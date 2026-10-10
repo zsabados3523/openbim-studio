@@ -18,7 +18,17 @@ Para quem vai mexer no código. O PO não precisa fazer isto: o líder técnico 
 ## Regras
 - Canal único: conda-forge, com `nodefaults`. Pacote de outro canal é erro.
 - Ao mudar `environment.yml`, gere o arquivo de trava de novo: `conda list --explicit --md5 > environment.linux-64.lock`.
-- Windows: o ambiente é montado pelo CI (ver seção CI, quando existir) e na VM do PO.
+- Windows: o ambiente é montado pelo CI (ver seção CI) e na VM do PO.
 
 ## CI
-O fluxo `.github/workflows/ci.yml` roda a cada push e pull request em `main`, num único job chamado `linux` (esse nome é usado na regra de bloqueio de merge; não renomear). Ele cria o ambiente do `environment.yml` só com conda-forge, roda `pytest` sem tela, gera o inventário de licenças (falha se algum pacote não for do conda-forge ou não tiver licença), roda `reuse lint` (a ferramenta REUSE é instalada só no CI, em ambiente separado), guarda como artefato o inventário e um `app.tar.gz`, e registra o tempo total no resumo da execução. Não usa segredos.
+O fluxo `.github/workflows/ci.yml` roda a cada push e pull request em `main`, em três jobs com estes nomes exatos (usados na regra de bloqueio de merge; não renomear):
+
+| Job | Sistema | Bloqueia merge? |
+|---|---|---|
+| `linux` | ubuntu-latest | sim |
+| `windows` | windows-latest | sim |
+| `macos` | macos-14 (Apple Silicon) | não: `continue-on-error`, a falha vira aviso |
+
+Cada job cria o ambiente do `environment.yml` só com conda-forge, roda `pytest -q tests` sem tela (o teste de sonda de `prototypes/cpp_probe` fica fora), gera o inventário de licenças (falha se algum pacote não for do conda-forge ou não tiver licença), guarda como artefato o inventário e um `app.tar.gz` (`openbim-ci-linux`, `-windows`, `-macos`) e registra o tempo total no resumo da execução, dizendo que o ambiente foi montado sem cache (build limpo; o incremental ainda não é medido). Só o `linux` roda `reuse lint` (a ferramenta REUSE é instalada só no CI, em ambiente separado). Os passos usam `bash` em todos os sistemas. Se o `macos` falhar, o motivo vai para `docs/state/LOG.md`, sem esforço de correção. Não usa segredos.
+
+Estado: os jobs `windows` e `macos` foram escritos mas ainda não foram executados em runner (o push depende de autenticação); só valem como prova depois de uma execução verde com log.

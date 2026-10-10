@@ -10,7 +10,8 @@ permissions:
   contents: read
 
 jobs:
-  # O nome do job (linux) é usado na regra de bloqueio de merge. Não renomear.
+  # Os nomes dos jobs linux e windows são usados na regra de bloqueio de merge. Não renomear.
+  # (macos não bloqueia.)
   linux:
     runs-on: ubuntu-latest
     steps:
@@ -48,3 +49,92 @@ jobs:
         if: always()
         run: |
           echo "Tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Início (relógio)
+        shell: bash
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
+        with:
+          environment-file: environment.yml
+          activate-environment: openbim
+          channels: conda-forge
+          conda-remove-defaults: "true"
+          channel-priority: strict
+          miniforge-version: latest
+      - name: Testes
+        shell: bash -el {0}
+        run: QT_QPA_PLATFORM=offscreen pytest -q tests
+      - name: Inventário de licenças e canal
+        shell: bash -el {0}
+        run: |
+          mkdir -p out
+          python scripts/license_inventory.py out/license-inventory.md
+      - name: Pacote do app esqueleto
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p out
+          tar czf out/app.tar.gz app/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: openbim-ci-windows
+          path: out/
+      - name: Tempo total
+        if: always()
+        shell: bash
+        run: |
+          echo "### windows: tempo total do job até aqui: $(( $(date +%s) - T0 )) s (build limpo, sem cache do ambiente conda; incremental não medido)" >> "$GITHUB_STEP_SUMMARY"
+
+  # Melhor esforço (R12): falha vira aviso e não entra na regra de bloqueio de merge.
+
+  macos:
+    runs-on: macos-14
+    continue-on-error: true
+    steps:
+      - name: Início (relógio)
+        shell: bash
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
+        with:
+          environment-file: environment.yml
+          activate-environment: openbim
+          channels: conda-forge
+          conda-remove-defaults: "true"
+          channel-priority: strict
+          miniforge-version: latest
+      - name: Testes
+        shell: bash -el {0}
+        run: QT_QPA_PLATFORM=offscreen pytest -q tests
+      - name: Inventário de licenças e canal
+        shell: bash -el {0}
+        run: |
+          mkdir -p out
+          python scripts/license_inventory.py out/license-inventory.md
+      - name: Pacote do app esqueleto
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p out
+          tar czf out/app.tar.gz app/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: openbim-ci-macos
+          path: out/
+      - name: Tempo total
+        if: always()
+        shell: bash
+        run: |
+          echo "### macos: tempo total do job até aqui: $(( $(date +%s) - T0 )) s (build limpo, sem cache do ambiente conda; incremental não medido)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Aviso (macOS não bloqueia merge)
+        if: failure()
+        shell: bash
+        run: |
+          echo "::warning title=macOS::job macOS falhou; melhor esforço, não bloqueia merge. Registrar o motivo em docs/state/LOG.md."
+          echo "AVISO: o job macOS falhou (não bloqueia merge)." >> "$GITHUB_STEP_SUMMARY"

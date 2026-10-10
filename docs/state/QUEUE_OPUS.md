@@ -15,7 +15,7 @@ Itens 1 a 3 formam o lote mínimo; o item 4 entra só se a cota permitir. O líd
 ## Já despachados
 - Lote 1 (2026-10-10): itens 1 a 4 executados. Resultado em `docs/state/reports/LOTE_OPUS_1.md`. T11 reprovada (12 defeitos); ADR-009 e esboço do ADR-005 entregues.
 
-## Lote 2 (pendente)
+## Lote 2 (pedido pronto em `docs/state/LOTE_OPUS_2.md`, 2026-10-10; itens abaixo + revisão do AppImage e sonda C++)
 | # | Item | Origem | Entrou em | Prioridade |
 |---|---|---|---|---|
 | 1 | Conferir o diff da correção da tabela mestre (v2) e os arquivos que ficaram fora do lote 1: `THIRD_PARTY.md`, `docs/state/reports/F0-S01.md` e a lista de componentes de `v2/03` S01 | S01-T11 | 2026-10-10 | Média |

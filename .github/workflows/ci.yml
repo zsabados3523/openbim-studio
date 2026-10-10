@@ -28,7 +28,17 @@ jobs:
           miniforge-version: latest
       - name: Testes
         shell: bash -el {0}
-        run: QT_QPA_PLATFORM=offscreen pytest -q tests
+        run: |
+          # Em caso de falha, as últimas linhas viram anotação pública (o log completo exige login no GitHub).
+          set +e
+          QT_QPA_PLATFORM=offscreen pytest -q tests > pytest.log 2>&1
+          rc=$?
+          cat pytest.log
+          if [ $rc -ne 0 ]; then
+            msg=$(tail -n 40 pytest.log | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=pytest falhou::$msg"
+          fi
+          exit $rc
       - name: Inventário de licenças e canal
         shell: bash -el {0}
         run: |
@@ -67,7 +77,17 @@ jobs:
           miniforge-version: latest
       - name: Testes
         shell: bash -el {0}
-        run: QT_QPA_PLATFORM=offscreen pytest -q tests
+        run: |
+          # Em caso de falha, as últimas linhas viram anotação pública (o log completo exige login no GitHub).
+          set +e
+          QT_QPA_PLATFORM=offscreen pytest -q tests > pytest.log 2>&1
+          rc=$?
+          cat pytest.log
+          if [ $rc -ne 0 ]; then
+            msg=$(tail -n 40 pytest.log | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=pytest falhou::$msg"
+          fi
+          exit $rc
       - name: Inventário de licenças e canal
         shell: bash -el {0}
         run: |
@@ -110,7 +130,17 @@ jobs:
           miniforge-version: latest
       - name: Testes
         shell: bash -el {0}
-        run: QT_QPA_PLATFORM=offscreen pytest -q tests
+        run: |
+          # Em caso de falha, as últimas linhas viram anotação pública (o log completo exige login no GitHub).
+          set +e
+          QT_QPA_PLATFORM=offscreen pytest -q tests > pytest.log 2>&1
+          rc=$?
+          cat pytest.log
+          if [ $rc -ne 0 ]; then
+            msg=$(tail -n 40 pytest.log | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=pytest falhou::$msg"
+          fi
+          exit $rc
       - name: Inventário de licenças e canal
         shell: bash -el {0}
         run: |

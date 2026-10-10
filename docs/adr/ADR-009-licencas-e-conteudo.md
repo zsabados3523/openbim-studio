@@ -25,7 +25,7 @@ Este ADR não depende de medição de desempenho. Os números são de contagem (
 ## 4. Decisão
 
 ### 4.1 Licença do projeto
-1. Todo o código do projeto é **AGPL-3.0-or-later**. Cada arquivo leva a linha `SPDX-License-Identifier: AGPL-3.0-or-later`.
+1. Todo o código do projeto é **AGPL-3.0-or-later**. Cada arquivo leva a etiqueta SPDX de licença `AGPL-3.0-or-later` (no cabeçalho ou no `REUSE.toml`).
 2. O programa montado (instalador, AppImage) inclui bibliotecas que são "somente versão 3" (por exemplo PySide6). Por isso o **conjunto distribuído vale, hoje, sob a versão 3**. O "ou posterior" protege o nosso código para o futuro; não muda a licença de ninguém.
 3. A tela "Sobre" mostra a licença, o endereço do código-fonte e a lista de bibliotecas de terceiros.
 4. Não há dupla licença comercial. (Isso também mantém o projeto elegível à assinatura gratuita da SignPath, `v2/02` §12.)

@@ -10,6 +10,8 @@ Este pacote traz bibliotecas livres do canal conda-forge, nas versões e compila
 
 O código do OpenBIM Studio (AGPL-3.0-or-later) e os scripts de montagem estão em https://github.com/zsabados3523/openbim-studio.
 
+Os pacotes marcados "removido na montagem" (vtk, viskores) constam da trava do ambiente, mas foram retirados do AppImage (ver `licenses/REMOVIDOS.md`): nada deles e distribuido.
+
 Lista de pacotes (arquivo de trava do ambiente de runtime, linux-64). Cada linha é o endereço exato de um pacote: nome-versão-build.
 
 ```

@@ -5,6 +5,7 @@
 #   RUNTIME_ENV  ambiente criado com: conda env create -f packaging/linux/runtime-environment.yml -p <pasta>
 #   SAIDA_DIR    pasta de trabalho/saída (fora do repositório); recebe pacote/ e OpenBIM-Studio-Setup.exe
 set -euo pipefail
+export PYTHONUTF8=1
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
@@ -57,7 +58,7 @@ visualização do OCCT (`TKIVtk`), que o OpenBIM Studio não usa. Nada deles é 
 licença ficam em `pacotes\` por cortesia. As DLLs `TKIVtk*` do OCCT podem permanecer, mas não carregam
 (não são usadas). Padrões removidos: ver `build_installer.sh`.
 EOT
-LISTA="$(conda list -p "$ENV_DIR" --explicit | grep -E '^https?://' | sed -E 's#(/(vtk|vtk-base|vtk-io-ffmpeg|viskores)-[0-9].*)$#\1   \# removido na montagem#')"
+LISTA="$("${CONDA_EXE:-conda}" list -p "$ENV_DIR" --explicit | grep -E '^https?://' | sed -E 's#(/(vtk|vtk-base|vtk-io-ffmpeg|viskores)-[0-9].*)$#\1   \# removido na montagem#')"
 python - "$REPO/packaging/linux/FONTES.md.in" "$PKG/FONTES.md" "$LISTA" <<'PY'
 import sys
 src, dst, lista = sys.argv[1:4]

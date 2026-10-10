@@ -13,6 +13,15 @@
 | P6 | Posso rodar `git init` local na sessão 2? As contas no GitHub e no Codeberg e a criação do repositório vazio são suas; eu guio passo a passo | Sim; criar as contas antes da sessão 2 | 2026-10-10: **git init local autorizado**; contas e repositório remoto ainda a cargo do PO |
 | P7 | Qual o hardware da sua máquina Linux e da Windows (CPU, RAM, placa de vídeo, sistema)? (pergunta E de 06) | Informar até a S03; o padrão é 4 núcleos, 16 GB, vídeo integrado recente | 2026-10-10: Linux nativo; Windows via VM. CPU i5-12600KF, GPU RTX 3070, 24 GB RAM |
 
+## Respostas do lote Opus 1 (2026-10-10, confirmadas pelo PO neste chat)
+| # | Pergunta | Resposta |
+|---|---|---|
+| L1 | Aprovar o ADR-009? | **Sim** (aceito) |
+| L2 | WiX fora; instalador Windows parte do NSIS? | **Sim** |
+| L3 | Cartão novo na S02 (sonda C++) e arquivos gerados fora do limite de 400 linhas (S02-T03, S02-T06)? | **Sim** |
+| L4 | Líder ajusta `v2/05` §3? | **Sim** (feito em 2026-10-10; conferência no lote 2) |
+| L5 | Páginas de termos do conda-forge e do SINAPI no navegador | Opcional, aberto |
+
 ## Decisões já tomadas (06 §1)
 10 posicionamento geral, Brasil como primeiro pacote regional (2026-10-10) · 1 corte da 1.0 · 2 Claude Pro, sonnet líder · 3 corpus do PO depois da F0 · 4 PO testa Windows e Linux, Mac melhor esforço · 5 IFC limpo + `.obim` lateral · 6 AGPL v3 · 7 sem gasto extra · 8 par `.ifc` + `.obim` com `.obimpack` para envio · 9 pset `OBIM_Projeto` aceito.
 

@@ -41,13 +41,15 @@ O que o usuário espera que aconteça? (1–3 frases)
 |---|---|---|
 | MIT, BSD, Apache-2.0, ISC, MPL-2.0 | sim | Manter aviso de copyright; MPL: arquivos MPL continuam MPL |
 | LGPL-2.1+/3, GPL-3, AGPL-3 | sim | Atribuição; GPL-2.0-*only* **não** é compatível com AGPL-3 |
+| LGPL-2.1-*only* (ex.: OCCT) | **só como biblioteca ligada dinamicamente, sem modificação** (arquivo separado, textos de licença no pacote). **Copiar código dela para o nosso: não** | Ver ADR-009 e `docs/research/2026-10-10-licencas-revisao-opus.md` |
+| GPL-3 ou posterior (ex.: LibreDWG, libslvs) | sim, como biblioteca ligada | A seção 13 de cada licença permite combinar com AGPL-3; a parte GPL continua GPL-3 |
 | GPL-2.0-only | **não** | Usar só como referência de ideia |
 | Sem licença / proprietário | **não** | Nem como base |
 | CC-BY (dados, ícones) | sim, com atribuição | CC-BY-NC/ND: **não** |
 
 Todo código copiado: comentário com origem, licença e commit; registro em `THIRD_PARTY.md`. Ferramenta de checagem de licenças (ex.: REUSE/SPDX) no CI a partir da F0.
 
-**Checagem de licenças das dependências (F0-S01):** a Revisão 2 verificou na web (detalhes e fontes em `07` §1): IfcOpenShell LGPL-3.0-or-later; Bonsai GPL-3.0-or-later (só referência); OCCT **LGPL-2.1-only** + Open CASCADE Exception 1.0; PySide6 LGPLv3/GPLv2/GPLv3 ou comercial (evitar módulos comerciais); pythonocc-core LGPL (3 segundo distribuições); ezdxf MIT; LibreDWG GPL-3.0-or-later; libslvs GPL-3 (via SolveSpace); web-ifc MPL-2.0. **Atenção:** libdxfrw tem licença disputada (GPLv2 ou LGPLv2+); se for GPLv2-only é incompatível. Ainda não verificados: nanobind/pybind11 (esperado BSD), PlaneGCS (esperado LGPL). A F0-S01 reconfirma tudo pelo arquivo LICENSE da versão fixada.
+**Checagem de licenças das dependências (F0-S01):** a Revisão 2 verificou na web (detalhes e fontes em `07` §1): IfcOpenShell LGPL-3.0-or-later; Bonsai GPL-3.0-or-later (só referência); OCCT **LGPL-2.1-only** + Open CASCADE Exception 1.0; PySide6 LGPLv3/GPLv2/GPLv3 ou comercial (evitar módulos comerciais); pythonocc-core LGPL (3 segundo distribuições); ezdxf MIT; LibreDWG GPL-3.0-or-later; libslvs GPL-3 (via SolveSpace); web-ifc MPL-2.0. **Atenção:** libdxfrw tem licença disputada. A pesquisa de 2026-10-10 (ficha do grupo C) corrige este texto: nenhum arquivo menciona LGPL; README e cabeçalhos dizem GPL-2.0-or-later, o COPYING e a API do GitHub dizem GPL-2.0. **Decisão: fica fora**; o DXF usa ezdxf (MIT). Ainda não verificados: nanobind/pybind11 (esperado BSD), PlaneGCS (esperado LGPL). A F0-S01 reconfirma tudo pelo arquivo LICENSE da versão fixada.
 
 ## 4. Política de conteúdo: normas e bases brasileiras
 | Conteúdo | Status | O que fazemos | O que NÃO fazemos |

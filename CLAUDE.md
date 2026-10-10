@@ -30,7 +30,7 @@ Programa BIM aberto (AGPL v3), instalável no Windows e no Linux, geral (núcleo
 - O líder **não rebaixa** a classe de uma tarefa sem registrar em LOG.md. O implementador não edita testes de oráculo nem sai dos "arquivos permitidos".
 
 ## Regras do processo
-- Todo trabalho nasce de um **cartão** (formato em `docs/state/cards/README.md`). Diff máximo: **400 linhas**; maior que isso, dividir antes.
+- Todo trabalho nasce de um **cartão** (formato em `docs/state/cards/README.md`). Diff máximo: **400 linhas**; maior que isso, dividir antes. Não contam: texto verbatim de licença e arquivos gerados (arquivo de trava), por decisão do PO.
 - Retorno do implementador: `STATUS` (SUCESSO | FALHA | BLOQUEADO | PRECISA_PO | AGUARDA_OPUS), `TAREFA`, `RESUMO` (≤5 linhas), `EVIDENCIAS`, `PERGUNTA_PO`.
 - Escalonamento: 2 falhas do sonnet → opus **reespecifica** (não implementa sem ordem do PO); 1 falha depois disso → parar e levar ao PO. Revisão reprovada 2 vezes → reescrever o cartão. Registrar cada escalonamento no LOG.
 - Lote opus = 1 sessão com 2–4 itens do mesmo módulo; contexto fechado (especificação, diffs, resultados de teste); saída: aprovado ou reprovado com lista numerada.

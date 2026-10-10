@@ -22,3 +22,6 @@ Uma linha por tarefa concluída ou escalada, e por mudança de classe de tarefa.
 2026-10-10 | LOTE-1 | executado (opus) | Itens 1 a 4. S01-T11 REPROVADA (1ª reprovação, 12 defeitos de redação/cobertura, nenhuma lib trocada). ADR-009 e esboço do ADR-005 escritos. Opus avisa que o ADR-009 usou as respostas da revisão e não a tabela reprovada (T12 dependia de T11 aprovada).
 2026-10-10 | S01-T11 | correção feita pelo líder | Tabela mestre v2 aplicando os defeitos 1 a 12; sem rede. Conferência do diff vai ao lote 2.
 2026-10-10 | LOTE-1 | pendente de confirmação | O relatório do opus diz que o PO respondeu "sim, aprovo e autorizo tudo" na sessão Opus. O líder pede confirmação no chat do líder antes de agir (ADR-009 aceito, WiX fora, cartão novo S02, edição de v2/05 §3).
+2026-10-10 | PO | confirmou os 4 itens do lote 1 | ADR-009 aceito; WiX fora (NSIS); cartão novo S02-T16; arquivos gerados fora do limite de 400 linhas (S02-T03, S02-T06 e texto de licença); v2/05 §3 ajustado pelo líder (conferência no lote 2).
+2026-10-10 | S02-T10, T11 | classe mantida T2, revisão opus obrigatória | Decisão do opus no lote 1; cartões atualizados (ADR-009 §5.3, ADR-005 testes 7 e 8; começar só por P1).
+2026-10-10 | PO | push | a5cbfdc no GitHub.

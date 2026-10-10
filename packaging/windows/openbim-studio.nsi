@@ -1,7 +1,7 @@
 ; SPDX-License-Identifier: AGPL-3.0-or-later
 ; Instalador do OpenBIM Studio (NSIS). Instalação por usuário (sem administrador), pasta própria.
 ; Variáveis (passadas por makensis /D): PASTA_PACOTE (pasta pronta com env\, app\, licenses\ ...),
-; SAIDA (caminho do .exe), VERSAO.
+; SAIDA (caminho do .exe), VERSAO, ENV_TGZ (env.tgz com a pasta env\ inteira).
 Unicode true
 !include "MUI2.nsh"
 
@@ -23,6 +23,14 @@ SetCompressorDictSize 64
 Section "OpenBIM Studio"
   SetOutPath "$INSTDIR"
   File /r "${PASTA_PACOTE}\*.*"
+  ; ambiente conda: um tar.gz único, extraído com o tar.exe do Windows (10 e 11)
+  InitPluginsDir
+  File "/oname=$PLUGINSDIR\env.tgz" "${ENV_TGZ}"
+  nsExec::ExecToLog '"$SYSDIR\tar.exe" -xzf "$PLUGINSDIR\env.tgz" -C "$INSTDIR"'
+  Pop $0
+  StrCmp $0 0 +3
+    MessageBox MB_OK|MB_ICONSTOP "Falha ao extrair os arquivos do programa (código $0)."
+    Abort
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   CreateDirectory "$SMPROGRAMS\OpenBIM Studio"
   CreateShortcut "$SMPROGRAMS\OpenBIM Studio\OpenBIM Studio.lnk" "$INSTDIR\env\pythonw.exe" '"$INSTDIR\app\OpenBIM-Studio.pyw"' "$INSTDIR\env\pythonw.exe"

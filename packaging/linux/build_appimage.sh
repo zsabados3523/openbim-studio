@@ -55,8 +55,9 @@ printf '
 # arquivos de licenca que os pacotes conda trazem (share/licenses/<pacote>/)
 if [ -d "$ENV_DIR/share/licenses" ]; then cp -a "$ENV_DIR/share/licenses" "$APPDIR/licenses/pacotes"; fi
 cp "$HERE/LGPL-COMO-TROCAR.md" "$APPDIR/"
+SPDX_ID="SPDX-License-Identifier"  # montado assim para o reuse lint nao ler como etiqueta deste script
 {
-  printf '<!--\nSPDX-License-Identifier: AGPL-3.0-or-later\n-->\n# Pacotes removidos do AppImage na montagem\n\n'
+  printf '<!--\n%s: AGPL-3.0-or-later\n-->\n# Pacotes removidos do AppImage na montagem\n\n' "$SPDX_ID"
   printf 'Estes pacotes conda fazem parte do ambiente de runtime (constam em FONTES.md e INVENTARIO.md, com a marca "removido na montagem"), mas seus arquivos NAO estao neste AppImage.\n\n'
   printf 'Motivo: o pacote `occt` do conda-forge exige o VTK so para o modulo de visualizacao do OCCT (`libTKIVtk`), e o VTK arrasta o ffmpeg (compilacao GPL com x264/x265) e dezenas de bibliotecas de video, audio e aceleracao que o OpenBIM Studio nao usa. A geometria (ifcopenshell + OCCT) e a janela (Qt) funcionam sem eles. Nada deles e distribuido.\n'
   printf 'Efeito conhecido: `libTKIVtk.so*` do OCCT permanece no pacote, mas nao carrega (nao e usada). O texto das licencas dos removidos fica em `pacotes/` quando o pacote o trazia, por cortesia.\n\nLista (nome versao licenca):\n\n'

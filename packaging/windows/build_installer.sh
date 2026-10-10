@@ -44,8 +44,9 @@ printf '
 ' >> "$PKG/licenses/INVENTARIO.md"
 python "$REPO/scripts/collect_package_licenses.py" "$ENV_DIR" "$PKG/licenses/pacotes" | tee "$OUT/licencas-coletadas.txt"
 cp "$HERE/LGPL-COMO-TROCAR.md" "$PKG/"
+SPDX_ID="SPDX-License-Identifier"  # montado assim para o reuse lint nao ler como etiqueta deste script
 {
-  printf '<!--\nSPDX-License-Identifier: AGPL-3.0-or-later\n-->\n# Pacotes removidos do instalador na montagem\n\n'
+  printf '<!--\n%s: AGPL-3.0-or-later\n-->\n# Pacotes removidos do instalador na montagem\n\n' "$SPDX_ID"
   printf 'Estes pacotes conda fazem parte do ambiente de runtime (constam em FONTES.md e INVENTARIO.md, com a marca "removido na montagem"), mas seus arquivos NÃO estão neste instalador.\n\n'
   printf 'Motivo: o pacote `occt` do conda-forge exige o VTK só para o módulo de visualização do OCCT (`TKIVtk`), e o VTK arrasta o ffmpeg (compilação GPL com x264/x265) e dezenas de bibliotecas de vídeo, áudio e aceleração que o OpenBIM Studio não usa. A geometria (ifcopenshell + OCCT) e a janela (Qt) funcionam sem eles. Nada deles é distribuído.\n'
   printf 'Efeito conhecido: as DLLs `TKIVtk*` do OCCT podem permanecer, mas não carregam (não são usadas). O texto das licenças dos removidos fica em `pacotes\\` quando o pacote o trazia, por cortesia.\n\nLista (nome versão licença):\n\n'
@@ -64,10 +65,16 @@ open(dst, "w", encoding="utf-8").write(txt)
 PY
 cp "$PKG/FONTES.md" "$PKG/licenses/FONTES.md"
 
+# 3b. O ambiente (~1 GB, dezenas de milhares de arquivos) vai num único tar.gz dentro do instalador:
+# o makensis (32 bits) estoura a memória com tantos arquivos soltos. O instalador extrai com o tar.exe do Windows.
+tar -czf "$OUT/env.tgz" -C "$PKG" env
+rm -rf "$OUT/env-pronto" && mv "$PKG/env" "$OUT/env-pronto"
+echo "env.tgz: $(du -h "$OUT/env.tgz" | cut -f1)"
+
 # 4. Gera o instalador
 # makensis: variável MAKENSIS, ou o do PATH (no CI vem do pacote conda-forge `nsis`, ambiente separado)
 MAKENSIS="${MAKENSIS:-$(command -v makensis || true)}"
 [ -n "$MAKENSIS" ] || { echo "makensis nao encontrado (defina MAKENSIS)" >&2; exit 1; }
 WPKG="$(cygpath -w "$PKG")"; WEXE="$(cygpath -w "$EXE")"
-MSYS2_ARG_CONV_EXCL='*' "$MAKENSIS" -V2 "-DPASTA_PACOTE=$WPKG" "-DSAIDA=$WEXE" "-DVERSAO=$VERSAO" "$(cygpath -w "$HERE/openbim-studio.nsi")"
-echo "Pacote: $(du -sh "$PKG" | cut -f1)  Instalador: $(du -h "$EXE" | cut -f1)  tempo: $(( $(date +%s) - START )) s"
+MSYS2_ARG_CONV_EXCL='*' "$MAKENSIS" -V2 "-DPASTA_PACOTE=$WPKG" "-DSAIDA=$WEXE" "-DVERSAO=$VERSAO" "-DENV_TGZ=$(cygpath -w "$OUT/env.tgz")" "$(cygpath -w "$HERE/openbim-studio.nsi")"
+echo "Ambiente (descompactado): $(du -sh "$OUT/env-pronto" | cut -f1)  Pacote (sem ambiente): $(du -sh "$PKG" | cut -f1)  Instalador: $(du -h "$EXE" | cut -f1)  tempo: $(( $(date +%s) - START )) s"

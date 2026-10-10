@@ -1,0 +1,11 @@
+#!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Lancador do AppImage. Usa o Python da pasta env/ (ambiente conda de runtime) e o codigo em app/.
+# Nao confere hash nem assinatura de nenhuma biblioteca: voce pode trocar os .so (ver LGPL-COMO-TROCAR.md).
+HERE="$(dirname "$(readlink -f "$0")")"
+export APPDIR="$HERE"
+export PYTHONHOME="$HERE/env"
+export PYTHONPATH="$HERE/app"
+export PYTHONNOUSERSITE=1
+export PATH="$HERE/env/bin:$PATH"
+exec "$HERE/env/bin/python" -m openbim_app "$@"

@@ -41,7 +41,7 @@
 | F0-S02-T07 | CI Windows | T2 | sonnet | sonnet; amostra opus | S02-T06 | BLOQUEADA |
 | F0-S02-T08 | CI macOS melhor esforço | T1 | sonnet | sonnet | S02-T06 | BLOQUEADA |
 | F0-S02-T09 | Bloquear merge sem Windows+Linux verdes | T0 | PO (líder guia) | PO | S02-T07 | BLOQUEADA |
-| F0-S02-T10 | Pacote Linux (AppImage) | T2 | sonnet | **opus, obrigatória** | S02-T06, S02-T02 | BLOQUEADA |
+| F0-S02-T10 | Pacote Linux (AppImage) | T2 | sonnet | **opus, obrigatória** | S02-T06, S02-T02 | PRECISA_PO (tamanho 927 MiB > 600 MB); revisão opus obrigatória no lote 2 |
 | F0-S02-T11 | Instalador Windows (NSIS) | T2 | sonnet | **opus, obrigatória** | S02-T07, S02-T02 | BLOQUEADA |
 | F0-S02-T12 | Teste de gravação de vídeo headless | T2 | sonnet | sonnet | S02-T04 | BLOQUEADA |
 | F0-S02-T13 | Medir metas de build e tamanho | T1 | sonnet | sonnet | S02-T10, S02-T11, S02-T16 | BLOQUEADA |

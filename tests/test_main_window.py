@@ -63,3 +63,10 @@ def test_drop_non_ifc_rejected(window):
     enter.setAccepted(True)
     window.dragEnterEvent(enter)
     assert not enter.isAccepted()
+
+
+def test_selftest_mode(qapp, capsys):
+    from openbim_app.main import main
+
+    assert main(["openbim", "--selftest"]) == 0
+    assert "OK" in capsys.readouterr().out

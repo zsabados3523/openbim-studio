@@ -96,6 +96,8 @@ jobs:
       - name: Instalador Windows (ambiente de runtime e NSIS)
         shell: bash -el {0}
         run: |
+          trap 'rc=$?; if [ $rc -ne 0 ]; then msg=$(tail -n 40 "$RUNNER_TEMP/passo.log" | sed ":a;N;\$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g"); echo "::error title=instalador falhou::$msg"; fi' EXIT
+          exec > >(tee "$RUNNER_TEMP/passo.log") 2>&1
           mkdir -p out
           t0=$(date +%s)
           conda env create -f packaging/linux/runtime-environment.yml -p "$RUNNER_TEMP/rt" -y -q
@@ -107,6 +109,8 @@ jobs:
         shell: bash
         run: |
           set -e
+          trap 'rc=$?; if [ $rc -ne 0 ]; then msg=$(tail -n 40 "$RUNNER_TEMP/passo2.log" | sed ":a;N;\$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g"); echo "::error title=teste do instalador falhou::$msg"; fi' EXIT
+          exec > >(tee "$RUNNER_TEMP/passo2.log") 2>&1
           DEST="$(cygpath -w "$RUNNER_TEMP")\\OpenBIM Studio teste"
           "out/OpenBIM-Studio-Setup.exe" /S "/D=$DEST"
           D="$(cygpath -u "$DEST")"

@@ -19,3 +19,6 @@ Uma linha por tarefa concluída ou escalada, e por mudança de classe de tarefa.
 2026-10-10 | PO | decisão: posicionamento geral (opção A) | Núcleo sem país; Brasil = primeiro pacote regional e escopo da 1.0. Editados v2/00 (Rev. 2.1), v2/01, v2/02 (visão, princípio 5, D4), README pt/en, CLAUDE.md. Escopo da 1.0 e calendário inalterados.
 2026-10-10 | S02-T01 | feita | Ficha de disponibilidade (haiku coleta, sonnet ficha). Conteúdo do pacote ifcopenshell do conda-forge segue não verificado (teste real).
 2026-10-10 | LOTE-1 | pronto | Pedido em docs/state/LOTE_OPUS_1.md (itens 1 a 3; item 4 opcional). Aguarda PO abrir sessão Opus.
+2026-10-10 | LOTE-1 | executado (opus) | Itens 1 a 4. S01-T11 REPROVADA (1ª reprovação, 12 defeitos de redação/cobertura, nenhuma lib trocada). ADR-009 e esboço do ADR-005 escritos. Opus avisa que o ADR-009 usou as respostas da revisão e não a tabela reprovada (T12 dependia de T11 aprovada).
+2026-10-10 | S01-T11 | correção feita pelo líder | Tabela mestre v2 aplicando os defeitos 1 a 12; sem rede. Conferência do diff vai ao lote 2.
+2026-10-10 | LOTE-1 | pendente de confirmação | O relatório do opus diz que o PO respondeu "sim, aprovo e autorizo tudo" na sessão Opus. O líder pede confirmação no chat do líder antes de agir (ADR-009 aceito, WiX fora, cartão novo S02, edição de v2/05 §3).

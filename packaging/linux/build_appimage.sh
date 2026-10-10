@@ -28,29 +28,12 @@ cp -a "$ENV_DIR" "$APPDIR/env"
 rm -rf "$APPDIR/env/include" "$APPDIR/env/man" "$APPDIR/env/share/man" "$APPDIR/env/share/doc"
 find "$APPDIR/env" -name '*.a' -delete
 
-# 1b. Poda de pacotes nao usados (decisao do PO, cartao F0-S02-T10, opcao 1).
-# O pacote conda `occt` depende de `vtk` (que depende de `viskores`) so para o modulo de
-# visualizacao do OCCT (libTKIVtk). O app NAO usa isso: a geometria do ifcopenshell nao precisa de
-# VTK (verificado: ifcopenshell.geom.create_shape funciona sem eles) e a janela e Qt. Remove-los
-# tira ~1,4 GB sem compressao. Padroes removidos (relativos a env/), em uma unica variavel:
-PODA_PADROES=(
-  'lib/libvtk*'                              # bibliotecas VTK
-  'lib/libviskores*'                         # bibliotecas Viskores (dependencia do VTK)
-  'lib/python3*/site-packages/vtkmodules'    # ligacoes Python do VTK
-  'lib/python3*/site-packages/vtk.py'
-  'lib/python3*/site-packages/vtk-*'         # vtk-*.dist-info / .egg-info
-  'lib/vtk-*'                                # hierarquias de wrappers
-  'lib/cmake/vtk-*'
-  'lib/cmake/viskores-*'
-  'share/viskores-*'
-  'bin/vtk*'
-)
-# Nao remove share/licenses/VTK: o texto da licenca (BSD) fica em licenses/pacotes/ por cortesia.
-shopt -s nullglob
-for pad in "${PODA_PADROES[@]}"; do
-  for alvo in "$APPDIR"/env/$pad; do rm -rf "$alvo"; done
-done
-shopt -u nullglob
+# 1b. Poda de pacotes nao usados (decisao do PO, cartao F0-S02-T10, opcao 1; ampliada em F0-S02-T11).
+# O pacote conda `occt` depende de `vtk` so para o modulo de visualizacao do OCCT (libTKIVtk); o `vtk`
+# arrasta `vtk-io-ffmpeg`, `ffmpeg` (compilacao GPL, com x264 e x265) e ~130 pacotes de video, audio e
+# aceleracao. O app NAO usa nada disso (verificado: selftest e ifcopenshell.geom.create_shape funcionam).
+# prune_packages.py remove as raizes abaixo e so os pacotes que apenas elas exigem.
+python3 "$REPO/scripts/prune_packages.py" "$APPDIR/env" "$OUT/removidos.txt" vtk vtk-base vtk-io-ffmpeg viskores ffmpeg
 
 # 2. Codigo do app, lancador, desktop e icone
 cp -a "$REPO/app/openbim_app" "$APPDIR/app/"
@@ -66,36 +49,28 @@ for f in LGPL-3 LGPL-2.1 GPL-3; do
   [ -f "/usr/share/common-licenses/$f" ] && cp "/usr/share/common-licenses/$f" "$APPDIR/licenses/$f.txt" || true
 done
 CONDA_PREFIX="$ENV_DIR" python3 "$REPO/scripts/license_inventory.py" "$APPDIR/licenses/INVENTARIO.md" >/dev/null
-printf '\n> Nota: os pacotes vtk, vtk-base, vtk-io-ffmpeg e viskores aparecem acima mas foram **removidos na montagem** (ver REMOVIDOS.md).\n' >> "$APPDIR/licenses/INVENTARIO.md"
+printf '
+> Nota: os pacotes listados em REMOVIDOS.md aparecem acima mas foram **removidos na montagem**.
+' >> "$APPDIR/licenses/INVENTARIO.md"
 # arquivos de licenca que os pacotes conda trazem (share/licenses/<pacote>/)
 if [ -d "$ENV_DIR/share/licenses" ]; then cp -a "$ENV_DIR/share/licenses" "$APPDIR/licenses/pacotes"; fi
 cp "$HERE/LGPL-COMO-TROCAR.md" "$APPDIR/"
-cat > "$APPDIR/licenses/REMOVIDOS.md" <<'EOF'
-<!--
-SPDX-License-Identifier: AGPL-3.0-or-later
--->
-# Pacotes removidos do AppImage na montagem
-
-Os pacotes conda abaixo fazem parte do ambiente de runtime (e continuam listados em FONTES.md e em
-INVENTARIO.md, com a marca "removido na montagem"), mas seus arquivos NAO estao neste AppImage:
-
-- `vtk`, `vtk-base`, `vtk-io-ffmpeg` (BSD-3-Clause): bibliotecas `libvtk*` e Python `vtkmodules`.
-- `viskores` (BSD-3-Clause): bibliotecas `libviskores*`.
-
-Motivo: o pacote `occt` do conda-forge exige o VTK so para o modulo de visualizacao do OCCT
-(`libTKIVtk`), que o OpenBIM Studio nao usa. Sem eles o pacote cai de ~927 MiB para o tamanho da
-meta (<= 600 MB). A geometria (ifcopenshell + OCCT) funciona sem VTK. Como nada do VTK/Viskores
-e distribuido, nao ha obrigacao de fonte para eles; o texto da licenca (em `pacotes/VTK`) fica por cortesia.
-Efeito colateral conhecido: `libTKIVtk.so*` do OCCT permanece no pacote, mas nao carrega (nao e usada).
-Padroes removidos: ver `PODA_PADROES` em `packaging/linux/build_appimage.sh`.
-EOF
+{
+  printf '<!--\nSPDX-License-Identifier: AGPL-3.0-or-later\n-->\n# Pacotes removidos do AppImage na montagem\n\n'
+  printf 'Estes pacotes conda fazem parte do ambiente de runtime (constam em FONTES.md e INVENTARIO.md, com a marca "removido na montagem"), mas seus arquivos NAO estao neste AppImage.\n\n'
+  printf 'Motivo: o pacote `occt` do conda-forge exige o VTK so para o modulo de visualizacao do OCCT (`libTKIVtk`), e o VTK arrasta o ffmpeg (compilacao GPL com x264/x265) e dezenas de bibliotecas de video, audio e aceleracao que o OpenBIM Studio nao usa. A geometria (ifcopenshell + OCCT) e a janela (Qt) funcionam sem eles. Nada deles e distribuido.\n'
+  printf 'Efeito conhecido: `libTKIVtk.so*` do OCCT permanece no pacote, mas nao carrega (nao e usada). O texto das licencas dos removidos fica em `pacotes/` quando o pacote o trazia, por cortesia.\n\nLista (nome versao licenca):\n\n'
+  sed 's/^/- /' "$OUT/removidos.txt"
+} > "$APPDIR/licenses/REMOVIDOS.md"
 LISTA="$("$CONDA" list -p "$ENV_DIR" --explicit | grep -E '^https?://')"
-python3 - "$HERE/FONTES.md.in" "$APPDIR/FONTES.md" "$LISTA" <<'PY'
+REMOVIDOS="$OUT/removidos.txt" python3 - "$HERE/FONTES.md.in" "$APPDIR/FONTES.md" "$LISTA" <<'PY'
 import sys
 src, dst, lista = sys.argv[1:4]
 import re
-marca = re.compile(r"/(vtk|vtk-base|vtk-io-ffmpeg|viskores)-\d")
-lista = "\n".join(l + "   # removido na montagem" if marca.search(l) else l for l in lista.splitlines())
+import os
+rem = {l.split()[0] for l in open(os.environ["REMOVIDOS"], encoding="utf-8") if l.strip()}
+nome = lambda l: re.sub(r"-[^-]+-[^-]+$", "", l.rstrip("/").rsplit("/", 1)[-1].replace(".conda", "").replace(".tar.bz2", ""))
+lista = "\n".join(l + "   # removido na montagem" if nome(l) in rem else l for l in lista.splitlines())
 open(dst, "w", encoding="utf-8").write(open(src, encoding="utf-8").read().replace("@@LISTA@@", lista))
 PY
 cp "$APPDIR/FONTES.md" "$APPDIR/licenses/FONTES.md"

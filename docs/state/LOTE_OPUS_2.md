@@ -47,3 +47,6 @@ EVIDENCIAS: <arquivos; item 1, 2 e 3: aprovado/reprovado e defeitos>
 PERGUNTA_PO: <se houver, com recomendação>
 ```
 Depois, o PO volta ao líder (sonnet) com "Leia docs/state e continue".
+
+## Adendo (2026-10-10, T10/T11): poda ampliada
+Item 3 deve conferir também `scripts/prune_packages.py` e `licenses/REMOVIDOS.md` gerado: a poda agora remove vtk, viskores, ffmpeg (GPL, com x264/x265) e todos os pacotes que só eles exigem (139). Antes, o AppImage levava o ffmpeg GPL. Pergunta: a poda por fechamento de dependências é segura e suficiente? O AppImage anterior nunca foi publicado (só local). Item novo (T11): revisar `packaging/windows/` e os passos do job `windows` (NSIS do conda-forge, instalação por usuário, teste de instalar/abrir/desinstalar).

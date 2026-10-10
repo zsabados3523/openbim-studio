@@ -24,15 +24,12 @@ cp -a "$ENV_DIR" "$PKG/env"
 rm -rf "$PKG/env/Library/include" "$PKG/env/include" "$PKG/env/Library/share/doc" "$PKG/env/Library/man"
 find "$PKG/env" -name '*.a' -delete
 
-# 1b. Poda de pacotes não usados (mesma decisão do PO do AppImage, cartão T10): VTK e Viskores só servem
-# ao módulo de visualização do OCCT (TKIVtk), que o app não usa.
-shopt -s nullglob
-for pad in 'Library/bin/vtk*' 'Library/bin/viskores*' 'Library/lib/vtk*' 'Library/lib/viskores*' \
-           'Library/lib/cmake/vtk-*' 'Library/lib/cmake/viskores-*' 'Library/share/viskores-*' \
-           'Lib/site-packages/vtkmodules' 'Lib/site-packages/vtk.py' 'Lib/site-packages/vtk-*'; do
-  for alvo in "$PKG"/env/$pad; do rm -rf "$alvo"; done
-done
-shopt -u nullglob
+# 1b. Poda de pacotes não usados (mesma decisão do PO do AppImage, cartão T10, ampliada na T11).
+# O pacote conda `occt` depende de `vtk` só para o módulo de visualização do OCCT (TKIVtk); o `vtk`
+# arrasta `vtk-io-ffmpeg`, `ffmpeg` (compilação GPL, com x264 e x265) e dezenas de pacotes de vídeo,
+# áudio e aceleração que o app não usa. prune_packages.py remove as raízes abaixo e só os pacotes
+# que apenas elas exigem (o inventário e a lista de fontes continuam listando tudo, com a marca).
+python "$REPO/scripts/prune_packages.py" "$PKG/env" "$OUT/removidos.txt" vtk vtk-base vtk-io-ffmpeg viskores ffmpeg
 
 # 2. Código do app e lançador
 cp -a "$REPO/app/openbim_app" "$PKG/app/"
@@ -42,28 +39,27 @@ cp "$HERE/OpenBIM-Studio.pyw" "$PKG/app/"
 # 3. Licenças, como trocar, fontes
 cp "$REPO/LICENSES/AGPL-3.0-or-later.txt" "$PKG/licenses/"
 CONDA_PREFIX="$ENV_DIR" python "$REPO/scripts/license_inventory.py" "$PKG/licenses/INVENTARIO.md" >/dev/null
-printf '\n> Nota: os pacotes vtk, vtk-base, vtk-io-ffmpeg e viskores aparecem acima mas foram **removidos na montagem** (ver REMOVIDOS.md).\n' >> "$PKG/licenses/INVENTARIO.md"
+printf '
+> Nota: os pacotes listados em REMOVIDOS.md aparecem acima mas foram **removidos na montagem**.
+' >> "$PKG/licenses/INVENTARIO.md"
 python "$REPO/scripts/collect_package_licenses.py" "$ENV_DIR" "$PKG/licenses/pacotes" | tee "$OUT/licencas-coletadas.txt"
 cp "$HERE/LGPL-COMO-TROCAR.md" "$PKG/"
-cat > "$PKG/licenses/REMOVIDOS.md" <<'EOT'
-<!--
-SPDX-License-Identifier: AGPL-3.0-or-later
--->
-# Pacotes removidos do instalador na montagem
-
-Os pacotes conda `vtk`, `vtk-base`, `vtk-io-ffmpeg` e `viskores` (BSD-3-Clause) fazem parte do ambiente
-de runtime (constam em FONTES.md e INVENTARIO.md, com a marca "removido na montagem"), mas seus arquivos
-NÃO estão neste instalador. Motivo: o pacote `occt` do conda-forge exige o VTK só para o módulo de
-visualização do OCCT (`TKIVtk`), que o OpenBIM Studio não usa. Nada deles é distribuído; os textos de
-licença ficam em `pacotes\` por cortesia. As DLLs `TKIVtk*` do OCCT podem permanecer, mas não carregam
-(não são usadas). Padrões removidos: ver `build_installer.sh`.
-EOT
-LISTA="$("${CONDA_EXE:-conda}" list -p "$ENV_DIR" --explicit | grep -E '^https?://' | sed -E 's#(/(vtk|vtk-base|vtk-io-ffmpeg|viskores)-[0-9].*)$#\1   \# removido na montagem#')"
-python - "$REPO/packaging/linux/FONTES.md.in" "$PKG/FONTES.md" "$LISTA" <<'PY'
-import sys
+{
+  printf '<!--\nSPDX-License-Identifier: AGPL-3.0-or-later\n-->\n# Pacotes removidos do instalador na montagem\n\n'
+  printf 'Estes pacotes conda fazem parte do ambiente de runtime (constam em FONTES.md e INVENTARIO.md, com a marca "removido na montagem"), mas seus arquivos NÃO estão neste instalador.\n\n'
+  printf 'Motivo: o pacote `occt` do conda-forge exige o VTK só para o módulo de visualização do OCCT (`TKIVtk`), e o VTK arrasta o ffmpeg (compilação GPL com x264/x265) e dezenas de bibliotecas de vídeo, áudio e aceleração que o OpenBIM Studio não usa. A geometria (ifcopenshell + OCCT) e a janela (Qt) funcionam sem eles. Nada deles é distribuído.\n'
+  printf 'Efeito conhecido: as DLLs `TKIVtk*` do OCCT podem permanecer, mas não carregam (não são usadas). O texto das licenças dos removidos fica em `pacotes\\` quando o pacote o trazia, por cortesia.\n\nLista (nome versão licença):\n\n'
+  sed 's/^/- /' "$OUT/removidos.txt"
+} > "$PKG/licenses/REMOVIDOS.md"
+LISTA="$("${CONDA_EXE:-conda}" list -p "$ENV_DIR" --explicit | grep -E '^https?://')"
+REMOVIDOS="$OUT/removidos.txt" python - "$REPO/packaging/linux/FONTES.md.in" "$PKG/FONTES.md" "$LISTA" <<'PY'
+import os, re, sys
 src, dst, lista = sys.argv[1:4]
+rem = {l.split()[0] for l in open(os.environ["REMOVIDOS"], encoding="utf-8") if l.strip()}
+nome = lambda l: re.sub(r"-[^-]+-[^-]+$", "", l.rstrip("/").rsplit("/", 1)[-1].replace(".conda", "").replace(".tar.bz2", ""))
+lista = "\n".join(l + "   # removido na montagem" if nome(l) in rem else l for l in lista.splitlines())
 txt = open(src, encoding="utf-8").read().replace("@@LISTA@@", lista)
-txt = txt.replace("linux-64", "win-64").replace("do AppImage", "do instalador")
+txt = txt.replace("linux-64", "win-64").replace("do AppImage", "do instalador").replace("vtk, viskores", "ver REMOVIDOS.md")
 open(dst, "w", encoding="utf-8").write(txt)
 PY
 cp "$PKG/FONTES.md" "$PKG/licenses/FONTES.md"

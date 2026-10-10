@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+# Uma nova alteração cancela a execução anterior do mesmo ramo (evita execuções penduradas).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Os nomes dos jobs linux e windows são usados na regra de bloqueio de merge. Não renomear.
   # (macos não bloqueia.)
@@ -62,6 +67,7 @@ jobs:
 
   windows:
     runs-on: windows-latest
+    timeout-minutes: 60
     steps:
       - name: Início (relógio)
         shell: bash
@@ -111,24 +117,17 @@ jobs:
           cp "$RUNNER_TEMP/inst-out/OpenBIM-Studio-Setup.exe" "$RUNNER_TEMP/inst-out/licencas-coletadas.txt" out/
       - name: Teste do instalador (instala, abre, desinstala)
         shell: bash
+        timeout-minutes: 20
         run: |
-          set -e
-          trap 'rc=$?; if [ $rc -ne 0 ]; then msg=$(tail -n 40 "$RUNNER_TEMP/passo2.log" | sed ":a;N;\$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g"); echo "::error title=teste do instalador falhou::$msg"; fi' EXIT
-          exec > >(tee "$RUNNER_TEMP/passo2.log") 2>&1
-          DEST="$(cygpath -w "$RUNNER_TEMP")\\OpenBIM Studio teste"
-          "out/OpenBIM-Studio-Setup.exe" /S "/D=$DEST"
-          D="$(cygpath -u "$DEST")"
-          test -f "$D/app/OpenBIM-Studio.pyw" && test -f "$D/Uninstall.exe" && test -f "$D/LGPL-COMO-TROCAR.md" && test -f "$D/FONTES.md"
-          test -f "$D/licenses/AGPL-3.0-or-later.txt" && test -f "$D/licenses/INVENTARIO.md"
-          grep -rqi "GNU LESSER GENERAL PUBLIC LICENSE" "$D/licenses/pacotes" || { echo "::error::sem texto da LGPL em licenses/pacotes"; exit 1; }
-          # abre o app (sem tela) a partir da pasta instalada, sem o ambiente conda ativo do CI
-          out="$(env -i SYSTEMROOT="$SYSTEMROOT" TEMP="$TEMP" QT_QPA_PLATFORM=offscreen "$D/env/python.exe" "$D/app/OpenBIM-Studio.pyw" --selftest)"
-          echo "selftest: $out"; test "$out" = "OK"
-          # desinstala e confere que não sobrou nada além do próprio desinstalador
-          "$D/Uninstall.exe" /S "_?=$DEST"
-          sleep 5
-          rm -f "$D/Uninstall.exe"
-          if [ -d "$D" ] && [ -n "$(ls -A "$D")" ]; then echo "::error::sobras após desinstalar:"; ls -A "$D" | head; exit 1; fi
+          set +e
+          timeout 900 bash packaging/windows/test_installer.sh "$PWD/out/OpenBIM-Studio-Setup.exe" "$(cygpath -w "$RUNNER_TEMP")\\OpenBIM Studio teste" > "$RUNNER_TEMP/teste.log" 2>&1
+          rc=$?
+          cat "$RUNNER_TEMP/teste.log"
+          if [ $rc -ne 0 ]; then
+            msg=$(tail -n 40 "$RUNNER_TEMP/teste.log" | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=teste do instalador falhou (código $rc)::$msg"
+            exit $rc
+          fi
           echo "Instalação, abertura e desinstalação sem sobras: OK" >> "$GITHUB_STEP_SUMMARY"
       - name: Pacote do app esqueleto
         if: always()

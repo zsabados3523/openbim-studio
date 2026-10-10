@@ -17,7 +17,7 @@ def _pkg(meta, name, lic, url):
 
 def _run(prefix, out):
     env = dict(os.environ, CONDA_PREFIX=str(prefix))
-    return subprocess.run([sys.executable, str(SCRIPT), str(out)], env=env, capture_output=True, text=True)
+    return subprocess.run([sys.executable, str(SCRIPT), str(out)], env=env, capture_output=True, text=True, encoding="utf-8")
 
 
 def test_bom_passa(tmp_path):
@@ -26,7 +26,7 @@ def test_bom_passa(tmp_path):
     _pkg(meta, "bom", "MIT", FORGE + "bom-1.0-0.conda")
     r = _run(tmp_path, tmp_path / "o.md")
     assert r.returncode == 0
-    assert "| bom | 1.0 | MIT | conda-forge |" in (tmp_path / "o.md").read_text()
+    assert "| bom | 1.0 | MIT | conda-forge |" in (tmp_path / "o.md").read_text(encoding="utf-8")
 
 
 def test_falha_sem_licenca_e_outro_canal(tmp_path):
@@ -37,6 +37,6 @@ def test_falha_sem_licenca_e_outro_canal(tmp_path):
     _pkg(meta, "defaults", "MIT", "https://repo.anaconda.com/pkgs/main/linux-64/defaults-1.0-0.conda")
     r = _run(tmp_path, tmp_path / "o.md")
     assert r.returncode == 1
-    txt = (tmp_path / "o.md").read_text()
+    txt = (tmp_path / "o.md").read_text(encoding="utf-8")
     assert "## Não conda-forge (1)" in txt and "defaults 1.0" in txt
     assert "## Sem licença (1)" in txt and "semlic 1.0" in txt

@@ -56,5 +56,5 @@ Programa BIM aberto (AGPL v3), instalável no Windows e no Linux, geral (núcleo
 
 ## Plataformas e comandos
 - Windows e Linux: obrigatórios (CI bloqueia merge). macOS: build experimental, falha não bloqueia, sem teste manual.
-- Comandos de build e teste: **ainda não definidos**; serão fixados na F0-S02 e anotados aqui.
+- Ambiente: Miniforge em `~/miniforge3`; ambiente `openbim` (conda-forge). Criar: `conda env create -f environment.yml`. Rodar testes: `QT_QPA_PLATFORM=offscreen ~/miniforge3/envs/openbim/bin/pytest`. Detalhes em `docs/dev-setup.md`. Build e empacotamento: definidos nas T06, T10, T11.
 - Git: ramo `main`, remoto `origin` = github.com/zsabados3523/openbim-studio (público). Push só com ok do PO. Espelho Codeberg: adiado.

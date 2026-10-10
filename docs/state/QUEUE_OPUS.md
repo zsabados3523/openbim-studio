@@ -20,3 +20,4 @@ Itens 1 a 3 formam o lote mínimo; o item 4 entra só se a cota permitir. O líd
 |---|---|---|---|---|
 | 1 | Conferir o diff da correção da tabela mestre (v2) e os arquivos que ficaram fora do lote 1: `THIRD_PARTY.md`, `docs/state/reports/F0-S01.md` e a lista de componentes de `v2/03` S01 | S01-T11 | 2026-10-10 | Média |
 | 2 | (se o PO confirmar) revisar o texto novo de `v2/05` §3 proposto pelo líder | v2/05 | 2026-10-10 | Baixa |
+| 3 | Amostra de revisão (1 em 3 das T2): sonda C++ S02-T16 (`prototypes/cpp_probe/`, `docs/research/2026-10-10-sonda-cpp.md`). Pergunta: a conclusão "IfcOpenShell 0.9 usa `ifcopenshell::file` e libs `libifcopenshell.*` compartilhadas" fecha o teste 2 do ADR-005 e muda o teste 5 (R1)? | S02-T16 | 2026-10-10 | Média |

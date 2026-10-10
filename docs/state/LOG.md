@@ -25,3 +25,8 @@ Uma linha por tarefa concluída ou escalada, e por mudança de classe de tarefa.
 2026-10-10 | PO | confirmou os 4 itens do lote 1 | ADR-009 aceito; WiX fora (NSIS); cartão novo S02-T16; arquivos gerados fora do limite de 400 linhas (S02-T03, S02-T06 e texto de licença); v2/05 §3 ajustado pelo líder (conferência no lote 2).
 2026-10-10 | S02-T10, T11 | classe mantida T2, revisão opus obrigatória | Decisão do opus no lote 1; cartões atualizados (ADR-009 §5.3, ADR-005 testes 7 e 8; começar só por P1).
 2026-10-10 | PO | push | a5cbfdc no GitHub.
+2026-10-10 | PO | autorizou instalar | Miniforge 26.7.2 (sha256 conferido) em ~/miniforge3, sem alterar o shell; ambiente `openbim` só conda-forge (315 pacotes, todos conda-forge), criado em 1 min 50 s.
+2026-10-10 | S02-T03 | feita (líder) | environment.yml, environment.linux-64.lock (320 linhas, gerado), docs/dev-setup.md, tests/test_env_smoke.py (3 passam). CLAUDE.md atualizado com os comandos reais.
+2026-10-10 | S02-T04 | feita (sonnet subagente) | Janela PySide6, menu, drag-and-drop. 7 testes passam (conferido pelo líder). Implementador criou __main__.py e tests/conftest.py, fora da lista literal de arquivos; aceitos (necessários).
+2026-10-10 | S02-T05 | feita (sonnet subagente) | count_by_class, 15 testes passam (conferido). Leitura na thread da UI marcada TEMPORÁRIO (ADR-004). Sem threads.
+2026-10-10 | S02-T16 | feita (sonnet subagente) | Teste 2 do ADR-005: cabeçalhos e libs compartilhadas libifcopenshell.* presentes, módulo Python liga nelas. Teste 3: módulo nanobind+OCCT+Qt compila (limpo 2,4 s, incremental 0,9 s) só no Linux local. API C++ da 0.9 usa ifcopenshell::file, relevante ao teste 5 (S04, T3).

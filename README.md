@@ -2,7 +2,7 @@
 
 [English](README.en.md)
 
-Programa BIM aberto para fazer **projeto legal e executivo residencial no padrão brasileiro**, com o IFC como verdade do modelo.
+Programa BIM aberto e geral, com o IFC como verdade do modelo. O núcleo não é preso a nenhum país; o primeiro pacote regional, que define a versão 1.0, é o **Brasil**: projeto legal e executivo residencial no padrão ABNT. Outros países entram depois como pacotes regionais.
 
 > O nome "OpenBIM Studio" é provisório.
 
@@ -11,7 +11,7 @@ Programa BIM aberto para fazer **projeto legal e executivo residencial no padrã
 
 ## O que o projeto quer ser
 - Instalável no **Windows e no Linux**. macOS: build experimental, sem suporte.
-- Foco da versão 1.0: casa residencial, da modelagem às pranchas com carimbo, em PDF, DXF e IFC.
+- Foco da versão 1.0 (pacote Brasil): casa residencial, da modelagem às pranchas com carimbo, em PDF, DXF e IFC.
 - Sem conta, sem nuvem, sem telemetria: seus arquivos são seus.
 - Um projeto são **dois arquivos com o mesmo nome**: `Casa.ifc` (o modelo, limpo, abre em qualquer programa BIM) e `Casa.obim` (vistas, pranchas e cotas, num formato aberto).
 

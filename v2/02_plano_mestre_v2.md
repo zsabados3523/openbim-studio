@@ -5,14 +5,14 @@
 > Correção de item menor: o link do plano original para `claude_code_setup.md` apontava para `~/.gemini/...`; nesta v2 todos os links são relativos à pasta do projeto (ex.: `../claude_code_setup.md`, superado por `04_processo_agentes_v2.md`).
 
 ## 1. Visão
-Programa BIM **dedicado, aberto (AGPL v3) e multiplataforma (Windows e Linux na 1.0; macOS em seguida)**, com **IFC como arquivo nativo**, que permite a um arquiteto brasileiro fazer **projeto legal e executivo residencial** com pranchas ABNT, sem outro software.
+Programa BIM **dedicado, aberto (AGPL v3) e multiplataforma (Windows e Linux na 1.0; macOS em seguida)**, com **IFC como arquivo nativo**, que permite a um arquiteto fazer **projeto legal e executivo residencial** sem outro software. O núcleo é geral (sem país); a 1.0 entrega o **pacote regional Brasil** (pranchas ABNT, quadro de áreas legal, SINAPI). Outros países entram depois como pacotes regionais.
 
 ## 2. Princípios (revistos)
 1. **Seus dados são seus.** Sem conta, sem nuvem, sem telemetria.
 2. **IFC é a verdade do modelo; o IFC fica limpo.** Edificação, tipos, materiais, ambientes e quantidades ficam no `.ifc`, válido e sem anotações de prancha. Documentação (vistas, pranchas, carimbos, viewports, revisões, cotas e tags) fica num arquivo lateral aberto `.obim`, que referencia o IFC por GlobalId. Histórico e cache são descartáveis.
 3. **Sempre utilizável no Windows e no Linux.** Cada fase termina com instaladores Windows/Linux testados pelo PO; macOS recebe build de CI "melhor esforço".
 4. **Fluxo de arquiteto.** Nível, vista, tipo, prancha.
-5. **Brasil primeiro, localizável.** Todo texto traduzível; regras e conteúdo em pacotes regionais.
+5. **Núcleo geral, Brasil como primeiro pacote regional.** Todo texto traduzível; regras e conteúdo em pacotes regionais.
 6. **Verificável pelo uso.** O PO aceita por roteiro, vídeo e instalador, nunca por leitura de código.
 7. **Escopo é a variável de ajuste.** Prazo e qualidade se mantêm; corta-se recurso.
 8. **Fontes públicas apenas.** Sem engenharia reversa (ver `05`).
@@ -23,7 +23,7 @@ Programa BIM **dedicado, aberto (AGPL v3) e multiplataforma (Windows e Linux na 
 | D1 | Stack | **Híbrido**: C++ (viewport, geometria, tesselação, HLR: OCCT + IfcOpenShell C++) e Python (PySide6/Qt 6, ifcopenshell.api, regras, plugins). Validado na F0 contra C++ puro | sim |
 | D2 | Licença | AGPL v3, com auditoria de dependências na F0 | confirmada |
 | D3 | Escopo 1.0 | **Residencial, legal + executivo ABNT** (ver MoSCoW) | **sim, reduzido** |
-| D4 | Normas | Brasil primeiro; regras parametrizadas, sem reproduzir texto protegido | refinada |
+| D4 | Normas | Núcleo sem país; Brasil é o primeiro pacote regional; regras parametrizadas, sem reproduzir texto protegido | refinada |
 | D5 | Colaboração | 1.0: individual + troca de IFC/BCF. 2.0: reserva de elementos + sincronização periódica. Tempo real: pesquisa pós-2.0 | **sim** |
 | D6 | Agentes | 3 papéis iniciais, crescimento sob gatilho (ver `04`) | **sim** |
 | D7 | Formatos | IFC 4 (ADD2 TC1) como padrão de gravação, IFC 2x3 leitura+exportação, IFC 4.3 leitura; PDF, DXF (garantia), SVG, glTF; DWG só como bônus; BCF leitura/escrita; COBie 2.0 | **sim** |

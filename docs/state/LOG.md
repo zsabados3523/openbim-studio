@@ -16,3 +16,4 @@ Uma linha por tarefa concluída ou escalada, e por mudança de classe de tarefa.
 2026-10-10 | S01-T06..T10 | feitas | Coleta por haiku, fichas por sonnet. SINAPI: site da CAIXA em loop de redirecionamento, não verificado, sem contornar.
 2026-10-10 | S01-T11 | escrita, aguarda opus | Tabela mestre sem nenhum "Não"; 4 pendências para o lote 1 (OCCT, libdxfrw, WiX, relink LGPL).
 2026-10-10 | S01-T01 | feita | Commit 076d870 e push para github.com/zsabados3523/openbim-studio (ok do PO). Espelho Codeberg adiado por decisão do PO.
+2026-10-10 | PO | decisão: posicionamento geral (opção A) | Núcleo sem país; Brasil = primeiro pacote regional e escopo da 1.0. Editados v2/00 (Rev. 2.1), v2/01, v2/02 (visão, princípio 5, D4), README pt/en, CLAUDE.md. Escopo da 1.0 e calendário inalterados.

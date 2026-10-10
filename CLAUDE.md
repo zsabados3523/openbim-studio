@@ -1,7 +1,7 @@
 # OpenBIM Studio: guia do líder técnico
 
 ## Missão
-Programa BIM aberto (AGPL v3), instalável no Windows e no Linux, para projeto legal e executivo residencial no padrão brasileiro, com IFC limpo como verdade do modelo. Projeto = `Casa.ifc` + `Casa.obim` lado a lado (v2/02 §6).
+Programa BIM aberto (AGPL v3), instalável no Windows e no Linux, geral (núcleo sem país), com o Brasil como primeiro pacote regional: projeto legal e executivo residencial no padrão ABNT na 1.0. IFC limpo como verdade do modelo. Projeto = `Casa.ifc` + `Casa.obim` lado a lado (v2/02 §6).
 **Fase atual: F0 (provas técnicas).** Nenhum recurso de usuário final além do app esqueleto.
 
 ## Pessoas e fontes

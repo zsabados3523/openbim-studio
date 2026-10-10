@@ -3,7 +3,7 @@
 > Para: Rafael (PO). Leitura: 5 minutos. Documentos detalhados: `01` a `07` nesta pasta. Os 3 documentos originais não foram alterados.
 
 ## O que muda, em uma frase
-O plano original tentava construir um "Revit inteiro" com uma equipe que na prática é **você + agentes de IA**. A v2 encolhe a 1.0 para algo que dá para terminar e que ninguém oferece hoje: **um programa BIM instalável no Windows e no Linux que faz projeto legal e executivo residencial no padrão brasileiro, com um IFC limpo como verdade do modelo**.
+O plano original tentava construir um "Revit inteiro" com uma equipe que na prática é **você + agentes de IA**. A v2 encolhe a 1.0 para algo que dá para terminar e que ninguém oferece hoje: **um programa BIM aberto e geral, instalável no Windows e no Linux, com um IFC limpo como verdade do modelo. O primeiro pacote regional, e o que define a 1.0, é o Brasil: projeto legal e executivo residencial no padrão ABNT**. Outros países entram depois como pacotes regionais, sem mexer no núcleo.
 
 ## As mudanças principais
 1. **Foco da 1.0 (aprovado): residencial, projeto legal + executivo ABNT.** Visualizar, modelar (paredes, lajes, esquadrias, cobertura, escada simples), ambientes com áreas, quantitativos, pranchas com carimbo, PDF/DXF/IFC.
@@ -44,6 +44,8 @@ Iniciar **apenas a Fase 0** com IFCs públicos. A F0 termina com uma decisão si
 ---
 
 ## Changelog
+### Revisão 2.1 (2026-10-10)
+- Decisão do PO: **posicionamento geral**, sem foco em um único país. O núcleo (IFC, modelagem, vistas, pranchas, PDF/DXF) é neutro; o Brasil é o **primeiro pacote regional** e a referência de teste da 1.0. Escopo da 1.0 e calendário **não mudam**. Ajustados `00`, `01`, `02` (visão, princípio 5, D4), README e CLAUDE.md.
 ### Revisão 2 (2026-10-10)
 - Aplicadas as decisões do PO: corte da 1.0 aprovado; AGPL v3 confirmada; **Claude Pro** (`04` reescrito; `02` §14 e `06` ajustados); Windows+Linux obrigatórios e macOS melhor esforço (`02` D8/§12/R12, `03` S02); **Opção 2: IFC limpo + arquivo lateral `.obim`** (`02` §6 reescrito, `03` S05/S06, `01` §4); corpus do PO depois da F0 (`03` S08, `02` §10/R15).
 - Verificação na web de todos os itens verificáveis; marcadores trocados por "[verificado em 2026-10-10]" ou "[não verificado]" com motivo; novo `07_verificacoes_web.md`.

@@ -3,7 +3,7 @@
 > Status das afirmações (Revisão 2): itens marcados **[verificado em 2026-10-10]** foram checados na web; fontes e ressalvas em `07_verificacoes_web.md`. Licenças e capacidades mudam; a F0-S01 reconfirma com o arquivo LICENSE.
 
 ## 1. Pergunta central
-Por que um arquiteto brasileiro usaria o OpenBIM Studio em vez de (a) Revit/ArchiCAD pagos, (b) Bonsai (Blender) gratuito, (c) FreeCAD BIM gratuito?
+Por que um arquiteto (a 1.0 mira o brasileiro, primeiro pacote regional) usaria o OpenBIM Studio em vez de (a) Revit/ArchiCAD pagos, (b) Bonsai (Blender) gratuito, (c) FreeCAD BIM gratuito?
 
 Resposta proposta: **porque é o único programa gratuito, instalável como um programa normal no Windows e no Linux, que entrega pranchas de projeto legal e executivo residencial no padrão brasileiro, com fluxo de trabalho familiar a quem vem do Revit/ArchiCAD, e grava IFC limpo.** Nenhum concorrente aberto reúne os quatro pontos hoje.
 
@@ -35,7 +35,7 @@ Resposta proposta: **porque é o único programa gratuito, instalável como um p
 | Colaboração | worksharing | Teamwork | git/IFC | não | **2.0** |
 
 **Diferencial competitivo em ordem de força** (o que defendemos):
-1. **Documentação brasileira pronta** (template, carimbo, gráfico por categoria, quadro de áreas, pranchas legais). Ninguém aberto faz; é onde o arquiteto perde mais tempo.
+1. **Documentação regional pronta, começando pelo Brasil** (template, carimbo, gráfico por categoria, quadro de áreas, pranchas legais). Ninguém aberto faz; é onde o arquiteto perde mais tempo.
 2. **UX de arquiteto** (ferramentas de parede/laje/esquadria, cotas temporárias, navegador de projeto, propriedades), em vez de um modelador 3D genérico.
 3. **Programa dedicado no Windows e no Linux** com instalador normal (Mac depois).
 4. **IFC nativo e limpo** validado continuamente (documentação em arquivo lateral aberto, nunca poluindo o IFC).
@@ -49,7 +49,7 @@ Resposta proposta: **porque é o único programa gratuito, instalável como um p
 - **Ler o código aberto é permitido** (é a regra de pesquisa); copiar código GPL para dentro do nosso AGPL é compatível juridicamente, mas deve ser registrado com atribuição (ver `05`).
 
 ## 5. Público-alvo
-- **Primário (1.0):** arquiteto ou pequeno escritório brasileiro (1 a 5 pessoas) que faz residências unifamiliares e pequenas multifamiliares, hoje usa AutoCAD/SketchUp ou Revit/ArchiCAD pirata ou com custo pesado, e precisa aprovar projeto na prefeitura e entregar executivo.
+- **Primário (1.0, pacote regional Brasil):** arquiteto ou pequeno escritório brasileiro (1 a 5 pessoas) que faz residências unifamiliares e pequenas multifamiliares, hoje usa AutoCAD/SketchUp ou Revit/ArchiCAD pirata ou com custo pesado, e precisa aprovar projeto na prefeitura e entregar executivo.
 - **Secundário:** estudantes e professores de arquitetura (Linux/Mac, sem licença), consultores BIM que precisam de IFC limpo.
 - **Fora do público na 1.0:** grandes escritórios com fluxos de worksharing, engenharia estrutural/MEP, infraestrutura (IFC 4.3 infra).
 

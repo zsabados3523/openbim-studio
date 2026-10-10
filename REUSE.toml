@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+version = 1
+
+# Arquivos sem cabeçalho SPDX próprio (texto, dados, gerados).
+[[annotations]]
+path = [
+  "**/*.md",
+  "v2/**",
+  "docs/**",
+  "LICENSE",
+  ".gitignore",
+  ".editorconfig",
+  ".gitattributes",
+  "environment.linux-64.lock",
+  "tests/README.md",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 OpenBIM Studio contributors"
+SPDX-License-Identifier = "AGPL-3.0-or-later"

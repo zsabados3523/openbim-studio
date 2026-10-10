@@ -37,7 +37,7 @@
 | F0-S02-T03 | Ambiente de desenvolvimento reproduzível | T2 | sonnet | sonnet; amostra opus | S02-T01 | FEITA (amostra opus: não sorteada) |
 | F0-S02-T04 | App esqueleto: janela, menu, arrastar-e-soltar | T1 | sonnet | sonnet | S02-T03, S01-T03 | FEITA |
 | F0-S02-T05 | Abrir IFC e mostrar contagem de elementos | T2 | sonnet | sonnet; amostra opus | S02-T04 | FEITA |
-| F0-S02-T06 | CI Linux (build, teste, artefato, REUSE) | T2 | sonnet | sonnet; amostra opus | S02-T05, S01-T01 | BLOQUEADA |
+| F0-S02-T06 | CI Linux (build, teste, artefato, REUSE) | T2 | sonnet | sonnet; amostra opus | S02-T05, S01-T01 | ESCRITA; falta rodar no GitHub (push) e provar verde |
 | F0-S02-T07 | CI Windows | T2 | sonnet | sonnet; amostra opus | S02-T06 | BLOQUEADA |
 | F0-S02-T08 | CI macOS melhor esforço | T1 | sonnet | sonnet | S02-T06 | BLOQUEADA |
 | F0-S02-T09 | Bloquear merge sem Windows+Linux verdes | T0 | PO (líder guia) | PO | S02-T07 | BLOQUEADA |

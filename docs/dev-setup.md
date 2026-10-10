@@ -19,3 +19,6 @@ Para quem vai mexer no código. O PO não precisa fazer isto: o líder técnico 
 - Canal único: conda-forge, com `nodefaults`. Pacote de outro canal é erro.
 - Ao mudar `environment.yml`, gere o arquivo de trava de novo: `conda list --explicit --md5 > environment.linux-64.lock`.
 - Windows: o ambiente é montado pelo CI (ver seção CI, quando existir) e na VM do PO.
+
+## CI
+O fluxo `.github/workflows/ci.yml` roda a cada push e pull request em `main`, num único job chamado `linux` (esse nome é usado na regra de bloqueio de merge; não renomear). Ele cria o ambiente do `environment.yml` só com conda-forge, roda `pytest` sem tela, gera o inventário de licenças (falha se algum pacote não for do conda-forge ou não tiver licença), roda `reuse lint` (a ferramenta REUSE é instalada só no CI, em ambiente separado), guarda como artefato o inventário e um `app.tar.gz`, e registra o tempo total no resumo da execução. Não usa segredos.

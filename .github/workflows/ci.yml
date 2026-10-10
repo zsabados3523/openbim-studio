@@ -1,0 +1,50 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  # O nome do job (linux) é usado na regra de bloqueio de merge. Não renomear.
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Início (relógio)
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
+        with:
+          environment-file: environment.yml
+          activate-environment: openbim
+          channels: conda-forge
+          conda-remove-defaults: "true"
+          channel-priority: strict
+          miniforge-version: latest
+      - name: Testes
+        shell: bash -el {0}
+        run: QT_QPA_PLATFORM=offscreen pytest -q tests
+      - name: Inventário de licenças e canal
+        shell: bash -el {0}
+        run: |
+          mkdir -p out
+          python scripts/license_inventory.py out/license-inventory.md
+      - name: REUSE (ferramenta só no CI, ambiente separado)
+        shell: bash -el {0}
+        run: |
+          conda create -n reuse -c conda-forge --override-channels reuse -y
+          conda run -n reuse reuse lint
+      - name: Pacote do app esqueleto
+        run: tar czf out/app.tar.gz app/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: openbim-ci-linux
+          path: out/
+      - name: Tempo total
+        if: always()
+        run: |
+          echo "Tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"

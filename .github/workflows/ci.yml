@@ -102,6 +102,10 @@ jobs:
           t0=$(date +%s)
           conda env create -f packaging/linux/runtime-environment.yml -p "$RUNNER_TEMP/rt" -y -q
           echo "Ambiente de runtime criado em $(( $(date +%s) - t0 )) s" | tee -a "$GITHUB_STEP_SUMMARY"
+          # NSIS não vem mais no windows-latest (Server 2025): usa o pacote conda-forge `nsis` (só ferramenta, não entra no instalador)
+          conda create -n nsis -c conda-forge --override-channels nsis -y -q
+          export MAKENSIS="$(find "$(conda info --base)/envs/nsis" -name makensis.exe | head -n 1)"
+          echo "makensis: $MAKENSIS"
           bash packaging/windows/build_installer.sh "$RUNNER_TEMP/rt" "$RUNNER_TEMP/inst-out" 2>&1 | tail -n 15 | tee -a "$GITHUB_STEP_SUMMARY"
           ls -l "$RUNNER_TEMP/inst-out/OpenBIM-Studio-Setup.exe" | tee -a "$GITHUB_STEP_SUMMARY"
           cp "$RUNNER_TEMP/inst-out/OpenBIM-Studio-Setup.exe" "$RUNNER_TEMP/inst-out/licencas-coletadas.txt" out/

@@ -69,8 +69,9 @@ PY
 cp "$PKG/FONTES.md" "$PKG/licenses/FONTES.md"
 
 # 4. Gera o instalador
-MAKENSIS="$(command -v makensis || true)"
-[ -n "$MAKENSIS" ] || MAKENSIS="/c/Program Files (x86)/NSIS/makensis.exe"
+# makensis: variável MAKENSIS, ou o do PATH (no CI vem do pacote conda-forge `nsis`, ambiente separado)
+MAKENSIS="${MAKENSIS:-$(command -v makensis || true)}"
+[ -n "$MAKENSIS" ] || { echo "makensis nao encontrado (defina MAKENSIS)" >&2; exit 1; }
 WPKG="$(cygpath -w "$PKG")"; WEXE="$(cygpath -w "$EXE")"
 MSYS2_ARG_CONV_EXCL='*' "$MAKENSIS" -V2 "-DPASTA_PACOTE=$WPKG" "-DSAIDA=$WEXE" "-DVERSAO=$VERSAO" "$(cygpath -w "$HERE/openbim-studio.nsi")"
 echo "Pacote: $(du -sh "$PKG" | cut -f1)  Instalador: $(du -h "$EXE" | cut -f1)  tempo: $(( $(date +%s) - START )) s"

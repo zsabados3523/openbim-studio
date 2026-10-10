@@ -93,6 +93,35 @@ jobs:
         run: |
           mkdir -p out
           python scripts/license_inventory.py out/license-inventory.md
+      - name: Instalador Windows (ambiente de runtime e NSIS)
+        shell: bash -el {0}
+        run: |
+          mkdir -p out
+          t0=$(date +%s)
+          conda env create -f packaging/linux/runtime-environment.yml -p "$RUNNER_TEMP/rt" -y -q
+          echo "Ambiente de runtime criado em $(( $(date +%s) - t0 )) s" | tee -a "$GITHUB_STEP_SUMMARY"
+          bash packaging/windows/build_installer.sh "$RUNNER_TEMP/rt" "$RUNNER_TEMP/inst-out" 2>&1 | tail -n 15 | tee -a "$GITHUB_STEP_SUMMARY"
+          ls -l "$RUNNER_TEMP/inst-out/OpenBIM-Studio-Setup.exe" | tee -a "$GITHUB_STEP_SUMMARY"
+          cp "$RUNNER_TEMP/inst-out/OpenBIM-Studio-Setup.exe" "$RUNNER_TEMP/inst-out/licencas-coletadas.txt" out/
+      - name: Teste do instalador (instala, abre, desinstala)
+        shell: bash
+        run: |
+          set -e
+          DEST="$(cygpath -w "$RUNNER_TEMP")\\OpenBIM Studio teste"
+          "out/OpenBIM-Studio-Setup.exe" /S "/D=$DEST"
+          D="$(cygpath -u "$DEST")"
+          test -f "$D/app/OpenBIM-Studio.pyw" && test -f "$D/Uninstall.exe" && test -f "$D/LGPL-COMO-TROCAR.md" && test -f "$D/FONTES.md"
+          test -f "$D/licenses/AGPL-3.0-or-later.txt" && test -f "$D/licenses/INVENTARIO.md"
+          grep -rqi "GNU LESSER GENERAL PUBLIC LICENSE" "$D/licenses/pacotes" || { echo "::error::sem texto da LGPL em licenses/pacotes"; exit 1; }
+          # abre o app (sem tela) a partir da pasta instalada, sem o ambiente conda ativo do CI
+          out="$(env -i SYSTEMROOT="$SYSTEMROOT" TEMP="$TEMP" QT_QPA_PLATFORM=offscreen "$D/env/python.exe" "$D/app/OpenBIM-Studio.pyw" --selftest)"
+          echo "selftest: $out"; test "$out" = "OK"
+          # desinstala e confere que não sobrou nada além do próprio desinstalador
+          "$D/Uninstall.exe" /S "_?=$DEST"
+          sleep 5
+          rm -f "$D/Uninstall.exe"
+          if [ -d "$D" ] && [ -n "$(ls -A "$D")" ]; then echo "::error::sobras após desinstalar:"; ls -A "$D" | head; exit 1; fi
+          echo "Instalação, abertura e desinstalação sem sobras: OK" >> "$GITHUB_STEP_SUMMARY"
       - name: Pacote do app esqueleto
         if: always()
         shell: bash

@@ -15,3 +15,4 @@ Uma linha por tarefa concluída ou escalada, e por mudança de classe de tarefa.
 2026-10-10 | S01-T03..T05 | feitas | Esqueleto, README e CONTRIBUTING pt-BR (sonnet) e en (haiku). Autosave no .gitignore como `autosave/` genérico.
 2026-10-10 | S01-T06..T10 | feitas | Coleta por haiku, fichas por sonnet. SINAPI: site da CAIXA em loop de redirecionamento, não verificado, sem contornar.
 2026-10-10 | S01-T11 | escrita, aguarda opus | Tabela mestre sem nenhum "Não"; 4 pendências para o lote 1 (OCCT, libdxfrw, WiX, relink LGPL).
+2026-10-10 | S01-T01 | feita | Commit 076d870 e push para github.com/zsabados3523/openbim-studio (ok do PO). Espelho Codeberg adiado por decisão do PO.

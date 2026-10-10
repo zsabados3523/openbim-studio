@@ -5,7 +5,7 @@
 ## Fatias
 | Fatia | Nome | Tam. | Depende de | Status | Cartões | Observação |
 |---|---|---|---|---|---|---|
-| F0-S01 | Repositório, licenças e pesquisa | P | — | EM_ANDAMENTO | S01-T01 a T12 | Falta: remoto no GitHub (PO), lote Opus (T11, T12) |
+| F0-S01 | Repositório, licenças e pesquisa | P | — | EM_ANDAMENTO | S01-T01 a T12 | Falta: lote Opus (T11, T12); espelho Codeberg depois |
 | F0-S02 | CI Windows+Linux e app esqueleto | M→G (tratada como G) | S01 | BLOQUEADA | S02-T01 a T15 | S02-T01 pode começar quando S01-T01 estiver feita |
 | F0-S03 | Protótipo de viewport (Qt RHI) | M | S02; S08 contínuo | NÃO INICIADA (sem cartões) | — | |
 | F0-S04 | Ponte Python↔C++ (híbrido vs C++ puro) | G, crítica | S02 | NÃO INICIADA | — | Contém T3 (ponte, threads) |
@@ -20,7 +20,7 @@
 ## Cartões de S01 e S02
 | Cartão | Título | Classe | Implementa | Revisa | Depende de | Status |
 |---|---|---|---|---|---|---|
-| F0-S01-T01 | Git local e repositórios remotos | T0 | líder (sonnet) + PO | PO | — | EM_ANDAMENTO (git local feito; remoto aguarda PO) |
+| F0-S01-T01 | Git local e repositórios remotos | T0 | líder (sonnet) + PO | PO | — | FEITA (push em 2026-10-10; espelho Codeberg adiado) |
 | F0-S01-T02 | Arquivo LICENSE (AGPL v3, texto oficial) | T0 | haiku | líder confere hash | — | FEITA |
 | F0-S01-T03 | Esqueleto do repositório e modelo de ficha | T0 | haiku | líder | — | FEITA |
 | F0-S01-T04 | README e CONTRIBUTING em pt-BR | T1 | sonnet | sonnet | T03 | FEITA |

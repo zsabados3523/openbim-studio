@@ -57,4 +57,4 @@ Programa BIM aberto (AGPL v3), instalável no Windows e no Linux, para projeto l
 ## Plataformas e comandos
 - Windows e Linux: obrigatórios (CI bloqueia merge). macOS: build experimental, falha não bloqueia, sem teste manual.
 - Comandos de build e teste: **ainda não definidos**; serão fixados na F0-S02 e anotados aqui.
-- Git: iniciado localmente (ramo `main`), sem commits e sem remoto. Primeiro commit e push só com ok do PO.
+- Git: ramo `main`, remoto `origin` = github.com/zsabados3523/openbim-studio (público). Push só com ok do PO. Espelho Codeberg: adiado.

@@ -25,3 +25,6 @@ Itens 1 a 3 formam o lote mínimo; o item 4 entra só se a cota permitir. O líd
 
 ## Já despachado: lote 2 (2026-10-11)
 Resultado em `docs/state/reports/LOTE_OPUS_2.md`. Tabela mestre APROVADA; v2/05 APROVADO; AppImage e instalador REPROVADOS (7 e 4 defeitos, só correções curtas); sonda C++ amostra aprovada; CI com 1 defeito (lista de licenças permitidas). Próximo lote (lote 3): conferir os diffs dos cartões S02-T17 e S02-T18, amostra de S02-T19 e S02-T20, ADR-005 final (S02-T15).
+
+## Lote 3 (pedido pronto em `docs/state/LOTE_OPUS_3.md`, 2026-10-11)
+T17/T18 (correções do lote 2), amostra de T19/T20 e ADR-005 final (T15). Cota semanal usada: 12%. Aguarda o ok do PO.

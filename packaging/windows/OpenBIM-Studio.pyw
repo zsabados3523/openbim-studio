@@ -2,6 +2,7 @@
 """Lançador do pacote Windows: usa o Python da pasta env\\ e o código em app\\.
 
 Não confere hash nem assinatura de nenhuma DLL: você pode trocar as bibliotecas (ver LGPL-COMO-TROCAR.md).
+O atalho inicia o Python em modo isolado (`pythonw.exe -I`), que ignora PYTHONPATH, PYTHONHOME e o Python do usuário.
 """
 import os
 import sys
@@ -14,7 +15,6 @@ for sub in ("Library\\bin", "Library\\mingw-w64\\bin", "Library\\usr\\bin", "bin
     if os.path.isdir(pasta):
         os.environ["PATH"] = pasta + os.pathsep + os.environ.get("PATH", "")
         os.add_dll_directory(pasta)
-os.environ["PYTHONNOUSERSITE"] = "1"
 sys.path.insert(0, aqui)
 
 from openbim_app.main import main  # noqa: E402

@@ -21,21 +21,31 @@ SetCompressorDictSize 64
 !insertmacro MUI_LANGUAGE "PortugueseBR"
 
 Section "OpenBIM Studio"
+  ; espaço necessário (KB): o programa instalado ocupa ~1,4 GB; a página de pasta avisa se não couber
+  AddSize 1500000
   SetOutPath "$INSTDIR"
+  ; instalar por cima de versão anterior: limpa env\ e app\ para não misturar arquivos velhos e novos
+  RMDir /r "$INSTDIR\env"
+  RMDir /r "$INSTDIR\app"
+  RMDir /r "$INSTDIR\licenses"
   File /r "${PASTA_PACOTE}\*.*"
   ; ambiente conda: um tar.gz único, extraído com o tar.exe do Windows (10 e 11)
   InitPluginsDir
+  DetailPrint "Copiando o pacote do programa (cerca de 480 MB)..."
   File "/oname=$PLUGINSDIR\env.tgz" "${ENV_TGZ}"
+  DetailPrint "Extraindo os arquivos do programa; isto leva de 1 a 3 minutos e a janela pode parecer parada..."
   nsExec::ExecToLog '"$SYSDIR\tar.exe" -xzf "$PLUGINSDIR\env.tgz" -C "$INSTDIR"'
   Pop $0
-  StrCmp $0 0 +3
-    MessageBox MB_OK|MB_ICONSTOP "Falha ao extrair os arquivos do programa (código $0)."
+  StrCmp $0 0 +4
+    RMDir /r "$INSTDIR\env"
+    MessageBox MB_OK|MB_ICONSTOP "Falha ao extrair os arquivos do programa (código $0). Nada foi instalado."
     Abort
+  Delete "$PLUGINSDIR\env.tgz"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   CreateDirectory "$SMPROGRAMS\OpenBIM Studio"
-  CreateShortcut "$SMPROGRAMS\OpenBIM Studio\OpenBIM Studio.lnk" "$INSTDIR\env\pythonw.exe" '"$INSTDIR\app\OpenBIM-Studio.pyw"' "$INSTDIR\env\pythonw.exe"
+  CreateShortcut "$SMPROGRAMS\OpenBIM Studio\OpenBIM Studio.lnk" "$INSTDIR\env\pythonw.exe" '-I "$INSTDIR\app\OpenBIM-Studio.pyw"' "$INSTDIR\env\pythonw.exe"
   CreateShortcut "$SMPROGRAMS\OpenBIM Studio\Desinstalar.lnk" "$INSTDIR\Uninstall.exe"
-  CreateShortcut "$DESKTOP\OpenBIM Studio.lnk" "$INSTDIR\env\pythonw.exe" '"$INSTDIR\app\OpenBIM-Studio.pyw"' "$INSTDIR\env\pythonw.exe"
+  CreateShortcut "$DESKTOP\OpenBIM Studio.lnk" "$INSTDIR\env\pythonw.exe" '-I "$INSTDIR\app\OpenBIM-Studio.pyw"' "$INSTDIR\env\pythonw.exe"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\OpenBIM Studio" "DisplayName" "OpenBIM Studio"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\OpenBIM Studio" "DisplayVersion" "${VERSAO}"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\OpenBIM Studio" "UninstallString" '"$INSTDIR\Uninstall.exe"'
@@ -48,7 +58,13 @@ Section "Uninstall"
   RMDir "$SMPROGRAMS\OpenBIM Studio"
   Delete "$DESKTOP\OpenBIM Studio.lnk"
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\OpenBIM Studio"
-  ; só apaga a pasta se for mesmo a do programa (evita apagar uma pasta escolhida por engano)
-  IfFileExists "$INSTDIR\app\OpenBIM-Studio.pyw" 0 +2
-    RMDir /r "$INSTDIR"
+  ; apaga só o que o instalador criou; a pasta de instalação só some se ficar vazia
+  ; (se o usuário escolheu uma pasta que já tinha arquivos dele, eles ficam intactos)
+  RMDir /r "$INSTDIR\env"
+  RMDir /r "$INSTDIR\app"
+  RMDir /r "$INSTDIR\licenses"
+  Delete "$INSTDIR\LGPL-COMO-TROCAR.md"
+  Delete "$INSTDIR\FONTES.md"
+  Delete "$INSTDIR\Uninstall.exe"
+  RMDir "$INSTDIR"
 SectionEnd

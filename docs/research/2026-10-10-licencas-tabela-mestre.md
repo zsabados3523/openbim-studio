@@ -9,7 +9,7 @@
 |---|---|---|---|---|
 | IfcOpenShell (C++) | LGPL-3.0-or-later (tag v0.9.0) | b | Sim | Atribuição; bibliotecas separadas e trocáveis |
 | ifcopenshell-python | LGPL-3.0-or-later (v0.9.0) | b | Sim | Idem |
-| OCCT | `LGPL-2.1-only WITH OCCT-exception-1.0` (identificador SPDX de memória, a conferir) (V8_0_1) | b | **Sim, com condição** | Arquivos `.dll`/`.so` separados, sem modificar, textos da LGPL 2.1 e da exceção no pacote, aviso em "Sobre", oferta do fonte da versão exata. "Only" só pesaria se copiássemos código (a) |
+| OCCT | `LGPL-2.1-only WITH OCCT-exception-1.0` (identificador SPDX conferido na lista oficial de exceções do SPDX, lote opus 2) (V8_0_1) | b | **Sim, com condição** | Arquivos `.dll`/`.so` separados, sem modificar, textos da LGPL 2.1 e da exceção no pacote, aviso em "Sobre", oferta do fonte da versão exata. "Only" só pesaria se copiássemos código (a) |
 | pythonocc-core | LGPL-3.0 (conda-forge "or-later") (8.0.1.1) | b | Sim | Relink; divergência entre fontes registrada |
 | Qt 6 (módulos LGPL) | LGPL-3.0 (ou GPL-3/comercial) (6.12; no conda-forge 6.11.2) | b | Sim | Relink; evitar módulos só GPL-3. Lacuna: licença do Qt Shader Tools (compila shaders do QRhi) não verificada; confirmar se vai no instalador |
 | PySide6 | LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only (PyPI 6.12.0; conda 6.11.2) | b | Sim (opção LGPL-3) | Relink; GPL-2.0-only não vale |
@@ -32,7 +32,7 @@
 | linuxdeploy, appimagetool | MIT | c | Sim | — |
 
 ## Dependências transitivas (defeito 8)
-O instalador carregará dezenas de pacotes além dos listados (Python, e o que OCCT, IfcOpenShell e Qt puxam). Candidatos citados pelo opus **de memória, a conferir**: CPython (PSF-2.0), Eigen (MPL-2.0), Boost (BSL-1.0), TBB (Apache-2.0), HDF5, libxml2, FreeType (escolher FTL), CGAL (possivelmente GPL-3-or-later), componentes de terceiros dentro do Qt e o runtime do Visual C++ no Windows (proprietário, redistribuível pelos termos da Microsoft). **O inventário completo será gerado do arquivo de trava do ambiente na S02** (ADR-005, teste 9).
+O instalador e o AppImage carregam dezenas de pacotes além dos listados (Python, e o que OCCT, IfcOpenShell e Qt puxam). Candidatos citados pelo opus **de memória, a conferir**: CPython (PSF-2.0), Eigen (MPL-2.0), Boost (BSL-1.0), TBB (Apache-2.0), HDF5, libxml2, FreeType (escolher FTL), CGAL (possivelmente GPL-3-or-later), componentes de terceiros dentro do Qt e o runtime do Visual C++ no Windows (proprietário, redistribuível pelos termos da Microsoft). **O inventário completo será gerado do arquivo de trava do ambiente na S02** (ADR-005, teste 9).
 
 ## Notas
 - "Somente versão 3": PySide6, fpdf2 e (talvez) libslvs são "3.0-only"; o nosso código é AGPL-3.0-or-later, mas o conjunto distribuído só pode ser usado hoje sob a versão 3 (registrado no ADR-009).
@@ -40,3 +40,9 @@ O instalador carregará dezenas de pacotes além dos listados (Python, e o que O
 
 ## Não verificado (consolidado)
 Termos próprios do conda-forge · lista de módulos só comerciais do Qt · licença do Qt Shader Tools · texto do LICENSE do ReportLab · versão oficial da LGPL do pythonocc-core · identificador SPDX da exceção do OCCT · versão do NSIS · termos do SINAPI (site da CAIXA inacessível).
+
+## Conferência do lote opus 2 (2026-10-11)
+- Tabela aprovada (12 de 12 defeitos corrigidos). Lista real dos pacotes distribuídos: `licenses/INVENTARIO.md` de cada pacote e `license-inventory.md` no artefato do CI (gerados do ambiente de runtime; nada é escrito à mão).
+- Escolhas de licença vistas no inventário real: FreeType (`GPL-2.0-only OR FTL`: escolhida FTL), FreeImage (escolhida GPL-3), GMP (escolhida LGPL-3), cairo (`LGPL-2.1-only OR MPL-1.1`), dbus (`AFL-2.1 OR GPL-2.0-or-later`), readline (GPL-3.0-only, usada pelo Python: combina pela seção 13 da AGPL), CGAL (GPL-3/LGPL-3, compilado dentro do IfcOpenShell: seção 13). Outras bibliotecas "LGPL-2.1-only" além do OCCT: geos, libiconv, libnsl, libraw, com as mesmas condições do OCCT.
+- Versões consultadas que faltavam: ezdxf, vcpkg, Briefcase/conda-constructor, WiX, linuxdeploy: copiar das fichas (`docs/research/2026-10-10-licencas-grupo-*.md`); appimagetool: 1.9.1 (a do CI).
+- Contagem: 23 linhas de componentes na tabela (o ADR-009 §3 diz 24 linhas; ajustar quando o ADR for tocado de novo).

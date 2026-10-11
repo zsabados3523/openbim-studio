@@ -27,3 +27,11 @@
 
 ## Padrões assumidos (06 §2, sem resposta ainda)
 C hospedagem GitHub + espelho Codeberg · D interface híbrida (confirmar na S09) · F gravação IFC4 e exportação IFC2x3 como critério de portão · G SignPath na v0.3 · H nome provisório "OpenBIM Studio" · I sem IA embutida na 1.0 · J consulta à CAIXA (SINAPI) só na F5.
+
+## Decisões do PO após o lote Opus 2 (2026-10-11)
+- Mesa fora do AppImage: manter fora; testar em máquina virtual sem aceleração no roteiro T14 (se não abrir, o Mesa volta).
+- Download dos textos oficiais (exceção do OCCT, LGPL-3, LGPL-2.1, GPL-3) para o repositório: autorizado (uma vez, para esses quatro).
+- Artefatos do CI: guarda de 7 dias; tratados como builds de teste.
+- Build incremental do Windows (~16 min contra meta de 10): **opção 1, aceitar agora e revisitar na S04** (2026-10-11).
+- Autorização permanente para ramos de trabalho, PR e merge de T0 a T2 aprovadas: registrada no `CLAUDE.md` (2026-10-11).
+- Licenças do Windows (2026-10-11): trocar MKL por OpenBLAS no ambiente de runtime; aceitar `ucrt`, `vc14_runtime` e `vcomp14` (runtimes redistribuíveis da Microsoft) por exceção nomeada e amarrada à versão; incluir `BSD-3-Clause-Clear` na lista de permitidas.

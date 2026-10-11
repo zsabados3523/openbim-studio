@@ -13,9 +13,18 @@ Fonte: execução do CI [38110728020](https://github.com/zsabados3523/openbim-st
 
 macOS (melhor esforço, não bloqueia): 93 s, verde.
 
-## Pendências que impedem declarar a T13 completa
-1. **O AppImage ainda não é gerado no CI** (critério 1 da T10 pede "a cada merge"). Hoje ele foi montado e testado só na máquina do líder. Para gerar no CI é preciso baixar o `appimagetool` (MIT, versão fixa 1.9.1, conferida por sha256) dentro do CI. Pede ok do PO.
-2. **Build incremental não medido:** o CI não guarda cache, então toda execução é "limpa". O app esqueleto é só Python (não há compilação); o único trecho compilado é a sonda C++, que levou 2,4 s limpa e 0,9 s incremental no Linux (relatório F0-S02-sonda). Sem cache de pacotes o Windows leva ~16 min por execução, acima dos 10 min da meta incremental. Opções: (a) ligar cache de pacotes e medir (recomendado); (b) aceitar a medição da sonda C++ como a de "incremental" nesta fatia e medir de verdade na S04, quando houver código C++ do app.
+## Atualização 2026-10-11 (execuções 38148119510 e 38150116542, ramo `lote2-resultado`)
+| Meta | Linux | Windows | Situação |
+|---|---|---|---|
+| Build limpo ≤ 60 min | AppImage: job `appimage` 170 a 182 s (inclui criar o ambiente e montar); testes: 81 s | 939 s a 1207 s (o 1207 s inclui gravar o cache pela 1ª vez) | **Atingida** nos dois |
+| Build incremental ≤ 10 min | cache de pacotes ligado: `linux` 81 s (era 66 s sem cache) | 995 s com cache contra 939 s sem: **o cache de pacotes não ajudou** (restaurar leva 89 s; criar o ambiente continua ~186 s) | Medida; **não atingida no Windows** (~16 min por execução) |
+| Instalador ≤ 600 MB | AppImage 389 MB (CI) | **309 MB** (CI; eram 482 MB antes de tirar o MKL por licença) | **Atingida** nos dois |
+| Instalação ≤ 5 min / primeira abertura ≤ 10 s (ADR-005 teste 7) | | verificado pelo CI (falha se passar); teste todo leva 116 s com duas instalações | Atingida no runner do CI |
+
+**Meta não atingida: build incremental do Windows (~16 min contra 10 min).** Regra da F0: parar e reportar ao PO com opções, sem contornar. O que consome o tempo no Windows não é compilar: é criar o ambiente conda do zero (~3 min), criar o segundo ambiente de runtime (~5 min) e montar o instalador (~1 min). O app esqueleto é só Python. Opções:
+1. **Aceitar** nesta fatia e rever quando houver C++ do app (S04): hoje o "incremental" real é um teste de Python, que leva segundos no desenvolvimento local; o tempo do CI é o do ambiente. (Recomendado; **decidido pelo PO em 2026-10-11: opção 1**.)
+2. Guardar o **ambiente já criado** em cache (não só os pacotes); economiza ~8 min, mas tem risco de ambiente velho e cache de vários GB.
+3. Pular o instalador quando só mudar documentação (CI condicional); não reduz o tempo de uma mudança de código.
 
 ## Cota da S02 (3 linhas)
 - Sessões 1 e 2 (preparação, S01, início da S02): janela de 5 h entre 22% e 34%; semana de 2% a 3%.

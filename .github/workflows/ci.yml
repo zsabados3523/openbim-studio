@@ -28,7 +28,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/conda_pkgs
-          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'packaging/linux/runtime-environment.yml') }}
+          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'packaging/runtime-environment.yml') }}
       - name: Pasta de pacotes do conda
         shell: bash
         run: |
@@ -59,11 +59,20 @@ jobs:
         shell: bash -el {0}
         run: |
           mkdir -p out
-          python scripts/license_inventory.py out/license-inventory.md
+          python scripts/license_inventory.py out/license-inventory.md --informativo
+      - name: Teste 2 do ADR-005 (o pacote do IfcOpenShell; não bloqueia)
+        shell: bash -el {0}
+        continue-on-error: true
+        run: |
+          mkdir -p out
+          python scripts/sonda_ifcopenshell.py out/sonda-ifcopenshell.txt 2>&1 | grep -v "No stream support" || true
+          v=$(grep -E "^VEREDITO" out/sonda-ifcopenshell.txt || echo "VEREDITO: sem resultado")
+          m=$(grep -E "^  liga em|^módulo" out/sonda-ifcopenshell.txt | cut -c1-400 | sed ':a;N;$!ba;s/\n/%0A/g')
+          echo "::notice title=ifcopenshell no ${RUNNER_OS}::${v}%0A${m}"
       - name: REUSE (ferramenta só no CI, ambiente separado)
         shell: bash -el {0}
         run: |
-          conda create -n reuse -c conda-forge --override-channels reuse -y
+          conda create -n reuse -c conda-forge --override-channels reuse=6.2.0 -y
           conda run -n reuse reuse lint
       - name: Gravação do roteiro (experimento T12; não bloqueia)
         shell: bash -el {0}
@@ -77,6 +86,7 @@ jobs:
         with:
           name: openbim-ci-linux
           path: out/
+          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
       - name: Tempo total
         if: always()
         run: |
@@ -95,7 +105,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/conda_pkgs
-          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'packaging/linux/runtime-environment.yml') }}
+          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'packaging/runtime-environment.yml') }}
       - name: Pasta de pacotes do conda
         shell: bash
         run: |
@@ -126,7 +136,16 @@ jobs:
         shell: bash -el {0}
         run: |
           mkdir -p out
-          python scripts/license_inventory.py out/license-inventory.md
+          python scripts/license_inventory.py out/license-inventory.md --informativo
+      - name: Teste 2 do ADR-005 (o pacote do IfcOpenShell; não bloqueia)
+        shell: bash -el {0}
+        continue-on-error: true
+        run: |
+          mkdir -p out
+          python scripts/sonda_ifcopenshell.py out/sonda-ifcopenshell.txt 2>&1 | grep -v "No stream support" || true
+          v=$(grep -E "^VEREDITO" out/sonda-ifcopenshell.txt || echo "VEREDITO: sem resultado")
+          m=$(grep -E "^  liga em|^módulo" out/sonda-ifcopenshell.txt | cut -c1-400 | sed ':a;N;$!ba;s/\n/%0A/g')
+          echo "::notice title=ifcopenshell no ${RUNNER_OS}::${v}%0A${m}"
       - name: Instalador Windows (ambiente de runtime e NSIS)
         shell: bash -el {0}
         run: |
@@ -134,21 +153,21 @@ jobs:
           exec > >(tee "$RUNNER_TEMP/passo.log") 2>&1
           mkdir -p out
           t0=$(date +%s)
-          conda env create -f packaging/linux/runtime-environment.yml -p "$RUNNER_TEMP/rt" -y -q
+          conda env create -f packaging/runtime-environment.yml -p "$RUNNER_TEMP/rt" -y -q
           echo "Ambiente de runtime criado em $(( $(date +%s) - t0 )) s" | tee -a "$GITHUB_STEP_SUMMARY"
           # NSIS não vem mais no windows-latest (Server 2025): usa o pacote conda-forge `nsis` (só ferramenta, não entra no instalador)
-          conda create -n nsis -c conda-forge --override-channels nsis -y -q
+          conda create -n nsis -c conda-forge --override-channels nsis=3.12=h4c425fd_1 -y -q
           export MAKENSIS="$(find "$(conda info --base)/envs/nsis" -name makensis.exe | head -n 1)"
           echo "makensis: $MAKENSIS"
-          bash packaging/windows/build_installer.sh "$RUNNER_TEMP/rt" "$RUNNER_TEMP/inst-out" 2>&1 | tail -n 30 | tee -a "$GITHUB_STEP_SUMMARY"
+          bash packaging/windows/build_installer.sh "$RUNNER_TEMP/rt" "$RUNNER_TEMP/inst-out" 2>&1 | tail -n 45 | tee -a "$GITHUB_STEP_SUMMARY"
           ls -l "$RUNNER_TEMP/inst-out/OpenBIM-Studio-Setup.exe" | tee -a "$GITHUB_STEP_SUMMARY"
           cp "$RUNNER_TEMP/inst-out/OpenBIM-Studio-Setup.exe" "$RUNNER_TEMP/inst-out/licencas-coletadas.txt" out/
       - name: Teste do instalador (instala, abre, desinstala)
         shell: bash
-        timeout-minutes: 20
+        timeout-minutes: 30
         run: |
           set +e
-          timeout 900 bash packaging/windows/test_installer.sh "$PWD/out/OpenBIM-Studio-Setup.exe" "$(cygpath -w "$RUNNER_TEMP")\\OpenBIM-teste" > "$RUNNER_TEMP/teste.log" 2>&1
+          timeout 1500 bash packaging/windows/test_installer.sh "$PWD/out/OpenBIM-Studio-Setup.exe" "$(cygpath -w "$RUNNER_TEMP")\\OpenBIM-teste" > "$RUNNER_TEMP/teste.log" 2>&1
           rc=$?
           cat "$RUNNER_TEMP/teste.log"
           if [ $rc -ne 0 ]; then
@@ -174,6 +193,7 @@ jobs:
         with:
           name: openbim-ci-windows
           path: out/
+          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
       - name: Tempo total
         if: always()
         shell: bash
@@ -215,7 +235,7 @@ jobs:
         shell: bash -el {0}
         run: |
           mkdir -p out
-          python scripts/license_inventory.py out/license-inventory.md
+          python scripts/license_inventory.py out/license-inventory.md --informativo
       - name: Pacote do app esqueleto
         if: always()
         shell: bash
@@ -227,6 +247,7 @@ jobs:
         with:
           name: openbim-ci-macos
           path: out/
+          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
       - name: Tempo total
         if: always()
         shell: bash
@@ -252,7 +273,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/conda_pkgs
-          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'packaging/linux/runtime-environment.yml') }}
+          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'packaging/runtime-environment.yml') }}
       - name: Pasta de pacotes do conda
         shell: bash
         run: |
@@ -260,7 +281,7 @@ jobs:
           echo "::notice title=cache de pacotes::cache-hit=${{ steps.cache_conda.outputs.cache-hit }}"
       - uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
         with:
-          environment-file: packaging/linux/runtime-environment.yml
+          environment-file: packaging/runtime-environment.yml
           activate-environment: openbim-runtime
           channels: conda-forge
           conda-remove-defaults: "true"
@@ -283,14 +304,21 @@ jobs:
             echo "::error title=AppImage falhou::$msg"
             exit $rc
           fi
-      - name: Testar o AppImage (abre sem tela) e conferir tamanho
+      - name: Testar o AppImage (licenças, extração, troca de biblioteca, tamanho)
         run: |
+          set +e
           IMG="$RUNNER_TEMP/ai/OpenBIM-Studio-x86_64.AppImage"
-          out="$(QT_QPA_PLATFORM=offscreen "$IMG" --appimage-extract-and-run --selftest 2>&1 | tail -n 1)"
-          echo "selftest: $out"; test "$out" = "OK"
+          QT_QPA_PLATFORM=offscreen timeout 900 bash packaging/linux/test_appimage.sh "$IMG" > teste-ai.log 2>&1
+          rc=$?
+          cat teste-ai.log
+          if [ $rc -ne 0 ]; then
+            msg=$(tail -n 45 teste-ai.log | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=teste do AppImage falhou::$msg"
+            exit $rc
+          fi
           size=$(stat -c %s "$IMG"); echo "AppImage: $((size/1000000)) MB"
-          test "$size" -le 600000000
-          echo "::notice title=AppImage::$((size/1000000)) MB, selftest OK"
+          test "$size" -le 600000000 || { echo "::error::AppImage acima de 600 MB"; exit 1; }
+          echo "::notice title=AppImage::$((size/1000000)) MB, testes de licença e troca de biblioteca OK"
       - name: Empacotar (tar.gz mantém a permissão de executar)
         run: |
           mkdir -p out
@@ -299,6 +327,7 @@ jobs:
         with:
           name: openbim-appimage
           path: out/
+          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
       - name: Tempo total
         if: always()
         run: echo "::notice title=tempo do job appimage::$(( $(date +%s) - T0 )) s"

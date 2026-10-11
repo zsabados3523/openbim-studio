@@ -11,3 +11,5 @@ dependencies:
   - ifcopenshell=0.9.0
   - pyside6=6.11.2
   - qt6-main=6.11.2
+  # Sem MKL (licença proprietária da Intel, decisão do PO em 2026-10-11): BLAS livre (OpenBLAS) em todos os sistemas
+  - libblas=*=*openblas

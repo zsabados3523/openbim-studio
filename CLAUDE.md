@@ -37,7 +37,7 @@ Programa BIM aberto (AGPL v3), instalável no Windows e no Linux, geral (núcleo
 - **Proibido:** merge de T3 sem revisão opus; "aprovar provisoriamente"; revisão crítica em sonnet/haiku.
 - Meta de F0 não atingida = parar e reportar ao PO com opções. Nunca contornar em silêncio.
 - **Adiado (v2/04 §9):** hooks, `.claude/agents`, comandos personalizados, orquestrador autônomo, trabalho noturno, CLAUDE.md por módulo.
-- Não instalar nada, não rodar comando de rede, não iniciar git nem criar repositório remoto sem perguntar ao PO. Aprovação vale por ação.
+- Não instalar ferramenta nova, não baixar arquivo, não criar repositório remoto nem mexer no `main` sem o ok do PO. Fora a **autorização permanente** abaixo, aprovação vale por ação.
 
 ## Cota (plano Claude Pro; v2/04 §6 e §7)
 - Orçamento semanal: sonnet ~70% · opus ~20% (1–2 lotes) · reserva ~10% · haiku residual.
@@ -57,5 +57,12 @@ Programa BIM aberto (AGPL v3), instalável no Windows e no Linux, geral (núcleo
 ## Plataformas e comandos
 - Windows e Linux: obrigatórios (CI bloqueia merge). macOS: build experimental, falha não bloqueia, sem teste manual.
 - Ambiente: Miniforge em `~/miniforge3`; ambiente `openbim` (conda-forge). Criar: `conda env create -f environment.yml`. Rodar testes: `QT_QPA_PLATFORM=offscreen ~/miniforge3/envs/openbim/bin/pytest`. Detalhes em `docs/dev-setup.md`. Build e empacotamento: definidos nas T06, T10, T11.
-- Git: ramo `main` protegido (jobs `linux` e `windows` obrigatórios): **nada vai direto ao `main`**. Todo trabalho em ramo próprio, push do ramo só com ok do PO, e o PO abre o PR e faz o merge. Remoto `origin` = github.com/zsabados3523/openbim-studio (público). Espelho Codeberg: adiado.
+- Git: ramo `main` protegido (jobs `linux` e `windows` obrigatórios): **nada vai direto ao `main`**. Todo trabalho em ramo próprio; push, PR e merge seguem a autorização permanente abaixo. Remoto `origin` = github.com/zsabados3523/openbim-studio (público). Espelho Codeberg: adiado.
 - Referências do PO (IFC e plantas) ficam fora do repositório (`../openbim-studio-referencias/`). Só abrir arquivo dali se o PO listar no chat quais; nunca copiar para o repositório; testes com elas rodam só na máquina do PO.
+
+## Autorização permanente do PO (registrada em 2026-10-11; vale até o PO revogar)
+1. Pode criar ramos, fazer commit e push **só em ramos de trabalho** (nunca direto no `main`) e abrir PR com `gh`.
+2. Pode ler logs do CI com `gh`, corrigir e enviar de novo, até **5 tentativas por problema**. Na sexta falha, parar e explicar ao PO.
+3. Pode dar merge do PR quando `linux` e `windows` estiverem verdes e o PR for só de tarefa T0, T1 ou T2 já aprovada em cartão. **T3, ADR e qualquer coisa que mexa em licença, regras do processo ou este `CLAUDE.md` o PO aprova antes.**
+4. Pode rodar subagentes sonnet e haiku conforme o cartão. Opus continua por lote, com ok do PO e só com mais de 25% da cota semanal restante.
+5. Continuam pedindo ok do PO: instalar ferramenta nova, baixar arquivo, gastar cota extra, apagar dados, mexer em credenciais ou no `main`. O auto-merge está ativado no projeto.

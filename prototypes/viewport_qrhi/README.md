@@ -20,3 +20,11 @@ Teste: `QT_QPA_PLATFORM=xcb pytest tests/test_viewport_qrhi.py` (com tela). Sem 
 
 Controles do mouse: arrasto com botão esquerdo = orbitar; arrasto com botão do meio ou Shift+esquerdo = mover; roda = aproximar/afastar (distância limitada entre 0,1 e 10000).
 Teste da câmera sem tela: `pytest tests/test_viewport_camera.py`.
+
+## Seleção por clique (S03-T06)
+
+`selecao.py` (sem Qt, CPU, numpy): `Malha` (lista de objetos com id), `malha_de_ifc(caminho)`, `raio_da_tela`, `pick_raio`, `pick`. Caixa delimitadora por objeto, ordem pela entrada do raio e parada antecipada; Möller-Trumbore nos triângulos candidatos. No widget: `set_objetos(malha)`, `pick(x, y)` (pixels lógicos; só a razão com o tamanho do widget importa, então vale em tela com escala) e o sinal `clicado(id | None)` (clique esquerdo sem arrasto). Sem `set_objetos`, o cubo padrão é o objeto de id 1.
+
+Medida (modelo de 1 milhão de triângulos, 83 334 objetos, `corpus/modelo-grande-1m.ifc`, uma máquina de desenvolvimento): `pick` mediana 5,6 ms, máximo 14,9 ms (meta: < 100 ms). Carregar a malha do IFC leva cerca de 52 s (feito uma vez; threads são da T05). Teste pesado:
+
+    OBIM_MODELO_GRANDE=corpus/modelo-grande-1m.ifc QT_QPA_PLATFORM=offscreen pytest tests/test_viewport_selecao.py -s

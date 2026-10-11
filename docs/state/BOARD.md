@@ -37,12 +37,12 @@
 | F0-S02-T03 | Ambiente de desenvolvimento reproduzível | T2 | sonnet | sonnet; amostra opus | S02-T01 | FEITA (amostra opus: não sorteada) |
 | F0-S02-T04 | App esqueleto: janela, menu, arrastar-e-soltar | T1 | sonnet | sonnet | S02-T03, S01-T03 | FEITA |
 | F0-S02-T05 | Abrir IFC e mostrar contagem de elementos | T2 | sonnet | sonnet; amostra opus | S02-T04 | FEITA |
-| F0-S02-T06 | CI Linux (build, teste, artefato, REUSE) | T2 | sonnet | sonnet; amostra opus | S02-T05, S01-T01 | ESCRITA; falta rodar no GitHub (push) e provar verde |
-| F0-S02-T07 | CI Windows | T2 | sonnet | sonnet; amostra opus | S02-T06 | ESCRITA; não provada (aguarda push e execução no GitHub) |
-| F0-S02-T08 | CI macOS melhor esforço | T1 | sonnet | sonnet | S02-T06 | ESCRITA; não provada (aguarda push e execução no GitHub) |
-| F0-S02-T09 | Bloquear merge sem Windows+Linux verdes | T0 | PO (líder guia) | PO | S02-T07 | BLOQUEADA |
-| F0-S02-T10 | Pacote Linux (AppImage) | T2 | sonnet | **opus, obrigatória** | S02-T06, S02-T02 | FEITA (565 MB, meta atingida com poda do vtk); revisão opus obrigatória no lote 2 |
-| F0-S02-T11 | Instalador Windows (NSIS) | T2 | sonnet | **opus, obrigatória** | S02-T07, S02-T02 | BLOQUEADA |
+| F0-S02-T06 | CI Linux (build, teste, artefato, REUSE) | T2 | sonnet | sonnet; amostra opus | S02-T05, S01-T01 | FEITA (verde em 2026-10-10, run 38078371976; linux ~60 s) |
+| F0-S02-T07 | CI Windows | T2 | sonnet | sonnet; amostra opus | S02-T06 | FEITA (verde; windows ~15 min com ambiente limpo e instalador; run 38110728020) |
+| F0-S02-T08 | CI macOS melhor esforço | T1 | sonnet | sonnet | S02-T06 | FEITA (verde; macos ~90 s, não bloqueia) |
+| F0-S02-T09 | Bloquear merge sem Windows+Linux verdes | T0 | PO (líder guia) | PO | S02-T07 | FEITA em 2026-10-10 (regra no GitHub: `linux` e `windows` obrigatórios; trabalho vai por ramo + PR) |
+| F0-S02-T10 | Pacote Linux (AppImage) | T2 | sonnet | **opus, obrigatória** | S02-T06, S02-T02 | FEITA (390 MB após poda por pacote que também removeu o ffmpeg GPL); revisão opus obrigatória no lote 2 |
+| F0-S02-T11 | Instalador Windows (NSIS) | T2 | sonnet | **opus, obrigatória** | S02-T07, S02-T02 | FEITA no CI (instalador 482 MB; instala, abre e desinstala sem sobras; run 38110728020); falta: ícone próprio, teste do PO (T14) e revisão opus obrigatória no lote 2 |
 | F0-S02-T12 | Teste de gravação de vídeo headless | T2 | sonnet | sonnet | S02-T04 | BLOQUEADA |
 | F0-S02-T13 | Medir metas de build e tamanho | T1 | sonnet | sonnet | S02-T10, S02-T11, S02-T16 | BLOQUEADA |
 | F0-S02-T14 | Roteiro de aceite do PO e relatório da S02 | T1 | sonnet | PO | S02-T10, S02-T11 | BLOQUEADA |

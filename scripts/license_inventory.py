@@ -101,6 +101,8 @@ def build_report(rows, removidos=frozenset()):
 
 
 def main(argv):
+    for fluxo in (sys.stdout, sys.stderr):  # console do Windows usa cp1252 por padrão
+        fluxo.reconfigure(encoding="utf-8", errors="replace")
     args = [a for a in argv[1:] if not a.startswith("--")]
     opts = [a for a in argv[1:] if a.startswith("--")]
     if len(args) != 1:

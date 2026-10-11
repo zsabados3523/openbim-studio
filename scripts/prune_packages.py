@@ -15,6 +15,8 @@ from pathlib import Path
 
 
 def main(argv):
+    for fluxo in (sys.stdout, sys.stderr):  # console do Windows usa cp1252 por padrão
+        fluxo.reconfigure(encoding="utf-8", errors="replace")
     esperado = None
     args = []
     for a in argv[3:]:

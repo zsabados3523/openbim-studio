@@ -51,6 +51,8 @@ def needed(path):
 
 
 def main(argv):
+    for fluxo in (sys.stdout, sys.stderr):  # console do Windows usa cp1252 por padrão
+        fluxo.reconfigure(encoding="utf-8", errors="replace")
     import ifcopenshell
     pkg = Path(ifcopenshell.__file__).parent
     prefix = Path(sys.prefix)

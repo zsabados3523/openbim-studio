@@ -12,6 +12,8 @@ from pathlib import Path
 
 
 def main(argv):
+    for fluxo in (sys.stdout, sys.stderr):  # console do Windows usa cp1252 por padrão
+        fluxo.reconfigure(encoding="utf-8", errors="replace")
     prefix, out = Path(argv[1]), Path(argv[2])
     com, sem = 0, []
     for f in sorted((prefix / "conda-meta").glob("*.json")):

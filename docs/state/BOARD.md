@@ -7,7 +7,7 @@
 |---|---|---|---|---|---|---|
 | F0-S01 | Repositório, licenças e pesquisa | P | — | FEITA (2026-10-11; aprovada no lote Opus 2) | S01-T01 a T12 | Abertos sem bloquear: termos conda-forge, Qt Shader Tools, ReportLab, SINAPI; espelho Codeberg depois |
 | F0-S02 | CI Windows+Linux e app esqueleto | M→G (tratada como G) | S01 | CONCLUÍDA (aceite do PO em 2026-10-11, Windows e Linux) | S02-T01 a T16 | S02-T01 pode começar quando S01-T01 estiver feita |
-| F0-S03 | Protótipo de viewport (Qt RHI) | M | S02; S08 contínuo | EM_ANDAMENTO | S03-T01 a T07 (plano em reports/F0-S03-plano.md; PO aprovou 2026-10-11) | T01 (ficha) feita; próximo: T03 (janela QRhi) e T02 (corpus, depende de licença conferida) |
+| F0-S03 | Protótipo de viewport (Qt RHI) | M | S02; S08 contínuo | EM_ANDAMENTO | S03-T01 a T07 (plano em reports/F0-S03-plano.md; PO aprovou 2026-10-11) | T01 e T03 feitas (cubo em QRhiWidget, Python puro, OpenGL e Vulkan no Linux; no CI o teste pula sem GPU); próximo: T04 (câmera) e T02 (corpus, depende de licença conferida) |
 | F0-S04 | Ponte Python↔C++ (híbrido vs C++ puro) | G, crítica | S02 | NÃO INICIADA | — | Contém T3 (ponte, threads) |
 | F0-S05 | Oplog, undo e merge | M | S04 | NÃO INICIADA | — | Contém T3 (transações, gravação do par). Precisa de formato mínimo provisório do `.obim` antes do ADR-003 |
 | F0-S06 | Planta e corte (HLR) + vista no `.obim` | G, crítica | S02; S08 contínuo | NÃO INICIADA | — | Contém T3 (HLR, arquivo lateral) |

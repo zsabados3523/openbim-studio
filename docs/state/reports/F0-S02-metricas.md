@@ -22,7 +22,7 @@ macOS (melhor esforço, não bloqueia): 93 s, verde.
 | Instalação ≤ 5 min / primeira abertura ≤ 10 s (ADR-005 teste 7) | | verificado pelo CI (falha se passar); teste todo leva 116 s com duas instalações | Atingida no runner do CI |
 
 **Meta não atingida: build incremental do Windows (~16 min contra 10 min).** Regra da F0: parar e reportar ao PO com opções, sem contornar. O que consome o tempo no Windows não é compilar: é criar o ambiente conda do zero (~3 min), criar o segundo ambiente de runtime (~5 min) e montar o instalador (~1 min). O app esqueleto é só Python. Opções:
-1. **Aceitar** nesta fatia e rever quando houver C++ do app (S04): hoje o "incremental" real é um teste de Python, que leva segundos no desenvolvimento local; o tempo do CI é o do ambiente. (Recomendado.)
+1. **Aceitar** nesta fatia e rever quando houver C++ do app (S04): hoje o "incremental" real é um teste de Python, que leva segundos no desenvolvimento local; o tempo do CI é o do ambiente. (Recomendado; **decidido pelo PO em 2026-10-11: opção 1**.)
 2. Guardar o **ambiente já criado** em cache (não só os pacotes); economiza ~8 min, mas tem risco de ambiente velho e cache de vários GB.
 3. Pular o instalador quando só mudar documentação (CI condicional); não reduz o tempo de uma mudança de código.
 

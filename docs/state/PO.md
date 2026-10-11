@@ -32,3 +32,5 @@ C hospedagem GitHub + espelho Codeberg · D interface híbrida (confirmar na S09
 - Mesa fora do AppImage: manter fora; testar em máquina virtual sem aceleração no roteiro T14 (se não abrir, o Mesa volta).
 - Download dos textos oficiais (exceção do OCCT, LGPL-3, LGPL-2.1, GPL-3) para o repositório: autorizado (uma vez, para esses quatro).
 - Artefatos do CI: guarda de 7 dias; tratados como builds de teste.
+- Build incremental do Windows (~16 min contra meta de 10): **opção 1, aceitar agora e revisitar na S04** (2026-10-11).
+- Autorização permanente para ramos de trabalho, PR e merge de T0 a T2 aprovadas: registrada no `CLAUDE.md` (2026-10-11).

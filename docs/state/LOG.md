@@ -53,3 +53,4 @@ Uma linha por tarefa concluída ou escalada, e por mudança de classe de tarefa.
 2026-10-10 | S02-T11 | 6º run (38096583572): instalador parado numa tela: o bash do Windows (Git for Windows) converte /S em caminho, então o modo silencioso não valia. Correção: MSYS2_ARG_CONV_EXCL=* no test_installer.sh.
 2026-10-10 | S02-T11 | 7º run (38098596406): instalação silenciosa OK (~2 min), mas foi para a pasta padrão porque o NSIS não aceita /D= com espaço. Teste agora usa caminho sem espaço.
 2026-10-10 | S02-T11 | 8º run (38100061860): instalação em pasta própria OK (~90 s, 2240 MB instalados, todos os arquivos conferidos); falha só no teste de abertura (env -i apagava o PATH e o timeout sumia). Corrigido.
+2026-10-10 | S02-T11 | 9º run (38101239682): app instalado ABRIU e imprimiu OK no Windows; teste falhou só por conferir a saída inteira (aviso 'No module named lark' do ifcopenshell sai antes do OK). Conferindo a última linha.

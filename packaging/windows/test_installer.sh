@@ -28,6 +28,7 @@ done
 grep -rqi "GNU LESSER GENERAL PUBLIC LICENSE" "$D/licenses/pacotes" || falha "sem texto da LGPL em licenses/pacotes"
 passo "abrindo o app (selftest, sem tela)"
 out="$(timeout 120 env -i SYSTEMROOT="$SYSTEMROOT" TEMP="$TEMP" QT_QPA_PLATFORM=offscreen "$D/env/python.exe" "$D/app/OpenBIM-Studio.pyw" --selftest 2>&1)"
+out="$(printf "%s" "$out" | tail -n 1 | tr -d "\r")"
 echo "selftest: $out"
 [ "$out" = "OK" ] || falha "selftest não imprimiu OK"
 passo "desinstalando"

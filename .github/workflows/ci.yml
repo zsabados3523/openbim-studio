@@ -115,6 +115,19 @@ jobs:
           bash packaging/windows/build_installer.sh "$RUNNER_TEMP/rt" "$RUNNER_TEMP/inst-out" 2>&1 | tail -n 15 | tee -a "$GITHUB_STEP_SUMMARY"
           ls -l "$RUNNER_TEMP/inst-out/OpenBIM-Studio-Setup.exe" | tee -a "$GITHUB_STEP_SUMMARY"
           cp "$RUNNER_TEMP/inst-out/OpenBIM-Studio-Setup.exe" "$RUNNER_TEMP/inst-out/licencas-coletadas.txt" out/
+      - name: Diagnóstico - o tar do Windows lê o env.txz?
+        shell: bash
+        timeout-minutes: 15
+        run: |
+          set +e
+          export MSYS2_ARG_CONV_EXCL="*"
+          T="$(cygpath -w "$RUNNER_TEMP")"
+          ls -l "$RUNNER_TEMP/inst-out/env.txz"
+          mkdir -p "$RUNNER_TEMP/tx"
+          s=$(date +%s)
+          timeout 600 /c/Windows/System32/tar.exe -xf "$T\\inst-out\\env.txz" -C "$T\\tx"
+          echo "tar.exe saiu com $? em $(( $(date +%s) - s )) s; $(du -sm "$RUNNER_TEMP/tx" | cut -f1) MB extraídos" | tee -a "$GITHUB_STEP_SUMMARY"
+          rm -rf "$RUNNER_TEMP/tx"
       - name: Teste do instalador (instala, abre, desinstala)
         shell: bash
         timeout-minutes: 20

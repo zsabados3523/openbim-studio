@@ -16,7 +16,7 @@ PID=$!
 t=0
 while kill -0 "$PID" 2>/dev/null; do
   sleep 30; t=$((t + 30))
-  echo "   ${t}s: pasta de destino $(du -sm "$D" 2>/dev/null | cut -f1) MB; temp do instalador $(du -sm "$TEMP"/nsi*.tmp 2>/dev/null | tail -n 1 | cut -f1) MB; processos: $(tasklist 2>/dev/null | grep -ciE 'tar.exe|OpenBIM-Studio-Setup')"
+  echo "   ${t}s: destino $(du -sm "$D" 2>/dev/null | cut -f1) MB; temp do NSIS: $(du -sm "$TEMP"/ns*.tmp 2>/dev/null | tr '\n' ' '); processos: $(tasklist /FO CSV /NH 2>/dev/null | grep -iE '"(tar|xz|7z|OpenBIM-Studio-Setup)[^"]*"' | cut -d, -f1,5 | tr '\n' ' ')"
   [ "$t" -ge 840 ] && { tasklist | grep -iE 'tar|OpenBIM' ; kill "$PID" 2>/dev/null; falha "instalador não terminou em ${t}s"; }
 done
 wait "$PID" || falha "instalador saiu com código $?"

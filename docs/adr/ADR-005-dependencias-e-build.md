@@ -1,7 +1,8 @@
 # ADR-005: Dependências, build e empacotamento
-- Status: **esboço** · **Decisão: pendente** (fecha na F0-S02-T15, com os números dos testes abaixo) · Autor: opus, lote 1 · Data: 2026-10-10 · Cartão: F0-S02-T02
+- Status: **aceito** (aprovado pelo PO no chat em 2026-10-11) · Decisão: seção 4 · Autor: opus (esboço no lote 1; decisão no lote 3, cartão F0-S02-T15) · Data: 2026-10-11
 - Base: ficha de disponibilidade (`docs/research/2026-10-10-dependencias-disponibilidade.md`), fichas de licença do grupo D, revisão de licenças do lote 1, `v2/02` §5 e §12.
-- **Atualização de 2026-10-11 (opus, lote 2):** resultados parciais dos testes 2, 3, 7, 8 e 9 na seção 3.1; nomes da API 0.9 e alcance da S04 na seção 7.1. O status continua **esboço** e a decisão continua pendente.
+- **Atualização de 2026-10-11 (opus, lote 2):** resultados parciais dos testes 2, 3, 7, 8 e 9 na seção 3.1; nomes da API 0.9 e alcance da S04 na seção 7.1.
+- **Atualização de 2026-10-11 (opus, lote 3):** o esboço vira decisão (seção 4), com a tabela "meta × medido" (seção 3.2), o que a S04 deve provar (seção 7.1) e o que continua em aberto (seção 9.1). Aprovado pelo PO no chat em 2026-10-11.
 - Feito sem rede e sem instalar nada. O que está marcado "de memória" precisa ser conferido. As condições de licença citadas não são parecer jurídico (ver ADR-009).
 
 ## 1. Contexto
@@ -38,37 +39,61 @@ Disponibilidade lida em páginas públicas em 2026-10-10. Os primeiros números 
 | Componente | conda-forge (win-64 e linux-64) | Observação |
 |---|---|---|
 | OCCT | 8.0.1 | |
-| IfcOpenShell | 0.9.0, exige OCCT 8.0.x, Python 3.11 a 3.14 | Cabeçalhos e bibliotecas C++: **presentes no linux-64** (seção 3.1); win-64 não verificado |
+| IfcOpenShell | 0.9.0, exige OCCT 8.0.x, Python 3.11 a 3.14 | Cabeçalhos e bibliotecas C++ compartilhadas: **presentes em linux-64 e win-64** (seção 3.1) |
 | PySide6 / Qt | 6.11.2 / `qt6-main` 6.11.2 (existe 6.12.0 do Qt, sem PySide6 correspondente) | Fixar o par em 6.11.2 |
 | nanobind, pybind11 | 3.1.0 | |
 | pythonocc-core | 8.0.1.1, exige OCCT 8.0.1 | Só para protótipo; não é ponte de produção (`v2/02` §5) |
 
-### 3.1 Resultados parciais (2026-10-11)
-Fontes: `docs/research/2026-10-10-sonda-cpp.md`, `docs/research/2026-10-10-appimage-p1.md`, `docs/state/BOARD.md`, `docs/state/reports/LOTE_OPUS_2.md`. "Fechado" quer dizer meta atingida em todos os sistemas pedidos.
+### 3.1 Resultados dos testes (2026-10-11)
+Fontes: `docs/research/2026-10-10-sonda-cpp.md`, `docs/research/2026-10-10-appimage-p1.md`, `docs/state/reports/F0-S02-metricas.md`, `F0-S02-sonda.md`, `F0-S02-appimage.md`, `LOTE_OPUS_2.md` e `LOTE_OPUS_3.md`. "Fechado" quer dizer meta atingida em todos os sistemas pedidos.
 
 | # | Teste | Medido | Situação |
 |---|---|---|---|
-| 2 | Conteúdo do pacote do IfcOpenShell | **linux-64: 4 de 4 "sim".** Cabeçalhos em `include/ifcparse` (28 arquivos) e `include/ifcgeom` (27); bibliotecas compartilhadas `libifcopenshell.parse`, `.geometry`, `.geometry.writer`, `.plugin` (`.so.0.9`), nenhuma estática; arquivo de configuração do CMake presente; o módulo Python declara precisar dessas bibliotecas e não embute cópia. **win-64: não testado** | **Aberto.** Aprovado no Linux. O Windows é o caso duvidoso (de memória, a conferir: lá o IfcOpenShell costuma ser compilado estático). Rodar no job `windows`, só leitura, **antes da S04** **win-64 (CI, 2026-10-11, `scripts/sonda_ifcopenshell.py`): 4 de 4 "sim".** Cabeçalhos `ifcparse` presentes; DLLs separadas `ifcopenshell.parse.dll`, `ifcopenshell.geometry.dll`, `ifcopenshell.plugin.dll` (nenhuma só estática); o módulo `_ifcopenshell_wrapper.cp312-win_amd64.pyd` importa essas DLLs em vez de embutir cópia. **Teste 2 fechado nos dois sistemas**; o risco R1 de cópia dupla não aparece no pacote do conda-forge. |
-| 3 | Módulo C++ mínimo (nanobind + OCCT + Qt6 Core) | linux-64 local: compila e passa (caixa 2×3×4, volume 24). Limpo **2,4 s**, incremental **0,9 s**, com g++ 15.3 e CMake 4.4 do conda-forge. Criação do ambiente: não medida. win-64 e CI: não testado | **Aberto.** As metas de tempo estão atendidas com folga no Linux, mas o número é de um módulo de 17 linhas e não representa o custo real. Complemento recomendado ("3b"): a mesma sonda incluindo `ifcparse/file.h` e ligando em `libifcopenshell.parse`, nos dois sistemas |
+| 2 | Conteúdo do pacote do IfcOpenShell | **4 de 4 "sim" nos dois sistemas.** linux-64: cabeçalhos em `include/ifcparse` (28 arquivos) e `include/ifcgeom` (27); bibliotecas compartilhadas `libifcopenshell.parse`, `.geometry`, `.geometry.writer`, `.plugin` (`.so.0.9`), nenhuma estática; configuração do CMake presente; o módulo Python declara precisar delas. win-64 (CI, `scripts/sonda_ifcopenshell.py`): cabeçalhos presentes; DLLs separadas `ifcopenshell.parse.dll`, `.geometry.dll`, `.plugin.dll`; o `_ifcopenshell_wrapper.cp312-win_amd64.pyd` importa essas DLLs | **Fechado.** O pacote do conda-forge permite a ponte sem cópia dupla. Que o processo carrega **uma** cópia só é a verificação e) do teste 5, na S04. O passo do CI é informativo (não reprova): passa a bloquear na S04 |
+| 3 | Módulo C++ mínimo (nanobind + OCCT + Qt6 Core) | linux-64 local: compila e passa (caixa 2×3×4, volume 24). Limpo **2,4 s**, incremental **0,9 s**, com g++ 15.3 e CMake 4.4 do conda-forge. **win-64: não rodado** (a sonda 3b, abaixo, cobre só o IfcOpenShell) | **Aberto no Windows** para nanobind + OCCT + Qt com o MSVC. Vai para a S04 (seção 7.1, prova 7) |
 | 3b | Programa C++ que inclui `ifcparse/file.h` e liga em `IfcOpenShell::IfcParse` pelo `IfcOpenShellConfig.cmake`, e abre um IFC (`prototypes/cpp_probe_3b/`, CI, 2026-10-11) | **Passa nos dois.** Linux (g++ 15.3, Ninja): limpo **4,8 s**, incremental **4,2 s**. Windows (MSVC, Visual Studio): limpo **19,4 s**, incremental **5,7 s**. Abriu `casa-simples.ifc` (IFC4, 87 entidades). Armadilhas achadas: o ambiente precisa dos arquivos de desenvolvimento de `zlib`, `libxml2` e `boost`; no Windows o CMake deve usar o MSVC (não o MinGW do runner) e apontar a pasta `Library/lib` do conda; `ifcopenshell::file(const char*, bool)` não abre arquivo (usar `std::string`). |
-| 7 | Instalador Windows (P1 + NSIS) | **309 MB** (meta 600; eram 482 MB com MKL, que saiu por licença); o CI instala em silêncio, abre o autoteste e desinstala sem sobras; sem administrador. O ambiente vai num `tar.gz` extraído pelo `tar.exe` do Windows, porque o NSIS não aguentou dezenas de milhares de arquivos soltos | **Aberto.** Faltam: DLL trocada, instalar por cima, tempos de instalação e de abertura, Windows 10 e 11 reais. Revisão opus: reprovado, 4 defeitos |
-| 8 | AppImage (P1 + appimagetool 1.9.1) | Sem poda: 971 MB (**meta não atingida**). Com poda de vtk e viskores: **565 MB**. Com a poda ampliada (139 pacotes, inclui ffmpeg): o job confere ≤ 600 MB; valor exato a registrar. Abre sem Python do sistema; primeira abertura 8,5 s sem FUSE e 0,5 s com FUSE; `--appimage-extract` funciona; abre com `.so` do Qt alterado | **Aberto.** Faltam Ubuntu LTS, Fedora e duplo clique. Revisão opus: reprovado, 7 defeitos (textos de licença) |
-| 9 | Inventário de licenças | Gerado no CI: 291 pacotes no ambiente de runtime (152 ficam no pacote), 0 fora do conda-forge, 1 metadado vazio (`tbb-devel`, exceção aceita) | **Aberto.** Falta comparar com a lista de licenças permitidas |
-| 1, 4, 5, 6, 10, 11 | — | Sem resultado registrado neste ADR | Aberto |
+| 7 | Instalador Windows (P1 + NSIS) | **309 MB** (meta 600; eram 482 MB com o MKL, que saiu por licença). O ambiente vai num `tar.gz` extraído pelo `tar.exe` do Windows, porque o NSIS não aguentou dezenas de milhares de arquivos soltos. O CI (`packaging/windows/test_installer.sh`) instala sem administrador em até 300 s, abre o autoteste em até 10 s com Python isolado e variáveis de ambiente "sujas", abre com uma DLL do Qt alterada, instala por cima, desinstala sem sobras preservando arquivo do usuário, e confere a pasta `licenses\` | **Atingido no CI.** Revisão opus (lote 3): as 4 correções conferidas; 1 defeito novo (pasta de destino que já tem arquivos). Faltam Windows 10 e 11 reais (roteiro T14) |
+| 8 | AppImage (P1 + appimagetool 1.9.1) | Sem poda: 971 MB (**meta não atingida**). Com a poda atual (139 pacotes; sai VTK, ffmpeg e Mesa): **389 MB** no CI; job `appimage` inteiro em 170 a 182 s. O CI (`packaging/linux/test_appimage.sh`) confere autoteste, `--appimage-extract`, arquivos de licença, ausência do que foi podado e abertura com um `.so` do Qt alterado. Primeira abertura (medida local): 0,5 s com FUSE e 8,5 s sem | **Atingido no CI.** Revisão opus (lote 3): aprovado. Faltam Ubuntu LTS, Fedora, duplo clique e máquina virtual sem aceleração de vídeo (roteiro T14), e fixar o "runtime" do appimagetool (antes do primeiro release) |
+| 9 | Inventário de licenças | `scripts/license_inventory.py` compara com a lista de licenças permitidas; a montagem dos dois pacotes reprova licença vazia, canal errado ou licença fora da lista, só sobre os pacotes que ficam. Linux: 291 pacotes no ambiente de runtime, 152 ficam; 0 fora do conda-forge. 5 exceções nomeadas e presas à versão (`tbb-devel`, `ucrt`, `vc14_runtime`, `vcomp14`, `cgal-cpp`) | **Atingido nos números; o portão tem 1 defeito** (expressão de licença com parênteses passa sem conferência; `LOTE_OPUS_3.md`, item 2). Fecha com a correção |
+| 1 | Ambiente resolve | Resolve no CI em linux-64, win-64 e macOS; 0 pacotes de outro canal; criação no Windows em ~186 s (meta 15 min) | **Parcial:** o CI não usa arquivo de trava (só existe o do Linux, do ambiente de desenvolvimento) |
+| 10 | Reprodutibilidade | Não medido | Aberto (seção 9.1) |
+| 11 | macOS (melhor esforço) | 93 s, verde | Informativo |
+| 4, 5, 6 | — | Sem resultado | 4: S03 · 5: S04 · 6: só se o 5 reprovar |
 
 O que os resultados já dizem:
-1. **A opção A (conda-forge como fonte única) se sustenta no Linux:** o plano da seção 8 (sem cabeçalhos) não é necessário ali. O teste 2 passou também no Windows (2026-10-11): a opção A (conda-forge como fonte única) se sustenta nos dois sistemas.
+1. **A opção A (conda-forge como fonte única) se sustenta nos dois sistemas:** o teste 2 passou no Linux e no Windows e a sonda 3b compila e liga nos dois. O plano da seção 8 (pacote sem cabeçalhos) não é necessário.
 2. **P1 puro passa do tamanho; P1 com poda cabe nos dois sistemas.** A poda passa a fazer parte da montagem P1. P2 (PyInstaller) não é necessário por tamanho.
 3. **A poda tem custo:** o módulo de visualização do OCCT (`TKIVtk`) deixa de funcionar e o Mesa sai do pacote. Nada que o programa use hoje; registrar na seção 9.
 4. **O PySide6 do conda-forge traz módulos sem a biblioteca Qt correspondente** (Charts, Multimedia, 3D, WebEngine, Pdf e outros não carregam com o `qt6-main` sozinho). Quem precisar de um deles acrescenta o pacote Qt e refaz inventário e tamanho.
 
+### 3.2 Metas da S02 contra o medido
+Números do CI informados pelo líder no pedido do lote 3 e em `F0-S02-metricas.md`. O app esqueleto é só Python: nenhum destes tempos inclui compilar C++ do programa.
+
+| Meta | Linux | Windows | Situação |
+|---|---|---|---|
+| Build limpo ≤ 60 min | job `linux` ~94 s; job `appimage` (cria o ambiente e monta o pacote) 170 a 182 s | job `windows` ~1004 s (≈ 17 min): cria o ambiente, testa, cria o ambiente de runtime, monta e testa o instalador | **Atingida** nos dois |
+| Build incremental ≤ 10 min | ~94 s | **~16 min** (o cache de pacotes não ajudou: 995 s com cache contra 939 s sem) | **Não atingida no Windows.** Aceita pelo PO em 2026-10-11 para revisão na S04 (seção 9.1, item 1) |
+| Instalador ≤ 600 MB | AppImage **389 MB** | **309 MB** | **Atingida** nos dois |
+| Instalação ≤ 5 min e primeira abertura ≤ 10 s | abertura 0,5 s com FUSE e 8,5 s sem (local) | conferido pelo CI, que reprova se passar | **Atingida** no CI; máquinas reais no roteiro T14 |
+| Sonda 3b (compilar com os cabeçalhos do IfcOpenShell) | limpo 4,8 s · incremental 4,2 s | limpo 19,4 s · incremental 5,7 s | Informativo: cada arquivo C++ que inclui `ifcparse/file.h` custa cerca de 4 a 6 s |
+
 ## 4. Decisão
-**Pendente.** Fecha na S02-T15 com a tabela "meta × medido" dos testes da seção 6.
+**Aprovada pelo PO em 2026-10-11:**
+1. **Fonte dos binários: opção A, conda-forge como canal único** (com `nodefaults`), para Python 3.12, OCCT 8.0.1, IfcOpenShell 0.9.0 e o par PySide6/`qt6-main` 6.11.2. A opção D (compilar o IfcOpenShell nós mesmos) fica como plano B, acionado só pelos gatilhos da seção 10. As opções B e C ficam descartadas.
+2. **Montagem: P1 com poda.** O ambiente de runtime (`packaging/runtime-environment.yml`) vai inteiro numa pasta, com um lançador pequeno; `scripts/prune_packages.py` retira VTK, ffmpeg e o que só eles exigiam, e a lista do que saiu vai em `licenses/REMOVIDOS.md`. P2 (PyInstaller) não é adotado: P1 com poda cabe na meta com folga.
+3. **Instaladores: NSIS no Windows** (por usuário, sem administrador; ambiente num `tar.gz` extraído pelo `tar.exe` do sistema) **e AppImage no Linux** (appimagetool em versão fixa com sha256). WiX e Flatpak ficam fora, como na seção 2.3.
+4. **Álgebra linear sem MKL:** `libblas=*=*openblas` no ambiente de runtime (decisão do PO de 2026-10-11, por licença). O inventário reprova a montagem se o MKL voltar.
+5. **Compilador do C++ do programa:** os do conda-forge no Linux; MSVC (Visual Studio 2022) no Windows, sempre em modo "Release", nunca o MinGW. Ligar no IfcOpenShell pelo `IfcOpenShellConfig.cmake` do pacote.
+6. **Portões de todo pacote:** inventário de licenças com lista permitida, textos de licença em `licenses/`, e os testes de pacote dos dois sistemas (instala, abre isolado, abre com biblioteca trocada, desinstala). Vêm do ADR-009 e já rodam no CI.
 
-Regras que já valem, por virem do ADR-009 e não de teste: só o canal conda-forge; bibliotecas LGPL em arquivos separados; nada de executável único; pasta de licenças e lista de fontes em todo pacote.
+**O IfcOpenShell do C++ e o do Python compartilham versão e ABI?** O que está provado: nos dois sistemas o pacote traz **um** conjunto de bibliotecas compartilhadas, o módulo Python usa essas mesmas bibliotecas (teste 2) e um programa C++ nosso compila, liga nelas e abre um IFC (sonda 3b). Ou seja, o caminho escolhido **permite** versão e ABI únicas. O que **não** está provado: que Python e C++ enxergam o mesmo modelo na memória, sem cópia e com uma cópia só de cada núcleo no processo. Essa é a prova do risco R1 (teste 5) e **fica para a S04**. Se ela reprovar, vale a seção 10, item 1.
 
-## 5. Opção provisória recomendada (para a S02-T03 usar já)
-Marcada como **provisória**: serve para montar o ambiente de desenvolvimento, não decide o ADR.
+**Portão da F0 (risco R2, `v2/03` §5):** o build Windows + Linux fechou dentro das 12 semanas (CI verde nos dois, pacotes gerados e testados). O gatilho de NO-GO parcial **não disparou**. Ressalva: isso vale para o app esqueleto, que é só Python; o R2 só se encerra quando o C++ do programa compilar nos dois sistemas dentro das metas (S04).
+
+Regras que já valiam, por virem do ADR-009 e não de teste: só o canal conda-forge; bibliotecas LGPL em arquivos separados; nada de executável único; pasta de licenças e lista de fontes em todo pacote.
+
+## 5. Configuração adotada (era a opção provisória do esboço)
+Serviu para montar o ambiente de desenvolvimento na S02; com a decisão da seção 4, passa a ser a configuração do projeto. Os itens 2 e 4 têm pendências (seção 9.1).
 1. **Fonte:** opção A, conda-forge como canal único, com `nodefaults`.
 2. **Ferramenta de ambiente:** Miniforge (ou micromamba). Nunca o instalador Anaconda/Miniconda. Alternativa a comparar no teste 1: pixi, que gera um arquivo de trava único para os dois sistemas; antes de adotar, precisa de uma linha na tabela de licenças (não tem ficha). Instalar qualquer uma delas exige ok do PO.
 3. **Versões fixas:** Python 3.12 · `occt` 8.0.1 · `ifcopenshell` 0.9.0 · `pyside6` 6.11.2 com `qt6-main` 6.11.2 · `nanobind` 3.1.0 · pytest. `pythonocc-core` fica fora do ambiente base.
@@ -127,8 +152,14 @@ A S04 deve provar:
 | 4 | Threads: leitura pelo C++ fora da thread da interface enquanto o Python não escreve; regra do bloqueio do interpretador escrita na especificação | 0 travamentos e 0 diferenças em 1.000 repetições |
 | 5 | Custo da ponte | Tempo por chamada e por elemento percorrido, comparado com o Python puro e com o C++ puro (`v2/03` S04) |
 | 6 | Geometria real com o pacote podado (sem VTK) | Tesselação de pelo menos 1 IFC do corpus igual no ambiente de desenvolvimento e dentro do AppImage e do instalador |
+| 7 | Módulo nanobind + OCCT + Qt compilado com o MSVC (a sonda do teste 3, que só rodou no Linux) | Compila e passa no job `windows`; o runtime do Visual C++ que vai no instalador é igual ou mais novo que o do compilador usado |
+| 8 | Ambiente de compilação travado: versão **e build** do `ifcopenshell`; `zlib`, `libxml2-devel` e `libboost-devel` no `environment.yml` (hoje a sonda 3b os instala na hora, sem versão); arquivo de trava para linux-64 e win-64 usado pelo CI | Sonda e ponte compilam sem instalar nada na hora; teste 10 com 0 diferenças |
+| 9 | Tempo de build com C++ de verdade (ponte com cabeçalhos do IfcOpenShell e do OCCT) | Limpo ≤ 60 min e incremental ≤ 10 min nos dois sistemas, ou proposta ao PO (seção 9.1, item 1) |
+| 10 | Os passos "teste 2" e "sonda" do CI passam a reprovar (hoje são informativos) | Mudança de build do pacote que traga biblioteca estática bloqueia o merge |
 
-Pré-requisito da S04: teste 2 aprovado no Windows: **cumprido em 2026-10-11** (ver tabela de resultados). A sonda 3b (cabeçalhos pesados) também passou (ver abaixo).
+Pré-requisito da S04: teste 2 aprovado no Windows: **cumprido em 2026-10-11** (ver tabela de resultados). A sonda 3b (cabeçalhos pesados) também passou (seção 3.1).
+
+**Risco R1 em uma frase:** a S02 mostrou que o pacote não obriga a ter duas cópias; a S04 tem de mostrar que, com a ponte de verdade, o processo tem uma cópia só e o modelo é o mesmo dos dois lados (provas 1 a 3). Enquanto isso não passar, nenhuma tarefa que dependa da ponte C++/Python começa.
 
 ## 8. Se o conda-forge não trouxer os cabeçalhos do IfcOpenShell
 Em ordem, parando no primeiro que passar no teste 5:
@@ -145,20 +176,34 @@ Em ordem, parando no primeiro que passar no teste 5:
 - Redistribuir binários do conda-forge traz as obrigações do ADR-009 (pasta de licenças, lista de fontes por release).
 - Se cair na opção D, o projeto passa a manter uma receita de build do IfcOpenShell.
 
+### 9.1 Em aberto depois desta decisão
+| # | Item | Dono e prazo |
+|---|---|---|
+| 1 | **Build incremental no Windows: ~16 min contra a meta de 10 min.** O tempo não é de compilar: é criar dois ambientes conda do zero (~3 min e ~5 min) e montar e testar o instalador. Aceito pelo PO em 2026-10-11 (opção 1 de `F0-S02-metricas.md`) | Rever na S04, com C++ de verdade (prova 9). Se continuar acima da meta: guardar o ambiente pronto em cache, ou montar o instalador só quando o pacote mudar; o PO decide |
+| 2 | Arquivo de trava do ambiente de runtime, para linux-64 e win-64, usado pelo CI (testes 1 e 10). Sem ele o inventário de licenças e as exceções presas à versão mudam sozinhos de uma semana para outra | S04 (prova 8) |
+| 3 | Fixar o "runtime" do appimagetool (versão, sha256, `--runtime-file`) e registrar a licença dele | Antes do primeiro release |
+| 4 | Oferta de fonte por 3 anos, tabela de fontes por pacote com cópia junto do release, tela "Sobre > Licenças" (ADR-009 §5.3) | Cartão "antes do primeiro release" |
+| 5 | Testes em máquinas reais: Windows 10 e 11, Ubuntu LTS, Fedora, duplo clique, máquina virtual sem aceleração de vídeo (Mesa fora do pacote) | PO, roteiro T14 |
+| 6 | Defeitos do lote 3: pasta de destino do instalador; expressão de licença com parênteses | Cartões curtos, antes do roteiro T14 |
+| 7 | `miniforge-version: latest` no CI; job `appimage` fora da regra de bloqueio de merge | Líder. O PO autorizou em 2026-10-11 incluir o job `appimage` na regra de bloqueio do `main` |
+| 8 | Testes 4 (um Qt só, cabeçalhos do QRhi) e 5 (R1) | S03 e S04 |
+
 ## 10. O que nos faria mudar de ideia
-1. Teste 2 ou 5 reprovado: opção D; se D reprovar, levar ao PO (ADR-001).
+1. Teste 5 reprovado na S04 (duas cópias no processo, ou o modelo não é o mesmo dos dois lados), ou um build novo do pacote passar a trazer o IfcOpenShell estático: opção D; se D reprovar, levar ao PO (ADR-001).
 2. Par PySide6/Qt do conda-forge com defeito que só o 6.12 resolve: reavaliar PyPI para a interface, o que reabre o problema do Qt duplicado (teste 4).
 3. Instalador acima de 600 MB mesmo com P2: rever a meta com o PO ou separar componentes opcionais.
 4. NSIS falhar em instalar por cima, desinstalar limpo ou conviver com a assinatura: reabrir o WiX, com ok escrito do PO sobre a taxa.
 5. conda-forge publicar termos que restrinjam redistribuição, ou abandonar um dos pacotes: opção D ampliada ou vcpkg para a parte C++.
 6. Build limpo acima de 60 min: guardar pacotes prontos no cache do CI; se não bastar, é gatilho do R2 (mais de 4 semanas sem build nos dois sistemas: simplificar e reportar).
+7. Build incremental no Windows continuar acima de 10 min na S04, já com C++: cache do ambiente pronto ou instalador só quando o pacote mudar; se não bastar, rever a meta com o PO.
+8. A poda quebrar algo que o programa passe a usar (visualização do OCCT pelo VTK, vídeo, Mesa em máquina sem driver): o pacote volta, com novo inventário e novo tamanho.
 
 ## 11. Não verificado
-Conteúdo do pacote do IfcOpenShell no conda-forge **em win-64** (linux-64 verificado) · de onde o appimagetool tira o programa de partida que vai dentro do AppImage, e a licença dele · manutenção da receita do PySide6 no conda-forge · cabeçalhos do QRhi no `qt6-main` · como o Briefcase monta e gera MSI · licença do pixi e do micromamba · termos do canal conda-forge · tamanho real do ambiente.
+De onde o appimagetool tira o programa de partida que vai dentro do AppImage, e a licença dele · manutenção da receita do PySide6 no conda-forge · cabeçalhos do QRhi no `qt6-main` · licença do pixi e do micromamba · termos do canal conda-forge · nanobind + OCCT + Qt com o MSVC · a saída bruta do CI do teste 2 no Windows (este ADR usa o relato de `F0-S02-sonda.md`).
 
 ## Resumo para o PO (5 linhas)
-1. Ainda não há decisão: este documento diz o que testar e com que número cada teste passa. Em 2026-10-11 já há resultados parciais (seção 3.1): no Linux o caminho simples serve; falta o mesmo teste no Windows.
-2. Para começar a trabalhar, recomendo provisoriamente pegar todas as bibliotecas de um lugar só (conda-forge), com versões travadas; é o único lugar onde as peças são da mesma "safra" no Windows e no Linux.
-3. O ponto mais arriscado é a parte C++ e a parte Python usarem exatamente o mesmo IfcOpenShell. O teste 5 prova isso; o teste 2, que é só olhar o conteúdo de um pacote, já diz se o caminho simples serve. Se não servir, compilamos o IfcOpenShell nós mesmos.
-4. Instalador: NSIS no Windows e AppImage no Linux. O WiX fica de fora por cobrar taxa; só volta com o seu ok por escrito e se o NSIS falhar.
-5. O cartão extra da parte C++ foi feito no Linux: compila em segundos, mas com um módulo mínimo. Os dois pacotes cabem em 600 MB depois de retirar o que o programa não usa (482 MB no Windows; 565 MB no Linux na primeira poda). Faltam o teste 2 no Windows e a prova completa da ponte (S04).
+1. **Decisão (aprovada em 2026-10-11):** todas as bibliotecas vêm de um lugar só (conda-forge), com versões travadas; o programa vai numa pasta com tudo dentro; instalador NSIS no Windows e AppImage no Linux.
+2. **As metas de tamanho e de build limpo foram atingidas:** instalador Windows com 309 MB e AppImage com 389 MB (meta 600 MB); o CI inteiro leva cerca de 1,5 min no Linux e 17 min no Windows (meta 60 min).
+3. **Uma meta não foi atingida:** uma alteração pequena leva ~16 min para passar no CI do Windows (meta 10 min). Você já aceitou rever isso na S04; o tempo é de preparar o ambiente, não de compilar.
+4. **O ponto mais arriscado segue aberto, como previsto:** já sabemos que a parte C++ e a parte Python **podem** usar o mesmo IfcOpenShell nos dois sistemas; a prova de que **usam**, sem cópia, é a S04. Se falhar, compilamos o IfcOpenShell nós mesmos.
+5. **Para depois:** ficam para antes do primeiro release público a lista de fontes por 3 anos e a tela de licenças. Não é parecer jurídico.

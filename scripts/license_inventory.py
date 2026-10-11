@@ -21,11 +21,11 @@ UNKNOWN = {"", "unknown", "none", "null"}
 # LGPL-2.1-only (OCCT, geos, libiconv...) é permitida só como biblioteca dinâmica sem modificação (ADR-009 §5.1).
 ALLOWED = {x.lower() for x in """
 MIT MIT-open-group X11 NCSA ISC 0BSD HPND HPND-sell-variant PostgreSQL TCL blessing curl Zlib zlib-acknowledgement libpng-2.0
-BSD-2-Clause BSD-3-Clause BSD-3-Clause-Attribution BSD-3-Clause-Clear BSL-1.0 Apache-2.0 PSF-2.0 Python-2.0 MPL-2.0 AFL-2.1 OFL-1.1 FTL
+BSD-2-Clause BSD-3-Clause BSD-3-Clause-Attribution BSD-3-Clause-Clear BSL-1.0 Apache-2.0 PSF-2.0 Python-2.0 MPL-2.0 OFL-1.1 FTL
 IJG JasPer-2.0 SGI-B-2.0 bzip2-1.0.6 OLDAP-2.8
 LGPL-2.1-only LGPL-2.1-or-later LGPL-2.0-or-later LGPL-3.0-only LGPL-3.0-or-later
 GPL-2.0-or-later GPL-3.0-only GPL-3.0-or-later
-LicenseRef-libglvnd LicenseRef-Qhull LicenseRef-Public-Domain LicenseRef-Ubuntu-Font-Licence-Version-1.0 FreeImage
+LicenseRef-libglvnd LicenseRef-Qhull LicenseRef-Public-Domain LicenseRef-Ubuntu-Font-Licence-Version-1.0
 """.split()}
 # Licenças aceitas SÓ por exceção nomeada (nunca por metadado de outro pacote).
 EXCEPTION_ONLY = {"licenseref-microsoft-redistributable"}
@@ -40,13 +40,18 @@ EXCEPTIONS = {
     ("ucrt", "10.0.26100.0"): ("LicenseRef-Microsoft-Redistributable", "Universal CRT do Windows SDK 10, redistribuível pelos termos da Microsoft"),
     ("vc14_runtime", "14.51.36247"): ("LicenseRef-Microsoft-Redistributable", "runtime do Visual C++ 2015-2022, redistribuível pelos termos da Microsoft"),
     ("vcomp14", "14.51.36247"): ("LicenseRef-Microsoft-Redistributable", "runtime OpenMP do Visual C++ 2015-2022, redistribuível pelos termos da Microsoft"),
-    ("cgal-cpp", "6.2.1"): ("GPL-3.0-only OR LGPL-3.0-only", "metadado 'GPL3/LGPL3' (não é SPDX); cabeçalhos do CGAL em GPL-3 ou LGPL-3, compilados dentro do IfcOpenShell; combinação pela seção 13 da AGPL (lote opus 2)"),
+    ("cgal-cpp", "6.2.1"): ("GPL-3.0-or-later AND LGPL-3.0-or-later", "metadado 'GPL3/LGPL3' (não é SPDX); cabeçalhos do CGAL em GPL-3 e LGPL-3 (partes diferentes), compilados dentro do IfcOpenShell; combinação pela seção 13 da AGPL (lote opus 2)"),
 }
 
 
 def expr_ok(expr):
     """True se a expressão SPDX é aceita: alguma alternativa de OR tem todos os itens de AND permitidos."""
-    expr = re.sub(r"\s+", " ", expr.strip().strip("()"))
+    expr = re.sub(r"\s+", " ", expr.strip())
+    # Só um par de parênteses externo é lido; parênteses internos reprovam (o pacote vira exceção nomeada).
+    if expr.startswith("(") and expr.endswith(")"):
+        expr = expr[1:-1].strip()
+    if "(" in expr or ")" in expr:
+        return False
     for alt in re.split(r"\s+or\s+", expr, flags=re.I):
         atoms = re.split(r"\s+and\s+", alt, flags=re.I)
         if all(_atom_ok(a) for a in atoms):
@@ -55,7 +60,7 @@ def expr_ok(expr):
 
 
 def _atom_ok(atom):
-    parts = re.split(r"\s+with\s+", atom.strip().strip("()"), maxsplit=1, flags=re.I)
+    parts = re.split(r"\s+with\s+", atom.strip(), maxsplit=1, flags=re.I)
     if parts[0].lower() not in ALLOWED:
         return False
     return len(parts) == 1 or parts[1].lower() in ALLOWED_EXCEPTIONS

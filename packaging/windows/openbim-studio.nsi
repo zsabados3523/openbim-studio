@@ -14,13 +14,54 @@ SetCompressorDictSize 64
 
 !define MUI_ABORTWARNING
 !insertmacro MUI_PAGE_LICENSE "${PASTA_PACOTE}\licenses\AGPL-3.0-or-later.txt"
+!define MUI_PAGE_CUSTOMFUNCTION_LEAVE PastaLeave
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_LANGUAGE "PortugueseBR"
 
+; $0 = 1 se a pasta de instalação já tem arquivos que não são de uma instalação nossa
+Function PastaOcupada
+  StrCpy $0 0
+  IfFileExists "$INSTDIR\app\OpenBIM-Studio.pyw" fim
+  IfFileExists "$INSTDIR\*.*" 0 fim
+  FindFirst $1 $2 "$INSTDIR\*.*"
+  laco:
+    StrCmp $2 "" feito
+    StrCmp $2 "." proximo
+    StrCmp $2 ".." proximo
+    StrCpy $0 1
+    Goto feito
+  proximo:
+    FindNext $1 $2
+    Goto laco
+  feito:
+    FindClose $1
+  fim:
+FunctionEnd
+
+; pasta com arquivos de outra coisa: instala numa subpasta própria, para nunca apagar o que não é nosso
+Function AjustaPasta
+  Call PastaOcupada
+  StrCmp $0 1 0 +2
+    StrCpy $INSTDIR "$INSTDIR\OpenBIM Studio"
+FunctionEnd
+
+Function PastaLeave
+  StrCpy $3 "$INSTDIR"
+  Call AjustaPasta
+  StrCmp $3 "$INSTDIR" +2
+    MessageBox MB_OK|MB_ICONINFORMATION "A pasta escolhida já tem outros arquivos. O programa será instalado em: $INSTDIR"
+FunctionEnd
+
 Section "OpenBIM Studio"
+  ; também na instalação silenciosa (as páginas não rodam)
+  Call AjustaPasta
+  Call PastaOcupada
+  StrCmp $0 0 +3
+    MessageBox MB_OK|MB_ICONSTOP /SD IDOK "A pasta de instalação já tem outros arquivos. Escolha outra pasta. Nada foi instalado."
+    Abort
   ; espaço necessário (KB): o programa instalado ocupa ~1,4 GB; a página de pasta avisa se não couber
   AddSize 1500000
   SetOutPath "$INSTDIR"
@@ -31,14 +72,19 @@ Section "OpenBIM Studio"
   File /r "${PASTA_PACOTE}\*.*"
   ; ambiente conda: um tar.gz único, extraído com o tar.exe do Windows (10 e 11)
   InitPluginsDir
-  DetailPrint "Copiando o pacote do programa (cerca de 480 MB)..."
+  DetailPrint "Copiando o pacote do programa (cerca de 310 MB)..."
   File "/oname=$PLUGINSDIR\env.tgz" "${ENV_TGZ}"
   DetailPrint "Extraindo os arquivos do programa; isto leva de 1 a 3 minutos e a janela pode parecer parada..."
   nsExec::ExecToLog '"$SYSDIR\tar.exe" -xzf "$PLUGINSDIR\env.tgz" -C "$INSTDIR"'
   Pop $0
-  StrCmp $0 0 +4
+  StrCmp $0 0 +9
     RMDir /r "$INSTDIR\env"
-    MessageBox MB_OK|MB_ICONSTOP "Falha ao extrair os arquivos do programa (código $0). Nada foi instalado."
+    RMDir /r "$INSTDIR\app"
+    RMDir /r "$INSTDIR\licenses"
+    Delete "$INSTDIR\LGPL-COMO-TROCAR.md"
+    Delete "$INSTDIR\FONTES.md"
+    RMDir "$INSTDIR"
+    MessageBox MB_OK|MB_ICONSTOP /SD IDOK "Falha ao extrair os arquivos do programa (código $0). Nada foi instalado."
     Abort
   Delete "$PLUGINSDIR\env.tgz"
   WriteUninstaller "$INSTDIR\Uninstall.exe"

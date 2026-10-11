@@ -6,7 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 Este pacote traz bibliotecas livres do canal conda-forge, nas versões e compilações exatas listadas abaixo. O código-fonte de cada uma pode ser obtido de duas formas:
 
 1. Pelo canal conda-forge: cada pacote tem um repositório de receita (`https://github.com/conda-forge/<nome>-feedstock`) que aponta para o código original de cada projeto, na versão listada.
-2. Por oferta escrita: para as bibliotecas LGPL/GPL, o código-fonte exato é mantido junto da publicação (release) do programa. Pedidos: abra uma issue em https://github.com/zsabados3523/openbim-studio.
+2. Por pedido: para as bibliotecas LGPL/GPL, o endereço exato do código e da receita de cada pacote está na tabela abaixo. Se não conseguir obter algum código-fonte, abra uma issue em https://github.com/zsabados3523/openbim-studio.
 
 O código do OpenBIM Studio (AGPL-3.0-or-later) e os scripts de montagem estão em https://github.com/zsabados3523/openbim-studio.
 

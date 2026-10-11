@@ -43,9 +43,9 @@
 | F0-S02-T09 | Bloquear merge sem Windows+Linux verdes | T0 | PO (líder guia) | PO | S02-T07 | FEITA em 2026-10-10 (regra no GitHub: `linux` e `windows` obrigatórios; trabalho vai por ramo + PR) |
 | F0-S02-T10 | Pacote Linux (AppImage) | T2 | sonnet | **opus, obrigatória** | S02-T06, S02-T02 | FEITA (390 MB após poda por pacote que também removeu o ffmpeg GPL); revisão opus obrigatória no lote 2 |
 | F0-S02-T11 | Instalador Windows (NSIS) | T2 | sonnet | **opus, obrigatória** | S02-T07, S02-T02 | FEITA no CI (instalador 482 MB; instala, abre e desinstala sem sobras; run 38110728020); falta: ícone próprio, teste do PO (T14) e revisão opus obrigatória no lote 2 |
-| F0-S02-T12 | Teste de gravação de vídeo headless | T2 | sonnet | sonnet | S02-T04 | BLOQUEADA |
-| F0-S02-T13 | Medir metas de build e tamanho | T1 | sonnet | sonnet | S02-T10, S02-T11, S02-T16 | BLOQUEADA |
-| F0-S02-T14 | Roteiro de aceite do PO e relatório da S02 | T1 | sonnet | PO | S02-T10, S02-T11 | BLOQUEADA |
+| F0-S02-T12 | Teste de gravação de vídeo headless | T2 | sonnet | sonnet | S02-T04 | EM ANDAMENTO: experimento no Linux feito (GIF), Windows a confirmar no CI; vídeo MP4 aguarda ok do PO |
+| F0-S02-T13 | Medir metas de build e tamanho | T1 | sonnet | sonnet | S02-T10, S02-T11, S02-T16 | ESCRITA (relatório F0-S02-metricas.md); duas pendências: AppImage no CI e build incremental |
+| F0-S02-T14 | Roteiro de aceite do PO e relatório da S02 | T1 | sonnet | PO | S02-T10, S02-T11 | ESCRITA (docs/acceptance/F0-S02.md, parte A pronta; parte B aguarda AppImage no CI) |
 | F0-S02-T15 | ADR-005 final (decisão com testes) | TA | opus (lote) | PO (resumo) | S02-T13, S02-T02 | BLOQUEADA |
 | F0-S02-T16 | Sonda C++ mínima (pacote IfcOpenShell e módulo nanobind) | T2 | sonnet | sonnet; amostra opus | S02-T03 | FEITA (amostra opus no lote 2) |
 

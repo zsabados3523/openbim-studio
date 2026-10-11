@@ -31,8 +31,8 @@ Saída: seção no relatório do lote.
 Pergunta: as conclusões do teste 2 (cabeçalhos e bibliotecas compartilhadas `libifcopenshell.*` presentes; módulo Python liga nelas) e do teste 3 (módulo nanobind + OCCT + Qt compila em 2,4 s limpo / 0,9 s incremental no Linux) fecham esses dois testes do ADR-005? A descoberta de que a API C++ da 0.9 usa `ifcopenshell::file` (e não `IfcParse::IfcFile`) muda o teste 5 (prova do risco R1, S04, T3)? Atualize o ADR-005 (resultados parciais; status continua esboço) e diga o que a S04 deve provar.
 Saída: ADR-005 atualizado + seção no relatório do lote.
 
-### Item 5 (opcional, só se a cota permitir): amostra do CI e do inventário de licenças (F0-S02-T06)
-Leia o workflow, o script de inventário e o `REUSE.toml`. O CI ainda não rodou (o push está bloqueado por autenticação); aponte riscos que o primeiro run provavelmente mostrará, e se a exceção do `tbb-devel` (metadado vazio; pacote irmão Apache-2.0) é aceitável.
+### Item 5 (opcional, só se a cota permitir): CI, inventário de licenças e instalador Windows
+O CI já rodou e está verde (execução 38110728020). Leia `.github/workflows/ci.yml`, `scripts/license_inventory.py`, `scripts/prune_packages.py`, `scripts/collect_package_licenses.py`, `packaging/windows/` (inclui `build_installer.sh`, `openbim-studio.nsi`, `test_installer.sh`) e `REUSE.toml`. Aponte riscos reais (o NSIS do conda-forge como ferramenta de montagem; instalação por usuário; `tar.exe` do Windows na extração; cache de pacotes do conda; `appimagetool` 1.9.1 fixado por sha256) e diga se a exceção do `tbb-devel` (metadado vazio; pacote irmão Apache-2.0) é aceitável.
 Saída: seção no relatório do lote.
 
 ## Arquivos que você pode criar ou editar

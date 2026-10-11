@@ -8,7 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QPointF, Qt, QTimer
 from PySide6.QtGui import (
     QColor,
     QImage,
@@ -28,8 +28,10 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QRhiWidget
 
 try:  # execução como pacote (testes) ou como script
+    from .camera import Camera
     from .viewport import Viewport
 except ImportError:  # pragma: no cover
+    from camera import Camera
     from viewport import Viewport
 
 SHADERS = Path(__file__).resolve().parent / "shaders"
@@ -71,6 +73,8 @@ class CuboViewport(QRhiWidget, Viewport):
         self._pronto = False
         self._pipeline = None
         self._rhi_antigo = None
+        self.camera = Camera()
+        self._ultimo: QPointF | None = None
         if girar:
             self._timer = QTimer(self)
             self._timer.timeout.connect(self._passo)
@@ -85,6 +89,32 @@ class CuboViewport(QRhiWidget, Viewport):
 
     def grab_image(self) -> QImage:
         return self.grabFramebuffer()
+
+    # --- mouse: esquerdo orbita; meio ou shift+esquerdo move; roda aproxima ---
+    def mousePressEvent(self, ev) -> None:
+        self._ultimo = ev.position()
+
+    def mouseReleaseEvent(self, ev) -> None:
+        self._ultimo = None
+
+    def mouseMoveEvent(self, ev) -> None:
+        if self._ultimo is None:
+            return
+        pos = ev.position()
+        dx, dy = pos.x() - self._ultimo.x(), pos.y() - self._ultimo.y()
+        self._ultimo = pos
+        botoes = ev.buttons()
+        if botoes & Qt.MiddleButton or (botoes & Qt.LeftButton and ev.modifiers() & Qt.ShiftModifier):
+            self.camera.mover(dx, dy, self.height())
+        elif botoes & Qt.LeftButton:
+            self.camera.orbitar(dx, dy)
+        else:
+            return
+        self.update()
+
+    def wheelEvent(self, ev) -> None:
+        self.camera.aproximar(ev.angleDelta().y() / 120.0)
+        self.update()
 
     # --- giro ---
     def _passo(self) -> None:
@@ -165,10 +195,9 @@ class CuboViewport(QRhiWidget, Viewport):
         if self._malha_nova:
             self._subir_malha(rub)
         tam = self.renderTarget().pixelSize()
-        proj = QMatrix4x4()
-        proj.perspective(45.0, max(tam.width(), 1) / max(tam.height(), 1), 0.1, 100.0)
-        vista = QMatrix4x4()
-        vista.translate(0, 0, -3.2)
+        self.camera.proporcao = max(tam.width(), 1) / max(tam.height(), 1)
+        proj = QMatrix4x4(self.camera.matriz_projecao().flatten().tolist())
+        vista = QMatrix4x4(self.camera.matriz_vista().flatten().tolist())
         modelo = QMatrix4x4()
         modelo.rotate(self._angulo, 0.3, 1.0, 0.2)
         mvp = rhi.clipSpaceCorrMatrix() * proj * vista * modelo

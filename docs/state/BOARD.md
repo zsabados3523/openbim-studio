@@ -50,7 +50,7 @@
 | F0-S02-T21 | Instalador não apaga arquivos do usuário (N1) | T2 | sonnet | sonnet | S02-T18 | FEITA no ramo, aguarda CI |
 | F0-S02-T22 | Inventário: parênteses e lista (D1 e ajustes) | T2 | sonnet | sonnet | S02-T20 | FEITA no ramo, aguarda CI |
 | F0-S02-T23 | Antes do primeiro release | T2 | sonnet | opus (lote) | T17, T18, T22 | NÃO INICIADA (bloqueia release público) |
-| F0-S02-T24 | Seletor de arquivos nativo no AppImage (portal do desktop) | T2 | sonnet | sonnet | S02-T17 | NÃO INICIADA (prioridade baixa; antes do release; o PO testa no desktop dele) |
+| F0-S02-T24 | Seletor de arquivos nativo no AppImage (portal do desktop) | T2 | sonnet | sonnet | S02-T17 | FEITA no ramo (AppRun ativa o portal do desktop quando há D-Bus; teste no CI; o PO confere no passo 15 do roteiro) |
 | F0-S02-T16 | Sonda C++ mínima (pacote IfcOpenShell e módulo nanobind) | T2 | sonnet | sonnet; amostra opus | S02-T03 | FEITA (amostra aprovada no lote Opus 2; testes 2 e 3 do ADR-005 fecham só no Linux; ver S02-T19) |
 | F0-S02-T17 | Correções do AppImage (lote opus 2, defeitos 1 a 7) | T2 | sonnet | **opus, em lote (diff)** | S02-T10 | FEITA no CI (verde, 389 MB, testes de licença e troca de .so); falta conferência opus (lote 3); runtime do appimagetool pendente |
 | F0-S02-T18 | Correções do instalador Windows (defeitos 1 a 4 e riscos 5 a 7) | T2 | sonnet | **opus, em lote (diff)** | S02-T11, S02-T17 | FEITA no CI (verde, 309 MB sem MKL, testes de reinstalação, DLL trocada e arquivo do usuário); falta conferência opus (lote 3) |

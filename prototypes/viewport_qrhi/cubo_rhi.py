@@ -8,7 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-from PySide6.QtCore import QPointF, Qt, QTimer
+from PySide6.QtCore import QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import (
     QColor,
     QImage,
@@ -29,9 +29,11 @@ from PySide6.QtWidgets import QRhiWidget
 
 try:  # execução como pacote (testes) ou como script
     from .camera import Camera
+    from .selecao import Malha, pick as _pick
     from .viewport import Viewport
 except ImportError:  # pragma: no cover
     from camera import Camera
+    from selecao import Malha, pick as _pick
     from viewport import Viewport
 
 SHADERS = Path(__file__).resolve().parent / "shaders"
@@ -62,12 +64,15 @@ def cubo_padrao() -> tuple[np.ndarray, np.ndarray]:
 class CuboViewport(QRhiWidget, Viewport):
     """Widget 3D (QRhiWidget) que mostra uma malha colorida girando."""
 
+    clicado = Signal(object)  # id do objeto clicado (ou None) após clique esquerdo sem arrasto
+
     def __init__(self, parent=None, api: QRhiWidget.Api | None = None, girar: bool = True):
         super().__init__(parent)
         if api is not None:
             self.setApi(api)  # antes de mostrar a janela
         self._vertices, self._indices = cubo_padrao()
         self._malha_nova = True
+        self._selecao = None
         self._angulo = 0.0
         self._girar = girar
         self._pronto = False
@@ -85,7 +90,28 @@ class CuboViewport(QRhiWidget, Viewport):
         self._vertices = np.ascontiguousarray(vertices, dtype=np.float32).reshape(-1, FLOATS_POR_VERTICE)
         self._indices = np.ascontiguousarray(indices, dtype=np.uint32).reshape(-1)
         self._malha_nova = True
+        self._selecao = None  # malha de objetos para o pick; None = um objeto único (id 1) com esta malha
         self.update()
+
+    def set_objetos(self, malha: Malha) -> None:
+        """Define os objetos (com id) usados pelo `pick`; não muda o que é desenhado."""
+        self._selecao = malha
+
+    def pick(self, x: float, y: float):
+        """Id do objeto sob o ponto (x, y) em pixels lógicos do widget, ou None.
+
+        Só a razão x/largura importa, então vale em telas com escala (HiDPI), desde que x, y e o
+        tamanho do widget estejam na mesma unidade (aqui, lógica).
+        """
+        if self._selecao is None:
+            self._selecao = Malha([(1, self._vertices[:, :3], self._indices)])
+        inv = np.linalg.inv(self._matriz_modelo())
+        return _pick(self._selecao, self.camera, x, y, self.width(), self.height(), inv)
+
+    def _matriz_modelo(self) -> np.ndarray:
+        m = QMatrix4x4()
+        m.rotate(self._angulo, 0.3, 1.0, 0.2)
+        return np.array(m.data(), dtype=np.float64).reshape(4, 4).T  # data() vem coluna a coluna
 
     def grab_image(self) -> QImage:
         return self.grabFramebuffer()
@@ -93,14 +119,21 @@ class CuboViewport(QRhiWidget, Viewport):
     # --- mouse: esquerdo orbita; meio ou shift+esquerdo move; roda aproxima ---
     def mousePressEvent(self, ev) -> None:
         self._ultimo = ev.position()
+        self._inicio = ev.position()
+        self._arrastou = False
 
     def mouseReleaseEvent(self, ev) -> None:
         self._ultimo = None
+        if ev.button() == Qt.LeftButton and not getattr(self, "_arrastou", True):
+            p = ev.position()
+            self.clicado.emit(self.pick(p.x(), p.y()))
 
     def mouseMoveEvent(self, ev) -> None:
         if self._ultimo is None:
             return
         pos = ev.position()
+        if (pos - self._inicio).manhattanLength() > 4:
+            self._arrastou = True
         dx, dy = pos.x() - self._ultimo.x(), pos.y() - self._ultimo.y()
         self._ultimo = pos
         botoes = ev.buttons()
@@ -199,7 +232,7 @@ class CuboViewport(QRhiWidget, Viewport):
         proj = QMatrix4x4(self.camera.matriz_projecao().flatten().tolist())
         vista = QMatrix4x4(self.camera.matriz_vista().flatten().tolist())
         modelo = QMatrix4x4()
-        modelo.rotate(self._angulo, 0.3, 1.0, 0.2)
+        modelo.rotate(self._angulo, 0.3, 1.0, 0.2)  # igual a _matriz_modelo (usada no pick)
         mvp = rhi.clipSpaceCorrMatrix() * proj * vista * modelo
         dados = np.array(mvp.data(), dtype=np.float32)  # coluna a coluna, como o GLSL espera
         rub.updateDynamicBuffer(self._ubuf, 0, 64, dados.tobytes())

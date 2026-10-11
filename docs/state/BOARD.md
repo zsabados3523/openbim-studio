@@ -6,7 +6,7 @@
 | Fatia | Nome | Tam. | Depende de | Status | Cartões | Observação |
 |---|---|---|---|---|---|---|
 | F0-S01 | Repositório, licenças e pesquisa | P | — | FEITA (2026-10-11; aprovada no lote Opus 2) | S01-T01 a T12 | Abertos sem bloquear: termos conda-forge, Qt Shader Tools, ReportLab, SINAPI; espelho Codeberg depois |
-| F0-S02 | CI Windows+Linux e app esqueleto | M→G (tratada como G) | S01 | EM_ANDAMENTO | S02-T01 a T16 | S02-T01 pode começar quando S01-T01 estiver feita |
+| F0-S02 | CI Windows+Linux e app esqueleto | M→G (tratada como G) | S01 | CONCLUÍDA (aceite do PO em 2026-10-11, Windows e Linux) | S02-T01 a T16 | S02-T01 pode começar quando S01-T01 estiver feita |
 | F0-S03 | Protótipo de viewport (Qt RHI) | M | S02; S08 contínuo | NÃO INICIADA (sem cartões) | — | |
 | F0-S04 | Ponte Python↔C++ (híbrido vs C++ puro) | G, crítica | S02 | NÃO INICIADA | — | Contém T3 (ponte, threads) |
 | F0-S05 | Oplog, undo e merge | M | S04 | NÃO INICIADA | — | Contém T3 (transações, gravação do par). Precisa de formato mínimo provisório do `.obim` antes do ADR-003 |
@@ -43,13 +43,14 @@
 | F0-S02-T09 | Bloquear merge sem Windows+Linux verdes | T0 | PO (líder guia) | PO | S02-T07 | FEITA em 2026-10-10 (regra no GitHub: `linux` e `windows` obrigatórios; trabalho vai por ramo + PR) |
 | F0-S02-T10 | Pacote Linux (AppImage) | T2 | sonnet | **opus, obrigatória** | S02-T06, S02-T02 | REPROVADA no lote Opus 2 (7 defeitos, nenhum pede refazer a montagem); correções no cartão S02-T17; APROVADA no lote opus 3 (7 de 7); 389 MB no CI |
 | F0-S02-T11 | Instalador Windows (NSIS) | T2 | sonnet | **opus, obrigatória** | S02-T07, S02-T02 | REPROVADA no lote Opus 2 (4 defeitos); correções no cartão S02-T18; APROVADA no lote opus 3 (4 de 4; defeito novo N1 no cartão T21); 309 MB no CI |
-| F0-S02-T12 | Teste de gravação de vídeo headless | T2 | sonnet | sonnet | S02-T04 | EM ANDAMENTO: experimento no Linux feito (GIF), Windows a confirmar no CI; vídeo MP4 aguarda ok do PO |
-| F0-S02-T13 | Medir metas de build e tamanho | T1 | sonnet | sonnet | S02-T10, S02-T11, S02-T16 | ESCRITA (relatório F0-S02-metricas.md); duas pendências: AppImage no CI e build incremental |
-| F0-S02-T14 | Roteiro de aceite do PO e relatório da S02 | T1 | sonnet | PO | S02-T10, S02-T11 | ESCRITA (docs/acceptance/F0-S02.md, parte A pronta; parte B aguarda AppImage no CI) |
+| F0-S02-T12 | Teste de gravação de vídeo headless | T2 | sonnet | sonnet | S02-T04 | FEITA no plano B (capturas e GIF); MP4 aguarda ok do PO |
+| F0-S02-T13 | Medir metas de build e tamanho | T1 | sonnet | sonnet | S02-T10, S02-T11, S02-T16 | FEITA (relatório F0-S02-metricas.md; build incremental do Windows aceito pelo PO, revisão na S04) |
+| F0-S02-T14 | Roteiro de aceite do PO e relatório da S02 | T1 | sonnet | PO | S02-T10, S02-T11 | FEITA (PO executou o roteiro nos dois sistemas: tudo ok, 2026-10-11) |
 | F0-S02-T15 | ADR-005 final (decisão com testes) | TA | opus (lote) | PO (resumo) | S02-T13, S02-T02 | FEITA (lote opus 3; PO aprovou: ADR-005 aceito, 2026-10-11) |
 | F0-S02-T21 | Instalador não apaga arquivos do usuário (N1) | T2 | sonnet | sonnet | S02-T18 | FEITA no ramo, aguarda CI |
 | F0-S02-T22 | Inventário: parênteses e lista (D1 e ajustes) | T2 | sonnet | sonnet | S02-T20 | FEITA no ramo, aguarda CI |
 | F0-S02-T23 | Antes do primeiro release | T2 | sonnet | opus (lote) | T17, T18, T22 | NÃO INICIADA (bloqueia release público) |
+| F0-S02-T24 | Seletor de arquivos nativo no AppImage (portal do desktop) | T2 | sonnet | sonnet | S02-T17 | NÃO INICIADA (prioridade baixa; antes do release; o PO testa no desktop dele) |
 | F0-S02-T16 | Sonda C++ mínima (pacote IfcOpenShell e módulo nanobind) | T2 | sonnet | sonnet; amostra opus | S02-T03 | FEITA (amostra aprovada no lote Opus 2; testes 2 e 3 do ADR-005 fecham só no Linux; ver S02-T19) |
 | F0-S02-T17 | Correções do AppImage (lote opus 2, defeitos 1 a 7) | T2 | sonnet | **opus, em lote (diff)** | S02-T10 | FEITA no CI (verde, 389 MB, testes de licença e troca de .so); falta conferência opus (lote 3); runtime do appimagetool pendente |
 | F0-S02-T18 | Correções do instalador Windows (defeitos 1 a 4 e riscos 5 a 7) | T2 | sonnet | **opus, em lote (diff)** | S02-T11, S02-T17 | FEITA no CI (verde, 309 MB sem MKL, testes de reinstalação, DLL trocada e arquivo do usuário); falta conferência opus (lote 3) |

@@ -9,12 +9,9 @@ int main(int argc, char** argv) {
     const std::string caminho = argv[1];
     std::cerr << "esquema IFC4 registrado: "
               << (ifcopenshell::schema_by_name("IFC4") != nullptr ? "sim" : "nao") << "\n";
-    // Duas formas de abrir; a primeira que funcionar vale (a segunda é o caminho padrão da biblioteca).
-    ifcopenshell::file a(caminho, false);
-    std::cerr << "abrir(caminho, false): codigo " << static_cast<int>(a.good().value()) << "\n";
-    ifcopenshell::file b(caminho);
-    std::cerr << "abrir(caminho): codigo " << static_cast<int>(b.good().value()) << "\n";
-    ifcopenshell::file& f = (a.good().value() == ifcopenshell::file_open_status::SUCCESS) ? a : b;
+    // Atenção: file(const char*, bool) NÃO abre arquivo (cai no construtor de memória); use std::string.
+    ifcopenshell::file f(caminho);
+    std::cerr << "abrir(caminho): codigo " << static_cast<int>(f.good().value()) << "\n";
     if (f.good().value() != ifcopenshell::file_open_status::SUCCESS) {
         std::cerr << "falha ao abrir\n";
         return 1;

@@ -35,3 +35,8 @@ C hospedagem GitHub + espelho Codeberg · D interface híbrida (confirmar na S09
 - Build incremental do Windows (~16 min contra meta de 10): **opção 1, aceitar agora e revisitar na S04** (2026-10-11).
 - Autorização permanente para ramos de trabalho, PR e merge de T0 a T2 aprovadas: registrada no `CLAUDE.md` (2026-10-11).
 - Licenças do Windows (2026-10-11): trocar MKL por OpenBLAS no ambiente de runtime; aceitar `ucrt`, `vc14_runtime` e `vcomp14` (runtimes redistribuíveis da Microsoft) por exceção nomeada e amarrada à versão; incluir `BSD-3-Clause-Clear` na lista de permitidas.
+
+## Decisões do PO após o lote Opus 4 (2026-10-11)
+- S03: aceitar que a janela pare pelo tempo de um elemento muito pesado (0,2 s numa parede com 150 aberturas); solução fica para a S04/ADR-004.
+- S03: a leitura de v2/03 "tesselação via IfcOpenShell C++" está atendida pelo iterador C++ do IfcOpenShell chamado do Python (sem módulo C++ nosso na S03).
+- Modelo grande da S03: sintético por script; IFC real do PO só na T07, com arquivo indicado no chat.

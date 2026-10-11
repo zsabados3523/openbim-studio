@@ -69,6 +69,13 @@ jobs:
           v=$(grep -E "^VEREDITO" out/sonda-ifcopenshell.txt || echo "VEREDITO: sem resultado")
           m=$(grep -E "^  liga em|^módulo" out/sonda-ifcopenshell.txt | cut -c1-400 | sed ':a;N;$!ba;s/\n/%0A/g')
           echo "::notice title=ifcopenshell no ${RUNNER_OS}::${v}%0A${m}"
+      - name: Sonda 3b do ADR-005 (compilar com os cabeçalhos pesados do IfcOpenShell; não bloqueia)
+        shell: bash -el {0}
+        continue-on-error: true
+        run: |
+          mkdir -p out
+          bash prototypes/cpp_probe_3b/run.sh out docs/acceptance/amostras/casa-simples.ifc 2>&1 | tee out/sonda-3b.txt
+          echo "::notice title=sonda 3b no ${RUNNER_OS}::$(grep SONDA3B out/sonda-3b.txt || echo sem resultado)"
       - name: REUSE (ferramenta só no CI, ambiente separado)
         shell: bash -el {0}
         run: |
@@ -146,6 +153,13 @@ jobs:
           v=$(grep -E "^VEREDITO" out/sonda-ifcopenshell.txt || echo "VEREDITO: sem resultado")
           m=$(grep -E "^  liga em|^módulo" out/sonda-ifcopenshell.txt | cut -c1-400 | sed ':a;N;$!ba;s/\n/%0A/g')
           echo "::notice title=ifcopenshell no ${RUNNER_OS}::${v}%0A${m}"
+      - name: Sonda 3b do ADR-005 (compilar com os cabeçalhos pesados do IfcOpenShell; não bloqueia)
+        shell: bash -el {0}
+        continue-on-error: true
+        run: |
+          mkdir -p out
+          bash prototypes/cpp_probe_3b/run.sh out docs/acceptance/amostras/casa-simples.ifc 2>&1 | tee out/sonda-3b.txt
+          echo "::notice title=sonda 3b no ${RUNNER_OS}::$(grep SONDA3B out/sonda-3b.txt || echo sem resultado)"
       - name: Instalador Windows (ambiente de runtime e NSIS)
         shell: bash -el {0}
         run: |

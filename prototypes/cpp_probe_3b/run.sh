@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Sonda 3b (ADR-005): compila e liga um programa que inclui ifcparse/file.h.
+# Roda no CI (Linux e Windows) com o ambiente `openbim` ativo. Mede tempo limpo e incremental.
+# Uso: bash run.sh <pasta-de-saida> <arquivo.ifc>
+set -euo pipefail
+cd "$(dirname "$0")"
+OUT="$1"; IFC="$2"; B="$OUT/build_3b"; mkdir -p "$OUT"; rm -rf "$B"
+# O cmake do IfcOpenShell pede os arquivos de desenvolvimento do zlib (o ambiente só traz a biblioteca).
+conda install -y -c conda-forge --override-channels zlib >/dev/null
+agora() { python -c "import time; print(time.time())"; }
+t0=$(agora)
+cmake -S . -B "$B" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$CONDA_PREFIX"
+cmake --build "$B"
+t1=$(agora)
+touch probe_3b.cpp
+cmake --build "$B"
+t2=$(agora)
+exe=$(find "$B" -name 'probe_3b' -o -name 'probe_3b.exe' | head -1)
+saida=$("$exe" "$IFC")
+python - "$t0" "$t1" "$t2" "$saida" <<'PY'
+import sys
+a, b, c = map(float, sys.argv[1:4])
+print(f"SONDA3B: build limpo {b-a:.1f} s | incremental {c-b:.1f} s | {sys.argv[4]}")
+PY

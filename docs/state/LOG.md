@@ -52,3 +52,4 @@ Uma linha por tarefa concluída ou escalada, e por mudança de classe de tarefa.
 2026-10-10 | S02-T11 | 5º run (re-run de 38091296641): o instalador foi gerado e o teste ficou 15 min na etapa de instalar (silencioso) sem terminar. Adicionado acompanhamento de progresso (tamanho da pasta a cada 30 s) para diferenciar lento de travado.
 2026-10-10 | S02-T11 | 6º run (38096583572): instalador parado numa tela: o bash do Windows (Git for Windows) converte /S em caminho, então o modo silencioso não valia. Correção: MSYS2_ARG_CONV_EXCL=* no test_installer.sh.
 2026-10-10 | S02-T11 | 7º run (38098596406): instalação silenciosa OK (~2 min), mas foi para a pasta padrão porque o NSIS não aceita /D= com espaço. Teste agora usa caminho sem espaço.
+2026-10-10 | S02-T11 | 8º run (38100061860): instalação em pasta própria OK (~90 s, 2240 MB instalados, todos os arquivos conferidos); falha só no teste de abertura (env -i apagava o PATH e o timeout sumia). Corrigido.

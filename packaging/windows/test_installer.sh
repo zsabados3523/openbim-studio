@@ -27,7 +27,7 @@ for f in app/OpenBIM-Studio.pyw Uninstall.exe LGPL-COMO-TROCAR.md FONTES.md lice
 done
 grep -rqi "GNU LESSER GENERAL PUBLIC LICENSE" "$D/licenses/pacotes" || falha "sem texto da LGPL em licenses/pacotes"
 passo "abrindo o app (selftest, sem tela)"
-out="$(env -i SYSTEMROOT="$SYSTEMROOT" TEMP="$TEMP" QT_QPA_PLATFORM=offscreen timeout 120 "$D/env/python.exe" "$D/app/OpenBIM-Studio.pyw" --selftest 2>&1)"
+out="$(timeout 120 env -i SYSTEMROOT="$SYSTEMROOT" TEMP="$TEMP" QT_QPA_PLATFORM=offscreen "$D/env/python.exe" "$D/app/OpenBIM-Studio.pyw" --selftest 2>&1)"
 echo "selftest: $out"
 [ "$out" = "OK" ] || falha "selftest não imprimiu OK"
 passo "desinstalando"

@@ -31,6 +31,14 @@ find "$PKG/env" -name '*.a' -delete
 # que apenas elas exigem (o inventário e a lista de fontes continuam listando tudo, com a marca).
 python "$REPO/scripts/prune_packages.py" "$PKG/env" "$OUT/removidos.txt" vtk vtk-base vtk-io-ffmpeg viskores ffmpeg
 
+# 1c. Arquivos que só servem para COMPILAR contra as bibliotecas (o app roda sem eles): bibliotecas de
+# importação .lib, cmake, pkg-config, documentação, símbolos de depuração e testes.
+rm -rf "$PKG/env/Library/lib/cmake" "$PKG/env/Library/lib/pkgconfig" "$PKG/env/Library/share/man" \
+       "$PKG/env/Library/share/gtk-doc" "$PKG/env/Library/share/doc" "$PKG/env/Library/share/info"
+find "$PKG/env" \( -name '*.lib' -o -name '*.pdb' -o -name '*.exp' \) -delete
+echo "Maiores pastas do ambiente (MB):"
+du -sm "$PKG"/env/* "$PKG"/env/Library/* "$PKG"/env/Lib/site-packages/* 2>/dev/null | sort -rn | head -14
+
 # 2. Código do app e lançador
 cp -a "$REPO/app/openbim_app" "$PKG/app/"
 find "$PKG/app" -name __pycache__ -type d -prune -exec rm -rf {} +
@@ -67,7 +75,7 @@ cp "$PKG/FONTES.md" "$PKG/licenses/FONTES.md"
 
 # 3b. O ambiente (~1 GB, dezenas de milhares de arquivos) vai num único tar.gz dentro do instalador:
 # o makensis (32 bits) estoura a memória com tantos arquivos soltos. O instalador extrai com o tar.exe do Windows.
-tar -czf "$OUT/env.tgz" -C "$PKG" env
+tar -cf - -C "$PKG" env | gzip -9 > "$OUT/env.tgz"
 rm -rf "$OUT/env-pronto" && mv "$PKG/env" "$OUT/env-pronto"
 echo "env.tgz: $(du -h "$OUT/env.tgz" | cut -f1)"
 

@@ -96,3 +96,14 @@ def test_excecao_amarrada_a_versao(tmp_path):
     (meta / "tbb-devel-2023.1.0-0.json").write_text(json.dumps(
         {"name": "tbb-devel", "version": "2024.0.0", "license": "", "channel": FORGE, "url": FORGE + "tbb-devel-2024.0.0-0.conda"}))
     assert _run(tmp_path, tmp_path / "o.md").returncode == 1
+
+
+def test_runtime_microsoft_so_por_excecao(tmp_path):
+    meta = tmp_path / "conda-meta"
+    meta.mkdir()
+    (meta / "ucrt.json").write_text(json.dumps({"name": "ucrt", "version": "10.0.26100.0", "license": "LicenseRef-MicrosoftWindowsSDK10", "channel": FORGE, "url": FORGE + "ucrt-10.0.26100.0-0.conda"}))
+    assert _run(tmp_path, tmp_path / "o.md").returncode == 0
+    (meta / "ucrt.json").write_text(json.dumps({"name": "ucrt", "version": "10.0.99999.0", "license": "LicenseRef-MicrosoftWindowsSDK10", "channel": FORGE, "url": FORGE + "ucrt-10.0.99999.0-0.conda"}))
+    assert _run(tmp_path, tmp_path / "o.md").returncode == 1
+    (meta / "ucrt.json").write_text(json.dumps({"name": "outro", "version": "1", "license": "BSD-3-Clause-Clear", "channel": FORGE, "url": FORGE + "outro-1-0.conda"}))
+    assert _run(tmp_path, tmp_path / "o.md").returncode == 0

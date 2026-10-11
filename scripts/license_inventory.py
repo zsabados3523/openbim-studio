@@ -21,18 +21,25 @@ UNKNOWN = {"", "unknown", "none", "null"}
 # LGPL-2.1-only (OCCT, geos, libiconv...) é permitida só como biblioteca dinâmica sem modificação (ADR-009 §5.1).
 ALLOWED = {x.lower() for x in """
 MIT MIT-open-group X11 NCSA ISC 0BSD HPND HPND-sell-variant PostgreSQL TCL blessing curl Zlib zlib-acknowledgement libpng-2.0
-BSD-2-Clause BSD-3-Clause BSD-3-Clause-Attribution BSL-1.0 Apache-2.0 PSF-2.0 Python-2.0 MPL-2.0 AFL-2.1 OFL-1.1 FTL
+BSD-2-Clause BSD-3-Clause BSD-3-Clause-Attribution BSD-3-Clause-Clear BSL-1.0 Apache-2.0 PSF-2.0 Python-2.0 MPL-2.0 AFL-2.1 OFL-1.1 FTL
 IJG JasPer-2.0 SGI-B-2.0 bzip2-1.0.6 OLDAP-2.8
 LGPL-2.1-only LGPL-2.1-or-later LGPL-2.0-or-later LGPL-3.0-only LGPL-3.0-or-later
 GPL-2.0-or-later GPL-3.0-only GPL-3.0-or-later
 LicenseRef-libglvnd LicenseRef-Qhull LicenseRef-Public-Domain LicenseRef-Ubuntu-Font-Licence-Version-1.0 FreeImage
 """.split()}
+# Licenças aceitas SÓ por exceção nomeada (nunca por metadado de outro pacote).
+EXCEPTION_ONLY = {"licenseref-microsoft-redistributable"}
 ALLOWED_EXCEPTIONS = {x.lower() for x in "GCC-exception-3.1 LLVM-exception OCCT-exception-1.0 Qt-GPL-exception-1.0".split()}
 
 # Exceções registradas, uma a uma, amarradas à versão (reconferir quando a versão mudar).
 # (nome, versão) -> (licença SPDX equivalente, justificativa). Registrar também em docs/state/LOG.md.
 EXCEPTIONS = {
     ("tbb-devel", "2023.1.0"): ("Apache-2.0", "metadado vazio; o próprio pacote traz o arquivo de licença Apache-2.0 e sai da mesma receita do tbb (conferido no lote opus 2)"),
+    # Runtimes redistribuíveis da Microsoft (decisão do PO, 2026-10-11): a Microsoft permite redistribuir estas DLLs
+    # junto de programas; todo programa C++ no Windows as leva. Condições no THIRD_PARTY.md.
+    ("ucrt", "10.0.26100.0"): ("LicenseRef-Microsoft-Redistributable", "Universal CRT do Windows SDK 10, redistribuível pelos termos da Microsoft"),
+    ("vc14_runtime", "14.51.36247"): ("LicenseRef-Microsoft-Redistributable", "runtime do Visual C++ 2015-2022, redistribuível pelos termos da Microsoft"),
+    ("vcomp14", "14.51.36247"): ("LicenseRef-Microsoft-Redistributable", "runtime OpenMP do Visual C++ 2015-2022, redistribuível pelos termos da Microsoft"),
     ("cgal-cpp", "6.2.1"): ("GPL-3.0-only OR LGPL-3.0-only", "metadado 'GPL3/LGPL3' (não é SPDX); cabeçalhos do CGAL em GPL-3 ou LGPL-3, compilados dentro do IfcOpenShell; combinação pela seção 13 da AGPL (lote opus 2)"),
 }
 
@@ -88,7 +95,7 @@ def build_report(rows, removidos=frozenset()):
             no_lic.append(f"{name} {ver}")
         elif not exc and lic.lower() not in UNKNOWN and not expr_ok(lic):
             not_allowed.append(f"{name} {ver}: {lic}")
-        elif exc and not expr_ok(exc[0]):
+        elif exc and not (expr_ok(exc[0]) or exc[0].lower() in EXCEPTION_ONLY):
             not_allowed.append(f"{name} {ver}: exceção com licença não permitida ({exc[0]})")
     out += ["", f"Total: {len(rows)} pacotes ({len(removidos & {r[0] for r in rows})} removidos na montagem)", "", f"## Não conda-forge ({len(bad_chan)})"]
     out += [f"- {x}" for x in bad_chan] or ["- nenhum"]

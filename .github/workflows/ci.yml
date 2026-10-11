@@ -23,6 +23,17 @@ jobs:
       - name: Início (relógio)
         run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Cache de pacotes do conda
+        id: cache_conda
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/conda_pkgs
+          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'packaging/linux/runtime-environment.yml') }}
+      - name: Pasta de pacotes do conda
+        shell: bash
+        run: |
+          echo "CONDA_PKGS_DIRS=$RUNNER_TEMP/conda_pkgs" >> "$GITHUB_ENV"
+          echo "::notice title=cache de pacotes::cache-hit=${{ steps.cache_conda.outputs.cache-hit }}"
       - uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
         with:
           environment-file: environment.yml
@@ -79,6 +90,17 @@ jobs:
         shell: bash
         run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Cache de pacotes do conda
+        id: cache_conda
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/conda_pkgs
+          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'packaging/linux/runtime-environment.yml') }}
+      - name: Pasta de pacotes do conda
+        shell: bash
+        run: |
+          echo "CONDA_PKGS_DIRS=$RUNNER_TEMP/conda_pkgs" >> "$GITHUB_ENV"
+          echo "::notice title=cache de pacotes::cache-hit=${{ steps.cache_conda.outputs.cache-hit }}"
       - uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
         with:
           environment-file: environment.yml
@@ -216,3 +238,67 @@ jobs:
         run: |
           echo "::warning title=macOS::job macOS falhou; melhor esforço, não bloqueia merge. Registrar o motivo em docs/state/LOG.md."
           echo "AVISO: o job macOS falhou (não bloqueia merge)." >> "$GITHUB_STEP_SUMMARY"
+
+  # Gera o AppImage (pacote Linux) a cada alteração. Não bloqueia o merge; o nome do job não é usado na regra.
+  appimage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Início (relógio)
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Cache de pacotes do conda
+        id: cache_conda
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/conda_pkgs
+          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'packaging/linux/runtime-environment.yml') }}
+      - name: Pasta de pacotes do conda
+        shell: bash
+        run: |
+          echo "CONDA_PKGS_DIRS=$RUNNER_TEMP/conda_pkgs" >> "$GITHUB_ENV"
+          echo "::notice title=cache de pacotes::cache-hit=${{ steps.cache_conda.outputs.cache-hit }}"
+      - uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
+        with:
+          environment-file: packaging/linux/runtime-environment.yml
+          activate-environment: openbim-runtime
+          channels: conda-forge
+          conda-remove-defaults: "true"
+          channel-priority: strict
+          miniforge-version: latest
+      - name: Ferramenta appimagetool (versão fixa 1.9.1, sha256 conferido)
+        run: |
+          curl -fsSL -o appimagetool.AppImage https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          echo "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  appimagetool.AppImage" | sha256sum -c -
+          chmod +x appimagetool.AppImage
+      - name: Montar o AppImage
+        shell: bash -el {0}
+        run: |
+          set +e
+          RUNTIME_ENV="$CONDA_PREFIX" bash packaging/linux/build_appimage.sh "$RUNNER_TEMP/ai" "$PWD/appimagetool.AppImage" > ai.log 2>&1
+          rc=$?
+          tail -n 20 ai.log
+          if [ $rc -ne 0 ]; then
+            msg=$(tail -n 40 ai.log | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=AppImage falhou::$msg"
+            exit $rc
+          fi
+      - name: Testar o AppImage (abre sem tela) e conferir tamanho
+        run: |
+          IMG="$RUNNER_TEMP/ai/OpenBIM-Studio-x86_64.AppImage"
+          out="$(QT_QPA_PLATFORM=offscreen "$IMG" --appimage-extract-and-run --selftest 2>&1 | tail -n 1)"
+          echo "selftest: $out"; test "$out" = "OK"
+          size=$(stat -c %s "$IMG"); echo "AppImage: $((size/1000000)) MB"
+          test "$size" -le 600000000
+          echo "::notice title=AppImage::$((size/1000000)) MB, selftest OK"
+      - name: Empacotar (tar.gz mantém a permissão de executar)
+        run: |
+          mkdir -p out
+          tar -czf out/OpenBIM-Studio-x86_64.AppImage.tar.gz -C "$RUNNER_TEMP/ai" OpenBIM-Studio-x86_64.AppImage
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: openbim-appimage
+          path: out/
+      - name: Tempo total
+        if: always()
+        run: echo "::notice title=tempo do job appimage::$(( $(date +%s) - T0 )) s"

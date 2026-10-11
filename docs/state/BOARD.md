@@ -50,7 +50,7 @@
 | F0-S02-T16 | Sonda C++ mínima (pacote IfcOpenShell e módulo nanobind) | T2 | sonnet | sonnet; amostra opus | S02-T03 | FEITA (amostra aprovada no lote Opus 2; testes 2 e 3 do ADR-005 fecham só no Linux; ver S02-T19) |
 | F0-S02-T17 | Correções do AppImage (lote opus 2, defeitos 1 a 7) | T2 | sonnet | **opus, em lote (diff)** | S02-T10 | FEITA no CI (verde, 389 MB, testes de licença e troca de .so); falta conferência opus (lote 3); runtime do appimagetool pendente |
 | F0-S02-T18 | Correções do instalador Windows (defeitos 1 a 4 e riscos 5 a 7) | T2 | sonnet | **opus, em lote (diff)** | S02-T11, S02-T17 | FEITA no CI (verde, 309 MB sem MKL, testes de reinstalação, DLL trocada e arquivo do usuário); falta conferência opus (lote 3) |
-| F0-S02-T19 | Teste 2 no Windows e sonda 3b (cabeçalhos pesados) | T2 | sonnet | sonnet; amostra opus | S02-T16 | PARCIAL: teste 2 fechado no Windows (CI verde, 2026-10-11); falta a sonda 3b |
+| F0-S02-T19 | Teste 2 no Windows e sonda 3b (cabeçalhos pesados) | T2 | sonnet | sonnet; amostra opus | S02-T16 | FEITA (teste 2 fechado nos dois sistemas; sonda 3b passou: Linux 4,8 s, Windows 19,4 s; PR 5; amostra opus no lote 3) |
 | F0-S02-T20 | Lista de licenças permitidas no inventário (teste 9 do ADR-005) | T2 | sonnet | sonnet; amostra opus | S02-T06 | FEITA (CI verde, 24 testes; achou MKL e runtimes da Microsoft no Windows; amostra opus no lote 3) |
 
 Nenhum cartão de S01 ou S02 é T3 (ver LOG.md). A prova do R1 (ponte C++/Python) é T3 e fica na S04.

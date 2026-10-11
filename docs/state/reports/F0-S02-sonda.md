@@ -13,5 +13,5 @@
 
 ## Atualização 2026-10-11 (cartão S02-T19)
 - **Teste 2 no Windows (CI): 4 de 4 "sim".** Cabeçalhos `ifcparse` presentes; DLLs separadas (`ifcopenshell.parse.dll`, `.geometry.dll`, `.plugin.dll`); o `_ifcopenshell_wrapper.cp312-win_amd64.pyd` importa essas DLLs, sem cópia embutida. O teste 2 do ADR-005 fecha nos dois sistemas. Como reproduzir: `python scripts/sonda_ifcopenshell.py` (roda também no CI, Linux e Windows).
-- **Sonda 3b (compilar incluindo `ifcparse/file.h` e ligando em `libifcopenshell.parse`): ainda não feita.** Pendência do cartão S02-T19; entra antes da S04.
+- **Sonda 3b: passou nos dois sistemas (CI, run 38165289002).** Programa que inclui `ifcparse/file.h`, liga pelo `IfcOpenShellConfig.cmake` e abre `casa-simples.ifc` (IFC4, 87 entidades). Linux: limpo 4,8 s, incremental 4,2 s. Windows (MSVC): limpo 19,4 s, incremental 5,7 s. Cabeçalhos pesados não são problema de tempo. Precisa, no ambiente de desenvolvimento, de `zlib`, `libxml2-devel` e `libboost-devel`; ver `prototypes/cpp_probe_3b/run.sh`. Vale lembrar para a S04: no Windows usar o MSVC, não o MinGW do runner.
 

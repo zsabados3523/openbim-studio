@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 OUT="$1"; IFC="$2"; B="$OUT/build_3b"; mkdir -p "$OUT"; rm -rf "$B"
 # O cmake do IfcOpenShell pede os arquivos de desenvolvimento do zlib (o ambiente só traz a biblioteca).
-conda install -y -c conda-forge --override-channels zlib >/dev/null
+"${CONDA_EXE:-conda}" install -y -c conda-forge --override-channels zlib >/dev/null
 agora() { python -c "import time; print(time.time())"; }
 t0=$(agora)
 cmake -S . -B "$B" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$CONDA_PREFIX"

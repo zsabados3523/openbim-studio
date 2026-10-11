@@ -8,7 +8,8 @@ int main(int argc, char** argv) {
     if (argc < 2) { std::cerr << "uso: probe_3b arquivo.ifc\n"; return 2; }
     ifcopenshell::file f(argv[1], false);
     if (!f.good()) { std::cerr << "falha ao abrir\n"; return 1; }
-    std::cout << "esquema=" << f.schema()->name()
-              << " entidades=" << f.bounds() << "\n";
+    size_t n = 0;
+    for (auto it = f.begin(); it != f.end(); ++it) ++n;
+    std::cout << "esquema=" << f.schema()->name() << " entidades=" << n << "\n";
     return 0;
 }

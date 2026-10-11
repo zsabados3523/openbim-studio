@@ -9,13 +9,15 @@ cd "$(dirname "$0")"
 mkdir -p "$OUT"; rm -rf "$B"
 # O cmake do IfcOpenShell pede os arquivos de desenvolvimento do zlib e do libxml2 (o ambiente só traz as bibliotecas).
 "${CONDA_EXE:-conda}" install -y -c conda-forge --override-channels zlib libxml2-devel >/dev/null
+# No Windows, o MSVC (mesmo compilador das bibliotecas do conda-forge); o c++ do MinGW do runner não serve.
+if [ "${RUNNER_OS:-}" = "Windows" ]; then GEN=(-G "Visual Studio 17 2022" -A x64); else GEN=(-G Ninja); fi
 agora() { python -c "import time; print(time.time())"; }
 t0=$(agora)
-cmake -S . -B "$B" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$CONDA_PREFIX"
-cmake --build "$B"
+cmake -S . -B "$B" "${GEN[@]}" -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$CONDA_PREFIX"
+cmake --build "$B" --config Release
 t1=$(agora)
 touch probe_3b.cpp
-cmake --build "$B"
+cmake --build "$B" --config Release
 t2=$(agora)
 exe=$(find "$B" -name 'probe_3b' -o -name 'probe_3b.exe' | head -1)
 saida=$("$exe" "$IFC")

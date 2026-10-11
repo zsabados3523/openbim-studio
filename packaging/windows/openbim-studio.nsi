@@ -60,7 +60,7 @@ Section "OpenBIM Studio"
   Call AjustaPasta
   Call PastaOcupada
   StrCmp $0 0 +3
-    MessageBox MB_OK|MB_ICONSTOP /SD IDOK "A pasta de instalação já tem outros arquivos. Escolha outra pasta. Nada foi instalado."
+    MessageBox MB_OK|MB_ICONSTOP "A pasta de instalação já tem outros arquivos. Escolha outra pasta. Nada foi instalado." /SD IDOK
     Abort
   ; espaço necessário (KB): o programa instalado ocupa ~1,4 GB; a página de pasta avisa se não couber
   AddSize 1500000
@@ -84,7 +84,7 @@ Section "OpenBIM Studio"
     Delete "$INSTDIR\LGPL-COMO-TROCAR.md"
     Delete "$INSTDIR\FONTES.md"
     RMDir "$INSTDIR"
-    MessageBox MB_OK|MB_ICONSTOP /SD IDOK "Falha ao extrair os arquivos do programa (código $0). Nada foi instalado."
+    MessageBox MB_OK|MB_ICONSTOP "Falha ao extrair os arquivos do programa (código $0). Nada foi instalado." /SD IDOK
     Abort
   Delete "$PLUGINSDIR\env.tgz"
   WriteUninstaller "$INSTDIR\Uninstall.exe"

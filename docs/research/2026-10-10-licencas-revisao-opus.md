@@ -71,3 +71,50 @@ Ponto central: **como o nosso programa é aberto e publicamos todo o código e o
 1. O líder abre uma correção curta da tabela (defeitos 1 a 12), sem nova pesquisa na rede, e a devolve ao próximo lote opus para conferência do diff.
 2. O ADR-009 deste lote foi escrito com base nas respostas acima, não na tabela reprovada. Ele não depende da correção para valer; depende do ok do PO.
 3. Pendências que seguem abertas, nenhuma bloqueia a F0: termos do canal conda-forge; lista de módulos só comerciais do Qt; licença do Qt Shader Tools; texto de licença do ReportLab; termos do SINAPI; identificador SPDX da exceção do OCCT.
+
+---
+
+# Conferência da versão 2 (lote opus 2, 2026-10-11)
+- Revisor: opus (Arquiteto/Revisor crítico) · Objeto: tabela mestre versão 2, `THIRD_PARTY.md`, `docs/state/reports/F0-S01.md`, lista de componentes de `v2/03` (S01).
+- **Não é parecer jurídico.** Feito sem rede.
+
+## Veredito da tabela mestre (versão 2): APROVADA
+Os 12 defeitos foram aplicados. Nenhuma decisão do ADR-009 muda.
+
+| # | Defeito | Situação na versão 2 |
+|---|---|---|
+| 1 | LibreDWG e libslvs: condição errada | Corrigido (seção 13; cada parte fica na sua licença) |
+| 2 | Coluna "Como entra" | Corrigido (a, b, c, d, com legenda) |
+| 3 | OCCT "Sim, com condição" e identificador SPDX | Corrigido. Ver "Identificador SPDX" abaixo |
+| 4 | libdxfrw "Fora (decisão)" | Corrigido |
+| 5 | conda-forge "Condição"; canal não é licença | Corrigido |
+| 6 | WiX "Fora por padrão" | Corrigido |
+| 7 | PyInstaller | Corrigido |
+| 8 | Dependências transitivas | Corrigido (seção própria; hoje o inventário já existe, ver observação 2) |
+| 9 | Versões consultadas | Corrigido de forma aceitável: a versão vai entre parênteses na coluna "Licença", não em coluna própria, e há a nota "reconfirmar na versão travada". Ver observação 1 |
+| 10 | Qt Shader Tools | Corrigido (na linha do Qt e em "Não verificado") |
+| 11 | PlaneGCS: condição prática | Corrigido (entra como código copiado, só na 2.0) |
+| 12 | Divergência com `v2/05` | Corrigido |
+
+### Identificador SPDX da exceção do OCCT: conferido
+`OCCT-exception-1.0` **existe** na lista oficial de exceções do SPDX. Conferi sem rede, na cópia da lista que a ferramenta REUSE instalada traz (`reuse/resources/exceptions.json` do ambiente `reuse`). A grafia `LGPL-2.1-only WITH OCCT-exception-1.0` está certa. O líder pode tirar "de memória, a conferir" da linha do OCCT e riscar o item de "Não verificado" (na tabela e no ADR-009 §9).
+Dois fatos novos, vistos nos pacotes instalados:
+- O metadado do pacote `occt` 8.0.1 do conda-forge diz só `LGPL-2.1-only`, sem a exceção. Não muda nada: vale o arquivo de licença do projeto.
+- O pacote `occt` traz o texto da LGPL 2.1, mas **não traz o texto da exceção**. O nosso pacote precisa levá-lo por conta própria (defeito do item 3 do lote 2).
+
+### Observações (não bloqueiam; correção mecânica, classe T0, sem voltar ao opus)
+1. Linhas sem versão consultada: ezdxf, vcpkg, Briefcase/conda-constructor, WiX, linuxdeploy/appimagetool. Copiar das fichas. Para o appimagetool, anotar 1.9.1 (a que o CI usa).
+2. A seção "Dependências transitivas" e a linha 4 falam no futuro ("será gerado na S02"). O inventário já é gerado pelo CI: trocar por "gerado em `licenses/INVENTARIO.md` de cada pacote e no artefato do CI".
+3. O inventário real confirma os candidatos que citei de memória e acrescenta casos de escolha de licença, a registrar na tabela: FreeType (`GPL-2.0-only OR FTL`: escolhemos FTL), FreeImage (escolhemos GPL-3), GMP (escolhemos LGPL-3), cairo (`LGPL-2.1-only OR MPL-1.1`), dbus (`AFL-2.1 OR GPL-2.0-or-later`), readline (GPL-3.0-only, usada pelo Python: combina pela seção 13), CGAL (cabeçalhos GPL-3/LGPL-3 compilados dentro do IfcOpenShell: combina pela seção 13). Outras bibliotecas "LGPL-2.1-only" além do OCCT: geos, libiconv, libnsl, libraw. Valem para elas as mesmas condições do OCCT.
+4. Contagem: a versão 2 tem 23 linhas; o ADR-009 §3 fala em "24 linhas" e o relatório F0-S01 em "24 componentes". Acertar o número num dos dois lugares.
+
+## `THIRD_PARTY.md`: precisa de 1 ajuste
+A afirmação "nenhum código de terceiros foi copiado" está correta (conferi contra a tabela: tudo entra como biblioteca ou ferramenta). Mas a frase final diz que os componentes entram na tabela "quando forem adicionados ao repositório **ou ao instalador**", e o instalador e o AppImage já existem, com 152 pacotes de terceiros dentro.
+1. Trocar a seção "Avaliados, ainda não usados" por: "Distribuídos nos pacotes (não copiados para o repositório): lista gerada em `licenses/INVENTARIO.md` de cada pacote; condições na tabela mestre". O ADR-009 §7 (item 4) pede que essa parte seja gerada, não escrita à mão.
+
+## `docs/state/reports/F0-S01.md`: reprovado como relatório final (está desatualizado)
+O conteúdo confere com a tabela e com `v2/03` (os 12 grupos de componentes pedidos na S01 estão todos cobertos; o critério "nenhuma incompatível sem alternativa" está atendido). Mas o texto é o parcial de antes do lote 1:
+1. Item 1 ("sem commit e sem repositório remoto"): já há commits e o remoto no GitHub.
+2. Itens 5 e 8 ("quatro pontos pedem decisão do Opus", "falta revisão do Opus e ADR-009"): as quatro decisões foram dadas, o ADR-009 está aceito e a tabela está aprovada nesta conferência.
+3. Tirar "(parcial)" do título e acrescentar o que segue aberto: termos do conda-forge, Qt Shader Tools, ReportLab, SINAPI; espelho Codeberg adiado.
+Correção mecânica (T0). Feita ela, a S01 pode ser fechada no quadro: o aceite de `v2/03` ("tabela revisada pelo papel Arquiteto; nenhuma incompatível sem alternativa") está cumprido.

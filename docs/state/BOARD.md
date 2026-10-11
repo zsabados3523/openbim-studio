@@ -5,7 +5,7 @@
 ## Fatias
 | Fatia | Nome | Tam. | Depende de | Status | Cartões | Observação |
 |---|---|---|---|---|---|---|
-| F0-S01 | Repositório, licenças e pesquisa | P | — | EM_ANDAMENTO | S01-T01 a T12 | Falta: lote Opus (T11, T12); espelho Codeberg depois |
+| F0-S01 | Repositório, licenças e pesquisa | P | — | FEITA (2026-10-11; aprovada no lote Opus 2) | S01-T01 a T12 | Abertos sem bloquear: termos conda-forge, Qt Shader Tools, ReportLab, SINAPI; espelho Codeberg depois |
 | F0-S02 | CI Windows+Linux e app esqueleto | M→G (tratada como G) | S01 | EM_ANDAMENTO | S02-T01 a T16 | S02-T01 pode começar quando S01-T01 estiver feita |
 | F0-S03 | Protótipo de viewport (Qt RHI) | M | S02; S08 contínuo | NÃO INICIADA (sem cartões) | — | |
 | F0-S04 | Ponte Python↔C++ (híbrido vs C++ puro) | G, crítica | S02 | NÃO INICIADA | — | Contém T3 (ponte, threads) |
@@ -30,7 +30,7 @@
 | F0-S01-T08 | Fichas de licença C: formatos e solver | T2 | sonnet | opus (lote) | T03 | FEITA (revisão no lote opus) |
 | F0-S01-T09 | Fichas de licença D: distribuição e empacotamento | T2 | sonnet | opus (lote) | T03 | FEITA (revisão no lote opus) |
 | F0-S01-T10 | Ficha de pesquisa: termos do SINAPI | T1 | sonnet | sonnet | T03 | FEITA (termos não verificados: site inacessível) |
-| F0-S01-T11 | Tabela mestre de licenças e THIRD_PARTY.md | T2 | sonnet | **opus (lote, exigido pelo aceite)** | T06–T09 | REPROVADA 1x pelo opus; correção feita, AGUARDA_OPUS (conferência do diff) |
+| F0-S01-T11 | Tabela mestre de licenças e THIRD_PARTY.md | T2 | sonnet | **opus (lote, exigido pelo aceite)** | T06–T09 | FEITA (aprovada no lote Opus 2, 2026-10-11; 4 observações aplicadas) |
 | F0-S01-T12 | ADR-009: licenças e política de conteúdo | TA | opus (lote) | PO (resumo) | T11 | FEITA (aceito pelo PO) |
 | F0-S02-T01 | Ficha: dependências no conda-forge/vcpkg/wheels | T2 | sonnet | opus (insumo do ADR-005) | S01-T01 | FEITA (revisão no lote opus) |
 | F0-S02-T02 | Esboço do ADR-005 (dependências e build) | TA | opus (lote) | PO (resumo) | S02-T01, S01-T09 | FEITA (esboço aprovado pelo PO; decisão final na T15) |
@@ -41,12 +41,16 @@
 | F0-S02-T07 | CI Windows | T2 | sonnet | sonnet; amostra opus | S02-T06 | FEITA (verde; windows ~15 min com ambiente limpo e instalador; run 38110728020) |
 | F0-S02-T08 | CI macOS melhor esforço | T1 | sonnet | sonnet | S02-T06 | FEITA (verde; macos ~90 s, não bloqueia) |
 | F0-S02-T09 | Bloquear merge sem Windows+Linux verdes | T0 | PO (líder guia) | PO | S02-T07 | FEITA em 2026-10-10 (regra no GitHub: `linux` e `windows` obrigatórios; trabalho vai por ramo + PR) |
-| F0-S02-T10 | Pacote Linux (AppImage) | T2 | sonnet | **opus, obrigatória** | S02-T06, S02-T02 | FEITA (390 MB após poda por pacote que também removeu o ffmpeg GPL); revisão opus obrigatória no lote 2 |
-| F0-S02-T11 | Instalador Windows (NSIS) | T2 | sonnet | **opus, obrigatória** | S02-T07, S02-T02 | FEITA no CI (instalador 482 MB; instala, abre e desinstala sem sobras; run 38110728020); falta: ícone próprio, teste do PO (T14) e revisão opus obrigatória no lote 2 |
+| F0-S02-T10 | Pacote Linux (AppImage) | T2 | sonnet | **opus, obrigatória** | S02-T06, S02-T02 | REPROVADA no lote Opus 2 (7 defeitos, nenhum pede refazer a montagem); correções no cartão S02-T17; 389 MB no CI |
+| F0-S02-T11 | Instalador Windows (NSIS) | T2 | sonnet | **opus, obrigatória** | S02-T07, S02-T02 | REPROVADA no lote Opus 2 (4 defeitos); correções no cartão S02-T18; o CI verde segue valendo (482 MB, instala/abre/desinstala) |
 | F0-S02-T12 | Teste de gravação de vídeo headless | T2 | sonnet | sonnet | S02-T04 | EM ANDAMENTO: experimento no Linux feito (GIF), Windows a confirmar no CI; vídeo MP4 aguarda ok do PO |
 | F0-S02-T13 | Medir metas de build e tamanho | T1 | sonnet | sonnet | S02-T10, S02-T11, S02-T16 | ESCRITA (relatório F0-S02-metricas.md); duas pendências: AppImage no CI e build incremental |
 | F0-S02-T14 | Roteiro de aceite do PO e relatório da S02 | T1 | sonnet | PO | S02-T10, S02-T11 | ESCRITA (docs/acceptance/F0-S02.md, parte A pronta; parte B aguarda AppImage no CI) |
 | F0-S02-T15 | ADR-005 final (decisão com testes) | TA | opus (lote) | PO (resumo) | S02-T13, S02-T02 | BLOQUEADA |
-| F0-S02-T16 | Sonda C++ mínima (pacote IfcOpenShell e módulo nanobind) | T2 | sonnet | sonnet; amostra opus | S02-T03 | FEITA (amostra opus no lote 2) |
+| F0-S02-T16 | Sonda C++ mínima (pacote IfcOpenShell e módulo nanobind) | T2 | sonnet | sonnet; amostra opus | S02-T03 | FEITA (amostra aprovada no lote Opus 2; testes 2 e 3 do ADR-005 fecham só no Linux; ver S02-T19) |
+| F0-S02-T17 | Correções do AppImage (lote opus 2, defeitos 1 a 7) | T2 | sonnet | **opus, em lote (diff)** | S02-T10 | PRONTA; depende de ok do PO para baixar 4 textos de licença e decisão do Mesa |
+| F0-S02-T18 | Correções do instalador Windows (defeitos 1 a 4 e riscos 5 a 7) | T2 | sonnet | **opus, em lote (diff)** | S02-T11, S02-T17 | PRONTA |
+| F0-S02-T19 | Teste 2 no Windows e sonda 3b (cabeçalhos pesados) | T2 | sonnet | sonnet; amostra opus | S02-T16 | PRONTA (antes da S04) |
+| F0-S02-T20 | Lista de licenças permitidas no inventário (teste 9 do ADR-005) | T2 | sonnet | sonnet; amostra opus | S02-T06 | PRONTA |
 
 Nenhum cartão de S01 ou S02 é T3 (ver LOG.md). A prova do R1 (ponte C++/Python) é T3 e fica na S04.

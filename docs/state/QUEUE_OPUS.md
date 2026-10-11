@@ -1,6 +1,6 @@
 # Fila do lote Opus
 
-> Regras (`v2/04` §3.1 e §7): lote = 1 sessão opus com 2–4 itens do mesmo módulo; contexto fechado (especificação, diffs, resultados, sem ler o repositório); saída fixa = aprovado ou reprovado com lista numerada. Nunca abrir com menos de 25% da cota semanal restante. Item esperando >7 dias conta para o gatilho de plano. **Nenhum lote foi executado. Lote 1 pronto em 2026-10-10: pedido em `docs/state/LOTE_OPUS_1.md`.**
+> Regras (`v2/04` §3.1 e §7): lote = 1 sessão opus com 2–4 itens do mesmo módulo; contexto fechado (especificação, diffs, resultados, sem ler o repositório); saída fixa = aprovado ou reprovado com lista numerada. Nunca abrir com menos de 25% da cota semanal restante. Item esperando >7 dias conta para o gatilho de plano. Lotes 1 e 2 executados (2026-10-10 e 2026-10-11). Lote 1 pronto em 2026-10-10: pedido em `docs/state/LOTE_OPUS_1.md`.**
 
 ## Lote 1: licenças e dependências (módulo único)
 | # | Item | Origem | Pré-requisito | Entrou em | Prioridade |
@@ -22,3 +22,6 @@ Itens 1 a 3 formam o lote mínimo; o item 4 entra só se a cota permitir. O líd
 | 2 | (se o PO confirmar) revisar o texto novo de `v2/05` §3 proposto pelo líder | v2/05 | 2026-10-10 | Baixa |
 | 3 | Amostra de revisão (1 em 3 das T2): sonda C++ S02-T16 (`prototypes/cpp_probe/`, `docs/research/2026-10-10-sonda-cpp.md`). Pergunta: a conclusão "IfcOpenShell 0.9 usa `ifcopenshell::file` e libs `libifcopenshell.*` compartilhadas" fecha o teste 2 do ADR-005 e muda o teste 5 (R1)? | S02-T16 | 2026-10-10 | Média |
 | 4 | **Revisão obrigatória** do AppImage P1 (S02-T10): `packaging/linux/` (AppRun com PYTHONHOME fixo, build_appimage.sh), `docs/research/2026-10-10-appimage-p1.md`. Checar as obrigações do ADR-009 §5.3 (bibliotecas separadas, sem trava contra troca, licenses/, LGPL-COMO-TROCAR.md, FONTES.md) e a poda de vtk/viskores se o PO aprovar | S02-T10 | 2026-10-10 | Alta |
+
+## Já despachado: lote 2 (2026-10-11)
+Resultado em `docs/state/reports/LOTE_OPUS_2.md`. Tabela mestre APROVADA; v2/05 APROVADO; AppImage e instalador REPROVADOS (7 e 4 defeitos, só correções curtas); sonda C++ amostra aprovada; CI com 1 defeito (lista de licenças permitidas). Próximo lote (lote 3): conferir os diffs dos cartões S02-T17 e S02-T18, amostra de S02-T19 e S02-T20, ADR-005 final (S02-T15).

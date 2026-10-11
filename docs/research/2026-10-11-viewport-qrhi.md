@@ -28,3 +28,15 @@ Como desenhar um modelo IFC grande em 3D dentro do nosso programa (PySide6), com
 ## Riscos de IP identificados
 Nenhum até aqui (só documentação pública do Qt lida e resumida). Risco aberto: licença das amostras de IFC; nada será baixado nem redistribuído sem conferir.
 ## Revisado por: — (aguarda revisão sonnet)
+
+## Atualização S03-T02 (2026-10-11): licenças das amostras de IFC grandes
+| Candidato | O que a página diz | Pode ir ao repositório / ser baixado? |
+|---|---|---|
+| buildingSMART `Certification-datasets` (GitHub) | só "Copyright buildingSMART International"; sem licença nomeada; sem tamanhos | **Não** (sem licença explícita; regra do projeto: código/dado sem licença não entra) |
+| Schependomlaan (conjunto de dados no GitHub) | dono dos dados permite uso "científico e acadêmico"; não é licença aberta; tamanho do pacote não confirmado | **Não** no repositório. Uso local só com ok do PO, e não resolve a licença |
+| Steptools / KIT (AC20-FZK-Haus 2,5 MB, AC20-Institute-Var-2 10 MB) | licença não conferida; pequenos demais para a meta | Não, por tamanho e licença |
+| Open IFC Model Repository (Auckland), Molio-Huset | termos não lidos | **Pendente** (precisa abrir a página de termos) |
+**Conclusão:** nenhum IFC público de ~100 MB com licença aberta confirmada. Em vez de baixar algo duvidoso, recomendo:
+1. **Modelo sintético gerado por script nosso** (`scripts/`), repetindo/duplicando andares da `casa-simples.ifc` até ~1 milhão de triângulos. Sem download, sem licença externa, reproduzível no CI. Serve para FPS, seleção e memória.
+2. **Tempo de abrir um IFC real de ~100 MB**: medir só na máquina do PO com um projeto dele (fora do repositório; o PO lista o arquivo no chat). O número entra no relatório; o arquivo não.
+3. Se o PO quiser um público de verdade, abrir a página de termos do Open IFC Model Repository e do Molio-Huset (ação de leitura) antes de qualquer download.

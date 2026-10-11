@@ -120,7 +120,7 @@ jobs:
         timeout-minutes: 20
         run: |
           set +e
-          timeout 900 bash packaging/windows/test_installer.sh "$PWD/out/OpenBIM-Studio-Setup.exe" "$(cygpath -w "$RUNNER_TEMP")\\OpenBIM Studio teste" > "$RUNNER_TEMP/teste.log" 2>&1
+          timeout 900 bash packaging/windows/test_installer.sh "$PWD/out/OpenBIM-Studio-Setup.exe" "$(cygpath -w "$RUNNER_TEMP")\\OpenBIM-teste" > "$RUNNER_TEMP/teste.log" 2>&1
           rc=$?
           cat "$RUNNER_TEMP/teste.log"
           if [ $rc -ne 0 ]; then

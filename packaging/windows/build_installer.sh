@@ -31,6 +31,14 @@ find "$PKG/env" -name '*.a' -delete
 # que apenas elas exigem (o inventário e a lista de fontes continuam listando tudo, com a marca).
 python "$REPO/scripts/prune_packages.py" "$PKG/env" "$OUT/removidos.txt" vtk vtk-base vtk-io-ffmpeg viskores ffmpeg
 
+# 1c. Arquivos que só servem para COMPILAR contra as bibliotecas (o app roda sem eles): bibliotecas de
+# importação .lib, cmake, pkg-config, documentação, símbolos de depuração e testes.
+rm -rf "$PKG/env/Library/lib/cmake" "$PKG/env/Library/lib/pkgconfig" "$PKG/env/Library/share/man" \
+       "$PKG/env/Library/share/gtk-doc" "$PKG/env/Library/share/doc" "$PKG/env/Library/share/info"
+find "$PKG/env" \( -name '*.lib' -o -name '*.pdb' -o -name '*.exp' \) -delete
+echo "Maiores pastas do ambiente (MB):"
+du -sm "$PKG"/env/* "$PKG"/env/Library/* "$PKG"/env/Lib/site-packages/* 2>/dev/null | sort -rn | head -14
+
 # 2. Código do app e lançador
 cp -a "$REPO/app/openbim_app" "$PKG/app/"
 find "$PKG/app" -name __pycache__ -type d -prune -exec rm -rf {} +
@@ -65,16 +73,16 @@ open(dst, "w", encoding="utf-8").write(txt)
 PY
 cp "$PKG/FONTES.md" "$PKG/licenses/FONTES.md"
 
-# 3b. O ambiente (~1 GB, dezenas de milhares de arquivos) vai num único tar.xz dentro do instalador:
+# 3b. O ambiente (~1 GB, dezenas de milhares de arquivos) vai num único tar.gz dentro do instalador:
 # o makensis (32 bits) estoura a memória com tantos arquivos soltos. O instalador extrai com o tar.exe do Windows.
-tar -cf - -C "$PKG" env | xz -T0 -6 > "$OUT/env.txz"
+tar -cf - -C "$PKG" env | gzip -9 > "$OUT/env.tgz"
 rm -rf "$OUT/env-pronto" && mv "$PKG/env" "$OUT/env-pronto"
-echo "env.txz: $(du -h "$OUT/env.txz" | cut -f1)"
+echo "env.tgz: $(du -h "$OUT/env.tgz" | cut -f1)"
 
 # 4. Gera o instalador
 # makensis: variável MAKENSIS, ou o do PATH (no CI vem do pacote conda-forge `nsis`, ambiente separado)
 MAKENSIS="${MAKENSIS:-$(command -v makensis || true)}"
 [ -n "$MAKENSIS" ] || { echo "makensis nao encontrado (defina MAKENSIS)" >&2; exit 1; }
 WPKG="$(cygpath -w "$PKG")"; WEXE="$(cygpath -w "$EXE")"
-MSYS2_ARG_CONV_EXCL='*' "$MAKENSIS" -V2 "-DPASTA_PACOTE=$WPKG" "-DSAIDA=$WEXE" "-DVERSAO=$VERSAO" "-DENV_TXZ=$(cygpath -w "$OUT/env.txz")" "$(cygpath -w "$HERE/openbim-studio.nsi")"
+MSYS2_ARG_CONV_EXCL='*' "$MAKENSIS" -V2 "-DPASTA_PACOTE=$WPKG" "-DSAIDA=$WEXE" "-DVERSAO=$VERSAO" "-DENV_TGZ=$(cygpath -w "$OUT/env.tgz")" "$(cygpath -w "$HERE/openbim-studio.nsi")"
 echo "Ambiente (descompactado): $(du -sh "$OUT/env-pronto" | cut -f1)  Pacote (sem ambiente): $(du -sh "$PKG" | cut -f1)  Instalador: $(du -h "$EXE" | cut -f1)  tempo: $(( $(date +%s) - START )) s"

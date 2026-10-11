@@ -4,10 +4,11 @@
 # Roda no CI (Linux e Windows) com o ambiente `openbim` ativo. Mede tempo limpo e incremental.
 # Uso: bash run.sh <pasta-de-saida> <arquivo.ifc>
 set -euo pipefail
+OUT="$(realpath -m "$1")"; IFC="$(realpath "$2")"; B="$OUT/build_3b"
 cd "$(dirname "$0")"
-OUT="$1"; IFC="$2"; B="$OUT/build_3b"; mkdir -p "$OUT"; rm -rf "$B"
-# O cmake do IfcOpenShell pede os arquivos de desenvolvimento do zlib (o ambiente só traz a biblioteca).
-"${CONDA_EXE:-conda}" install -y -c conda-forge --override-channels zlib >/dev/null
+mkdir -p "$OUT"; rm -rf "$B"
+# O cmake do IfcOpenShell pede os arquivos de desenvolvimento do zlib e do libxml2 (o ambiente só traz as bibliotecas).
+"${CONDA_EXE:-conda}" install -y -c conda-forge --override-channels zlib libxml2-devel >/dev/null
 agora() { python -c "import time; print(time.time())"; }
 t0=$(agora)
 cmake -S . -B "$B" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$CONDA_PREFIX"

@@ -9,8 +9,6 @@ Name "OpenBIM Studio"
 OutFile "${SAIDA}"
 RequestExecutionLevel user
 InstallDir "$LOCALAPPDATA\Programs\OpenBIM Studio"
-; espaço necessário (KB): o programa instalado ocupa ~2,3 GB; a página de pasta avisa se não couber
-AddSize 2400000
 SetCompressor /SOLID lzma
 SetCompressorDictSize 64
 
@@ -23,6 +21,8 @@ SetCompressorDictSize 64
 !insertmacro MUI_LANGUAGE "PortugueseBR"
 
 Section "OpenBIM Studio"
+  ; espaço necessário (KB): o programa instalado ocupa ~1,4 GB; a página de pasta avisa se não couber
+  AddSize 1500000
   SetOutPath "$INSTDIR"
   ; instalar por cima de versão anterior: limpa env\ e app\ para não misturar arquivos velhos e novos
   RMDir /r "$INSTDIR\env"

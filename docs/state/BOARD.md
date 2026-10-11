@@ -7,7 +7,7 @@
 |---|---|---|---|---|---|---|
 | F0-S01 | Repositório, licenças e pesquisa | P | — | FEITA (2026-10-11; aprovada no lote Opus 2) | S01-T01 a T12 | Abertos sem bloquear: termos conda-forge, Qt Shader Tools, ReportLab, SINAPI; espelho Codeberg depois |
 | F0-S02 | CI Windows+Linux e app esqueleto | M→G (tratada como G) | S01 | CONCLUÍDA (aceite do PO em 2026-10-11, Windows e Linux) | S02-T01 a T16 | S02-T01 pode começar quando S01-T01 estiver feita |
-| F0-S03 | Protótipo de viewport (Qt RHI) | M | S02; S08 contínuo | EM_ANDAMENTO | S03-T01 a T07, T25 | T01 a T04, T06 feitas e no main; T02 gerador sintético feito; T05 especificada pelo Opus (T3 em 3 partes, lote 4); T07 depende da T05; T25 (provar desenho no CI) aberta |
+| F0-S03 | Protótipo de viewport (Qt RHI) | M | S02; S08 contínuo | EM_ANDAMENTO | S03-T01 a T07, T25 | T01 a T04, T06, T25 e T02 feitas e no main; **T05 (T3) feita em 3 partes, PRs 16, 18 e 19 aguardam o lote Opus 5 (pedido pronto) e o ok do PO**; metas do portão medidas na máquina do PO (abrir 13,5 s, 833 MB, atraso 118 ms, 60 FPS placa real); T07 (benchmark e relatório da fatia) depende da T05 |
 | F0-S04 | Ponte Python↔C++ (híbrido vs C++ puro) | G, crítica | S02 | NÃO INICIADA | — | Contém T3 (ponte, threads) |
 | F0-S05 | Oplog, undo e merge | M | S04 | NÃO INICIADA | — | Contém T3 (transações, gravação do par). Precisa de formato mínimo provisório do `.obim` antes do ADR-003 |
 | F0-S06 | Planta e corte (HLR) + vista no `.obim` | G, crítica | S02; S08 contínuo | NÃO INICIADA | — | Contém T3 (HLR, arquivo lateral) |

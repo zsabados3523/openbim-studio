@@ -56,7 +56,7 @@ for f in LGPL-3.0 LGPL-2.1 GPL-3.0 OCCT-exception-1.0; do   # a montagem falha s
   [ -f "$REPO/packaging/licenses-texts/$f.txt" ] || { echo "falta packaging/licenses-texts/$f.txt" >&2; exit 1; }
   cp "$REPO/packaging/licenses-texts/$f.txt" "$PKG/licenses/"
 done
-CONDA_PREFIX="$ENV_DIR" python "$REPO/scripts/license_inventory.py" "$PKG/licenses/INVENTARIO.md" "--removidos=$OUT/removidos.txt" >/dev/null
+CONDA_PREFIX="$ENV_DIR" python "$REPO/scripts/license_inventory.py" "$PKG/licenses/INVENTARIO.md" "--removidos=$OUT/removidos.txt" > "$OUT/inventario.log" || { sed -n '/## Não conda-forge/,$p' "$OUT/inventario.log"; echo "INVENTÁRIO DE LICENÇAS REPROVOU (ver acima)" >&2; exit 1; }
 printf '
 > Nota: os pacotes listados em REMOVIDOS.md aparecem acima mas foram **removidos na montagem**.
 ' >> "$PKG/licenses/INVENTARIO.md"

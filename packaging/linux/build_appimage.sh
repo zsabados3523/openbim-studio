@@ -57,7 +57,7 @@ for f in LGPL-3.0 LGPL-2.1 GPL-3.0 OCCT-exception-1.0; do
   [ -f "$REPO/packaging/licenses-texts/$f.txt" ] || { echo "falta packaging/licenses-texts/$f.txt" >&2; exit 1; }
   cp "$REPO/packaging/licenses-texts/$f.txt" "$APPDIR/licenses/"
 done
-CONDA_PREFIX="$ENV_DIR" python3 "$REPO/scripts/license_inventory.py" "$APPDIR/licenses/INVENTARIO.md" "--removidos=$OUT/removidos.txt" >/dev/null
+CONDA_PREFIX="$ENV_DIR" python3 "$REPO/scripts/license_inventory.py" "$APPDIR/licenses/INVENTARIO.md" "--removidos=$OUT/removidos.txt" > "$OUT/inventario.log" || { sed -n '/## Não conda-forge/,$p' "$OUT/inventario.log"; echo "INVENTÁRIO DE LICENÇAS REPROVOU (ver acima)" >&2; exit 1; }
 printf '\n> Nota: os pacotes listados em REMOVIDOS.md aparecem acima mas foram **removidos na montagem**.\n' >> "$APPDIR/licenses/INVENTARIO.md"
 # arquivos de licenca que cada pacote conda traz (info/licenses do cache do conda)
 python3 "$REPO/scripts/collect_package_licenses.py" "$ENV_DIR" "$APPDIR/licenses/pacotes" | tee "$OUT/licencas-coletadas.txt"

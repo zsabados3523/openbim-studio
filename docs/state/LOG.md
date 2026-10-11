@@ -54,3 +54,4 @@ Uma linha por tarefa concluída ou escalada, e por mudança de classe de tarefa.
 2026-10-10 | S02-T11 | 7º run (38098596406): instalação silenciosa OK (~2 min), mas foi para a pasta padrão porque o NSIS não aceita /D= com espaço. Teste agora usa caminho sem espaço.
 2026-10-10 | S02-T11 | 8º run (38100061860): instalação em pasta própria OK (~90 s, 2240 MB instalados, todos os arquivos conferidos); falha só no teste de abertura (env -i apagava o PATH e o timeout sumia). Corrigido.
 2026-10-10 | S02-T11 | 9º run (38101239682): app instalado ABRIU e imprimiu OK no Windows; teste falhou só por conferir a saída inteira (aviso 'No module named lark' do ifcopenshell sai antes do OK). Conferindo a última linha.
+2026-10-10 | S02-T11 | PR 1 mesclado no main (CI verde; run 38102427805: linux 60 s, macos 110 s, windows 1063 s; instalador ~639 MB, acima da meta de 600). PO escolheu opção 1: trocar tar.gz por tar.xz (ramo t11-compactacao-xz).

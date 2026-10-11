@@ -3,6 +3,8 @@
 # Teste do instalador no CI: instala em silêncio, confere arquivos e licenças, abre o app (--selftest),
 # desinstala e confere que não sobrou nada. Uso: test_installer.sh INSTALADOR.exe PASTA_DESTINO_WINDOWS
 set -u
+# O bash do Git for Windows converte argumentos como /S em caminhos; o NSIS precisa recebê-los como estão.
+export MSYS2_ARG_CONV_EXCL="*"
 EXE="$1"; DEST="$2"
 D="$(cygpath -u "$DEST")"
 falha() { echo "FALHA: $*"; exit 1; }

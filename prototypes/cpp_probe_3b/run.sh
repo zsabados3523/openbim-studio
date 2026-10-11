@@ -11,11 +11,6 @@ mkdir -p "$OUT"; rm -rf "$B"
 "${CONDA_EXE:-conda}" install -y -c conda-forge --override-channels zlib libxml2-devel libboost-devel >/dev/null
 # No Windows, sem -G o CMake escolhe o Visual Studio do runner; o MSVC (mesmo compilador das bibliotecas do conda-forge); o c++ do MinGW do runner não serve.
 if [ "${RUNNER_OS:-}" = "Windows" ]; then GEN=(-A x64); else GEN=(-G Ninja); fi
-if [ "${RUNNER_OS:-}" = "Windows" ]; then
-  echo "--- diagnostico: arquivos boost no ambiente"
-  ls "$CONDA_PREFIX/Library/lib" | grep -i boost | head -30 || true
-  ls "$CONDA_PREFIX/Library/bin" | grep -i boost | head -10 || true
-fi
 agora() { python -c "import time; print(time.time())"; }
 t0=$(agora)
 cmake -S . -B "$B" "${GEN[@]}" -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$CONDA_PREFIX"

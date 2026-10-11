@@ -25,9 +25,7 @@ Section "OpenBIM Studio"
   File /r "${PASTA_PACOTE}\*.*"
   ; ambiente conda: um tar.xz único, extraído com o tar.exe do Windows (10 e 11)
   InitPluginsDir
-  SetCompress off ; o tar.xz já está compactado
   File "/oname=$PLUGINSDIR\env.txz" "${ENV_TXZ}"
-  SetCompress auto
   nsExec::ExecToLog '"$SYSDIR\tar.exe" -xf "$PLUGINSDIR\env.txz" -C "$INSTDIR"'
   Pop $0
   StrCmp $0 0 +3

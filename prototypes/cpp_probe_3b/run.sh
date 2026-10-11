@@ -9,8 +9,8 @@ cd "$(dirname "$0")"
 mkdir -p "$OUT"; rm -rf "$B"
 # O cmake do IfcOpenShell pede os arquivos de desenvolvimento do zlib e do libxml2 (o ambiente só traz as bibliotecas).
 "${CONDA_EXE:-conda}" install -y -c conda-forge --override-channels zlib libxml2-devel >/dev/null
-# No Windows, o MSVC (mesmo compilador das bibliotecas do conda-forge); o c++ do MinGW do runner não serve.
-if [ "${RUNNER_OS:-}" = "Windows" ]; then GEN=(-A x64)  # sem -G: o CMake escolhe o Visual Studio instalado no runner; else GEN=(-G Ninja); fi
+# No Windows, sem -G o CMake escolhe o Visual Studio do runner; o MSVC (mesmo compilador das bibliotecas do conda-forge); o c++ do MinGW do runner não serve.
+if [ "${RUNNER_OS:-}" = "Windows" ]; then GEN=(-A x64); else GEN=(-G Ninja); fi
 agora() { python -c "import time; print(time.time())"; }
 t0=$(agora)
 cmake -S . -B "$B" "${GEN[@]}" -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$CONDA_PREFIX"

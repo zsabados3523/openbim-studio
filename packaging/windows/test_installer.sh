@@ -12,13 +12,13 @@ D="$(cygpath -u "$DEST")"
 falha() { echo "FALHA: $*"; exit 1; }
 passo() { echo "==> $(date +%H:%M:%S) $*"; }
 
-instalar() {
-  local t0=$(date +%s)
-  "$EXE" /S "/D=$DEST" &
+instalar() {  # $1 = pasta de destino (padrão: $DEST)
+  local alvo="${1:-$DEST}" t0=$(date +%s)
+  "$EXE" /S "/D=$alvo" &
   local pid=$! t=0
   while kill -0 "$pid" 2>/dev/null; do
     sleep 15; t=$((t + 15))
-    echo "   ${t}s: destino $(du -sm "$D" 2>/dev/null | cut -f1) MB"
+    echo "   ${t}s: destino $(du -sm "$(cygpath -u "$alvo")" 2>/dev/null | cut -f1) MB"
     [ "$t" -ge 420 ] && { kill "$pid" 2>/dev/null; falha "instalador não terminou em ${t}s"; }
   done
   wait "$pid" || falha "instalador saiu com código $?"
@@ -39,6 +39,14 @@ selftest() {  # $1 = rótulo; ambiente sujo e Python isolado (-I), como o atalho
   [ "$dur" -le 10 ] || falha "$1: abriu em ${dur}s (meta: até 10 s)"
 }
 
+passo "pasta que já tem arquivos de outra coisa: nada pode ser apagado (defeito N1 do lote opus 3)"
+DEST_OCUPADA="${DEST}-ocupada"; DO="$(cygpath -u "$DEST_OCUPADA")"
+mkdir -p "$DO/app" "$DO/env" && echo "do usuario" > "$DO/app/meu.txt" && echo "do usuario" > "$DO/env/meu.txt"
+instalar "$DEST_OCUPADA"
+[ -f "$DO/app/meu.txt" ] && [ -f "$DO/env/meu.txt" ] || falha "o instalador apagou arquivo do usuário numa pasta já ocupada"
+[ -f "$DO/OpenBIM Studio/app/OpenBIM-Studio.pyw" ] || falha "não instalou na subpasta 'OpenBIM Studio' da pasta ocupada"
+rm -rf "$DO"
+
 passo "instalando em $DEST"
 instalar
 passo "conteúdo instalado"
@@ -48,7 +56,7 @@ for f in app/OpenBIM-Studio.pyw Uninstall.exe LGPL-COMO-TROCAR.md FONTES.md lice
   [ -f "$D/$f" ] || falha "faltou $f"
 done
 grep -rqi "GNU LESSER GENERAL PUBLIC LICENSE" "$D/licenses/pacotes" || falha "sem texto da LGPL em licenses/pacotes"
-ach=$(find "$D/env" \( -iname 'avcodec*' -o -iname 'avformat*' -o -iname 'x264*' -o -iname 'x265*' -o -iname 'vtk*.dll' -o -iname 'TKIVtk*' \) -not -path '*/conda-meta/*' | head -n 5)
+ach=$(find "$D/env" \( -iname 'avcodec*' -o -iname 'avformat*' -o -iname 'x264*' -o -iname 'x265*' -o -iname 'vtk*.dll' -o -iname 'TKIVtk*' -o -iname 'mkl*.dll' \) -not -path '*/conda-meta/*' | head -n 5)
 [ -z "$ach" ] || falha "achou arquivo podado: $ach"
 
 passo "abrindo o app (isolado, com variáveis de ambiente sujas)"

@@ -107,3 +107,37 @@ def test_runtime_microsoft_so_por_excecao(tmp_path):
     assert _run(tmp_path, tmp_path / "o.md").returncode == 1
     (meta / "ucrt.json").write_text(json.dumps({"name": "outro", "version": "1", "license": "BSD-3-Clause-Clear", "channel": FORGE, "url": FORGE + "outro-1-0.conda"}))
     assert _run(tmp_path, tmp_path / "o.md").returncode == 0
+
+
+def test_parenteses_internos_reprovam(tmp_path):
+    # Defeito D1 do lote opus 3: parênteses internos passavam sem conferir o item proibido.
+    for i, lic in enumerate(["(MIT OR Proprietary) AND LicenseRef-NVIDIA",
+                             "MIT AND (GPL-2.0-only OR BSD-3-Clause)"]):
+        d = tmp_path / str(i)
+        meta = d / "conda-meta"
+        meta.mkdir(parents=True)
+        _pkg(meta, "p", lic, FORGE + "p-1.0-0.conda")
+        assert _run(d, d / "o.md").returncode == 1, lic
+
+
+def test_parenteses_externos_ainda_passam(tmp_path):
+    meta = tmp_path / "conda-meta"
+    meta.mkdir()
+    _pkg(meta, "p", "(MIT OR Apache-2.0)", FORGE + "p-1.0-0.conda")
+    assert _run(tmp_path, tmp_path / "o.md").returncode == 0
+
+
+def test_afl_e_freeimage_sozinhas_reprovam(tmp_path):
+    for i, lic in enumerate(["AFL-2.1", "FreeImage"]):
+        d = tmp_path / str(i)
+        meta = d / "conda-meta"
+        meta.mkdir(parents=True)
+        _pkg(meta, "p", lic, FORGE + "p-1.0-0.conda")
+        assert _run(d, d / "o.md").returncode == 1, lic
+
+
+def test_runtime_microsoft_em_pacote_qualquer_reprova(tmp_path):
+    meta = tmp_path / "conda-meta"
+    meta.mkdir()
+    _pkg(meta, "qualquer", "LicenseRef-Microsoft-Redistributable", FORGE + "qualquer-1.0-0.conda")
+    assert _run(tmp_path, tmp_path / "o.md").returncode == 1

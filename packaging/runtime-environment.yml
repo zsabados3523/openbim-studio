@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Ambiente de RUNTIME para o pacote Linux (ADR-005 §5 item 6). Mesmas versoes fixas de
+# Ambiente de RUNTIME para os pacotes Linux e Windows (ADR-005 §5 item 6). Mesmas versoes fixas de
 # environment.yml, sem compiladores, cmake, ninja, nanobind e pytest. Fonte unica: conda-forge.
 name: openbim-runtime
 channels:

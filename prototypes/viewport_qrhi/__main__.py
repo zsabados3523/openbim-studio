@@ -17,7 +17,7 @@ def main() -> int:
     api = None
     if "--api" in sys.argv:
         api = APIS[sys.argv[sys.argv.index("--api") + 1]]
-    w = CuboViewport(api=api)
+    w = CuboViewport(api=api, girar=False)
     w.setWindowTitle("Viewport QRhi (protótipo)")
     w.resize(640, 480)
     w.show()

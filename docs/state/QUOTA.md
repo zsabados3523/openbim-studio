@@ -19,6 +19,7 @@ Regras: sem sessão opus com menos de 25% da semana restante; sem subagente para
 |---|---|---|---|---|---|---|---|
 | 2026-10-10 | 1 | sonnet | PREP: CLAUDE.md, docs/state, cartões S01 e S02 | 22% → 29% | 2% → 3% | não | Informado pelo PO. Sessão de preparação: +7 pontos na janela, +1 ponto na semana. |
 | 2026-10-10 | 2 | sonnet (+ haiku em 5 subagentes) | S01: git, LICENSE, esqueleto, READMEs, fichas de licença A–D, push | 29% → 34% | 3% → 3% | não | Informado pelo PO. Leitura de páginas públicas feita por haiku. |
+| 2026-10-11 | 3 | sonnet | S02 T07 a T11 (CI Windows, instalador NSIS, poda por pacote) e início de T12–T14 | 0% (janela nova) | semana: 3% → 8% | não | PO informou 8% semana e 0% janela no início desta sessão |
 
 ## Resumo semanal (preencher no fim de cada semana)
 | Semana | Dias parados por limite | Custo médio por fatia (P/M/G) em % semanal | Fila opus mais antiga (dias) |

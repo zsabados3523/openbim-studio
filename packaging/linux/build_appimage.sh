@@ -5,7 +5,7 @@
 #   SAIDA_DIR    pasta de trabalho/saida (fora do repositorio); recebe AppDir/ e o .AppImage
 #   APPIMAGETOOL caminho do appimagetool-x86_64.AppImage (MIT, baixado por quem roda)
 # Variavel: RUNTIME_ENV (padrao ~/miniforge3/envs/openbim-runtime), criado com
-#   conda env create -f packaging/linux/runtime-environment.yml
+#   conda env create -f packaging/runtime-environment.yml
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

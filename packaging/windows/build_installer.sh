@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Monta o instalador Windows (NSIS): pasta do ambiente conda de runtime + código de app/ + textos de licença.
 # Uso: build_installer.sh RUNTIME_ENV SAIDA_DIR   (rodar no bash do Git for Windows, com makensis no PATH)
-#   RUNTIME_ENV  ambiente criado com: conda env create -f packaging/linux/runtime-environment.yml -p <pasta>
+#   RUNTIME_ENV  ambiente criado com: conda env create -f packaging/runtime-environment.yml -p <pasta>
 #   SAIDA_DIR    pasta de trabalho/saída (fora do repositório); recebe pacote/ e OpenBIM-Studio-Setup.exe
 set -euo pipefail
 export PYTHONUTF8=1
@@ -29,7 +29,13 @@ find "$PKG/env" -name '*.a' -delete
 # arrasta `vtk-io-ffmpeg`, `ffmpeg` (compilação GPL, com x264 e x265) e dezenas de pacotes de vídeo,
 # áudio e aceleração que o app não usa. prune_packages.py remove as raízes abaixo e só os pacotes
 # que apenas elas exigem (o inventário e a lista de fontes continuam listando tudo, com a marca).
-python "$REPO/scripts/prune_packages.py" "$PKG/env" "$OUT/removidos.txt" vtk vtk-base vtk-io-ffmpeg viskores ffmpeg
+python "$REPO/scripts/prune_packages.py" "$PKG/env" "$OUT/removidos.txt" --esperado=occt vtk vtk-base vtk-io-ffmpeg viskores ffmpeg
+
+# 1b2. Resíduo do OCCT: TKIVtk*.dll (módulo de visualização do próprio OCCT) fica quebrada sem o VTK.
+rm -f "$PKG"/env/Library/bin/TKIVtk*.dll
+for d in "$PKG"/env/Lib/site-packages/vtkmodules "$PKG"/env/Lib/site-packages/vtk-* "$PKG"/env/Library/lib/vtk-*; do
+  [ -d "$d" ] && find "$d" -depth -type d -empty -delete
+done
 
 # 1c. Arquivos que só servem para COMPILAR contra as bibliotecas (o app roda sem eles): bibliotecas de
 # importação .lib, cmake, pkg-config, documentação, símbolos de depuração e testes.
@@ -46,6 +52,10 @@ cp "$HERE/OpenBIM-Studio.pyw" "$PKG/app/"
 
 # 3. Licenças, como trocar, fontes
 cp "$REPO/LICENSES/AGPL-3.0-or-later.txt" "$PKG/licenses/"
+for f in LGPL-3.0 LGPL-2.1 GPL-3.0 OCCT-exception-1.0; do   # a montagem falha se faltar algum
+  [ -f "$REPO/packaging/licenses-texts/$f.txt" ] || { echo "falta packaging/licenses-texts/$f.txt" >&2; exit 1; }
+  cp "$REPO/packaging/licenses-texts/$f.txt" "$PKG/licenses/"
+done
 CONDA_PREFIX="$ENV_DIR" python "$REPO/scripts/license_inventory.py" "$PKG/licenses/INVENTARIO.md" >/dev/null
 printf '
 > Nota: os pacotes listados em REMOVIDOS.md aparecem acima mas foram **removidos na montagem**.
@@ -57,7 +67,7 @@ SPDX_ID="SPDX-License-Identifier"  # montado assim para o reuse lint nao ler com
   printf '<!--\n%s: AGPL-3.0-or-later\n-->\n# Pacotes removidos do instalador na montagem\n\n' "$SPDX_ID"
   printf 'Estes pacotes conda fazem parte do ambiente de runtime (constam em FONTES.md e INVENTARIO.md, com a marca "removido na montagem"), mas seus arquivos NÃO estão neste instalador.\n\n'
   printf 'Motivo: o pacote `occt` do conda-forge exige o VTK só para o módulo de visualização do OCCT (`TKIVtk`), e o VTK arrasta o ffmpeg (compilação GPL com x264/x265) e dezenas de bibliotecas de vídeo, áudio e aceleração que o OpenBIM Studio não usa. A geometria (ifcopenshell + OCCT) e a janela (Qt) funcionam sem eles. Nada deles é distribuído.\n'
-  printf 'Efeito conhecido: as DLLs `TKIVtk*` do OCCT podem permanecer, mas não carregam (não são usadas). O texto das licenças dos removidos fica em `pacotes\\` quando o pacote o trazia, por cortesia.\n\nLista (nome versão licença):\n\n'
+  printf 'Efeito conhecido: as DLLs `TKIVtk*` do OCCT (que ficaram sem as bibliotecas do VTK) também foram apagadas, junto com as pastas vazias do VTK; retirar um arquivo não é modificar o OCCT. O texto das licenças dos removidos fica em `pacotes\\` quando o pacote o trazia, por cortesia.\n\nLista (nome versão licença):\n\n'
   sed 's/^/- /' "$OUT/removidos.txt"
 } > "$PKG/licenses/REMOVIDOS.md"
 LISTA="$("${CONDA_EXE:-conda}" list -p "$ENV_DIR" --explicit | grep -E '^https?://')"

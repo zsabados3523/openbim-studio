@@ -59,7 +59,7 @@ jobs:
         shell: bash -el {0}
         run: |
           mkdir -p out
-          python scripts/license_inventory.py out/license-inventory.md
+          python scripts/license_inventory.py out/license-inventory.md --informativo
       - name: REUSE (ferramenta só no CI, ambiente separado)
         shell: bash -el {0}
         run: |
@@ -127,7 +127,7 @@ jobs:
         shell: bash -el {0}
         run: |
           mkdir -p out
-          python scripts/license_inventory.py out/license-inventory.md
+          python scripts/license_inventory.py out/license-inventory.md --informativo
       - name: Instalador Windows (ambiente de runtime e NSIS)
         shell: bash -el {0}
         run: |
@@ -217,7 +217,7 @@ jobs:
         shell: bash -el {0}
         run: |
           mkdir -p out
-          python scripts/license_inventory.py out/license-inventory.md
+          python scripts/license_inventory.py out/license-inventory.md --informativo
       - name: Pacote do app esqueleto
         if: always()
         shell: bash

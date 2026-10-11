@@ -14,4 +14,5 @@ Passo a passo:
 3. `packaging/linux/build_appimage.sh /caminho/saida /caminho/appimagetool-x86_64.AppImage`
 4. Teste rápido: `QT_QPA_PLATFORM=offscreen ./OpenBIM-Studio-x86_64.AppImage --selftest` imprime `OK`.
 
-Windows (NSIS): ainda não existe (cartão T11).
+## Windows (NSIS, montagem P1 do ADR-005)
+Pasta `windows/`: `build_installer.sh RUNTIME_ENV SAIDA_DIR` (monta `pacote/` com `env/`, `app/`, `licenses/`, `LGPL-COMO-TROCAR.md`, `FONTES.md` e gera `OpenBIM-Studio-Setup.exe` com `openbim-studio.nsi`), `OpenBIM-Studio.pyw` (lançador), `LGPL-COMO-TROCAR.md`. O CI (job `windows`) cria o ambiente de runtime, gera o instalador e testa instalar, abrir (`--selftest`) e desinstalar sem sobras. Instalação por usuário, sem administrador. Sem assinatura: o SmartScreen avisa (esperado até a v0.3).

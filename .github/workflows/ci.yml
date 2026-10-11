@@ -286,14 +286,21 @@ jobs:
             echo "::error title=AppImage falhou::$msg"
             exit $rc
           fi
-      - name: Testar o AppImage (abre sem tela) e conferir tamanho
+      - name: Testar o AppImage (licenças, extração, troca de biblioteca, tamanho)
         run: |
+          set +e
           IMG="$RUNNER_TEMP/ai/OpenBIM-Studio-x86_64.AppImage"
-          out="$(QT_QPA_PLATFORM=offscreen "$IMG" --appimage-extract-and-run --selftest 2>&1 | tail -n 1)"
-          echo "selftest: $out"; test "$out" = "OK"
+          QT_QPA_PLATFORM=offscreen timeout 900 bash packaging/linux/test_appimage.sh "$IMG" > teste-ai.log 2>&1
+          rc=$?
+          cat teste-ai.log
+          if [ $rc -ne 0 ]; then
+            msg=$(tail -n 30 teste-ai.log | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=teste do AppImage falhou::$msg"
+            exit $rc
+          fi
           size=$(stat -c %s "$IMG"); echo "AppImage: $((size/1000000)) MB"
-          test "$size" -le 600000000
-          echo "::notice title=AppImage::$((size/1000000)) MB, selftest OK"
+          test "$size" -le 600000000 || { echo "::error::AppImage acima de 600 MB"; exit 1; }
+          echo "::notice title=AppImage::$((size/1000000)) MB, testes de licença e troca de biblioteca OK"
       - name: Empacotar (tar.gz mantém a permissão de executar)
         run: |
           mkdir -p out

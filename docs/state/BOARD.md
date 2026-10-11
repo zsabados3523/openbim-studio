@@ -48,7 +48,7 @@
 | F0-S02-T14 | Roteiro de aceite do PO e relatório da S02 | T1 | sonnet | PO | S02-T10, S02-T11 | ESCRITA (docs/acceptance/F0-S02.md, parte A pronta; parte B aguarda AppImage no CI) |
 | F0-S02-T15 | ADR-005 final (decisão com testes) | TA | opus (lote) | PO (resumo) | S02-T13, S02-T02 | BLOQUEADA |
 | F0-S02-T16 | Sonda C++ mínima (pacote IfcOpenShell e módulo nanobind) | T2 | sonnet | sonnet; amostra opus | S02-T03 | FEITA (amostra aprovada no lote Opus 2; testes 2 e 3 do ADR-005 fecham só no Linux; ver S02-T19) |
-| F0-S02-T17 | Correções do AppImage (lote opus 2, defeitos 1 a 7) | T2 | sonnet | **opus, em lote (diff)** | S02-T10 | PRONTA; depende de ok do PO para baixar 4 textos de licença e decisão do Mesa |
+| F0-S02-T17 | Correções do AppImage (lote opus 2, defeitos 1 a 7) | T2 | sonnet | **opus, em lote (diff)** | S02-T10 | ESCRITA e testada na máquina do líder (selftest, extração, troca de .so, licenças); falta CI verde e conferência opus (lote 3); runtime do appimagetool pendente |
 | F0-S02-T18 | Correções do instalador Windows (defeitos 1 a 4 e riscos 5 a 7) | T2 | sonnet | **opus, em lote (diff)** | S02-T11, S02-T17 | PRONTA |
 | F0-S02-T19 | Teste 2 no Windows e sonda 3b (cabeçalhos pesados) | T2 | sonnet | sonnet; amostra opus | S02-T16 | PRONTA (antes da S04) |
 | F0-S02-T20 | Lista de licenças permitidas no inventário (teste 9 do ADR-005) | T2 | sonnet | sonnet; amostra opus | S02-T06 | PRONTA |

@@ -33,7 +33,14 @@ find "$APPDIR/env" -name '*.a' -delete
 # arrasta `vtk-io-ffmpeg`, `ffmpeg` (compilacao GPL, com x264 e x265) e ~130 pacotes de video, audio e
 # aceleracao. O app NAO usa nada disso (verificado: selftest e ifcopenshell.geom.create_shape funcionam).
 # prune_packages.py remove as raizes abaixo e so os pacotes que apenas elas exigem.
-python3 "$REPO/scripts/prune_packages.py" "$APPDIR/env" "$OUT/removidos.txt" vtk vtk-base vtk-io-ffmpeg viskores ffmpeg
+python3 "$REPO/scripts/prune_packages.py" "$APPDIR/env" "$OUT/removidos.txt" --esperado=occt vtk vtk-base vtk-io-ffmpeg viskores ffmpeg
+
+# 1c. Resíduo do OCCT: libTKIVtk* (modulo de visualizacao do proprio OCCT) fica quebrada sem o VTK
+# (faltam 11 bibliotecas). Apagar a biblioteca e as pastas vazias do VTK; o app nao usa nada disso.
+rm -f "$APPDIR"/env/lib/libTKIVtk*
+for d in "$APPDIR"/env/lib/vtk-* "$APPDIR"/env/lib/cmake/vtk-* "$APPDIR"/env/lib/python3*/site-packages/vtkmodules "$APPDIR"/env/lib/python3*/site-packages/vtk-*; do
+  [ -d "$d" ] && find "$d" -depth -type d -empty -delete   # so apaga pastas vazias (as com arquivos ficam e aparecem no teste do CI)
+done
 
 # 2. Codigo do app, lancador, desktop e icone
 cp -a "$REPO/app/openbim_app" "$APPDIR/app/"
@@ -44,23 +51,23 @@ cp "$HERE/openbim-studio.svg" "$APPDIR/openbim-studio.svg"
 [ -f "$HERE/openbim-studio.png" ] && cp "$HERE/openbim-studio.png" "$APPDIR/openbim-studio.png" && cp "$HERE/openbim-studio.png" "$APPDIR/.DirIcon"
 
 # 3. Licencas, como trocar, fontes
+# Textos verbatim guardados no repositorio (packaging/licenses-texts/); a montagem FALHA se faltar algum.
 cp "$REPO/LICENSES/AGPL-3.0-or-later.txt" "$APPDIR/licenses/"
-for f in LGPL-3 LGPL-2.1 GPL-3; do
-  [ -f "/usr/share/common-licenses/$f" ] && cp "/usr/share/common-licenses/$f" "$APPDIR/licenses/$f.txt" || true
+for f in LGPL-3.0 LGPL-2.1 GPL-3.0 OCCT-exception-1.0; do
+  [ -f "$REPO/packaging/licenses-texts/$f.txt" ] || { echo "falta packaging/licenses-texts/$f.txt" >&2; exit 1; }
+  cp "$REPO/packaging/licenses-texts/$f.txt" "$APPDIR/licenses/"
 done
 CONDA_PREFIX="$ENV_DIR" python3 "$REPO/scripts/license_inventory.py" "$APPDIR/licenses/INVENTARIO.md" >/dev/null
-printf '
-> Nota: os pacotes listados em REMOVIDOS.md aparecem acima mas foram **removidos na montagem**.
-' >> "$APPDIR/licenses/INVENTARIO.md"
-# arquivos de licenca que os pacotes conda trazem (share/licenses/<pacote>/)
-if [ -d "$ENV_DIR/share/licenses" ]; then cp -a "$ENV_DIR/share/licenses" "$APPDIR/licenses/pacotes"; fi
+printf '\n> Nota: os pacotes listados em REMOVIDOS.md aparecem acima mas foram **removidos na montagem**.\n' >> "$APPDIR/licenses/INVENTARIO.md"
+# arquivos de licenca que cada pacote conda traz (info/licenses do cache do conda)
+python3 "$REPO/scripts/collect_package_licenses.py" "$ENV_DIR" "$APPDIR/licenses/pacotes" | tee "$OUT/licencas-coletadas.txt"
 cp "$HERE/LGPL-COMO-TROCAR.md" "$APPDIR/"
 SPDX_ID="SPDX-License-Identifier"  # montado assim para o reuse lint nao ler como etiqueta deste script
 {
   printf '<!--\n%s: AGPL-3.0-or-later\n-->\n# Pacotes removidos do AppImage na montagem\n\n' "$SPDX_ID"
   printf 'Estes pacotes conda fazem parte do ambiente de runtime (constam em FONTES.md e INVENTARIO.md, com a marca "removido na montagem"), mas seus arquivos NAO estao neste AppImage.\n\n'
   printf 'Motivo: o pacote `occt` do conda-forge exige o VTK so para o modulo de visualizacao do OCCT (`libTKIVtk`), e o VTK arrasta o ffmpeg (compilacao GPL com x264/x265) e dezenas de bibliotecas de video, audio e aceleracao que o OpenBIM Studio nao usa. A geometria (ifcopenshell + OCCT) e a janela (Qt) funcionam sem eles. Nada deles e distribuido.\n'
-  printf 'Efeito conhecido: `libTKIVtk.so*` do OCCT permanece no pacote, mas nao carrega (nao e usada). O texto das licencas dos removidos fica em `pacotes/` quando o pacote o trazia, por cortesia.\n\nLista (nome versao licenca):\n\n'
+  printf 'Tambem foram apagados `libTKIVtk*` (arquivo do pacote occt, modulo de visualizacao do proprio OCCT que ficou sem as bibliotecas do VTK) e as pastas vazias do VTK. Retirar um arquivo nao e modificar o OCCT. O texto das licencas dos removidos fica em `pacotes/` quando o pacote o trazia, por cortesia.\n\nLista (nome versao licenca):\n\n'
   sed 's/^/- /' "$OUT/removidos.txt"
 } > "$APPDIR/licenses/REMOVIDOS.md"
 LISTA="$("$CONDA" list -p "$ENV_DIR" --explicit | grep -E '^https?://')"

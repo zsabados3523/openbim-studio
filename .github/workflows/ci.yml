@@ -55,6 +55,23 @@ jobs:
             echo "::error title=pytest falhou::$msg"
           fi
           exit $rc
+      - name: Desenho do cubo com tela virtual e Mesa por software (T25; informativo, não bloqueia)
+        shell: bash -el {0}
+        continue-on-error: true
+        run: |
+          mkdir -p out/desenho
+          # Xvfb e Mesa (llvmpipe) vêm do próprio runner Ubuntu; se faltar, instala só no runner.
+          command -v xvfb-run >/dev/null || sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0
+          set +e
+          OBIM_EXIGIR_DESENHO=1 OBIM_PNG_SAIDA=out/desenho LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe \
+            QT_QPA_PLATFORM=xcb xvfb-run -a -s "-screen 0 1280x1024x24" \
+            pytest -q -s -rs tests/test_viewport_qrhi.py > out/desenho/pytest-desenho.log 2>&1
+          rc=$?
+          cat out/desenho/pytest-desenho.log
+          if [ $rc -eq 0 ] && [ -f out/desenho/cubo.png ]; then r="DESENHA ($(grep 'RHI backend' out/desenho/pytest-desenho.log | head -n 1))"; else r="NÃO DESENHA (código $rc): $(tail -n 3 out/desenho/pytest-desenho.log | tr '\n' ' ' | cut -c1-300)"; fi
+          echo "::notice title=desenho do cubo no Linux::${r}"
+          echo "Desenho do cubo (Linux): ${r}" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
       - name: Inventário de licenças e canal
         shell: bash -el {0}
         run: |
@@ -139,6 +156,25 @@ jobs:
             echo "::error title=pytest falhou::$msg"
           fi
           exit $rc
+      - name: Desenho do cubo com WARP do Direct3D 11 (T25; informativo, não bloqueia)
+        shell: bash -el {0}
+        continue-on-error: true
+        run: |
+          mkdir -p out/desenho
+          set +e
+          # Tentativa 1: pede o rasterizador por software (WARP); tentativa 2: adaptador padrão do runner.
+          for modo in warp padrao; do
+            if [ "$modo" = warp ]; then export QSG_RHI_PREFER_SOFTWARE_RENDERER=1; else unset QSG_RHI_PREFER_SOFTWARE_RENDERER; fi
+            OBIM_EXIGIR_DESENHO=1 OBIM_PNG_SAIDA=out/desenho QT_QPA_PLATFORM=windows QSG_RHI_BACKEND=d3d11 \
+              pytest -q -s -rs tests/test_viewport_qrhi.py > "out/desenho/pytest-desenho-$modo.log" 2>&1
+            rc=$?
+            cat "out/desenho/pytest-desenho-$modo.log"
+            if [ $rc -eq 0 ] && [ -f out/desenho/cubo.png ]; then r="DESENHA no modo $modo ($(grep 'RHI backend' "out/desenho/pytest-desenho-$modo.log" | head -n 1))"; break; fi
+            r="NÃO DESENHA (código $rc, último modo $modo): $(tail -n 3 "out/desenho/pytest-desenho-$modo.log" | tr '\n' ' ' | cut -c1-300)"
+          done
+          echo "::notice title=desenho do cubo no Windows::${r}"
+          echo "Desenho do cubo (Windows): ${r}" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
       - name: Inventário de licenças e canal
         shell: bash -el {0}
         run: |

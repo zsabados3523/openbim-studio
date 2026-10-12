@@ -9,6 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 from PySide6.QtCore import QCoreApplication, QElapsedTimer
 from PySide6.QtWidgets import QApplication
@@ -143,3 +144,29 @@ def test_v5_legado_passa_sem_alteracao():
     r = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", *arqs],
                        cwd=str(RAIZ), env=env, capture_output=True, text=True, timeout=600)
     assert r.returncode == 0, r.stdout[-2000:] + r.stderr[-1000:]
+
+
+@requer_a
+@requer_b
+def test_v4_cena_cabe_depois_de_arrastar(tela, m600):
+    """P0b-4: depois de enquadrar() e de arrastar (mover), nenhum canto da caixa da cena fica além de
+    camera.longe nem (fora da caixa) aquém de camera.perto. Longe: distância à câmera; perto: profundidade na direção da câmera."""
+    w = tela.w
+    w.limpar()
+    lotes, _, _ = _carregar(m600)
+    for lt in lotes:
+        w.adicionar_lote(lt)
+    lo = np.min([lt.objetos["caixa_min"].min(axis=0) for lt in lotes], axis=0).astype(np.float64)
+    hi = np.max([lt.objetos["caixa_max"].max(axis=0) for lt in lotes], axis=0).astype(np.float64)
+    w.enquadrar()
+    cam = w.camera
+    cam.mover(-600, 0, 480)
+    cam.mover(0, 400, 480)
+    tela.desenhar(len(lotes) + 2)  # perto e longe são recalculados a cada quadro
+    _, _, frente = cam.eixos()
+    cantos = np.array([[x, y, z] for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])])
+    prof = (cantos - cam.posicao) @ frente
+    dist = float(np.linalg.norm(cantos - cam.posicao, axis=1).max())  # distância (mais estrita que a profundidade)
+    assert dist < cam.longe, f"canto mais distante {dist:.1f} >= longe {cam.longe:.1f} (B-1: longe tem de partir do centro da cena)"
+    dentro = bool(np.all(cam.posicao >= lo) and np.all(cam.posicao <= hi))
+    assert dentro or prof.min() > cam.perto, f"canto mais próximo {prof.min():.3f} <= perto {cam.perto:.3f}"

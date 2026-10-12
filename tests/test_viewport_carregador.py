@@ -9,6 +9,7 @@ import hashlib
 import importlib.util
 import os
 import sys
+import threading
 import time
 from functools import lru_cache
 from pathlib import Path
@@ -181,10 +182,19 @@ def _carregar(caminho, **kw):
     return lotes, resumo, car
 
 
-# ---------- O1 a O10 ----------
+@pytest.fixture
+def excecoes_em_thread(monkeypatch):
+    """Captura exceções não tratadas em qualquer thread (P0b-2). O teste exige a lista vazia."""
+    capturadas = []
+    monkeypatch.setattr(threading, "excepthook", lambda args: capturadas.append(args))
+    return capturadas
+
+
+# ---------- O1 a O11 ----------
 @requer_a
-def test_o1_contagem_m600(m600):
-    lotes, r, _ = _carregar(m600)
+def test_o1_contagem_m600(m600, excecoes_em_thread):
+    lotes, r, car = _carregar(m600)
+    assert car.aguardar(timeout=5.0) and excecoes_em_thread == [], "exceção não tratada na thread do carregador"
     assert r.estado == "concluido" and r.erro is None
     assert r.triangulos == 7200 and r.produtos_com_malha == 600 and r.sem_malha == []
     assert sum(len(lt.indices) for lt in lotes) == 21600  # soma dos n_indices
@@ -335,14 +345,15 @@ def test_o7_cancelamento_m3000(m3000):
 
 @requer_a
 @pytest.mark.parametrize("modo", ["inexistente", "texto"])
-def test_o8_arquivo_invalido(tmp_path, modo):
+def test_o8_arquivo_invalido(tmp_path, modo, excecoes_em_thread):
     caminho = tmp_path / "nada.ifc"
     if modo == "texto":
         caminho.write_text("isto não é um IFC\n")
     car = CarregadorMalhas(str(caminho))
     lotes, r = _percorrer(car)
     assert lotes == [] and r.estado == "erro" and r.erro
-    assert car.aguardar(timeout=5.0)  # a thread terminou sem exceção
+    assert car.aguardar(timeout=5.0)  # a thread terminou...
+    assert excecoes_em_thread == [], f"...mas com exceção: {excecoes_em_thread}"  # ...sem exceção
 
 
 @requer_a
@@ -400,3 +411,27 @@ def test_o10_vida_dos_dados_m600(m600):
     del car
     gc.collect()
     assert _soma(lotes) == antes and all(lt.vertices["pos"].size for lt in lotes)
+
+
+@requer_a
+@pytest.mark.parametrize("t", [0.0, 1e-9, 0.01, 0.05])
+def test_o11_obter_com_timeout_sempre_volta(tmp_path, t):
+    """P0b-3: com o trabalhador terminado e a fila vazia, obter(timeout=t) volta em < t + 0,1 s (pega o defeito A-1)."""
+    caminho = _gerar_cor(tmp_path / "cor.ifc")
+    car = CarregadorMalhas(str(caminho))
+    lotes, r = _percorrer(car)
+    assert r.estado == "concluido" and car.aguardar(timeout=5.0)
+    while car.obter(timeout=0.2) is not None:  # fila vazia e resumo já entregue
+        pass
+    resultado = {}
+
+    def chamar():
+        t0 = time.perf_counter()
+        resultado["x"] = car.obter(timeout=t)
+        resultado["dt"] = time.perf_counter() - t0
+
+    th = threading.Thread(target=chamar, daemon=True)  # daemon: se travar, o teste falha em vez de pendurar o CI
+    th.start()
+    th.join(timeout=2.0)
+    assert not th.is_alive(), f"obter(timeout={t}) travou (não voltou em 2 s)"
+    assert resultado["x"] is None and resultado["dt"] < t + 0.1, f"voltou em {resultado['dt']:.3f} s para timeout={t}"

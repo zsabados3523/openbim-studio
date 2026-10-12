@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Apoio do oráculo R1 (S04-T02): modelos por script, referência em Python e casos em subprocesso (r1e|r1f|r1g)."""
 import gc
+import importlib
 import json
 import os
 import re
@@ -36,6 +37,7 @@ def gerar_modelos(pasta):
         api("unit.assign_unit", f)
         ctx = api("context.add_context", f, context_type="Model")
         corpo = api("context.add_context", f, context_type="Model", context_identifier="Body", target_view="MODEL_VIEW", parent=ctx)
+        eixo = api("context.add_context", f, context_type="Plan", context_identifier="Axis", target_view="GRAPH_VIEW", parent=api("context.add_context", f, context_type="Plan"))
         andar = api("root.create_entity", f, ifc_class="IfcBuildingStorey")
         api("aggregate.assign_object", f, products=[andar], relating_object=api("root.create_entity", f, ifc_class="IfcBuilding"))
         itens = []
@@ -49,11 +51,18 @@ def gerar_modelos(pasta):
                 rep = api("geometry.add_slab_representation", f, context=corpo, depth=0.2,
                           polyline=[(0, 0), (2 * k, 0), (2 * k, k), (k, k), (k, 2 * k), (0, 2 * k)])
             api("geometry.assign_representation", f, product=e, representation=rep)
+            if i < PAREDES and i % 5 == 0:  # achado 12: parede com eixo (o iterador pode entregá-lo)
+                api("geometry.assign_representation", f, product=e, representation=api("geometry.add_axis_representation", f, context=eixo, axis=[(0, 0), (2.0 + i % 7 * 0.75, 0)]))
             a, m = np.radians(i * 37 % 360), np.eye(4)
             m[:2, :2] = [[np.cos(a), -np.sin(a)], [np.sin(a), np.cos(a)]]
             m[:3, 3] = (i % 20 * 6.0, i // 20 * 6.0, i % 3 * 3.0)
             api("geometry.edit_object_placement", f, product=e, matrix=m)
             itens.append(e)
+            if i == 1:  # achado 12: uma parede com abertura (exercita a booleana)
+                v = api("root.create_entity", f, ifc_class="IfcOpeningElement", name="Abertura")
+                api("geometry.assign_representation", f, product=v, representation=api("geometry.add_wall_representation", f, context=corpo, length=0.8, height=1.0, thickness=0.6))
+                api("geometry.edit_object_placement", f, product=v, matrix=m @ np.array([[1, 0, 0, 0.5], [0, 1, 0, -0.2], [0, 0, 1, 0.5], [0, 0, 0, 1.0]]))
+                api("feature.add_feature", f, feature=v, element=e)
         api("spatial.assign_container", f, products=itens, relating_structure=andar)
         f.write(str(saida[esq]))
     return saida
@@ -61,8 +70,8 @@ def gerar_modelos(pasta):
 def contagem_python(f, classe):  # classe=None: toda instância
     return sum(1 for _ in f) if classe is None else len(f.by_type(classe))
 
-def guids_com_geometria(f):
-    return sorted(p.GlobalId for p in f.by_type("IfcProduct") if p.Representation)
+def guids_com_geometria(f):  # a abertura não é elemento visível: entra só pelo furo da parede
+    return sorted(p.GlobalId for p in f.by_type("IfcProduct") if p.Representation and not p.is_a("IfcOpeningElement"))
 
 def versao_conda(pacote, campo="version"):
     for j in (Path(sys.prefix) / "conda-meta").glob(f"{pacote}-[0-9]*.json"):
@@ -80,14 +89,14 @@ def impressao(v, t):  # (triângulos, caixa [mín, máx], volume = soma de tetra
     p = v[t]
     return len(t), np.concatenate([v.min(0), v.max(0)]), abs(np.einsum("ij,ij->i", p[:, 0], np.cross(p[:, 1], p[:, 2])).sum() / 6)
 
-def referencia(f, guids):  # create_shape do Python com as opções da S03 (mundo, sem soldar vértices)
+def referencia(f, guids):  # create_shape do Python com as opções da S03 (mundo, sem soldar vértices) e a MESMA biblioteca do C++
     import ifcopenshell.geom
     cfg = ifcopenshell.geom.settings()
     cfg.set("use-world-coords", True)
     cfg.set("weld-vertices", False)
     r = {}
     for g in guids:
-        s = ifcopenshell.geom.create_shape(cfg, f.by_guid(g)).geometry
+        s = ifcopenshell.geom.create_shape(cfg, f.by_guid(g), geometry_library="hybrid-cgal-simple-opencascade").geometry
         r[g] = impressao(np.array(s.verts, float).reshape(-1, 3), np.array(s.faces, np.int64).reshape(-1, 3))
     return r
 
@@ -113,17 +122,17 @@ def rss_kb():
 def agrupar(caminhos):  # {núcleo: caminhos reais distintos}; .so, .so.N e .so.N.M resolvem para o mesmo arquivo
     return {k: sorted({os.path.realpath(c) for c in caminhos if re.search(rx, os.path.basename(c))}) for k, rx in NUCLEOS.items()}
 
-def _importar(ordem=()):
+def _importar(ordem=("ifcopenshell", "obimcore")):  # obedece a ordem dada (achado 1); o obimcore importa o ifcopenshell sozinho
     global ifcopenshell
-    import ifcopenshell  # sempre antes do obimcore (armadilha 2 da etapa 1)
+    for nome in ordem:
+        importlib.import_module(nome)
+    import ifcopenshell
     import ifcopenshell.geom  # noqa: F401
     preparar_dono()
-    for nome in ordem:
-        __import__(nome)
-    return __import__("obimcore")
+    return importlib.import_module("obimcore")
 
 def caso_r1e(ordem, pasta):
-    oc = _importar(ordem.split(","))
+    oc = _importar(ordem.split(","))  # ex.: PySide6.QtCore,ifcopenshell,obimcore
     f = ifcopenshell.open(str(Path(pasta) / "s04_ifc4.ifc"))
     referencia(f, guids_com_geometria(f)[:1])  # o Python carrega a geometria (e o OCCT)
     linhas = Path("/proc/self/maps").read_text().splitlines() if sys.platform.startswith("linux") else None

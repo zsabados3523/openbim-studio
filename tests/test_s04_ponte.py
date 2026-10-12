@@ -6,7 +6,7 @@ do conda-meta, `qVersion()` e a versão do `occt`; `contar(f, classe)` int com s
 `bibliotecas_carregadas()` lista de caminhos. (2) `malhas(f, guids)` devolve dict {guid: item} ou lista na ordem
 pedida; item (dict/objeto) com posicoes, indices e, opcional, caixa (6 números), em coordenadas do mundo, sem soldar
 vértices (opções da S03). (3) Desfazer = `undo()` do ifcopenshell-python; não-arquivo = qualquer `Exception`.
-(4) R1-e só confere /proc/self/maps no Linux. (5) R1-f: o ifcopenshell 0.9 SOZINHO cresce ~0,7 MB por reabertura
+(4) R1-e só confere /proc/self/maps no Linux. `OBIM_S04_OBRIGATORIO=1` faz todo pulo falhar (exceto o que aguarda a T04c). (5) R1-f: o ifcopenshell 0.9 SOZINHO cresce ~0,7 MB por reabertura
 (medido): os 10% valem para o que o módulo acrescenta sobre a mesma volta em Python puro. (6) LC_ALL=C basta.
 """
 import importlib.util
@@ -23,9 +23,13 @@ from pathlib import Path
 import pytest
 import s04_aux as aux
 
+OBRIGATORIO = os.environ.get("OBIM_S04_OBRIGATORIO") == "1"  # no CI: pulo vira falha (achado 8)
 AUX = Path(__file__).resolve().parent / "s04_aux.py"
 TEM_MODULO = importlib.util.find_spec("obimcore") is not None
 ESQ = list(aux.ESQUEMAS)
+
+def pular(msg):
+    (pytest.fail if OBRIGATORIO else pytest.skip)(msg)
 
 @pytest.fixture(scope="session")
 def modelos(tmp_path_factory):
@@ -34,7 +38,7 @@ def modelos(tmp_path_factory):
 @pytest.fixture(scope="module")
 def oc():
     if not TEM_MODULO:
-        pytest.skip("\n!!! aguarda S04-T03: módulo obimcore (oráculo R1 NÃO FOI EXECUTADO) !!!\n")
+        pular("\n!!! aguarda S04-T03: módulo obimcore (oráculo R1 NÃO FOI EXECUTADO) !!!\n")
     import ifcopenshell, obimcore  # noqa: E401,F401  (ifcopenshell antes do obimcore)
     aux.preparar_dono()
     return obimcore
@@ -42,7 +46,7 @@ def oc():
 @pytest.fixture
 def malhas(oc):
     if not hasattr(oc, "malhas"):
-        pytest.skip("\n!!! aguarda S04-T04: obimcore.malhas !!!\n")
+        pular("\n!!! aguarda S04-T04: obimcore.malhas !!!\n")
     return oc.malhas
 
 def abrir(caminho):
@@ -69,16 +73,22 @@ def test_modelos_gerados_por_script(modelos, esq):  # roda hoje, sem o módulo
     f, g, ref = pedaco(abrir(modelos[esq]), 5)
     assert f.schema.upper().startswith(esq[:4]) and len(f.by_type("IfcWall")) == aux.PAREDES and all(n > 0 for n, _, _ in ref.values())
 
-def test_r1a_versao_e_build_iguais_aos_do_python(oc):
-    import ifcopenshell
+def test_r1a_versao_e_build_iguais_aos_do_python(oc):  # compilação (cabeçalhos, texto do CMake) x execução (o que o Python carregou)
+    import ifcopenshell.ifcopenshell_wrapper as w
     from PySide6.QtCore import qVersion
-    texto, build = repr(oc.versao()), aux.versao_conda("ifcopenshell", "build")
-    assert ifcopenshell.version in texto and qVersion() in texto, texto
+    v = oc.versao()
+    assert v["ifcopenshell"] == w.version(), v  # versão compilada x biblioteca carregada no Python
+    assert v["qt"] == v["qt_execucao"] == qVersion(), v  # Qt da compilação x Qt do módulo em uso x Qt do PySide6
+    build, occt = aux.versao_conda("ifcopenshell", "build"), aux.versao_conda("occt")
     if build is None:
-        pytest.skip("\n!!! sem conda-meta do ifcopenshell: build NÃO conferido (R1-a incompleto) !!!\n")
-    assert build in texto, f"build {build} ausente: {texto}"
-    occt = aux.versao_conda("occt")
-    assert occt is None or occt in texto, f"versão do OCCT ausente: {texto}"
+        pular("\n!!! sem conda-meta do ifcopenshell: build NÃO conferido (R1-a incompleto) !!!\n")
+    assert build in repr(v) and (occt is None or occt in repr(v)), v
+
+def test_r1b_registro_de_esquemas_unico(oc):  # achado 6: o mesmo registro IFC4 dos dois lados
+    import ifcopenshell.ifcopenshell_wrapper as w
+    if "registro_ifc4" not in oc.versao():
+        pytest.skip("\n!!! aguarda S04-T04c: versao()['registro_ifc4'] (prova de uma cópia só do IfcOpenShell) !!!\n")
+    assert oc.versao()["registro_ifc4"] == int(w.schema_by_name("IFC4").this)
 
 @pytest.mark.parametrize("esq", ESQ)
 def test_r1c_contagens_iguais_em_tres_esquemas(oc, modelos, esq):
@@ -109,7 +119,15 @@ def test_r1d_mesmo_modelo_nos_dois_lados(oc, modelos, esq):
     f.undo()  # desfaz a criação: o C++ vê o elemento sumir
     assert (oc.contar(f, "IfcWall"), oc.contar(f, None)) == (n0, t0)
 
-@pytest.mark.parametrize("ordem", ["ifcopenshell,PySide6", "PySide6,ifcopenshell", "ifcopenshell,PySide6.QtCore"])
+def test_r1d_nome_com_acento_ida_e_volta(oc, modelos):  # achado 20: UTF-8 entre Python e C++
+    f = abrir(modelos["IFC4"])
+    p = f.by_type("IfcWall")[0]
+    oc.definir_nome(f, p.GlobalId, "Ação ç")
+    assert p.Name == oc.ler_nome(f, p.GlobalId) == "Ação ç"
+    p.Name = "Pão ü ñ"
+    assert oc.ler_nome(f, p.GlobalId) == "Pão ü ñ"
+
+@pytest.mark.parametrize("ordem", ["PySide6.QtCore,ifcopenshell,obimcore", "ifcopenshell,obimcore,PySide6.QtCore", "ifcopenshell,PySide6.QtCore,obimcore"])
 def test_r1e_uma_copia_de_cada_nucleo(oc, modelos, ordem):
     r = resultado(subprocesso("r1e", ordem, modelos["IFC4"].parent), 300)
     for onde in ("modulo", "real"):
@@ -156,22 +174,30 @@ def test_r1h_quatro_threads_em_arquivos_diferentes(malhas, modelos, tmp_path):
     assert rodar_threads([trabalho(*pedaco(abrir(c))) for c in [*modelos.values(), tmp_path / "quarto.ifc"]]) == []
 
 
-def test_r1h_principal_nao_espera_a_malha(malhas, modelos):
-    f, todos, ref = pedaco(abrir(modelos["IFC4"]), 10**6)
-    assert aux.diferencas(aux.por_guid(malhas(f, todos), todos), ref) == []
-    k, dur = 1, 0
-    while dur < 0.15 and k <= 400:  # carga: cada chamada precisa durar >= 150 ms, senão a regra 4 não é exercitada
-        k *= 2
-        t = time.perf_counter()
-        malhas(f, todos * k)  # só carga: esta lista repetida não é conferida
-        dur = time.perf_counter() - t
-    assert dur >= 0.15, f"carga insuficiente ({dur * 1000:.0f} ms)"
+@pytest.fixture(scope="session")
+def grande(tmp_path_factory):  # modelo oficial do §2.1: 3000 paredes, GlobalIds únicos
+    sys.path.insert(0, str(AUX.parents[1] / "scripts"))
+    import gerar_modelo_grande
+    caminho = tmp_path_factory.mktemp("s04g") / "grande.ifc"
+    gerar_modelo_grande.gerar(caminho, 3000)
+    return caminho
+
+
+def test_r1h_principal_nao_espera_a_malha(malhas, grande):
+    f = abrir(grande)
+    todos = aux.guids_com_geometria(f)
+    assert len(todos) == len(set(todos)) == 3000
+    t = time.perf_counter()
+    res = aux.por_guid(malhas(f, todos), todos)
+    dur = time.perf_counter() - t
+    assert aux.diferencas(res, aux.referencia(f, todos[::100])) == []
+    assert dur >= 0.15, f"carga insuficiente ({dur * 1000:.0f} ms): a regra 4 não seria exercitada"
     parar, chamadas, erros = threading.Event(), [], []
 
     def trabalho():
         try:
             while not parar.is_set():
-                malhas(f, todos * k)
+                malhas(f, todos)  # GlobalIds únicos: sem repetição para fabricar carga
                 chamadas.append(1)
         except Exception as e:  # noqa: BLE001
             erros.append(repr(e))

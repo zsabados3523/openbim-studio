@@ -5,7 +5,8 @@ O filho abre o arquivo, lista os produtos, converte com `ifcopenshell.geom.itera
 `(tipo, dados)` por um `Pipe` de mão única: `fase`, `inicio`, `lote`, `feitos`, `sem_malha`, `erro`, `fim`.
 Quem lê e vigia é a thread do `CarregadorMalhas`. O filho nunca importa Qt.
 Ganchos de teste (só valem se a variável existir): OBIM_TESTE_PECA_LENTA="<guid>=<s>[,<guid>=<s>]" e
-OBIM_TESTE_MATAR_FILHO="<guid>" (o filho sai com código 3 nessa peça).
+OBIM_TESTE_MATAR_FILHO="<guid>" (o filho sai com código 3 nessa peça) e OBIM_TESTE_FALHAR_CAIXA="<guid>" (o filho da
+caixa falha só nessa peça).
 """
 from __future__ import annotations
 
@@ -44,14 +45,18 @@ def pico_memoria_mb(ident=None) -> float:
         if not f(k.GetCurrentProcess() if ident is None else wintypes.HANDLE(ident), ctypes.byref(pmc), pmc.cb):
             raise ctypes.WinError(ctypes.get_last_error())
         return pmc.PeakWorkingSetSize / 2**20
-    if ident is not None:  # Linux: VmHWM (pico do conjunto residente) em kB
+    if ident is not None and sys.platform.startswith("linux"):  # VmHWM (pico do conjunto residente) em kB
         with open(f"/proc/{int(ident)}/status") as a:
             for linha in a:
                 if linha.startswith("VmHWM:"):
                     return int(linha.split()[1]) / 1024.0
         return 0.0
+    if ident is not None:  # macOS e outros: `ps` existe no sistema; dá o conjunto residente atual (não o pico), em kB
+        import subprocess
+        saida = subprocess.run(["ps", "-o", "rss=", "-p", str(int(ident))], capture_output=True, text=True, timeout=5).stdout
+        return int(saida.split()[0]) / 1024.0 if saida.split() else 0.0
     import resource
-    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0  # KB no Linux
+    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (2**20 if sys.platform == "darwin" else 1024.0)  # bytes no macOS, KB no Linux
 
 
 def _dividir(p, max_bytes):
@@ -172,15 +177,40 @@ def _converter(enviar, params):
 
     feitos = 0
     t = time.perf_counter()
-    for ini in range(0, total, tb):
-        bloco = produtos[ini:ini + tb]
-        enviar("fase", "convertendo")  # antes de criar o iterador: a primeira peça é convertida em initialize()
-        entregar = (lambda q: emitir([q], 0)) if isolado else None
-        prods, sem = _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar, entregar)
-        feitos += len(bloco)
-        if sem:
-            enviar("sem_malha", sem)
-        emitir(prods, feitos)
+    if isolado:  # um iterador por peça: a peça em curso é sempre a acusada ("atual"), e peça sem geometria não é confundida
+        enviar("fase", "convertendo")
+        buffer, t_buf = [], 0.0
+
+        def soltar():
+            nonlocal buffer
+            if buffer:
+                emitir(buffer, 0)
+                buffer = []
+
+        def juntar(q):  # agrupa por tempo (0,2 s) para não criar um lote por peça
+            nonlocal t_buf
+            if not buffer:
+                t_buf = time.perf_counter()
+            buffer.append(q)
+            if time.perf_counter() - t_buf >= 0.2:
+                soltar()
+
+        for p in produtos:
+            enviar("atual", p.id())
+            _, sem = _bloco(ifcopenshell, cfg, arq, [p], params, enviar, lentas, matar, juntar)
+            feitos += 1
+            if sem:
+                enviar("sem_malha", sem)
+        soltar()
+    else:
+        for ini in range(0, total, tb):
+            bloco = produtos[ini:ini + tb]
+            enviar("fase", "convertendo")  # antes de criar o iterador: a primeira peça é convertida em initialize()
+            prods, sem = _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar)
+            feitos += len(bloco)
+            if sem:
+                enviar("sem_malha", sem)
+            emitir(prods, feitos)
     tempos["geometria_s"] = time.perf_counter() - t
     try:
         mensagens = str(ifcopenshell.get_log()).splitlines()[-50:]
@@ -203,7 +233,8 @@ def _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar, entrega
         try:
             if not it.initialize():
                 log = " | ".join(str(ifcopenshell.get_log()).splitlines()[-3:])
-                falhou(list(porid), "initialize() falhou" + (f": {log}" if log else ""))
+                falhou(list(porid), "o conversor não achou geometria nesta peça" if entregar else
+                       "initialize() falhou" + (f": {log}" if log else ""))
                 return [], sem
             while True:
                 s = it.get()
@@ -253,12 +284,20 @@ def _pontos_item(util_p, item, m, saida, t_fim):
             p2 = [(-x, -y), (x, -y), (x, y), (-x, y)]
         elif perfil.is_a("IfcArbitraryClosedProfileDef") and perfil.OuterCurve.is_a("IfcPolyline"):
             p2 = [tuple(q.Coordinates)[:2] for q in perfil.OuterCurve.Points]
+        elif perfil.is_a("IfcArbitraryClosedProfileDef") and perfil.OuterCurve.is_a("IfcIndexedPolyCurve"):
+            curva = perfil.OuterCurve  # só trechos retos: com arco, os pontos da lista não limitam a curva
+            if any(not sg.is_a("IfcLineIndex") for sg in (curva.Segments or ())):
+                raise ValueError("curva com arco")
+            p2 = [tuple(q)[:2] for q in curva.Points.CoordList]
         else:
             raise ValueError("perfil não suportado")
+        if perfil.is_a("IfcParameterizedProfileDef") and perfil.Position is not None:  # posição própria do perfil (2D)
+            q = util_p.get_axis2placement(perfil.Position)
+            p2 = [tuple((q @ np.array([a, b, 0.0, 1.0]))[:2]) for a, b in p2]
         d = np.array(item.ExtrudedDirection.DirectionRatios, dtype=np.float64)
         d = d / np.linalg.norm(d) * item.Depth
         base = np.array([(a, b, 0.0) for a, b in p2], dtype=np.float64)
-        mm = m @ util_p.get_axis2placement(item.Position)
+        mm = m @ (util_p.get_axis2placement(item.Position) if item.Position is not None else np.eye(4))
         for p in (base, base + d):
             saida.append(p @ mm[:3, :3].T + mm[:3, 3])
     else:
@@ -297,8 +336,16 @@ def entrada_caixa(tx, params):
         enviar("fase", "abrindo")
         arq = ifcopenshell.open(params["caminho"])
         escala = util_u.calculate_unit_scale(arq)  # unidade do arquivo -> metros
+        falhar = os.environ.get("OBIM_TESTE_FALHAR_CAIXA")
         for i in params["ids"]:
-            mn, mx, metodo = _caixa_produto(util_p, arq.by_id(i), escala)
+            try:
+                prod = arq.by_id(i)
+                if falhar and prod.GlobalId == falhar:
+                    raise RuntimeError("falha provocada pelo teste")
+                mn, mx, metodo = _caixa_produto(util_p, prod, escala)
+            except Exception as e:  # só esta peça falha; as outras seguem
+                enviar("caixa_erro", (i, f"{type(e).__name__}: {e}"))
+                continue
             enviar("caixa", (i, mn, mx, metodo))
         enviar("fim", None)
     except BaseException as e:

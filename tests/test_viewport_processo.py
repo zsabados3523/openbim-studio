@@ -414,7 +414,6 @@ def copias12(tmp_path_factory):
 
 @requer_a
 @requer_limite
-@_aguarda_e("§1.4 item 2, a regra da mesma família vale no arquivo inteiro (P13)")
 def test_p13_copias_da_mesma_familia_em_blocos_diferentes(copias1, copias12, monkeypatch):
     (c1, [(_, g1)]), (c12, lentas12) = copias1, copias12
     _lentas(monkeypatch, (g1, 5))
@@ -452,7 +451,6 @@ def _gerar_sem_geometria(caminho):
 
 @requer_a
 @requer_limite
-@_aguarda_e("§1.4 item 1, peça errada acusada: produto sem geometria não vira caixa (P14)")
 def test_p14_produto_sem_geometria_nao_e_acusado(tmp_path, monkeypatch):
     caminho, id_ruim, (id_l, guid) = _gerar_sem_geometria(tmp_path / "semgeo.ifc")
     _lentas(monkeypatch, (guid, 5))
@@ -494,7 +492,6 @@ def _gerar_retangulares(caminho):
 
 @requer_a
 @requer_limite
-@_aguarda_e("§1.4 item 4, a caixa do sólido extrudado fica dentro de 1 cm (P15)")
 @pytest.mark.parametrize("modelo", ["paredes_e_aberturas", "perfil_retangular", "posicao_vazia"])
 def test_p15_caixa_do_solido_extrudado_dentro_de_1cm(modelo, mab, tmp_path, monkeypatch):
     if modelo == "paredes_e_aberturas":  # paredes de perfil IfcArbitraryClosedProfileDef com IfcIndexedPolyCurve
@@ -520,8 +517,7 @@ def test_p15_caixa_do_solido_extrudado_dentro_de_1cm(modelo, mab, tmp_path, monk
 @requer_a
 @requer_limite
 @pytest.mark.parametrize("modelo", [
-    pytest.param("com_reinicio", marks=_aguarda_e("§1.3 item 1, `deslocamento` chega gravável ao pai (P16)")),
-    "so_caixa"])  # só_caixa já passa hoje (o deslocamento nasce no pai): fica como regressão, sem xfail
+    "com_reinicio", "so_caixa"])
 def test_p16_deslocamento_nao_gravavel_em_todo_lote(modelo, mapeadas1, copias1, monkeypatch):
     caminho, [(_, guid)] = mapeadas1 if modelo == "com_reinicio" else copias1  # só_caixa: o primeiro lote é uma caixa
     _lentas(monkeypatch, (guid, 5))
@@ -537,7 +533,6 @@ def test_p16_deslocamento_nao_gravavel_em_todo_lote(modelo, mapeadas1, copias1, 
 @requer_a
 @requer_limite
 @requer_caixa_falha
-@_aguarda_e("§1.4 item 3, filho da caixa que falha: peça vai para sem_malha, não para cubo na origem (P18)")
 def test_p18_filho_da_caixa_que_falha(mapeadas1, monkeypatch):
     caminho, [(id_l, guid)] = mapeadas1
     ref_lotes, _, _ = _tempo_carga(caminho)

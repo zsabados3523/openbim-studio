@@ -105,7 +105,6 @@ def _trocar_de_janela(tmp_path):
     return antes, depois, perdidos, sinais, len(fins)
 
 
-@pytest.mark.xfail(strict=True, reason="aguarda S03-T08-E: §1.6 item 1, a troca de contexto gráfico apaga o modelo em silêncio (P17)")
 def test_p17_troca_de_janela_recarrega_sozinha(tmp_path):
     antes, depois, perdidos, _sinais, fins = _trocar_de_janela(tmp_path)
     assert antes == 7200
@@ -114,7 +113,6 @@ def test_p17_troca_de_janela_recarrega_sozinha(tmp_path):
 
 
 @requer_reabertura
-@pytest.mark.xfail(strict=True, reason="aguarda S03-T08-E: §1.6 item 1, sinal contexto_perdido ao perder lotes (P17)")
 def test_p17_sinal_contexto_perdido_emitido(tmp_path):
     antes, depois, _perdidos, sinais, _fins = _trocar_de_janela(tmp_path)
     assert len(sinais) >= 1, "o viewport não emitiu contexto_perdido"

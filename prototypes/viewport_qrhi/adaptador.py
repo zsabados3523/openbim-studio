@@ -27,6 +27,10 @@ class AdaptadorCarga(QObject):
         self._timer = QTimer(self)
         self._timer.setInterval(INTERVALO_MS)
         self._timer.timeout.connect(self._passo)
+        self._ultimo = None  # (caminho, opções) da última carga: o viewport perdeu o modelo, reabre sozinho
+        sinal = getattr(viewport, "contexto_perdido", None)
+        if sinal is not None:  # a troca de contexto ocorre dentro do desenho: recarrega depois, fora dele
+            sinal.connect(lambda: QTimer.singleShot(0, self._reabrir))
         app = QCoreApplication.instance()
         if app is not None:  # B-5: fechar o programa cancela a carga
             app.aboutToQuit.connect(self.cancelar)
@@ -36,11 +40,16 @@ class AdaptadorCarga(QObject):
         if not self.cancelar():  # B-4: a carga velha não terminou; não começa outra por cima
             self.erro.emit("a carga anterior ainda não terminou; tente de novo em instantes")
             return
+        self._ultimo = (str(caminho), dict(opcoes))
         self.viewport.limpar()
         self.carregador = CarregadorMalhas(str(caminho), **opcoes)
         self._primeiro = True
         self.carregador.iniciar()
         self._timer.start()
+
+    def _reabrir(self) -> None:
+        if self._ultimo is not None:
+            self.abrir(self._ultimo[0], **self._ultimo[1])
 
     def cancelar(self) -> bool:
         """Devolve False se a thread não terminou em 5 s (o carregador velho é mantido)."""

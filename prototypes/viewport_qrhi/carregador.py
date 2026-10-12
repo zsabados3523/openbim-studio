@@ -162,6 +162,7 @@ class CarregadorMalhas:
         self._produtos = {}  # id_step -> (guid, classe, nome, família), de `inicio`
         self._conv = 0  # mensagens "convertendo" do filho atual (qual bloco está em curso)
         self._maxfeito = -1  # maior id avisado em `feitos` pelo filho atual
+        self._atual = None  # peça em curso no filho isolado (aviso `atual`)
 
     # ---- interface pública ----
     @property
@@ -276,9 +277,10 @@ class CarregadorMalhas:
 
     # ---- leitura e vigia dos filhos (D3 e D4) ----
     def _ler(self, est):
-        """Fase rápida (blocos, várias threads); peça lenta ou queda do filho: modo isolado (1 thread, só os pendentes
-        do bloco); a peça em espera vira caixa. Teto de 20 reinícios por carga."""
-        iso, primeiro = set(), True
+        """Fase rápida (blocos, várias threads); peça lenta ou queda do filho: modo isolado (1 thread, um iterador por peça,
+        só os pendentes do bloco); a peça em curso (a acusada) vira caixa, e com ela toda peça do arquivo ainda não
+        resolvida com o mesmo item mapeado. Teto: 20 reinícios seguidos sem condenar nenhuma peça."""
+        iso, primeiro, seguidos = set(), True, 0
         while True:
             if primeiro:
                 ids, isolado = None, False
@@ -299,22 +301,23 @@ class CarregadorMalhas:
                         est["sem"].append((i, g, c, "o conversor não devolveu a peça"))
                         est["resolvidos"].add(i)
                 continue
-            est["reinicios"] += 1
-            if est["reinicios"] > 20:
-                raise RuntimeError("o conversor de geometria precisou reiniciar mais de 20 vezes")
+            seguidos += 1
+            if seguidos > 20:
+                raise RuntimeError("o conversor de geometria precisou reiniciar mais de 20 vezes sem resolver peça")
             pend = [i for i in falha["bloco"] if i not in est["resolvidos"]]
             if not isolado:
                 iso = set(pend)  # várias threads: não dá para saber qual peça travou
                 continue
-            culpada = min([i for i in pend if i > falha["maxfeito"]] or pend)
+            culpada = falha["atual"] if falha["atual"] in pend else min([i for i in pend if i > falha["maxfeito"]] or pend)
             fam = self._produtos[culpada][3]
-            irmas = [i for i in pend if i != culpada and fam is not None and self._produtos[i][3] == fam]
+            irmas = [i for i in sorted(self._produtos) if i != culpada and i not in est["resolvidos"]
+                     and fam is not None and self._produtos[i][3] == fam]  # o arquivo inteiro, não só o bloco
             lim = f"passou do limite de {self.limite_peca_s:g} s" if falha["motivo"] == "limite" else "o conversor caiu nesta peça"
             lote = [(culpada, lim, falha["seg"])] + [
                 (i, "mesma peça-base de uma que passou do limite" if falha["motivo"] == "limite"
                  else "mesma peça-base de uma em que o conversor caiu", 0.0) for i in irmas]
             self._caixas(est, lote)
-            iso = set(pend) - {i for i, _, _ in lote}
+            seguidos = 0
 
     def _rodar(self, est, ids, isolado):
         """Um filho de conversão. Devolve None se terminou (`fim`); senão dict com motivo ("limite" ou "queda"),
@@ -326,7 +329,7 @@ class CarregadorMalhas:
         params = {"caminho": self.caminho, "threads": 1 if isolado else self.threads, "tamanho_bloco": self.tamanho_bloco,
                   "excluir": self.excluir, "biblioteca": self.biblioteca, "max_bytes_lote": self.max_bytes_lote,
                   "ids": ids, "isolado": isolado, "desl": est["desl"]}
-        self._conv, self._maxfeito, self._fase = 0, -1, None
+        self._conv, self._maxfeito, self._fase, self._atual = 0, -1, None, None
 
         def limite():
             return self.limite_peca_s if self._fase == "convertendo" else self.limite_abrir_s
@@ -339,7 +342,7 @@ class CarregadorMalhas:
         todos = ids if ids is not None else sorted(self._produtos)
         tb = self.tamanho_bloco if self.tamanho_bloco > 0 and not isolado else max(len(todos), 1)
         r["bloco"] = todos[max(self._conv - 1, 0) * tb:self._conv * tb]
-        r["maxfeito"] = self._maxfeito
+        r["maxfeito"], r["atual"] = self._maxfeito, self._atual
         return r
 
     def _executar(self, est, alvo, params, ao_receber, limite):
@@ -392,12 +395,12 @@ class CarregadorMalhas:
 
     def _caixas(self, est, itens):
         """Peças [(id, motivo, segundos)] viram caixa laranja de 12 triângulos. Os pontos vêm de um filho sem a
-        biblioteca de geometria (limite de 5 s); se ele falhar, cubo de 0,5 m na origem."""
+        biblioteca de geometria (limite de 5 s); a peça que ele não entregar vai para `sem_malha` com o motivo."""
         try:
             from . import processo_malhas as pm
         except ImportError:  # pragma: no cover
             import processo_malhas as pm
-        achados = {}
+        achados, falhas = {}, {}
 
         def receber(tipo, dados):
             if tipo == "fase":
@@ -405,6 +408,8 @@ class CarregadorMalhas:
             elif tipo == "caixa":
                 self._fase = "caixa"
                 achados[dados[0]] = (np.asarray(dados[1], dtype=np.float64), np.asarray(dados[2], dtype=np.float64))
+            elif tipo == "caixa_erro":
+                falhas[dados[0]] = dados[1]
             elif tipo == "erro":
                 raise RuntimeError(dados)
             return tipo == "fim"
@@ -415,10 +420,15 @@ class CarregadorMalhas:
             self._executar(est, pm.entrada_caixa, params, receber,
                            lambda: pm.LIMITE_CAIXA_S + 1.0 if self._fase == "caixa" else self.limite_abrir_s)
         except RuntimeError:
-            pass  # o que faltar vira cubo na origem
+            pass  # o que faltar vai para sem_malha
         for i, motivo, seg in itens:
-            mn, mx = achados.get(i, (np.full(3, -0.25), np.full(3, 0.25)))
             g, c, n, _f = self._produtos[i]
+            if i not in achados:  # regra de ouro: nada some; sem a posição certa não se desenha cubo na origem
+                est["sem"].append((i, g, c, "não foi possível calcular a caixa da peça (" + falhas.get(
+                    i, "o processo da caixa falhou ou passou do tempo") + ")"))
+                est["resolvidos"].add(i)
+                continue
+            mn, mx = achados[i]
             if est["desl"] is None:
                 est["desl"] = np.rint((mn + mx) / 2.0).astype(np.float64)
                 est["desl"].flags.writeable = False
@@ -446,15 +456,21 @@ class CarregadorMalhas:
                 est["produtos_total"] = dados["total"]
                 self._produtos = {i: (g, c, n, f) for i, g, c, n, f in dados["produtos"]}
         elif tipo == "lote":
-            dados = replace(dados, vertices=dados.vertices.copy(), indices=dados.indices.copy(), objetos=dados.objetos.copy())
-            for a in (dados.vertices, dados.indices, dados.objetos):  # cópia própria (o recebido aponta para o buffer do canal)
+            # cópia própria (o oráculo exige OWNDATA; o recebido aponta para o buffer do canal); a proteção do filho
+            # se perde no canal, então o deslocamento também é copiado e protegido (§1.3 item 1)
+            dados = replace(dados, vertices=dados.vertices.copy(), indices=dados.indices.copy(),
+                            objetos=dados.objetos.copy(), deslocamento=np.array(dados.deslocamento, dtype=np.float64))
+            for a in (dados.vertices, dados.indices, dados.objetos, dados.deslocamento):
                 a.flags.writeable = False
+            desl = dados.deslocamento
             if est["desl"] is None:
-                est["desl"] = dados.deslocamento  # as reinicializações recebem o mesmo deslocamento
+                est["desl"] = desl  # as reinicializações recebem o mesmo deslocamento
             self._contar_lote(est, dados)
             dados = replace(dados, indice_lote=est["lotes"] - 1, produtos_feitos=len(est["resolvidos"]),
                             produtos_total=est["produtos_total"])
             self._colocar(dados)
+        elif tipo == "atual":
+            self._atual = dados
         elif tipo == "feitos":
             self._maxfeito = max(self._maxfeito, dados)
         elif tipo == "sem_malha":

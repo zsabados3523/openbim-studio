@@ -151,7 +151,7 @@ def medir(caminho, threads, bloco, png=None, janela=(1280, 720), biblioteca=None
     filho_rusage = None
     if sys.platform != "win32":
         import resource  # conferência no Linux: maior pico entre filhos já finalizados
-        filho_rusage = round(resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss / 1024.0)
+        filho_rusage = round(resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss / (2**20 if sys.platform == "darwin" else 1024.0))  # bytes no macOS
     simp = list(resumo.simplificadas)
     return {
         "pico_pai_mb": round(pico_pai), "pico_filho_mb": round(pico_filho),

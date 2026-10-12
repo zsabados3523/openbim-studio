@@ -67,6 +67,7 @@ class CuboViewport(QRhiWidget, Viewport):
     """Widget 3D (QRhiWidget) que mostra uma malha colorida girando."""
 
     clicado = Signal(object)  # id do objeto clicado (ou None) após clique esquerdo sem arrasto
+    contexto_perdido = Signal()  # a placa foi trocada e lotes liberados não voltam: quem carregou deve recarregar
 
     def __init__(self, parent=None, api: QRhiWidget.Api | None = None, girar: bool = True,
                  liberar_apos_envio: bool = True):
@@ -270,12 +271,18 @@ class CuboViewport(QRhiWidget, Viewport):
         if any(e["livre"] for e in self._lotes):  # sem os dados não dá para reenviar: some da tela e fica contado
             self.lotes_perdidos += sum(1 for e in self._lotes if e["livre"])
             self._lotes = [e for e in self._lotes if not e["livre"]]
+            self._caixa = None  # a cena não é mais a mesma; o sinal avisa quem pode recarregá-la
+            avisar = True
+        else:
+            avisar = False
         for n in ("_vbuf", "_ibuf", "_ubuf", "_srb", "_pipeline", "_ubuf_m", "_srb_m", "_pipeline_m"):
             o = getattr(self, n, None)
             if o is not None:
                 o.deleteLater()
             setattr(self, n, None)
         self._rhi_antigo, self._pronto, self._malha_nova = None, False, True
+        if avisar:
+            self.contexto_perdido.emit()
 
     def releaseResources(self) -> None:
         self._liberar_recursos()

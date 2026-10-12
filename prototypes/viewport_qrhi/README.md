@@ -14,7 +14,7 @@ Rodar (precisa de tela):
 
 Refazer os shaders (o `qsb` fica em `~/miniforge3/envs/openbim/lib/qt6/bin/qsb`):
 
-    cd shaders && for s in cubo.vert cubo.frag; do qsb --glsl "100 es,120,150" --hlsl 50 --msl 12 -o $s.qsb $s; done
+    cd shaders && for s in cubo.vert cubo.frag malha.vert malha.frag; do qsb --glsl "100 es,120,150" --hlsl 50 --msl 12 -o $s.qsb $s; done
 
 Teste: `QT_QPA_PLATFORM=xcb pytest tests/test_viewport_qrhi.py` (com tela). Sem tela (offscreen) o teste de desenho é pulado com mensagem.
 

@@ -19,6 +19,8 @@ jobs:
   # (macos não bloqueia.)
   linux:
     runs-on: ubuntu-latest
+    env:
+      PLAT: linux-64
     steps:
       - name: Início (relógio)
         run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
@@ -28,7 +30,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/conda_pkgs
-          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'packaging/runtime-environment.yml') }}
+          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'environment.*.lock', 'packaging/runtime-environment.yml') }}
       - name: Pasta de pacotes do conda
         shell: bash
         run: |
@@ -36,12 +38,32 @@ jobs:
           echo "::notice title=cache de pacotes::cache-hit=${{ steps.cache_conda.outputs.cache-hit }}"
       - uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
         with:
-          environment-file: environment.yml
           activate-environment: openbim
           channels: conda-forge
           conda-remove-defaults: "true"
           channel-priority: strict
           miniforge-version: latest
+      - name: Criar o ambiente (pela trava environment.linux-64.lock, se existir)
+        shell: bash -el {0}
+        run: |
+          LOCK="environment.${PLAT}.lock"
+          if [ -f "$LOCK" ]; then
+            if conda env list | grep -qE '^openbim[[:space:]]'; then conda install -n openbim -y -q --file "$LOCK"; else conda create -n openbim -y -q --file "$LOCK"; fi
+            echo "::notice title=ambiente::criado pela trava $LOCK"
+          else
+            conda env update -n openbim -f environment.yml -q
+            echo "::notice title=ambiente::sem trava para ${PLAT}; criado pelo environment.yml"
+          fi
+      - name: Trava do ambiente (informativo; o líder traz o arquivo ao repositório)
+        shell: bash -el {0}
+        continue-on-error: true
+        run: |
+          mkdir -p out
+          conda list -n openbim --explicit --md5 > "out/environment.${PLAT}.lock"
+          if [ -f "environment.${PLAT}.lock" ]; then
+            if diff <(grep -v '^#' "environment.${PLAT}.lock" | tr -d '\r') <(grep -v '^#' "out/environment.${PLAT}.lock" | tr -d '\r') >/dev/null; then r="igual à do repositório"; else r="DIFERENTE da do repositório (atualizar)"; fi
+          else r="ainda não existe no repositório (trazer o artefato)"; fi
+          echo "::notice title=trava ${PLAT}::${r}"
       - name: Localidade pt_BR na máquina descartável (T26; informativo, não bloqueia)
         continue-on-error: true
         run: |
@@ -123,6 +145,8 @@ jobs:
 
   windows:
     runs-on: windows-latest
+    env:
+      PLAT: win-64
     timeout-minutes: 60
     steps:
       - name: Início (relógio)
@@ -134,7 +158,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/conda_pkgs
-          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'packaging/runtime-environment.yml') }}
+          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'environment.*.lock', 'packaging/runtime-environment.yml') }}
       - name: Pasta de pacotes do conda
         shell: bash
         run: |
@@ -142,12 +166,32 @@ jobs:
           echo "::notice title=cache de pacotes::cache-hit=${{ steps.cache_conda.outputs.cache-hit }}"
       - uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
         with:
-          environment-file: environment.yml
           activate-environment: openbim
           channels: conda-forge
           conda-remove-defaults: "true"
           channel-priority: strict
           miniforge-version: latest
+      - name: Criar o ambiente (pela trava environment.win-64.lock, se existir)
+        shell: bash -el {0}
+        run: |
+          LOCK="environment.${PLAT}.lock"
+          if [ -f "$LOCK" ]; then
+            if conda env list | grep -qE '^openbim[[:space:]]'; then conda install -n openbim -y -q --file "$LOCK"; else conda create -n openbim -y -q --file "$LOCK"; fi
+            echo "::notice title=ambiente::criado pela trava $LOCK"
+          else
+            conda env update -n openbim -f environment.yml -q
+            echo "::notice title=ambiente::sem trava para ${PLAT}; criado pelo environment.yml"
+          fi
+      - name: Trava do ambiente (informativo; o líder traz o arquivo ao repositório)
+        shell: bash -el {0}
+        continue-on-error: true
+        run: |
+          mkdir -p out
+          conda list -n openbim --explicit --md5 > "out/environment.${PLAT}.lock"
+          if [ -f "environment.${PLAT}.lock" ]; then
+            if diff <(grep -v '^#' "environment.${PLAT}.lock" | tr -d '\r') <(grep -v '^#' "out/environment.${PLAT}.lock" | tr -d '\r') >/dev/null; then r="igual à do repositório"; else r="DIFERENTE da do repositório (atualizar)"; fi
+          else r="ainda não existe no repositório (trazer o artefato)"; fi
+          echo "::notice title=trava ${PLAT}::${r}"
       - name: Testes
         shell: bash -el {0}
         run: |
@@ -328,7 +372,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/conda_pkgs
-          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'packaging/runtime-environment.yml') }}
+          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'environment.*.lock', 'packaging/runtime-environment.yml') }}
       - name: Pasta de pacotes do conda
         shell: bash
         run: |

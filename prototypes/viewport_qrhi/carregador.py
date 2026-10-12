@@ -26,6 +26,7 @@ DTYPE_OBJETO = np.dtype([
 ])
 MAX_BYTES_LOTE = 8 * 1024 * 1024
 CINZA = (204, 204, 204, 255)
+ORANGE = (255, 140, 0, 255)  # caixa substituta (D4)
 FATIA_S = 0.05
 
 
@@ -54,7 +55,8 @@ class ResumoCarga:
     threads: int = 1
     tamanho_bloco: int = 0
     mensagens: list = field(default_factory=list)
-    pico_filho_mb: float = 0.0  # pico de memória do processo filho (informado por ele)
+    pico_filho_mb: float = 0.0  # maior pico de memória entre os processos filhos (informado por eles)
+    simplificadas: list = field(default_factory=list)  # (id_step, guid, classe, nome, motivo, segundos): viraram caixa
 
 
 class _Cancelado(Exception):
@@ -132,13 +134,16 @@ def _montar_lote(indice, prods, desl, feitos, total):
 class CarregadorMalhas:
     # D1 (LOTE_OPUS_6 §2.2): a híbrida tenta a biblioteca rápida e cai na "opencascade" nos recortes de abertura.
     # Curiosidade: has_geometry_library() responde falso para esse nome, mas o iterador o aceita.
-    def __init__(self, caminho, threads=None, tamanho_bloco=4000, fila_max=4,
+    def __init__(self, caminho, threads=None, tamanho_bloco=1000, fila_max=4,
                  excluir=("IfcFeatureElementSubtraction", "IfcSpace"),
-                 biblioteca="hybrid-cgal-simple-opencascade", max_bytes_lote=MAX_BYTES_LOTE, manter_arquivo=False):
+                 biblioteca="hybrid-cgal-simple-opencascade", max_bytes_lote=MAX_BYTES_LOTE, manter_arquivo=False,
+                 limite_peca_s=20.0, limite_abrir_s=600.0):
         self.caminho = str(caminho)
         self.biblioteca = str(biblioteca)
         self.max_bytes_lote = int(max_bytes_lote)
         self.manter_arquivo = bool(manter_arquivo)
+        self.limite_peca_s = None if limite_peca_s is None else float(limite_peca_s)  # None desliga
+        self.limite_abrir_s = None if limite_abrir_s is None else float(limite_abrir_s)
         self.threads = int(threads) if threads else max(1, (os.cpu_count() or 2) - 1)
         self.tamanho_bloco = int(tamanho_bloco)
         self.excluir = tuple(excluir)
@@ -154,7 +159,8 @@ class CarregadorMalhas:
         self._descartados = 0
         self._fase = None  # última fase informada pelo filho
         self._produtos = {}  # id_step -> (guid, classe, nome, família), de `inicio`
-        self._concluidos = set()  # ids avisados em `feitos`
+        self._conv = 0  # mensagens "convertendo" do filho atual (qual bloco está em curso)
+        self._maxfeito = -1  # maior id avisado em `feitos` pelo filho atual
 
     # ---- interface pública ----
     @property
@@ -236,7 +242,7 @@ class CarregadorMalhas:
         t0 = time.perf_counter()
         est = {"estado": "erro", "erro": None, "produtos_total": 0, "ids": set(), "tri": 0, "vert": 0,
                "lotes": 0, "sem": [], "t": {"abrir_s": 0.0, "listar_s": 0.0, "geometria_s": 0.0}, "msgs": [],
-               "pico_filho": 0.0}
+               "pico_filho": 0.0, "resolvidos": set(), "simp": [], "desl": None, "reinicios": 0}
         try:
             self._ler(est)
             est["estado"] = "concluido"
@@ -253,38 +259,123 @@ class CarregadorMalhas:
                 est["msgs"].append(f"não foi possível manter o arquivo aberto: {e}")
         self._resumo = ResumoCarga(
             est["estado"], est["erro"], est["produtos_total"], len(est["ids"]), est["tri"], est["vert"],
-            est["lotes"], est["sem"], est["t"], self.threads, self.tamanho_bloco, est["msgs"], est["pico_filho"])
+            est["lotes"], est["sem"], est["t"], self.threads, self.tamanho_bloco, est["msgs"] + self._linhas_resumo(est["simp"]),
+            est["pico_filho"], est["simp"])
         self._pronto.set()
 
+    def _linhas_resumo(self, simp):
+        por_limite = sum(1 for s in simp if "limite" in s[4])
+        linhas = []
+        if por_limite:
+            lim = f"{self.limite_peca_s:g}" if self.limite_peca_s is not None else "o limite"
+            linhas.append(f"{por_limite} peça(s) foram mostradas como caixa porque passaram de {lim} s")
+        if len(simp) - por_limite:
+            linhas.append(f"{len(simp) - por_limite} peça(s) foram mostradas como caixa porque o conversor caiu nelas")
+        return linhas
+
+    # ---- leitura e vigia dos filhos (D3 e D4) ----
     def _ler(self, est):
+        """Fase rápida (blocos, várias threads); peça lenta ou queda do filho: modo isolado (1 thread, só os pendentes
+        do bloco); a peça em espera vira caixa. Teto de 20 reinícios por carga."""
+        iso, primeiro = set(), True
+        while True:
+            if primeiro:
+                ids, isolado = None, False
+            else:
+                iso -= est["resolvidos"]
+                if iso:
+                    ids, isolado = sorted(iso), True
+                else:
+                    ids, isolado = [i for i in sorted(self._produtos) if i not in est["resolvidos"]], False
+                    if not ids:
+                        return
+            falha = self._rodar(est, ids, isolado)
+            primeiro = False
+            if falha is None:
+                for i in (ids or []):  # rede de segurança da regra de ouro: o filho terminou e não entregou
+                    if i not in est["resolvidos"]:
+                        g, c, _n, _f = self._produtos[i]
+                        est["sem"].append((i, g, c, "o conversor não devolveu a peça"))
+                        est["resolvidos"].add(i)
+                continue
+            est["reinicios"] += 1
+            if est["reinicios"] > 20:
+                raise RuntimeError("o conversor de geometria precisou reiniciar mais de 20 vezes")
+            pend = [i for i in falha["bloco"] if i not in est["resolvidos"]]
+            if not isolado:
+                iso = set(pend)  # várias threads: não dá para saber qual peça travou
+                continue
+            culpada = min([i for i in pend if i > falha["maxfeito"]] or pend)
+            fam = self._produtos[culpada][3]
+            irmas = [i for i in pend if i != culpada and fam is not None and self._produtos[i][3] == fam]
+            lim = f"passou do limite de {self.limite_peca_s:g} s" if falha["motivo"] == "limite" else "o conversor caiu nesta peça"
+            lote = [(culpada, lim, falha["seg"])] + [
+                (i, "mesma peça-base de uma que passou do limite" if falha["motivo"] == "limite"
+                 else "mesma peça-base de uma em que o conversor caiu", 0.0) for i in irmas]
+            self._caixas(est, lote)
+            iso = set(pend) - {i for i, _, _ in lote}
+
+    def _rodar(self, est, ids, isolado):
+        """Um filho de conversão. Devolve None se terminou (`fim`); senão dict com motivo ("limite" ou "queda"),
+        segundos de espera, produtos do bloco em curso e o maior id avisado."""
         try:
             from . import processo_malhas
         except ImportError:  # pragma: no cover
             import processo_malhas
+        params = {"caminho": self.caminho, "threads": 1 if isolado else self.threads, "tamanho_bloco": self.tamanho_bloco,
+                  "excluir": self.excluir, "biblioteca": self.biblioteca, "max_bytes_lote": self.max_bytes_lote,
+                  "ids": ids, "isolado": isolado, "desl": est["desl"]}
+        self._conv, self._maxfeito, self._fase = 0, -1, None
+
+        def limite():
+            return self.limite_peca_s if self._fase == "convertendo" else self.limite_abrir_s
+
+        r = self._executar(est, processo_malhas.entrada, params, lambda t, d: self._tratar(t, d, est), limite)
+        if r is None:
+            return None
+        if self._fase != "convertendo":  # falha ao abrir/listar: não há como isolar peça
+            raise RuntimeError(f"o conversor falhou ao abrir o arquivo ({r['motivo']}, {r['seg']:.0f} s)")
+        todos = ids if ids is not None else sorted(self._produtos)
+        tb = self.tamanho_bloco if self.tamanho_bloco > 0 and not isolado else max(len(todos), 1)
+        r["bloco"] = todos[max(self._conv - 1, 0) * tb:self._conv * tb]
+        r["maxfeito"] = self._maxfeito
+        return r
+
+    def _executar(self, est, alvo, params, ao_receber, limite):
+        """Cria o filho, lê as mensagens e vigia o tempo desde a última. `ao_receber` devolve True na última.
+        Devolve None se terminou, ou {"motivo", "seg"} se estourou o limite ("limite") ou caiu ("queda")."""
         ctx = multiprocessing.get_context("spawn")  # também no Linux: igual nos dois sistemas, sem cópia com Qt ativo
         rx, tx = ctx.Pipe(duplex=False)  # um canal por filho; Queue seria corrompida ao matar o filho
-        params = {"caminho": self.caminho, "threads": self.threads, "tamanho_bloco": self.tamanho_bloco,
-                  "excluir": self.excluir, "biblioteca": self.biblioteca, "max_bytes_lote": self.max_bytes_lote}
-        filho = ctx.Process(target=processo_malhas.entrada, args=(tx, params), name="obim-malhas", daemon=True)
+        filho = ctx.Process(target=alvo, args=(tx, params), name="obim-malhas", daemon=True)
         try:
             self._checar()
             filho.start()
             tx.close()  # só o filho guarda a ponta de escrita: se ele morrer, o pai vê o fim do canal
-            fim = False
-            while not fim:
+            ultimo = time.perf_counter()
+            while True:
                 self._checar()
                 if not rx.poll(FATIA_S):
+                    lim = limite()
+                    seg = time.perf_counter() - ultimo
+                    if lim is not None and seg >= lim:
+                        return {"motivo": "limite", "seg": seg}
                     continue
                 try:
                     tipo, dados = rx.recv()
                 except (EOFError, OSError):
                     filho.join(2)
-                    raise RuntimeError(f"o processo de conversão terminou sem avisar (código {filho.exitcode})")
-                fim = self._tratar(tipo, dados, est)
+                    return {"motivo": "queda", "seg": time.perf_counter() - ultimo}
+                if ao_receber(tipo, dados):
+                    return None
+                ultimo = time.perf_counter()  # o tempo gasto na fila cheia (contrapressão) não conta contra o filho
         finally:
             if filho.is_alive() and filho.pid is not None:
                 try:
-                    est["pico_filho"] = max(est["pico_filho"], processo_malhas.pico_memoria_mb(
+                    try:
+                        from . import processo_malhas as pm
+                    except ImportError:  # pragma: no cover
+                        import processo_malhas as pm
+                    est["pico_filho"] = max(est["pico_filho"], pm.pico_memoria_mb(
                         filho.pid if sys.platform != "win32" else filho.sentinel))
                 except Exception:
                     pass
@@ -298,32 +389,105 @@ class CarregadorMalhas:
                 except OSError:
                     pass
 
+    def _caixas(self, est, itens):
+        """Peças [(id, motivo, segundos)] viram caixa laranja de 12 triângulos. Os pontos vêm de um filho sem a
+        biblioteca de geometria (limite de 5 s); se ele falhar, cubo de 0,5 m na origem."""
+        try:
+            from . import processo_malhas as pm
+        except ImportError:  # pragma: no cover
+            import processo_malhas as pm
+        achados = {}
+
+        def receber(tipo, dados):
+            if tipo == "fase":
+                self._fase = dados
+            elif tipo == "caixa":
+                self._fase = "caixa"
+                achados[dados[0]] = (np.asarray(dados[1], dtype=np.float64), np.asarray(dados[2], dtype=np.float64))
+            elif tipo == "erro":
+                raise RuntimeError(dados)
+            return tipo == "fim"
+
+        self._fase = None
+        params = {"caminho": self.caminho, "ids": [i for i, _, _ in itens]}
+        try:
+            self._executar(est, pm.entrada_caixa, params, receber,
+                           lambda: pm.LIMITE_CAIXA_S + 1.0 if self._fase == "caixa" else self.limite_abrir_s)
+        except RuntimeError:
+            pass  # o que faltar vira cubo na origem
+        for i, motivo, seg in itens:
+            mn, mx = achados.get(i, (np.full(3, -0.25), np.full(3, 0.25)))
+            g, c, n, _f = self._produtos[i]
+            if est["desl"] is None:
+                est["desl"] = np.rint((mn + mx) / 2.0).astype(np.float64)
+                est["desl"].flags.writeable = False
+            lote = _montar_lote(est["lotes"], [(i, g, *_malha_caixa(mn, mx))], est["desl"], len(est["resolvidos"]) + 1,
+                                est["produtos_total"])
+            est["simp"].append((i, g, c, n, motivo, float(seg)))
+            self._contar_lote(est, lote)
+            self._colocar(lote)
+
+    def _contar_lote(self, est, lote):
+        est["lotes"] += 1
+        est["ids"].update(int(i) for i in lote.objetos["id_step"])
+        est["resolvidos"].update(int(i) for i in lote.objetos["id_step"])
+        est["tri"] += len(lote.indices) // 3
+        est["vert"] += len(lote.vertices)
+        self._lotes_produzidos += 1
+
     def _tratar(self, tipo, dados, est):
-        """Aplica uma mensagem do filho. Devolve True na última (`fim`)."""
+        """Aplica uma mensagem do filho de conversão. Devolve True na última (`fim`)."""
         if tipo == "fase":
             self._fase = dados
+            self._conv += dados == "convertendo"
         elif tipo == "inicio":
-            est["produtos_total"] = dados["total"]
-            self._produtos = {i: (g, c, n, f) for i, g, c, n, f in dados["produtos"]}
+            if not self._produtos:  # só o primeiro filho manda a tabela completa
+                est["produtos_total"] = dados["total"]
+                self._produtos = {i: (g, c, n, f) for i, g, c, n, f in dados["produtos"]}
         elif tipo == "lote":
             dados = replace(dados, vertices=dados.vertices.copy(), indices=dados.indices.copy(), objetos=dados.objetos.copy())
             for a in (dados.vertices, dados.indices, dados.objetos):  # cópia própria (o recebido aponta para o buffer do canal)
                 a.flags.writeable = False
-            est["lotes"] += 1
-            est["ids"].update(int(i) for i in dados.objetos["id_step"])
-            est["tri"] += len(dados.indices) // 3
-            est["vert"] += len(dados.vertices)
-            self._lotes_produzidos += 1
+            if est["desl"] is None:
+                est["desl"] = dados.deslocamento  # as reinicializações recebem o mesmo deslocamento
+            self._contar_lote(est, dados)
+            dados = replace(dados, indice_lote=est["lotes"] - 1, produtos_feitos=len(est["resolvidos"]),
+                            produtos_total=est["produtos_total"])
             self._colocar(dados)
         elif tipo == "feitos":
-            self._concluidos.add(dados)
+            self._maxfeito = max(self._maxfeito, dados)
         elif tipo == "sem_malha":
             est["sem"].extend(dados)
+            est["resolvidos"].update(d[0] for d in dados)
         elif tipo == "erro":
             raise RuntimeError(dados)
         elif tipo == "fim":
-            est["t"].update(dados["tempos"])
+            for k, v in dados["tempos"].items():
+                est["t"][k] = est["t"].get(k, 0.0) + v
             est["msgs"] = dados["mensagens"]
-            est["pico_filho"] = dados["pico_memoria_mb"]
+            est["pico_filho"] = max(est["pico_filho"], dados["pico_memoria_mb"])
             return True
         return False
+
+
+def _malha_caixa(mn, mx):
+    """Caixa (mínimo, máximo) em metros -> (pos float64, normal, cor laranja, índices): 24 vértices, 12 triângulos."""
+    lim = (mn, mx)
+    pos, nor = [], []
+    for a in range(3):
+        b, c = (a + 1) % 3, (a + 2) % 3
+        for s in (0, 1):
+            quad = []
+            for ub, uc in ((0, 0), (1, 0), (1, 1), (0, 1)):
+                v = [0, 0, 0]
+                v[a], v[b], v[c] = s, ub, uc
+                quad.append(v)
+            if s == 0:
+                quad.reverse()  # normal para fora
+            n = [0.0, 0.0, 0.0]
+            n[a] = 1.0 if s else -1.0
+            pos += [[lim[v[k]][k] for k in range(3)] for v in quad]
+            nor += [n] * 4
+    idx = np.array([[4 * q, 4 * q + 1, 4 * q + 2, 4 * q, 4 * q + 2, 4 * q + 3] for q in range(6)], dtype=np.uint32).ravel()
+    return (np.array(pos, dtype=np.float64), np.array(nor, dtype=np.float32),
+            np.tile(np.array(ORANGE, dtype=np.uint8), (24, 1)), idx)

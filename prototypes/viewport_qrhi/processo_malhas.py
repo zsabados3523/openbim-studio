@@ -146,30 +146,41 @@ def _converter(enviar, params):
     produtos = [p for p in arq.by_type("IfcProduct")
                 if p.Representation is not None and not any(p.is_a(c) for c in excluir)]
     produtos.sort(key=lambda p: p.id())
+    if params.get("ids") is not None:  # reinício: só os produtos pedidos (o pai já tem a tabela completa)
+        pedidos = set(params["ids"])
+        produtos = [p for p in produtos if p.id() in pedidos]
     total = len(produtos)
-    enviar("inicio", {"total": total, "produtos": [(p.id(), p.GlobalId, p.is_a(), p.Name, _familia(p)) for p in produtos]})
+    tabela = [(p.id(), p.GlobalId, p.is_a(), p.Name, _familia(p)) for p in produtos] if params.get("ids") is None else []
+    enviar("inicio", {"total": total, "produtos": tabela})
     tempos["listar_s"] = time.perf_counter() - t
     cfg = ifcopenshell.geom.settings()
     cfg.set("use-world-coords", True)
     cfg.set("weld-vertices", False)
-    tb = params["tamanho_bloco"] if params["tamanho_bloco"] > 0 else max(total, 1)
-    desl, feitos, indice = None, 0, 0
+    isolado = bool(params.get("isolado"))  # modo isolado: um único iterador (1 thread), cada peça entregue na hora
+    tb = params["tamanho_bloco"] if params["tamanho_bloco"] > 0 and not isolado else max(total, 1)
+    estado = {"desl": params.get("desl"), "indice": 0}  # o pai passa o deslocamento do primeiro lote às reinicializações
+
+    def emitir(prods, feitos):
+        for grupo in _agrupar(prods, params["max_bytes_lote"]):
+            if estado["desl"] is None:  # centro da caixa do primeiro lote, em float64, arredondado ao metro
+                mn = np.min([p[2].min(axis=0) for p in grupo], axis=0)
+                mx = np.max([p[2].max(axis=0) for p in grupo], axis=0)
+                estado["desl"] = np.rint((mn + mx) / 2.0).astype(np.float64)
+                estado["desl"].flags.writeable = False
+            enviar("lote", _montar_lote(estado["indice"], grupo, estado["desl"], feitos, total))
+            estado["indice"] += 1
+
+    feitos = 0
     t = time.perf_counter()
     for ini in range(0, total, tb):
         bloco = produtos[ini:ini + tb]
-        enviar("fase", "convertendo")
-        prods, sem = _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar)
+        enviar("fase", "convertendo")  # antes de criar o iterador: a primeira peça é convertida em initialize()
+        entregar = (lambda q: emitir([q], 0)) if isolado else None
+        prods, sem = _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar, entregar)
         feitos += len(bloco)
         if sem:
             enviar("sem_malha", sem)
-        for grupo in _agrupar(prods, params["max_bytes_lote"]):
-            if desl is None:  # centro da caixa do primeiro lote, em float64, arredondado ao metro
-                mn = np.min([p[2].min(axis=0) for p in grupo], axis=0)
-                mx = np.max([p[2].max(axis=0) for p in grupo], axis=0)
-                desl = np.rint((mn + mx) / 2.0).astype(np.float64)
-                desl.flags.writeable = False
-            enviar("lote", _montar_lote(indice, grupo, desl, feitos, total))
-            indice += 1
+        emitir(prods, feitos)
     tempos["geometria_s"] = time.perf_counter() - t
     try:
         mensagens = str(ifcopenshell.get_log()).splitlines()[-50:]
@@ -178,8 +189,9 @@ def _converter(enviar, params):
     enviar("fim", {"tempos": tempos, "pico_memoria_mb": pico_memoria_mb(), "mensagens": mensagens})
 
 
-def _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar):
-    """Converte os produtos de um bloco. Devolve (lista ordenada por id, lista de sem malha)."""
+def _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar, entregar=None):
+    """Converte os produtos de um bloco. Devolve (lista ordenada por id, lista de sem malha).
+    Com `entregar` (modo isolado) cada peça sai logo depois do aviso `feitos` e a lista devolvida fica vazia."""
     porid = {p.id(): p for p in bloco}
     achados, sem = {}, []
 
@@ -197,7 +209,7 @@ def _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar):
                 s = it.get()
                 r = _produto_para_numpy(s.geometry, _paleta(s.geometry))
                 if r is not None and s.id in porid:
-                    achados[s.id] = r
+                    achados[s.id] = None if entregar else r
                 guid = porid[s.id].GlobalId if s.id in porid else None
                 if guid is not None and guid == matar:
                     os._exit(3)
@@ -205,6 +217,8 @@ def _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar):
                     time.sleep(lentas[guid])
                 if guid is not None:
                     enviar("feitos", s.id)
+                    if entregar and r is not None and s.id in porid:
+                        entregar((s.id, guid, *r))
                 if not it.next():
                     break
         finally:
@@ -213,4 +227,79 @@ def _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar):
         falhou([i for i in porid if i not in achados], f"erro no iterador: {type(e).__name__}: {e}")
     else:
         falhou([i for i in porid if i not in achados], "o iterador não devolveu geometria")
-    return [(i, porid[i].GlobalId, *achados[i]) for i in sorted(achados)], sem
+    return [] if entregar else [(i, porid[i].GlobalId, *achados[i]) for i in sorted(achados)], sem
+
+
+# ---- caixa substituta (D4): filho sem a biblioteca de geometria, só leitura de pontos do IFC ----
+LIMITE_CAIXA_S = 5.0
+CUBO_M = 0.5
+
+
+def _pontos_item(util_p, item, m, saida, t_fim):
+    """Pontos (arquivo) de um item levados pela matriz `m`. Só malhas, itens mapeados e extrusões simples."""
+    if time.perf_counter() > t_fim:
+        raise TimeoutError("limite da caixa")
+    if item.is_a("IfcMappedItem"):
+        mm = m @ util_p.get_mappeditem_transformation(item)
+        for sub in item.MappingSource.MappedRepresentation.Items:
+            _pontos_item(util_p, sub, mm, saida, t_fim)
+    elif item.is_a("IfcPolygonalFaceSet") or item.is_a("IfcTriangulatedFaceSet"):
+        p = np.array(item.Coordinates.CoordList, dtype=np.float64).reshape(-1, 3)
+        saida.append(p @ m[:3, :3].T + m[:3, 3])
+    elif item.is_a("IfcExtrudedAreaSolid"):
+        perfil = item.SweptArea
+        if perfil.is_a("IfcRectangleProfileDef"):
+            x, y = perfil.XDim / 2.0, perfil.YDim / 2.0
+            p2 = [(-x, -y), (x, -y), (x, y), (-x, y)]
+        elif perfil.is_a("IfcArbitraryClosedProfileDef") and perfil.OuterCurve.is_a("IfcPolyline"):
+            p2 = [tuple(q.Coordinates)[:2] for q in perfil.OuterCurve.Points]
+        else:
+            raise ValueError("perfil não suportado")
+        d = np.array(item.ExtrudedDirection.DirectionRatios, dtype=np.float64)
+        d = d / np.linalg.norm(d) * item.Depth
+        base = np.array([(a, b, 0.0) for a, b in p2], dtype=np.float64)
+        mm = m @ util_p.get_axis2placement(item.Position)
+        for p in (base, base + d):
+            saida.append(p @ mm[:3, :3].T + mm[:3, 3])
+    else:
+        raise ValueError(f"item {item.is_a()} sem pontos")
+
+
+def _caixa_produto(util_p, prod, escala):
+    """(mínimo, máximo) em metros, no mundo. Pontos da representação; qualquer falha ou estouro: cubo de 0,5 m."""
+    try:
+        m = util_p.get_local_placement(prod.ObjectPlacement) if prod.ObjectPlacement is not None else np.eye(4)
+    except Exception:
+        m = np.eye(4)
+    try:
+        t_fim = time.perf_counter() + LIMITE_CAIXA_S
+        pts = []
+        reps = prod.Representation.Representations
+        for rep in [r for r in reps if r.RepresentationIdentifier == "Body"] or list(reps):
+            for item in rep.Items:
+                _pontos_item(util_p, item, m, pts, t_fim)
+        p = np.vstack(pts) * escala
+        if not len(p) or not np.all(np.isfinite(p)):
+            raise ValueError("sem pontos")
+        return p.min(axis=0), p.max(axis=0), "pontos"
+    except Exception:
+        c = np.asarray(m[:3, 3], dtype=np.float64) * escala
+        return c - CUBO_M / 2.0, c + CUBO_M / 2.0, "cubo"
+
+
+def entrada_caixa(tx, params):
+    """Filho da caixa substituta: manda `("caixa", (id, mínimo, máximo, método))` para cada id pedido."""
+    enviar = _Enviador(tx)
+    try:
+        import ifcopenshell
+        import ifcopenshell.util.placement as util_p
+        import ifcopenshell.util.unit as util_u
+        enviar("fase", "abrindo")
+        arq = ifcopenshell.open(params["caminho"])
+        escala = util_u.calculate_unit_scale(arq)  # unidade do arquivo -> metros
+        for i in params["ids"]:
+            mn, mx, metodo = _caixa_produto(util_p, arq.by_id(i), escala)
+            enviar("caixa", (i, mn, mx, metodo))
+        enviar("fim", None)
+    except BaseException as e:
+        enviar("erro", f"{type(e).__name__}: {e}" or "erro desconhecido")

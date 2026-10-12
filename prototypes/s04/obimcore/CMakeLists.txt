@@ -35,7 +35,7 @@ message(STATUS "ifcopenshell ${IFC_VERSAO} build ${IFC_BUILD}")
 
 # O .pyd/.so fica dentro do pacote `obimcore` (a pasta de saída), ao lado do __init__.py gerado pelo build.sh.
 file(TO_CMAKE_PATH "${OBIM_SAIDA}" OBIM_SAIDA)
-nanobind_add_module(_obimcore ponte.cpp)
+nanobind_add_module(_obimcore ponte.cpp malha.cpp)
 set_target_properties(_obimcore PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${OBIM_SAIDA}/obimcore")
 foreach(cfg DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
   set_target_properties(_obimcore PROPERTIES LIBRARY_OUTPUT_DIRECTORY_${cfg} "${OBIM_SAIDA}/obimcore")
@@ -43,7 +43,7 @@ endforeach()
 target_compile_definitions(_obimcore PRIVATE OBIM_IFC_VERSAO="${IFC_VERSAO}" OBIM_IFC_BUILD="${IFC_BUILD}")
 target_include_directories(_obimcore PRIVATE ${OpenCASCADE_INCLUDE_DIR})
 target_link_libraries(_obimcore PRIVATE
-  IfcOpenShell::IfcParse IfcOpenShell::parse_schema_ifc2x3 IfcOpenShell::parse_schema_ifc4
+  IfcOpenShell::IfcParse IfcOpenShell::IfcGeom IfcOpenShell::parse_schema_ifc2x3 IfcOpenShell::parse_schema_ifc4
   IfcOpenShell::parse_schema_ifc4x1 IfcOpenShell::parse_schema_ifc4x3_add2
   TKernel Qt6::Core)
 if(WIN32)

@@ -2,7 +2,7 @@
 // Ponte Python/C++ (S04-T03; LOTE_OPUS_9 §1.4). Regras de posse e de vida:
 //  1. O Python é o dono do arquivo; o C++ pega emprestado só durante a chamada (o objeto Python fica referenciado até o retorno).
 //  2. O C++ nunca guarda o endereço do arquivo nem ponteiros de entidades entre chamadas.
-//  3. Só a thread do comando (a que segura o bloqueio do interpretador) chama; estas funções são curtas e mantêm o bloqueio.
+//  3. Só a thread do comando chama; as funções curtas mantêm o bloqueio, `malhas` (malha.cpp) o solta na geometria.
 // Único arquivo que inclui ifcparse/file.h (custo de compilação alto).
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
@@ -24,11 +24,12 @@
 
 namespace nb = nanobind;
 
-namespace {
+ifcopenshell::file* emprestar(nb::handle obj);  // definida abaixo
+void registrar_malhas(nb::module_& m);  // malha.cpp
 
 // Confere o tipo (ifcopenshell.file, e não uma entidade, que também tem file_pointer()), chama file_pointer() e
 // devolve o ponteiro emprestado. Zero ou tipo errado vira erro Python limpo.
-ifcopenshell::file* emprestar(nb::handle obj) {
+ifcopenshell::file* emprestar(nb::handle obj) {  // fora do namespace anônimo: malha.cpp também empresta
     nb::object tipo = nb::module_::import_("ifcopenshell.ifcopenshell_wrapper").attr("file");
     int ok = PyObject_IsInstance(obj.ptr(), tipo.ptr());
     if (ok < 0) throw nb::python_error();
@@ -40,6 +41,8 @@ ifcopenshell::file* emprestar(nb::handle obj) {
     return reinterpret_cast<ifcopenshell::file*>(static_cast<uintptr_t>(end));
 }
 
+namespace {
+
 express::entity achar(ifcopenshell::file* f, const std::string& guid) {
     express::base b = f->instance_by_guid(guid);
     if (!b) throw nb::value_error(("GlobalId inexistente: " + guid).c_str());
@@ -49,6 +52,7 @@ express::entity achar(ifcopenshell::file* f, const std::string& guid) {
 }  // namespace
 
 NB_MODULE(_obimcore, m) {
+    registrar_malhas(m);
     m.def("versao", [] {
         nb::dict d;
         d["ifcopenshell"] = OBIM_IFC_VERSAO;

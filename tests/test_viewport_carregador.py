@@ -35,6 +35,8 @@ else:
 requer_a = pytest.mark.skipif(
     CarregadorMalhas is None, reason="aguarda S03-T05 parte A (CarregadorMalhas, LoteMalha, ResumoCarga)"
 )
+TEM_PROCESSO = importlib.util.find_spec("viewport_qrhi.processo_malhas") is not None
+requer_processo = pytest.mark.skipif(not TEM_PROCESSO, reason="aguarda S03-T08-B1 (processo_malhas.py)")
 M1M_CAMINHO = RAIZ / "corpus" / "modelo-grande-1m.ifc"
 
 
@@ -394,7 +396,8 @@ def _soma(lotes):
 
 @requer_a
 def test_o10_vida_dos_dados_m600(m600):
-    car = CarregadorMalhas(str(m600))
+    # emenda T08-0: com o processo separado, o arquivo só é aberto no pai se pedido (manter_arquivo)
+    car = CarregadorMalhas(str(m600), **({"manter_arquivo": True} if TEM_PROCESSO else {}))
     car.iniciar()
     assert car.arquivo is None  # durante a carga
     lotes, r = [], None

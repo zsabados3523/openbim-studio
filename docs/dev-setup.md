@@ -36,3 +36,6 @@ Estado: os jobs `windows` e `macos` foram escritos mas ainda não foram executad
 ## Testes gráficos sem abrir janela na tela
 Para o desenho 3D rodar numa tela virtual (nada aparece na sua tela):
 `env -u DISPLAY -u WAYLAND_DISPLAY xvfb-run -a -s "-screen 0 1280x800x24" env QT_QPA_PLATFORM=xcb LIBGL_ALWAYS_SOFTWARE=1 ~/miniforge3/envs/openbim/bin/pytest`
+
+## Localidade numérica (T26)
+O Qt troca a localidade numérica do processo ao criar a aplicação, e em pt_BR o IfcOpenShell passa a gravar vírgula decimal (IFC corrompido que ainda reabre). Regras: a aplicação só é criada por `openbim_app.localidade.criar_aplicacao`, que já corrige; toda gravação de IFC e de `.obim` chama `garantir_numerico_c()` antes de gravar (se devolver verdadeiro, registrar um aviso); números mostrados ao usuário vêm do `QLocale`, nunca de funções do C; o `AppRun` não define `LC_ALL`. O `conftest.py` mantém `LC_ALL=C`, por isso os testes de `tests/test_localidade.py` rodam em subprocesso sem `LC_ALL`.

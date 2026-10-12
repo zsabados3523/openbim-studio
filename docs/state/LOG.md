@@ -101,3 +101,4 @@ Uma linha por tarefa concluída ou escalada, e por mudança de classe de tarefa.
 2026-10-12 | F0-S03-T08-0b e T08-E | FEITAS (subagentes sonnet diferentes; conferidas pelo líder: suíte tests 107 passam, 6 pulam, 0 falham; arquivo real 41,6 s, 14.804/6, 0 filhos sobrando). PRs 35, 28 e 30 mesclados (PO deu ok no chat). Pedido do lote Opus 8 pronto (docs/state/LOTE_OPUS_8.md); aguarda CI do rascunho e o PO.
 2026-10-12 | F0-S03-T07 | FEITA: relatório final reports/F0-S03.md (portão da S03: atingido no Linux com placa real; Windows só em software; pede decisão do PO). T06b feita (PR 43) e T26b feita (PR 42).
 2026-10-12 | F0-S03 | CONCLUÍDA: PO aprovou o portão (atingido no Linux, Windows em software; risco da placa real no Windows para a S10). Próxima: S04, precisa do lote Opus 9 (especificação).
+2026-10-12 | Lote opus 9 | PEDIDO PRONTO (docs/state/LOTE_OPUS_9.md): especificação da S04. Aguarda o PO colar em sessão Opus.

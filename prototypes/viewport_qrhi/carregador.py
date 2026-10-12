@@ -144,7 +144,8 @@ class CarregadorMalhas:
         self.manter_arquivo = bool(manter_arquivo)
         self.limite_peca_s = None if limite_peca_s is None else float(limite_peca_s)  # None desliga
         self.limite_abrir_s = None if limite_abrir_s is None else float(limite_abrir_s)
-        self.threads = int(threads) if threads else max(1, (os.cpu_count() or 2) - 1)
+        # T08-D: no máximo 8 fios por padrão (cada fio a mais custa ~70 MB no filho e quase não ganha tempo)
+        self.threads = int(threads) if threads else max(1, min(8, (os.cpu_count() or 2) - 1))
         self.tamanho_bloco = int(tamanho_bloco)
         self.excluir = tuple(excluir)
         self._fila = queue.Queue(maxsize=max(1, int(fila_max)))

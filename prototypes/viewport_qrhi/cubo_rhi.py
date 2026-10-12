@@ -30,11 +30,11 @@ from PySide6.QtWidgets import QRhiWidget
 
 try:  # execução como pacote (testes) ou como script
     from .camera import Camera
-    from .selecao import Malha, pick as _pick
+    from .selecao import CaixasObjetos, Malha, pick as _pick, pick_caixas as _pick_caixas
     from .viewport import Viewport
 except ImportError:  # pragma: no cover
     from camera import Camera
-    from selecao import Malha, pick as _pick
+    from selecao import CaixasObjetos, Malha, pick as _pick, pick_caixas as _pick_caixas
     from viewport import Viewport
 
 SHADERS = Path(__file__).resolve().parent / "shaders"
@@ -77,6 +77,7 @@ class CuboViewport(QRhiWidget, Viewport):
         self._vertices, self._indices = cubo_padrao()
         self._malha_nova = True
         self._selecao = None
+        self._caixas_sel = None  # CaixasObjetos dos lotes (cache; None = refazer)
         self._angulo = 0.0
         self._girar = girar
         self._pronto = False
@@ -110,7 +111,7 @@ class CuboViewport(QRhiWidget, Viewport):
     def limpar(self) -> None:
         for e in self._lotes:
             self._soltar(e)
-        self._lotes, self._caixa, self._cubo = [], None, False
+        self._lotes, self._caixa, self._cubo, self._caixas_sel = [], None, False, None
         self.update()
 
     @staticmethod
@@ -122,7 +123,7 @@ class CuboViewport(QRhiWidget, Viewport):
 
     def adicionar_lote(self, lote) -> None:
         """Guarda o lote (a T06 usa `objetos`, `pos` e `indices`); o envio à placa é no próximo desenho."""
-        self._cubo = False
+        self._cubo, self._caixas_sel = False, None
         self._lotes.append({"lote": lote, "vbuf": None, "ibuf": None, "n_idx": int(lote.indices.size),
                             "n_vert": int(lote.vertices.size), "bytes": int(lote.vertices.nbytes + lote.indices.nbytes),
                             "livre": False})
@@ -157,12 +158,22 @@ class CuboViewport(QRhiWidget, Viewport):
         """Define os objetos (com id) usados pelo `pick`; não muda o que é desenhado."""
         self._selecao = malha
 
+    def pick_objeto(self, x: float, y: float):
+        """Modo de lotes: (id_step, guid) do objeto cuja caixa o raio atinge primeiro, ou None. Sem triângulos."""
+        if self._caixas_sel is None:
+            self._caixas_sel = CaixasObjetos(e["lote"] for e in self._lotes)
+        inv = np.linalg.inv(self._matriz_modelo())
+        return _pick_caixas(self._caixas_sel, self.camera, x, y, self.width(), self.height(), inv)
+
     def pick(self, x: float, y: float):
         """Id do objeto sob o ponto (x, y) em pixels lógicos do widget, ou None.
 
         Só a razão x/largura importa, então vale em telas com escala (HiDPI), desde que x, y e o
         tamanho do widget estejam na mesma unidade (aqui, lógica).
         """
+        if not self._cubo:  # modo de lotes (T05): só as caixas por objeto; devolve o id_step
+            r = self.pick_objeto(x, y)
+            return None if r is None else r[0]
         if self._selecao is None:
             self._selecao = Malha([(1, self._vertices[:, :3], self._indices)])
         inv = np.linalg.inv(self._matriz_modelo())
@@ -271,6 +282,7 @@ class CuboViewport(QRhiWidget, Viewport):
         if any(e["livre"] for e in self._lotes):  # sem os dados não dá para reenviar: some da tela e fica contado
             self.lotes_perdidos += sum(1 for e in self._lotes if e["livre"])
             self._lotes = [e for e in self._lotes if not e["livre"]]
+            self._caixas_sel = None
             self._caixa = None  # a cena não é mais a mesma; o sinal avisa quem pode recarregá-la
             avisar = True
         else:

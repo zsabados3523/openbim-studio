@@ -143,3 +143,61 @@ def pick(malha: Malha, camera, x, y, largura, altura, modelo_inversa=None):
     """Id do objeto sob o pixel (x, y) ou None."""
     o, d = raio_da_tela(camera, x, y, largura, altura, modelo_inversa)
     return pick_raio(malha, o, d)[0]
+
+
+class CaixasObjetos:
+    """Seleção só por caixas (T06b): um objeto por `id_step`, caixa em float64 no espaço do mundo.
+
+    Os triângulos não existem mais no programa depois do envio à placa (T08-D); sobram `objetos` e o
+    `deslocamento` de cada lote. Peça dividida em vários lotes (mesmo `id_step`) vira uma caixa só (união).
+    """
+
+    def __init__(self, lotes):
+        """`lotes`: iterável de objetos com `.objetos` (dtype do carregador) e `.deslocamento` (3,)."""
+        ids, guids, mn, mx = [], [], [], []
+        for lt in lotes:
+            ob = lt.objetos
+            if not len(ob):
+                continue
+            d = np.asarray(lt.deslocamento, dtype=np.float64)
+            ids.append(ob["id_step"].astype(np.int64))
+            guids.append(ob["guid"])
+            mn.append(ob["caixa_min"].astype(np.float64) + d)
+            mx.append(ob["caixa_max"].astype(np.float64) + d)
+        if not ids:
+            self.ids = np.zeros(0, np.int64)
+            self.guids = np.zeros(0, "S22")
+            self.caixa_min = self.caixa_max = np.zeros((0, 3), np.float64)
+            return
+        ids, guids = np.concatenate(ids), np.concatenate(guids)
+        mn, mx = np.concatenate(mn), np.concatenate(mx)
+        ordem = np.argsort(ids, kind="stable")
+        ids, guids, mn, mx = ids[ordem], guids[ordem], mn[ordem], mx[ordem]
+        ini = np.flatnonzero(np.r_[True, ids[1:] != ids[:-1]])
+        self.ids, self.guids = ids[ini], guids[ini]
+        self.caixa_min = np.minimum.reduceat(mn, ini)
+        self.caixa_max = np.maximum.reduceat(mx, ini)
+
+    def __len__(self) -> int:
+        return len(self.ids)
+
+
+def pick_caixas_raio(caixas: CaixasObjetos, origem, direcao):
+    """(id_step, guid, t) da caixa que o raio atinge primeiro, ou (None, None, inf)."""
+    if not len(caixas):
+        return None, None, np.inf
+    o = np.asarray(origem, dtype=np.float64)
+    d = np.asarray(direcao, dtype=np.float64)
+    d = d / np.linalg.norm(d)
+    entrada = _caixas(caixas, o, d)
+    i = int(np.argmin(entrada))
+    if not np.isfinite(entrada[i]):
+        return None, None, np.inf
+    return int(caixas.ids[i]), caixas.guids[i].decode("ascii"), float(entrada[i])
+
+
+def pick_caixas(caixas: CaixasObjetos, camera, x, y, largura, altura, modelo_inversa=None):
+    """(id_step, guid) do objeto sob o pixel (x, y), ou None."""
+    o, d = raio_da_tela(camera, x, y, largura, altura, modelo_inversa)
+    r = pick_caixas_raio(caixas, o, d)
+    return None if r[0] is None else r[:2]

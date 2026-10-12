@@ -7,7 +7,7 @@ Você é o papel Arquiteto/Revisor crítico do OpenBIM Studio (BIM aberto, AGPL 
 
 **Contexto fechado.** `git fetch` e leia:
 - Seu relatório anterior: `docs/state/reports/LOTE_OPUS_5.md` (defeitos A-1, B-1 etc.).
-- Correções feitas: `git show origin/s03-t05-b~5` (P0b, testes do oráculo) e `git show origin/s03-t05-b~4` (C1, carregador e viewport). Estão nos PRs 16, 18 e 19, ainda sem merge.
+- Correções feitas: `git show 5a832bc` (P0b, testes do oráculo) e `git show c730f5a` (C1, carregador e viewport). Estão nos PRs 16, 18 e 19, ainda sem merge.
 - Medição com arquivo real: `docs/state/reports/F0-S03-T07-linux.md` (ramo `s03-t05-b`). O arquivo real é `../openbim-studio-referencia/ifc/biblioteca-3pav-ifc4.ifc` (só leitura, nunca copiar nem enviar a serviço online).
 - Cartões: `docs/state/cards/F0-S03-T08.md`, `F0-S03-T26.md`.
 

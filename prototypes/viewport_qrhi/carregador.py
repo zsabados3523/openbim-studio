@@ -12,7 +12,7 @@ import os
 import queue
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 
@@ -156,6 +156,7 @@ class CarregadorMalhas:
         self._thread = None
         self._arquivo = None
         self._lotes_produzidos = 0
+        self._descartados = 0
 
     # ---- interface pública ----
     @property
@@ -189,9 +190,9 @@ class CarregadorMalhas:
                 if self._pronto.wait(max(0.0, fim - time.perf_counter())):
                     return self._entregar_resumo()
                 return None
-            try:
-                return self._fila.get(timeout=min(FATIA_S, max(0.0, fim - time.perf_counter())) or None) \
-                    if timeout else self._fila.get_nowait()
+            restante = fim - time.perf_counter()
+            try:  # nunca `timeout=None` (esperaria para sempre): sem tempo sobrando, só olha a fila
+                return self._fila.get(timeout=min(FATIA_S, restante)) if restante > 0 else self._fila.get_nowait()
             except queue.Empty:
                 pass
             if self._pronto.is_set() and self._fila.empty():
@@ -204,6 +205,7 @@ class CarregadorMalhas:
         try:
             while True:
                 self._fila.get_nowait()
+                self._descartados += 1
         except queue.Empty:
             pass
 
@@ -212,7 +214,11 @@ class CarregadorMalhas:
             if self._entregue:
                 return None
             self._entregue = True
-            return self._resumo
+            r = self._resumo
+            if self._descartados and r.estado == "concluido":  # cancelar() jogou lotes fora: não é "concluido"
+                r = replace(r, estado="cancelado",
+                            mensagens=r.mensagens + [f"{self._descartados} lote(s) descartado(s) pelo cancelamento"])
+            return r
 
     def _checar(self):
         if self._cancelar.is_set():
@@ -229,10 +235,11 @@ class CarregadorMalhas:
 
     def _trabalhar(self):
         t0 = time.perf_counter()
+        arq = None
         est = {"estado": "erro", "erro": None, "produtos_total": 0, "com_malha": 0, "tri": 0, "vert": 0,
                "lotes": 0, "sem": [], "t": {"abrir_s": 0.0, "listar_s": 0.0, "geometria_s": 0.0}}
         try:
-            self._rodar(est)
+            arq = self._rodar(est)
             est["estado"] = "concluido"
         except _Cancelado:
             est["estado"] = "cancelado"
@@ -247,6 +254,8 @@ class CarregadorMalhas:
         self._resumo = ResumoCarga(
             est["estado"], est["erro"], est["produtos_total"], est["com_malha"], est["tri"], est["vert"],
             est["lotes"], est["sem"], est["t"], self.threads, self.tamanho_bloco, msgs)
+        if est["estado"] == "concluido":  # `arquivo` só depois do fim, e só se concluiu
+            self._arquivo = arq
         self._pronto.set()
 
     def _rodar(self, est):
@@ -278,6 +287,7 @@ class CarregadorMalhas:
                         mn = np.min([p[2].min(axis=0) for p in grupo], axis=0)
                         mx = np.max([p[2].max(axis=0) for p in grupo], axis=0)
                         desl = np.rint((mn + mx) / 2.0).astype(np.float64)
+                        desl.flags.writeable = False
                     lote = _montar_lote(est["lotes"], grupo, desl, feitos, total)
                     est["lotes"] += 1
                     self._lotes_produzidos += 1
@@ -287,12 +297,11 @@ class CarregadorMalhas:
                     self._colocar(lote)
         finally:
             est["t"]["geometria_s"] = time.perf_counter() - t
-            if not self._cancelar.is_set():
-                self._arquivo = arq
-        self._arquivo = arq
+        return arq
 
     def _bloco(self, geom, cfg, arq, bloco, est):
         """Gera e converte os produtos de um bloco. Devolve lista ordenada por id; falhas vão a est['sem']."""
+        import ifcopenshell
         porid = {p.id(): p for p in bloco}
         achados = {}
 
@@ -304,15 +313,19 @@ class CarregadorMalhas:
         try:
             it = geom.iterator(cfg, arq, self.threads, include=bloco, geometry_library="opencascade")
             try:
-                if it.initialize():
-                    while True:
-                        s = it.get()
-                        r = _produto_para_numpy(s.geometry, _paleta(s.geometry))
-                        if r is not None and s.id in porid:
-                            achados[s.id] = r
-                        self._checar()
-                        if not it.next():
-                            break
+                iniciou = it.initialize()
+                if not iniciou:
+                    log = " | ".join(str(ifcopenshell.get_log()).splitlines()[-3:])
+                    sem(list(porid), "initialize() falhou" + (f": {log}" if log else ""))
+                    return []
+                while True:
+                    s = it.get()
+                    r = _produto_para_numpy(s.geometry, _paleta(s.geometry))
+                    if r is not None and s.id in porid:
+                        achados[s.id] = r
+                    self._checar()
+                    if not it.next():
+                        break
             finally:
                 del it
         except _Cancelado:

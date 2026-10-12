@@ -40,3 +40,8 @@ C hospedagem GitHub + espelho Codeberg · D interface híbrida (confirmar na S09
 - S03: aceitar que a janela pare pelo tempo de um elemento muito pesado (0,2 s numa parede com 150 aberturas); solução fica para a S04/ADR-004.
 - S03: a leitura de v2/03 "tesselação via IfcOpenShell C++" está atendida pelo iterador C++ do IfcOpenShell chamado do Python (sem módulo C++ nosso na S03).
 - Modelo grande da S03: sintético por script; IFC real do PO só na T07, com arquivo indicado no chat.
+
+## Decisões do PO após o lote Opus 6 (2026-10-12)
+- S03/T08: biblioteca de geometria "híbrida" como padrão da visualização (comparação lado a lado antes de fechar a T08). Limite de 20 s por peça (peça lenta vira caixa laranja). Aprovado.
+- T26: passo no job Linux do GitHub que cria a localidade pt_BR, só na máquina descartável. Aprovado.
+- Tamanho: exceção aceita para o oráculo da T05 e o relatório da Parte B (>400 linhas).

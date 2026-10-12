@@ -8,4 +8,12 @@ export PYTHONHOME="$HERE/env"
 export PYTHONPATH="$HERE/app"
 export PYTHONNOUSERSITE=1
 export PATH="$HERE/env/bin:$PATH"
+# Seletor de arquivos nativo (T24): usa o portal do desktop (Favoritos, pastas de rede) quando ha barramento de
+# sessao D-Bus. Sem ele (CI, terminal puro) nao muda nada e vale o seletor de reserva do Qt.
+# Quem ja definiu QT_QPA_PLATFORMTHEME (ou OPENBIM_SEM_PORTAL=1) mantem a sua escolha.
+if [ -z "${QT_QPA_PLATFORMTHEME:-}" ] && [ -z "${OPENBIM_SEM_PORTAL:-}" ] && [ -f "$HERE/env/lib/qt6/plugins/platformthemes/libqxdgdesktopportal.so" ]; then
+  if [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] || [ -S "/run/user/$(id -u)/bus" ]; then
+    export QT_QPA_PLATFORMTHEME=xdgdesktopportal
+  fi
+fi
 exec "$HERE/env/bin/python" -m openbim_app "$@"

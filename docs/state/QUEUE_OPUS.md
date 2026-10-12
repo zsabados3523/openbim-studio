@@ -31,3 +31,6 @@ T17/T18 (correções do lote 2), amostra de T19/T20 e ADR-005 final (T15). Cota 
 
 ## Lote 6: FEITO (2026-10-12), resultado em `reports/LOTE_OPUS_6.md`
 Lote 7 (a abrir): revisão do oráculo T08-0, de T08-A/B1/B2 e da T26 (oráculo e código). Cada cartão T3 espera o lote; nada entra no `main` sem aprovado.
+
+## Lote 9 (a preparar): especificação da S04 (ponte Python↔C++, híbrido vs C++ puro; TA + T3)
+Itens: especificar os dois fluxos (A híbrido e B C++ puro), o corpus, o oráculo das metas de v2/03 (compartilhar o modelo sem cópia, 200 ms p95 por parede, GIL, 1.000 paredes em 20 s), ADR-001 e ADR-004 (threads); dividir em cartões ≤400 linhas. Incluir os pontos do lote 8 §2.3 (iterador por peça, orçamento de peças lentas) e a seleção por triângulo. Aguarda o PO.

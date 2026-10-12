@@ -133,7 +133,7 @@ jobs:
           bash prototypes/s04/obimcore/build.sh out/s04 | tee "$RUNNER_TEMP/b2.txt"
           echo "obimcore ${RUNNER_OS}: limpo $(grep OBIMCORE "$RUNNER_TEMP/b1.txt") | incremental $(grep OBIMCORE "$RUNNER_TEMP/b2.txt")" >> "$GITHUB_STEP_SUMMARY"
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
-          # Ligar OBIM_S04_OBRIGATORIO=1 (pulo vira falha) quando a T04c entregar versao()["registro_ifc4"]
+          export OBIM_S04_OBRIGATORIO=1  # pulo vira falha (T04c entregou versao()["registro_ifc4"])
           QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_ponte.py
       - name: REUSE (ferramenta só no CI, ambiente separado)
         shell: bash -el {0}
@@ -273,7 +273,7 @@ jobs:
           bash prototypes/s04/obimcore/build.sh out/s04 | tee "$RUNNER_TEMP/b2.txt"
           echo "obimcore ${RUNNER_OS}: limpo $(grep OBIMCORE "$RUNNER_TEMP/b1.txt") | incremental $(grep OBIMCORE "$RUNNER_TEMP/b2.txt")" >> "$GITHUB_STEP_SUMMARY"
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
-          # Ligar OBIM_S04_OBRIGATORIO=1 (pulo vira falha) quando a T04c entregar versao()["registro_ifc4"]
+          export OBIM_S04_OBRIGATORIO=1  # pulo vira falha (T04c entregou versao()["registro_ifc4"])
           QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_ponte.py
       - name: Instalador Windows (ambiente de runtime e NSIS)
         shell: bash -el {0}

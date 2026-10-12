@@ -78,27 +78,18 @@ void passada(ifcopenshell::file* f, const std::set<int>& ids, std::map<std::stri
     }
 }
 
-// Pedido com GlobalId repetido: cada repetição é calculada de novo (uma passada por repetição, sem cache entre elas), então o
-// trabalho acompanha o tamanho da lista; o resultado vem da primeira passada. Sem repetição = uma passada só.
+// GlobalIds repetidos no pedido contam uma vez só: uma passada, um resultado por GlobalId (LOTE_OPUS_10 achado 3b).
 std::map<std::string, Malha> calcular(ifcopenshell::file* f, const std::vector<std::string>& guids) {
-    std::map<std::string, size_t> vezes;
-    std::map<std::string, int> idde;
+    std::set<int> ids;
+    std::map<std::string, Malha> saida;
     for (const auto& g : guids) {
+        if (saida.count(g)) continue;
         express::base b = f->instance_by_guid(g);
         if (!b) throw std::invalid_argument("GlobalId inexistente: " + g);
-        idde[g] = b.id();
-        ++vezes[g];
+        ids.insert(b.id());
+        saida[g];  // entrada vazia para quem não tem geometria
     }
-    std::map<std::string, Malha> saida;
-    for (const auto& [g, n] : vezes) saida[g];  // entrada vazia para quem não tem geometria
-    size_t maximo = 0;
-    for (const auto& [g, n] : vezes) maximo = std::max(maximo, n);
-    for (size_t r = 1; r <= maximo; ++r) {
-        std::set<int> ids;
-        for (const auto& [g, n] : vezes) if (n >= r) ids.insert(idde[g]);
-        std::map<std::string, Malha> lixo;
-        passada(f, ids, r == 1 ? saida : lixo);
-    }
+    passada(f, ids, saida);
     return saida;
 }
 
@@ -123,6 +114,8 @@ void registrar_malhas(nb::module_& m) {
                 res = calcular(f, guids);
             } catch (const std::exception& e) {
                 erro = e.what();
+            } catch (...) {  // p.ex. Standard_Failure do OCCT, que não deriva de std::exception
+                erro = "erro desconhecido na geração da malha";
             }
         }
         if (!erro.empty()) throw nb::value_error(erro.c_str());

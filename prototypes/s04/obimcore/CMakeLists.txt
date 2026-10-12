@@ -46,6 +46,9 @@ target_link_libraries(_obimcore PRIVATE
   IfcOpenShell::IfcParse IfcOpenShell::IfcGeom IfcOpenShell::parse_schema_ifc2x3 IfcOpenShell::parse_schema_ifc4
   IfcOpenShell::parse_schema_ifc4x1 IfcOpenShell::parse_schema_ifc4x3_add2
   TKernel Qt6::Core)
+if(MSVC)
+  target_compile_options(_obimcore PRIVATE /utf-8)
+endif()
 if(WIN32)
   # O Boost aparece nas dependências só pelo nome (boost_*.lib): o MSVC precisa saber onde o conda guarda as bibliotecas.
   target_link_directories(_obimcore PRIVATE "${CONDA}/Library/lib")

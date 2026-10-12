@@ -60,6 +60,7 @@ NB_MODULE(_obimcore, m) {
         d["occt"] = OCC_VERSION_STRING_EXT;
         d["qt"] = QT_VERSION_STR;
         d["qt_execucao"] = qVersion();
+        d["registro_ifc4"] = reinterpret_cast<uintptr_t>(ifcopenshell::schema_by_name("IFC4"));
         return d;
     });
     m.def("endereco", [](nb::object f) { return static_cast<uintptr_t>(reinterpret_cast<uintptr_t>(emprestar(f))); }, nb::arg("arquivo"));

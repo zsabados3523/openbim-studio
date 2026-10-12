@@ -52,3 +52,8 @@ C hospedagem GitHub + espelho Codeberg · D interface híbrida (confirmar na S09
 
 ## Decisão do PO após o relatório da S03 (2026-10-12)
 - Portão da S03 dado como atingido (Linux com placa real; Windows em software). Risco registrado: placa de vídeo real e Intel integrada no Windows só medidas num computador físico, antes do portão final da F0 (S10).
+
+## Decisões do PO após o lote Opus 9 (2026-10-12)
+- Regra do "3 vezes mais lento": o portão do híbrido são as metas absolutas (M1 a M5). A razão contra o C++ puro (M6) é número de acompanhamento, registrado no ADR-001; só pesa se alguma meta absoluta ficar com menos de 2× de folga.
+- Ambiente: autorizado acrescentar `zlib`, `libxml2-devel` e `libboost-devel` (conda-forge) e guardar a lista travada de pacotes dos dois sistemas (cartão S04-T01). Qualquer outro pacote pede novo ok.
+- Regra do processo: o líder abre o lote Opus como subagente e mescla T3 aprovada com testes verdes (CLAUDE.md, item 6 e 3, editado pelo PO).

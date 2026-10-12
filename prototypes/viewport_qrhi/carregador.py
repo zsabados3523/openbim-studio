@@ -1,15 +1,17 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Carregador de malhas do IFC em thread de trabalho (S03-T05, parte A). Python puro, sem Qt.
+"""Carregador de malhas do IFC (S03-T05 parte A; processo separado na S03-T08-B1). Python puro, sem Qt.
 
-Especificação: docs/state/reports/LOTE_OPUS_4.md §1.2 e §1.3. A thread de trabalho abre o IFC, lista
-os produtos, gera os triângulos com `ifcopenshell.geom.iterator` (um iterador por bloco, com `include=`)
-e entrega `LoteMalha` (só numpy) por uma fila limitada. Só essa thread toca no `ifcopenshell.file`
-enquanto a carga roda; nenhum objeto do IfcOpenShell entra em lote.
+Especificação: docs/state/reports/LOTE_OPUS_4.md §1.2 e §1.3 e LOTE_OPUS_6.md §2.2 D3. Quem abre o IFC e gera
+os triângulos (`ifcopenshell.geom.iterator`, um iterador por bloco) é um processo filho (`processo_malhas.py`);
+a thread interna só lê as mensagens, vigia o filho e entrega `LoteMalha` (só numpy) por uma fila limitada.
+Durante a carga o pai não abre o arquivo (`manter_arquivo=True` abre depois que o filho terminou).
 """
 from __future__ import annotations
 
+import multiprocessing
 import os
 import queue
+import sys
 import threading
 import time
 from dataclasses import dataclass, field, replace
@@ -52,6 +54,7 @@ class ResumoCarga:
     threads: int = 1
     tamanho_bloco: int = 0
     mensagens: list = field(default_factory=list)
+    pico_filho_mb: float = 0.0  # pico de memória do processo filho (informado por ele)
 
 
 class _Cancelado(Exception):
@@ -126,29 +129,16 @@ def _montar_lote(indice, prods, desl, feitos, total):
     return LoteMalha(indice, verts, indices, objs, desl, feitos, total)
 
 
-def _agrupar(prods):
-    """Parte a lista em grupos de no máximo ~8 MB de vértices, sempre em fronteira de produto."""
-    grupos, atual, bytes_ = [], [], 0
-    for p in prods:
-        b = len(p[2]) * DTYPE_VERTICE.itemsize
-        if atual and bytes_ + b > MAX_BYTES_LOTE:
-            grupos.append(atual)
-            atual, bytes_ = [], 0
-        atual.append(p)
-        bytes_ += b
-    if atual:
-        grupos.append(atual)
-    return grupos
-
-
 class CarregadorMalhas:
     # D1 (LOTE_OPUS_6 §2.2): a híbrida tenta a biblioteca rápida e cai na "opencascade" nos recortes de abertura.
     # Curiosidade: has_geometry_library() responde falso para esse nome, mas o iterador o aceita.
     def __init__(self, caminho, threads=None, tamanho_bloco=4000, fila_max=4,
                  excluir=("IfcFeatureElementSubtraction", "IfcSpace"),
-                 biblioteca="hybrid-cgal-simple-opencascade"):
+                 biblioteca="hybrid-cgal-simple-opencascade", max_bytes_lote=MAX_BYTES_LOTE, manter_arquivo=False):
         self.caminho = str(caminho)
         self.biblioteca = str(biblioteca)
+        self.max_bytes_lote = int(max_bytes_lote)
+        self.manter_arquivo = bool(manter_arquivo)
         self.threads = int(threads) if threads else max(1, (os.cpu_count() or 2) - 1)
         self.tamanho_bloco = int(tamanho_bloco)
         self.excluir = tuple(excluir)
@@ -162,6 +152,9 @@ class CarregadorMalhas:
         self._arquivo = None
         self._lotes_produzidos = 0
         self._descartados = 0
+        self._fase = None  # última fase informada pelo filho
+        self._produtos = {}  # id_step -> (guid, classe, nome, família), de `inicio`
+        self._concluidos = set()  # ids avisados em `feitos`
 
     # ---- interface pública ----
     @property
@@ -239,105 +232,98 @@ class CarregadorMalhas:
                 pass
 
     def _trabalhar(self):
+        """Thread leitora e vigia: cria o filho (processo_malhas), lê as mensagens e alimenta a fila."""
         t0 = time.perf_counter()
-        arq = None
-        est = {"estado": "erro", "erro": None, "produtos_total": 0, "com_malha": 0, "tri": 0, "vert": 0,
-               "lotes": 0, "sem": [], "t": {"abrir_s": 0.0, "listar_s": 0.0, "geometria_s": 0.0}}
+        est = {"estado": "erro", "erro": None, "produtos_total": 0, "ids": set(), "tri": 0, "vert": 0,
+               "lotes": 0, "sem": [], "t": {"abrir_s": 0.0, "listar_s": 0.0, "geometria_s": 0.0}, "msgs": [],
+               "pico_filho": 0.0}
         try:
-            arq = self._rodar(est)
+            self._ler(est)
             est["estado"] = "concluido"
         except _Cancelado:
             est["estado"] = "cancelado"
         except BaseException as e:  # nenhuma exceção escapa da thread
             est["estado"], est["erro"] = "erro", f"{type(e).__name__}: {e}" or "erro desconhecido"
-        try:
-            import ifcopenshell
-            msgs = str(ifcopenshell.get_log()).splitlines()[-50:]
-        except Exception:
-            msgs = []
         est["t"]["total_s"] = time.perf_counter() - t0
+        if est["estado"] == "concluido" and self.manter_arquivo:  # só depois que o filho terminou (picos não se somam)
+            try:
+                import ifcopenshell
+                self._arquivo = ifcopenshell.open(self.caminho)
+            except Exception as e:
+                est["msgs"].append(f"não foi possível manter o arquivo aberto: {e}")
         self._resumo = ResumoCarga(
-            est["estado"], est["erro"], est["produtos_total"], est["com_malha"], est["tri"], est["vert"],
-            est["lotes"], est["sem"], est["t"], self.threads, self.tamanho_bloco, msgs)
-        if est["estado"] == "concluido":  # `arquivo` só depois do fim, e só se concluiu
-            self._arquivo = arq
+            est["estado"], est["erro"], est["produtos_total"], len(est["ids"]), est["tri"], est["vert"],
+            est["lotes"], est["sem"], est["t"], self.threads, self.tamanho_bloco, est["msgs"], est["pico_filho"])
         self._pronto.set()
 
-    def _rodar(self, est):
-        import ifcopenshell
-        import ifcopenshell.geom
-
-        t = time.perf_counter()
-        arq = ifcopenshell.open(self.caminho)
-        est["t"]["abrir_s"] = time.perf_counter() - t
-        t = time.perf_counter()
-        produtos = [p for p in arq.by_type("IfcProduct")
-                    if p.Representation is not None and not any(p.is_a(c) for c in self.excluir)]
-        produtos.sort(key=lambda p: p.id())
-        est["produtos_total"] = total = len(produtos)
-        est["t"]["listar_s"] = time.perf_counter() - t
-        cfg = ifcopenshell.geom.settings()
-        cfg.set("use-world-coords", True)
-        cfg.set("weld-vertices", False)
-        tb = self.tamanho_bloco if self.tamanho_bloco > 0 else max(total, 1)
-        desl, feitos = None, 0
-        t = time.perf_counter()
+    def _ler(self, est):
         try:
-            for ini in range(0, total, tb):
-                bloco = produtos[ini:ini + tb]
-                prods = self._bloco(ifcopenshell.geom, cfg, arq, bloco, est)
-                feitos += len(bloco)
-                for grupo in _agrupar(prods):
-                    if desl is None:  # centro da caixa do primeiro lote, em float64, arredondado ao metro
-                        mn = np.min([p[2].min(axis=0) for p in grupo], axis=0)
-                        mx = np.max([p[2].max(axis=0) for p in grupo], axis=0)
-                        desl = np.rint((mn + mx) / 2.0).astype(np.float64)
-                        desl.flags.writeable = False
-                    lote = _montar_lote(est["lotes"], grupo, desl, feitos, total)
-                    est["lotes"] += 1
-                    self._lotes_produzidos += 1
-                    est["com_malha"] += len(grupo)
-                    est["tri"] += len(lote.indices) // 3
-                    est["vert"] += len(lote.vertices)
-                    self._colocar(lote)
+            from . import processo_malhas
+        except ImportError:  # pragma: no cover
+            import processo_malhas
+        ctx = multiprocessing.get_context("spawn")  # também no Linux: igual nos dois sistemas, sem cópia com Qt ativo
+        rx, tx = ctx.Pipe(duplex=False)  # um canal por filho; Queue seria corrompida ao matar o filho
+        params = {"caminho": self.caminho, "threads": self.threads, "tamanho_bloco": self.tamanho_bloco,
+                  "excluir": self.excluir, "biblioteca": self.biblioteca, "max_bytes_lote": self.max_bytes_lote}
+        filho = ctx.Process(target=processo_malhas.entrada, args=(tx, params), name="obim-malhas", daemon=True)
+        try:
+            self._checar()
+            filho.start()
+            tx.close()  # só o filho guarda a ponta de escrita: se ele morrer, o pai vê o fim do canal
+            fim = False
+            while not fim:
+                self._checar()
+                if not rx.poll(FATIA_S):
+                    continue
+                try:
+                    tipo, dados = rx.recv()
+                except (EOFError, OSError):
+                    filho.join(2)
+                    raise RuntimeError(f"o processo de conversão terminou sem avisar (código {filho.exitcode})")
+                fim = self._tratar(tipo, dados, est)
         finally:
-            est["t"]["geometria_s"] = time.perf_counter() - t
-        return arq
+            if filho.is_alive() and filho.pid is not None:
+                try:
+                    est["pico_filho"] = max(est["pico_filho"], processo_malhas.pico_memoria_mb(
+                        filho.pid if sys.platform != "win32" else filho.sentinel))
+                except Exception:
+                    pass
+            if filho.pid is not None:
+                if filho.is_alive():
+                    filho.kill()
+                filho.join(2)
+            for c in (rx, tx):
+                try:
+                    c.close()
+                except OSError:
+                    pass
 
-    def _bloco(self, geom, cfg, arq, bloco, est):
-        """Gera e converte os produtos de um bloco. Devolve lista ordenada por id; falhas vão a est['sem']."""
-        import ifcopenshell
-        porid = {p.id(): p for p in bloco}
-        achados = {}
-
-        def sem(ids, motivo):
-            for i in ids:
-                p = porid[i]
-                est["sem"].append((i, p.GlobalId, p.is_a(), motivo))
-
-        try:
-            it = geom.iterator(cfg, arq, self.threads, include=bloco, geometry_library=self.biblioteca)
-            try:
-                iniciou = it.initialize()
-                if not iniciou:
-                    log = " | ".join(str(ifcopenshell.get_log()).splitlines()[-3:])
-                    sem(list(porid), "initialize() falhou" + (f": {log}" if log else ""))
-                    return []
-                while True:
-                    s = it.get()
-                    r = _produto_para_numpy(s.geometry, _paleta(s.geometry))
-                    if r is not None and s.id in porid:
-                        achados[s.id] = r
-                    self._checar()
-                    if not it.next():
-                        break
-            finally:
-                del it
-        except _Cancelado:
-            raise
-        except Exception as e:
-            sem([i for i in porid if i not in achados], f"erro no iterador: {type(e).__name__}: {e}")
-        else:
-            sem([i for i in porid if i not in achados], "o iterador não devolveu geometria")
-        self._checar()
-        return [(i, porid[i].GlobalId, *achados[i]) for i in sorted(achados)]
+    def _tratar(self, tipo, dados, est):
+        """Aplica uma mensagem do filho. Devolve True na última (`fim`)."""
+        if tipo == "fase":
+            self._fase = dados
+        elif tipo == "inicio":
+            est["produtos_total"] = dados["total"]
+            self._produtos = {i: (g, c, n, f) for i, g, c, n, f in dados["produtos"]}
+        elif tipo == "lote":
+            dados = replace(dados, vertices=dados.vertices.copy(), indices=dados.indices.copy(), objetos=dados.objetos.copy())
+            for a in (dados.vertices, dados.indices, dados.objetos):  # cópia própria (o recebido aponta para o buffer do canal)
+                a.flags.writeable = False
+            est["lotes"] += 1
+            est["ids"].update(int(i) for i in dados.objetos["id_step"])
+            est["tri"] += len(dados.indices) // 3
+            est["vert"] += len(dados.vertices)
+            self._lotes_produzidos += 1
+            self._colocar(dados)
+        elif tipo == "feitos":
+            self._concluidos.add(dados)
+        elif tipo == "sem_malha":
+            est["sem"].extend(dados)
+        elif tipo == "erro":
+            raise RuntimeError(dados)
+        elif tipo == "fim":
+            est["t"].update(dados["tempos"])
+            est["msgs"] = dados["mensagens"]
+            est["pico_filho"] = dados["pico_memoria_mb"]
+            return True
+        return False

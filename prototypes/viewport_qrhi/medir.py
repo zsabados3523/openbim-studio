@@ -18,32 +18,7 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from viewport_qrhi.carregador import CarregadorMalhas, LoteMalha, ResumoCarga  # noqa: E402
 from viewport_qrhi.cubo_rhi import CuboViewport  # noqa: E402
-
-
-def pico_memoria_mb() -> float:
-    """Pico do processo (sem psutil): getrusage no Linux; GetProcessMemoryInfo (PeakWorkingSetSize) no Windows."""
-    if sys.platform == "win32":
-        import ctypes
-        from ctypes import wintypes
-
-        class PMC(ctypes.Structure):
-            _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD)] + [
-                (n, ctypes.c_size_t) for n in ("PeakWorkingSetSize", "WorkingSetSize", "QuotaPeakPagedPoolUsage",
-                 "QuotaPagedPoolUsage", "QuotaPeakNonPagedPoolUsage", "QuotaNonPagedPoolUsage", "PagefileUsage", "PeakPagefileUsage")]
-
-        pmc = PMC()
-        pmc.cb = ctypes.sizeof(pmc)
-        k = ctypes.WinDLL("kernel32", use_last_error=True)
-        k.GetCurrentProcess.restype = wintypes.HANDLE
-        k.GetCurrentProcess.argtypes = []
-        f = ctypes.WinDLL("psapi", use_last_error=True).GetProcessMemoryInfo  # B-2: tipos declarados (pseudo-handle -1)
-        f.argtypes = [wintypes.HANDLE, ctypes.POINTER(PMC), wintypes.DWORD]
-        f.restype = wintypes.BOOL
-        if not f(k.GetCurrentProcess(), ctypes.byref(pmc), pmc.cb):
-            raise ctypes.WinError(ctypes.get_last_error())
-        return pmc.PeakWorkingSetSize / 2**20
-    import resource
-    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0  # KB no Linux
+from viewport_qrhi.processo_malhas import pico_memoria_mb  # noqa: E402,F401  (sem Qt; aceita o id de um filho)
 
 
 def esperar(cond, limite_s):

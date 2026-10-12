@@ -17,7 +17,7 @@ Como desenhar um modelo IFC grande em 3D dentro do nosso programa (PySide6), com
 - **PySide6:** conferido no nosso ambiente: `QRhiWidget` existe em `QtWidgets` e as classes `QRhi`, `QRhiBuffer`, `QShader` etc. existem em `QtGui` (o `v2/03` falava em precisar de `GuiPrivate`; no Python isso já vem exposto). **Ferramenta de shaders:** `qsb` já está no ambiente (`~/miniforge3/envs/openbim/lib/qt6/lib/qt6/bin/qsb`, pacote do Qt). **Não conferido ainda:** se dá para desenhar de verdade só em Python (será o objetivo da S03-T03).
 - **Amostras de IFC:** existem várias coleções públicas, mas nenhuma ficha de licença foi conferida: buildingSMART (amostras por conceito, no GitHub), Steptools com modelos do KIT (por exemplo `AC20-FZK-Haus.ifc`, 2,5 MB, e `AC20-Institute-Var-2.ifc`, 10 MB: pequenos demais para a meta de ~100 MB), Open IFC Model Repository (Universidade de Auckland) e Molio-Huset (buildingSMART Dinamarca). Nenhum candidato de ~100 MB foi identificado ainda.
 ## Comportamento de referência (testes do PO, se houver)
-- Nenhum. Os IFC do PO (fora do repositório, em `../openbim-studio-referencias/`) só entram com lista escrita no chat e nunca vão para o repositório.
+- Nenhum. Os IFC do PO (fora do repositório, em `../openbim-studio-referencia/`) só entram com lista escrita no chat e nunca vão para o repositório.
 ## Código aberto lido
 - Nenhum nesta etapa. Não foi lido código de outros viewers; se for, vira nova linha aqui com licença.
 ## Decisão para o OpenBIM Studio

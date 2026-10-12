@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "prototypes"))
 
 from test_viewport_carregador import (  # noqa: E402,F401  (modelos, M1M e fixtures compartilhados)
-    CarregadorMalhas, LoteMalha, ResumoCarga, _m1m_ou_pular, m3000, mab, requer_a,
+    CarregadorMalhas, LoteMalha, ResumoCarga, _m1m_ou_pular, m3000, mab, requer_a, TEM_PROCESSO,
 )
 from viewport_qrhi.cubo_rhi import CuboViewport  # noqa: E402
 
@@ -172,6 +172,7 @@ def test_r2_carga_termina_certa(r2_medida):
     assert resumo.estado == "concluido" and resumo.produtos_com_malha == 21 and resumo.sem_malha == []
 
 
+@pytest.mark.skipif(TEM_PROCESSO, reason="emenda T08-0: com o processo separado o fenômeno do GIL some (o teste de 200 ms vale)")
 def test_r2_demonstra_o_fenomeno_do_gil(r2_medida, capsys, record_property):
     """Passa hoje: next() segura o GIL, então a janela para por quase o tempo do elemento lento.
     Se a S04 resolver o GIL, este teste FALHA e avisa (aí remover o xfail do teste de 200 ms)."""
@@ -182,7 +183,7 @@ def test_r2_demonstra_o_fenomeno_do_gil(r2_medida, capsys, record_property):
     )
 
 
-@pytest.mark.xfail(strict=False, reason="R1 do lote Opus 4: next() segura o GIL")
+@pytest.mark.xfail(not TEM_PROCESSO, strict=False, reason="R1 do lote Opus 4: next() segura o GIL (some com o processo, T08)")
 def test_r2_atraso_maximo_com_elemento_lento(r2_medida):
     atrasos, _, maior_next = r2_medida
     assert atrasos.max() <= MAX_MS, f"atraso {atrasos.max():.1f} ms (next() mais longo {maior_next * 1000:.1f} ms)"

@@ -7,7 +7,7 @@
 |---|---|---|---|---|---|---|
 | F0-S01 | Repositório, licenças e pesquisa | P | — | FEITA (2026-10-11; aprovada no lote Opus 2) | S01-T01 a T12 | Abertos sem bloquear: termos conda-forge, Qt Shader Tools, ReportLab, SINAPI; espelho Codeberg depois |
 | F0-S02 | CI Windows+Linux e app esqueleto | M→G (tratada como G) | S01 | CONCLUÍDA (aceite do PO em 2026-10-11, Windows e Linux) | S02-T01 a T16 | S02-T01 pode começar quando S01-T01 estiver feita |
-| F0-S03 | Protótipo de viewport (Qt RHI) | M | S02; S08 contínuo | EM_ANDAMENTO | S03-T01 a T07, T25 | T01 a T04, T06 feitas e no main; T02 gerador sintético feito; T05 especificada pelo Opus (T3 em 3 partes, lote 4); T07 depende da T05; T25 (provar desenho no CI) aberta |
+| F0-S03 | Protótipo de viewport (Qt RHI) | M | S02; S08 contínuo | EM_ANDAMENTO | S03-T01 a T07, T25 | T01 a T04, T06, T25 e T02 feitas e no main; **T05 (T3) em 3 partes, REPROVADA no lote Opus 5 (2 defeitos reais, correções curtas): cartões T05-P0b (oráculo) e T05-C1 (código); PRs 16, 18 e 19 aguardam correção, re-revisão e ok do PO**; metas da T05 medidas na máquina do PO (o portão da S03 só se decide na T07) (abrir 13,5 s, 833 MB, atraso 118 ms, 60 FPS placa real); T07 (benchmark e relatório da fatia) depende da T05 |
 | F0-S04 | Ponte Python↔C++ (híbrido vs C++ puro) | G, crítica | S02 | NÃO INICIADA | — | Contém T3 (ponte, threads) |
 | F0-S05 | Oplog, undo e merge | M | S04 | NÃO INICIADA | — | Contém T3 (transações, gravação do par). Precisa de formato mínimo provisório do `.obim` antes do ADR-003 |
 | F0-S06 | Planta e corte (HLR) + vista no `.obim` | G, crítica | S02; S08 contínuo | NÃO INICIADA | — | Contém T3 (HLR, arquivo lateral) |
@@ -50,7 +50,7 @@
 | F0-S02-T21 | Instalador não apaga arquivos do usuário (N1) | T2 | sonnet | sonnet | S02-T18 | FEITA no ramo, aguarda CI |
 | F0-S02-T22 | Inventário: parênteses e lista (D1 e ajustes) | T2 | sonnet | sonnet | S02-T20 | FEITA no ramo, aguarda CI |
 | F0-S02-T23 | Antes do primeiro release | T2 | sonnet | opus (lote) | T17, T18, T22 | NÃO INICIADA (bloqueia release público) |
-| F0-S02-T24 | Seletor de arquivos nativo no AppImage (portal do desktop) | T2 | sonnet | sonnet | S02-T17 | NÃO INICIADA (prioridade baixa; antes do release; o PO testa no desktop dele) |
+| F0-S02-T24 | Seletor de arquivos nativo no AppImage (portal do desktop) | T2 | sonnet | sonnet | S02-T17 | FEITA no ramo (AppRun ativa o portal do desktop quando há D-Bus; teste no CI; o PO confere no passo 15 do roteiro) |
 | F0-S02-T16 | Sonda C++ mínima (pacote IfcOpenShell e módulo nanobind) | T2 | sonnet | sonnet; amostra opus | S02-T03 | FEITA (amostra aprovada no lote Opus 2; testes 2 e 3 do ADR-005 fecham só no Linux; ver S02-T19) |
 | F0-S02-T17 | Correções do AppImage (lote opus 2, defeitos 1 a 7) | T2 | sonnet | **opus, em lote (diff)** | S02-T10 | FEITA no CI (verde, 389 MB, testes de licença e troca de .so); falta conferência opus (lote 3); runtime do appimagetool pendente |
 | F0-S02-T18 | Correções do instalador Windows (defeitos 1 a 4 e riscos 5 a 7) | T2 | sonnet | **opus, em lote (diff)** | S02-T11, S02-T17 | FEITA no CI (verde, 309 MB sem MKL, testes de reinstalação, DLL trocada e arquivo do usuário); falta conferência opus (lote 3) |

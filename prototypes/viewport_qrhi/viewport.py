@@ -20,3 +20,20 @@ class Viewport:
     def grab_image(self) -> QImage:
         """Devolve o quadro atual como imagem."""
         raise NotImplementedError
+
+    # --- lotes de malha do IFC (S03-T05) ---
+    def limpar(self) -> None:
+        """Remove todos os lotes e solta os buffers da placa."""
+        raise NotImplementedError
+
+    def adicionar_lote(self, lote) -> None:
+        """Só na thread da interface. Cria 2 buffers para este lote; nunca recria os anteriores."""
+        raise NotImplementedError
+
+    def enquadrar(self) -> None:
+        """Ajusta alvo, distância e planos da câmera à caixa de tudo que foi adicionado."""
+        raise NotImplementedError
+
+    def estatisticas(self) -> dict:
+        """`lotes`, `triangulos`, `vertices`, `bytes_gpu`, `buffers_criados`."""
+        raise NotImplementedError

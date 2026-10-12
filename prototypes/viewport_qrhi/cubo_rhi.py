@@ -38,6 +38,7 @@ except ImportError:  # pragma: no cover
 
 SHADERS = Path(__file__).resolve().parent / "shaders"
 FLOATS_POR_VERTICE = 6  # x, y, z, r, g, b
+BYTES_VERTICE_MALHA = 28  # pos 3xf32, normal 3xf32, cor 4xu8 (LoteMalha)
 
 
 def cubo_padrao() -> tuple[np.ndarray, np.ndarray]:
@@ -78,6 +79,10 @@ class CuboViewport(QRhiWidget, Viewport):
         self._pronto = False
         self._pipeline = None
         self._rhi_antigo = None
+        self._cubo = True  # False depois de limpar()/adicionar_lote: só os lotes aparecem
+        self._lotes: list[dict] = []
+        self._buffers_criados = 0
+        self._caixa = None  # (min, max) de tudo o que foi adicionado, no espaço do lote
         self.camera = Camera()
         self._ultimo: QPointF | None = None
         if girar:
@@ -91,7 +96,53 @@ class CuboViewport(QRhiWidget, Viewport):
         self._indices = np.ascontiguousarray(indices, dtype=np.uint32).reshape(-1)
         self._malha_nova = True
         self._selecao = None  # malha de objetos para o pick; None = um objeto único (id 1) com esta malha
+        self._cubo = True
         self.update()
+
+    # --- lotes de malha (S03-T05): 1 lote = 2 buffers na placa, no máximo 1 lote enviado por quadro ---
+    def limpar(self) -> None:
+        for e in self._lotes:
+            self._soltar(e)
+        self._lotes, self._caixa, self._cubo = [], None, False
+        self.update()
+
+    @staticmethod
+    def _soltar(e: dict) -> None:
+        for k in ("vbuf", "ibuf"):
+            if e[k] is not None:
+                e[k].deleteLater()
+                e[k] = None
+
+    def adicionar_lote(self, lote) -> None:
+        """Guarda o lote (a T06 usa `objetos`, `pos` e `indices`); o envio à placa é no próximo desenho."""
+        self._cubo = False
+        self._lotes.append({"lote": lote, "vbuf": None, "ibuf": None})
+        if len(lote.objetos):
+            lo, hi = lote.objetos["caixa_min"].min(axis=0), lote.objetos["caixa_max"].max(axis=0)
+            if self._caixa is not None:
+                lo, hi = np.minimum(lo, self._caixa[0]), np.maximum(hi, self._caixa[1])
+            self._caixa = (lo.astype(np.float64), hi.astype(np.float64))
+        self.update()
+
+    def enquadrar(self) -> None:
+        if self._caixa is None:
+            return
+        lo, hi = self._caixa
+        self.camera.alvo = (lo + hi) / 2
+        raio = max(float(np.linalg.norm(hi - lo)) / 2, 0.1)
+        self.camera.distancia = float(np.clip(raio / np.sin(np.radians(self.camera.fov) / 2) * 1.05, 0.1, 10000.0))
+        self.update()
+
+    def estatisticas(self) -> dict:
+        enviados = [e for e in self._lotes if e["vbuf"] is not None]
+        return {
+            "lotes": len(self._lotes),
+            "triangulos": sum(int(e["lote"].indices.size) // 3 for e in self._lotes),
+            "vertices": sum(int(e["lote"].vertices.size) for e in self._lotes),
+            "bytes_gpu": sum(int(e["lote"].vertices.nbytes + e["lote"].indices.nbytes) for e in enviados),
+            "buffers_criados": self._buffers_criados,
+            "pendentes": len(self._lotes) - len(enviados),
+        }
 
     def set_objetos(self, malha: Malha) -> None:
         """Define os objetos (com id) usados pelo `pick`; não muda o que é desenhado."""
@@ -160,11 +211,12 @@ class CuboViewport(QRhiWidget, Viewport):
     # --- QRhiWidget ---
     def initialize(self, cb) -> None:
         rhi = self.rhi()
-        if self._pipeline is not None and self._rhi_antigo is not rhi:
-            self._pipeline = None  # contexto novo: recursos antigos não valem mais
+        chave = (rhi, self.sampleCount())
+        if self._pipeline is not None and self._rhi_antigo != chave:
+            self._liberar_recursos()  # contexto ou alvo novo: solta o que é do C++ e refaz
         if self._pipeline is not None:
             return
-        self._rhi_antigo = rhi
+        self._rhi_antigo = chave
         self._vbuf = self._ibuf = None
         self._ubuf = rhi.newBuffer(QRhiBuffer.Dynamic, QRhiBuffer.UniformBuffer, 64)
         self._ubuf.create()
@@ -200,7 +252,67 @@ class CuboViewport(QRhiWidget, Viewport):
         pipe.create()
         self._pipeline = pipe
         self._malha_nova = True
+        self._criar_pipeline_malha(rhi)
         self._pronto = True
+
+    def _liberar_recursos(self) -> None:
+        """Solta buffers, pipelines e bindings (dono = C++, então deleteLater) e marca tudo para reenvio."""
+        for e in self._lotes:  # os lotes voltam a ser enviados, 1 por quadro
+            self._soltar(e)
+        for n in ("_vbuf", "_ibuf", "_ubuf", "_srb", "_pipeline", "_ubuf_m", "_srb_m", "_pipeline_m"):
+            o = getattr(self, n, None)
+            if o is not None:
+                o.deleteLater()
+            setattr(self, n, None)
+        self._rhi_antigo, self._pronto, self._malha_nova = None, False, True
+
+    def releaseResources(self) -> None:
+        self._liberar_recursos()
+
+    def _criar_pipeline_malha(self, rhi) -> None:
+        self._ubuf_m = rhi.newBuffer(QRhiBuffer.Dynamic, QRhiBuffer.UniformBuffer, 80)
+        self._ubuf_m.create()
+        self._srb_m = rhi.newShaderResourceBindings()
+        self._srb_m.setBindings([
+            QRhiShaderResourceBinding.uniformBuffer(0, QRhiShaderResourceBinding.VertexStage, self._ubuf_m)
+        ])
+        self._srb_m.create()
+        pipe = rhi.newGraphicsPipeline()
+        pipe.setShaderStages([
+            QRhiShaderStage(QRhiShaderStage.Vertex, self._carregar("malha.vert.qsb")),
+            QRhiShaderStage(QRhiShaderStage.Fragment, self._carregar("malha.frag.qsb")),
+        ])
+        camada = QRhiVertexInputLayout()
+        camada.setBindings([QRhiVertexInputBinding(BYTES_VERTICE_MALHA)])
+        camada.setAttributes([
+            QRhiVertexInputAttribute(0, 0, QRhiVertexInputAttribute.Float3, 0),
+            QRhiVertexInputAttribute(0, 1, QRhiVertexInputAttribute.Float3, 12),
+            QRhiVertexInputAttribute(0, 2, QRhiVertexInputAttribute.UNormByte4, 24),
+        ])
+        pipe.setVertexInputLayout(camada)
+        pipe.setShaderResourceBindings(self._srb_m)
+        pipe.setRenderPassDescriptor(self.renderTarget().renderPassDescriptor())
+        pipe.setSampleCount(self.sampleCount())
+        pipe.setDepthTest(True)
+        pipe.setDepthWrite(True)  # sem descarte de faces de trás (cullMode padrão = nenhum)
+        pipe.create()
+        self._pipeline_m = pipe
+
+    def _enviar_um_lote(self, rub) -> bool:
+        """Cria os 2 buffers do primeiro lote ainda não enviado. Devolve True se enviou."""
+        e = next((x for x in self._lotes if x["vbuf"] is None), None)
+        if e is None:
+            return False
+        rhi, lote = self.rhi(), e["lote"]
+        v, i = lote.vertices.tobytes(), lote.indices.tobytes()
+        e["vbuf"] = rhi.newBuffer(QRhiBuffer.Immutable, QRhiBuffer.VertexBuffer, len(v))
+        e["vbuf"].create()
+        e["ibuf"] = rhi.newBuffer(QRhiBuffer.Immutable, QRhiBuffer.IndexBuffer, len(i))
+        e["ibuf"].create()
+        rub.uploadStaticBuffer(e["vbuf"], 0, len(v), v)
+        rub.uploadStaticBuffer(e["ibuf"], 0, len(i), i)
+        self._buffers_criados += 2
+        return True
 
     def _carregar(self, nome: str) -> QShader:
         sh = QShader.fromSerialized((SHADERS / nome).read_bytes())
@@ -225,10 +337,13 @@ class CuboViewport(QRhiWidget, Viewport):
     def render(self, cb) -> None:
         rhi = self.rhi()
         rub = rhi.nextResourceUpdateBatch()
-        if self._malha_nova:
-            self._subir_malha(rub)
         tam = self.renderTarget().pixelSize()
         self.camera.proporcao = max(tam.width(), 1) / max(tam.height(), 1)
+        if not self._cubo:
+            self._render_lotes(cb, rub, rhi, tam)
+            return
+        if self._malha_nova:
+            self._subir_malha(rub)
         proj = QMatrix4x4(self.camera.matriz_projecao().flatten().tolist())
         vista = QMatrix4x4(self.camera.matriz_vista().flatten().tolist())
         modelo = QMatrix4x4()
@@ -243,4 +358,30 @@ class CuboViewport(QRhiWidget, Viewport):
         cb.setShaderResources()
         cb.setVertexInput(0, [(self._vbuf, 0)], self._ibuf, 0, QRhiCommandBuffer.IndexUInt32)
         cb.drawIndexed(self._n_indices)
+        cb.endPass()
+
+    def _render_lotes(self, cb, rub, rhi, tam) -> None:
+        self._enviar_um_lote(rub)
+        if any(e["vbuf"] is None for e in self._lotes):
+            self.update()  # ainda há lotes na espera: o próximo vai no quadro seguinte
+        cam = self.camera
+        if self._caixa is not None:  # perto/longe a cada quadro (V4)
+            raio = float(np.linalg.norm(self._caixa[1] - self._caixa[0])) / 2
+            centro = (self._caixa[0] + self._caixa[1]) / 2  # B-1: distância ao centro da cena, não ao alvo
+            cam.longe = (float(np.linalg.norm(cam.posicao - centro)) + raio) * 1.1
+            cam.perto = max(cam.longe / 10000.0, 0.05)
+        proj = QMatrix4x4(cam.matriz_projecao().flatten().tolist())
+        vista = QMatrix4x4(cam.matriz_vista().flatten().tolist())
+        mvp = rhi.clipSpaceCorrMatrix() * proj * vista
+        luz = np.append(cam.eixos()[2], 0.0).astype(np.float32)  # direção em que a câmera olha
+        rub.updateDynamicBuffer(self._ubuf_m, 0, 64, np.array(mvp.data(), dtype=np.float32).tobytes())
+        rub.updateDynamicBuffer(self._ubuf_m, 64, 16, luz.tobytes())
+        cb.beginPass(self.renderTarget(), QColor(30, 30, 40), QRhiDepthStencilClearValue(1.0, 0), rub)
+        cb.setGraphicsPipeline(self._pipeline_m)
+        cb.setViewport(QRhiViewport(0, 0, tam.width(), tam.height()))
+        cb.setShaderResources()
+        for e in self._lotes:  # uma chamada de desenho por lote
+            if e["vbuf"] is not None:
+                cb.setVertexInput(0, [(e["vbuf"], 0)], e["ibuf"], 0, QRhiCommandBuffer.IndexUInt32)
+                cb.drawIndexed(int(e["lote"].indices.size))
         cb.endPass()

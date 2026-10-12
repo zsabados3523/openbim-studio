@@ -69,6 +69,13 @@ def caso(nome, tmp):
         QApplication([])
         r["depois"] = ponto_decimal()
         r["texto"] = texto_ifc().to_string()
+    elif nome == "l3ref":  # interface SEM a correção: é com ela que o L3 compara fora do Linux
+        from PySide6.QtCore import QLocale
+        from PySide6.QtWidgets import QApplication
+
+        QApplication([])
+        r["fmt"] = QLocale().toString(1234.5, "f", 2)
+        r["nome_qt"] = QLocale().name()
     elif nome == "l1w":  # força à mão, sem a correção e sem Qt
         r["nome"] = forcar_virgula()
         r["ponto"] = ponto_decimal()

@@ -19,6 +19,7 @@ AUX = Path(__file__).resolve().parent / "localidade_aux.py"
 TEM_MODULO = (APP / "openbim_app" / "localidade.py").exists()
 AGUARDA = pytest.mark.skipif(not TEM_MODULO, reason="aguarda S03-T26: localidade.py")
 WIN = sys.platform == "win32"
+LINUX = sys.platform.startswith("linux")
 
 
 def ambiente(pt_br=True):
@@ -105,11 +106,14 @@ def test_l2_gravacao_identica_a_processo_em_c(canario_windows_ok, referencia):
 @AGUARDA
 def test_l3_interface_continua_brasileira(canario_windows_ok):
     r = caso("l3")
-    assert r["fmt"] == "1.234,50"
-    assert r["nome_qt"] == "pt_BR"
     assert r["numerico_ok"]
-    if not WIN:  # datas e textos não mudam: as categorias seguem a do ambiente, só a numérica vira C
+    if LINUX:  # no Linux o Qt segue o ambiente (pt_BR): valores exatos; datas e textos não mudam
+        assert r["fmt"] == "1.234,50"
+        assert r["nome_qt"] == "pt_BR"
         assert "pt_BR" in r["time"] and "pt_BR" in r["ctype"], r
+    else:  # Windows e macOS: o Qt segue o idioma do sistema; a correção não pode mudar o que a interface mostra
+        ref = caso("l3ref")
+        assert (r["fmt"], r["nome_qt"]) == (ref["fmt"], ref["nome_qt"]), (r, ref)
 
 
 @AGUARDA

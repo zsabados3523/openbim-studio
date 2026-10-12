@@ -30,3 +30,6 @@ EVIDENCIAS: item 1 (T08-0b), item 2 (T08-E), item 3 (ordem)
 PERGUNTA_PO: se houver, com recomendação
 
 Depois, o PO volta ao líder com "Leia docs/state e continue".
+
+## Resultado do CI da ponta (preenchido pelo líder, 2026-10-12)
+Rascunho PR 37 (ponta = `s03-t08-e` com o `main`): `linux` verde, `windows` verde, `appimage` verde; `macos` vermelho (não bloqueia). PRs 39 (T08-0b) e 40 (T08-E) abertos, empilhados.

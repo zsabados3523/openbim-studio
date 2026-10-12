@@ -5,6 +5,7 @@ Imprime uma linha JSON. Roda com QT_QPA_PLATFORM=xcb (ou o padrão do sistema), 
 import argparse
 import gc
 import json
+import locale
 import multiprocessing
 import os
 import sys
@@ -14,15 +15,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import numpy as np  # noqa: E402
-from PySide6.QtCore import QCoreApplication, QEventLoop, Qt, QTimer  # noqa: E402
-from PySide6.QtWidgets import QApplication  # noqa: E402
-
 from viewport_qrhi.carregador import CarregadorMalhas, LoteMalha, ResumoCarga  # noqa: E402
-from viewport_qrhi.cubo_rhi import CuboViewport  # noqa: E402
 from viewport_qrhi.processo_malhas import pico_memoria_mb  # noqa: E402,F401  (sem Qt; aceita o id de um filho)
 
 
 def esperar(cond, limite_s):
+    from PySide6.QtCore import QCoreApplication  # Qt só dentro das funções: o filho (spawn) reimporta este módulo
     t = time.perf_counter()
     while not cond() and time.perf_counter() - t < limite_s:
         QCoreApplication.processEvents()
@@ -63,7 +61,12 @@ def medir_cancelamento(caminho, apos_s, biblioteca=None) -> dict:
 
 
 def medir(caminho, threads, bloco, png=None, janela=(1280, 720), biblioteca=None) -> dict:
+    from PySide6.QtCore import QCoreApplication, QEventLoop, Qt, QTimer
+    from PySide6.QtWidgets import QApplication
+
+    from viewport_qrhi.cubo_rhi import CuboViewport
     app = QApplication.instance() or QApplication([])
+    locale.setlocale(locale.LC_NUMERIC, "C")  # o Qt troca a localidade numérica e o IfcOpenShell grava vírgula decimal
     w = CuboViewport(girar=False)
     w.resize(*janela)
     quadros = []

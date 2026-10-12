@@ -8,7 +8,7 @@ Para quem vai mexer no código. O PO não precisa fazer isto: o líder técnico 
    ```bash
    conda env create -f environment.yml
    ```
-   Leva cerca de 2 minutos. O arquivo fixa as versões; o arquivo `environment.linux-64.lock` lista todos os pacotes exatos (gerado, não editar à mão).
+   Leva cerca de 2 minutos. O arquivo fixa as versões; o arquivo `environment.linux-64.lock` lista todos os pacotes exatos, com o build do `ifcopenshell` (gerado, não editar à mão). Para um ambiente idêntico ao do CI, use a trava: `conda create -n openbim --file environment.linux-64.lock`.
 3. Teste:
    ```bash
    conda activate openbim
@@ -18,7 +18,14 @@ Para quem vai mexer no código. O PO não precisa fazer isto: o líder técnico 
 ## Regras
 - Canal único: conda-forge, com `nodefaults`. Pacote de outro canal é erro.
 - Ao mudar `environment.yml`, gere o arquivo de trava de novo: `conda list --explicit --md5 > environment.linux-64.lock`.
-- Windows: o ambiente é montado pelo CI (ver seção CI) e na VM do PO.
+- Windows: o ambiente é montado pelo CI (ver seção CI) e na VM do PO. A trava do Windows é `environment.win-64.lock`.
+- Para compilar contra o IfcOpenShell (sonda 3b e o módulo `obimcore`), o ambiente traz `zlib`, `libxml2-devel` e `libboost-devel` (versões em `environment.yml`; o `ifcopenshell` tem o build travado nas travas, porque trocar o build é trocar de ABI). Nenhum script instala pacote na hora: `prototypes/cpp_probe_3b/run.sh` só confere se os arquivos existem e para com erro se faltar algum.
+
+## Travas do ambiente (T01 da S04)
+- Cada sistema gera a própria trava no CI (`conda list --explicit --md5`, sem ferramenta nova) no passo "Trava do ambiente" e a anexa ao artefato `openbim-ci-linux` / `openbim-ci-windows` (`out/environment.<sistema>.lock`). O passo é só informativo: diz se a trava gerada é igual à do repositório.
+- O líder baixa o artefato e guarda `environment.linux-64.lock` e `environment.win-64.lock` na raiz. Enquanto o arquivo de um sistema não existir, o CI cria o ambiente pelo `environment.yml`; quando existir, cria pela trava (`conda create --file`), e a mudança em `environment.yml` ou na trava invalida o cache de pacotes.
+- Fora do CI, nada acima baixa ferramenta nova: só `conda`/`mamba` do ambiente.
+- A sonda 3b também confere que o CMake acha o `Qt6GuiPrivate` (linha `QT6GUIPRIVATE: achado` no resultado) e falha se não achar.
 
 ## CI
 O fluxo `.github/workflows/ci.yml` roda a cada push e pull request em `main`, em três jobs com estes nomes exatos (usados na regra de bloqueio de merge; não renomear):

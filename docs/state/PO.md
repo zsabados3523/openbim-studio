@@ -45,3 +45,7 @@ C hospedagem GitHub + espelho Codeberg · D interface híbrida (confirmar na S09
 - S03/T08: biblioteca de geometria "híbrida" como padrão da visualização (comparação lado a lado antes de fechar a T08). Limite de 20 s por peça (peça lenta vira caixa laranja). Aprovado.
 - T26: passo no job Linux do GitHub que cria a localidade pt_BR, só na máquina descartável. Aprovado.
 - Tamanho: exceção aceita para o oráculo da T05 e o relatório da Parte B (>400 linhas).
+
+## Decisões do PO após a T08-D (2026-10-12)
+- Meta de memória de 6 GB: aceita "atingida na prática" para o arquivo real de 8,6 milhões de triângulos (maior soma ao mesmo tempo 6,2 GB com placa real; conta conservadora 6,8 GB). O valor final da meta é decidido na S04 com o modelo real e revisão do Opus. Windows: a VM do PO não tem placa real; vale só o teste automático (software) e o roteiro funcional.
+- Execução única na tela real autorizada e feita (Linux, placa real): abrir 36,6 s, atraso máximo 62 ms, 60 FPS.

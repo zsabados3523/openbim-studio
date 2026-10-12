@@ -22,6 +22,7 @@ Regras: sem sessão opus com menos de 25% da semana restante; sem subagente para
 | 2026-10-11 | 3 | sonnet | S02 T07 a T11 (CI Windows, instalador NSIS, poda por pacote) e início de T12–T14 | 0% (janela nova) | semana: 3% → 8% | não | PO informou 8% semana e 0% janela no início desta sessão |
 | 2026-10-11 | 3b | opus (lote 2, sessão do PO) + sonnet (aplicar resultado) | Lote Opus 2: tabela, v2/05, AppImage, instalador, sonda, CI | 18% (após o lote e o início desta sessão) | semana 10% | não | O PO informou 18% (janela) e 10% (semana) ao pedir "Leia docs/state e continue"; sem separar o custo do lote |
 | 2026-10-11 | 4 | opus (lote 3, sessão do PO) + sonnet (sonda 3b, N1, D1) | Lote Opus 3; sonda 3b; correções T21 e T22; PR 5 e 6 | 18% → 20% (informado após o lote 3 e as correções) | 10% → 14% | não | O PO informou 20% (janela) e 14% (semana) ao pedir para seguir as recomendações; o lote 3 custou cerca de 2 pontos de semana, sem separar do restante |
+| 2026-10-12 | 6 | sonnet (+ opus lote 6 na sessão do PO + subagentes sonnet T08-0/T08-A) | Lote 6 aplicado, T05 mesclada, T08-0, T08-A | 77% → renovada → 33% | 22% → 24% | não | Informado pelo PO ao pedir para continuar (janela 33%, semana 24%) |
 
 ## Resumo semanal (preencher no fim de cada semana)
 | Semana | Dias parados por limite | Custo médio por fatia (P/M/G) em % semanal | Fila opus mais antiga (dias) |

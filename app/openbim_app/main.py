@@ -2,19 +2,19 @@
 """Ponto de entrada do aplicativo."""
 import sys
 
-from PySide6.QtWidgets import QApplication
-
+from .localidade import criar_aplicacao, numerico_ok
 from .main_window import MainWindow
 
 
 def main(argv=None) -> int:
-    app = QApplication.instance() or QApplication(sys.argv if argv is None else argv)
+    app = criar_aplicacao(sys.argv if argv is None else argv)
     app.setApplicationName("OpenBIM Studio")
     window = MainWindow()
     if "--selftest" in (sys.argv if argv is None else argv):
-        print("OK" if window.windowTitle() else "FALHA")
+        ok = bool(window.windowTitle()) and numerico_ok()
+        print("OK" if ok else "FALHA")
         window.close()
-        return 0 if window.windowTitle() else 1
+        return 0 if ok else 1
     window.show()
     return app.exec()
 

@@ -58,7 +58,7 @@ Programa BIM aberto (AGPL v3), instalável no Windows e no Linux, geral (núcleo
 - Windows e Linux: obrigatórios (CI bloqueia merge). macOS: build experimental, falha não bloqueia, sem teste manual.
 - Ambiente: Miniforge em `~/miniforge3`; ambiente `openbim` (conda-forge). Criar: `conda env create -f environment.yml`. Rodar testes: `QT_QPA_PLATFORM=offscreen ~/miniforge3/envs/openbim/bin/pytest`. Detalhes em `docs/dev-setup.md`. Build e empacotamento: definidos nas T06, T10, T11.
 - Git: ramo `main` protegido (jobs `linux` e `windows` obrigatórios): **nada vai direto ao `main`**. Todo trabalho em ramo próprio; push, PR e merge seguem a autorização permanente abaixo. Remoto `origin` = github.com/zsabados3523/openbim-studio (público). Espelho Codeberg: adiado.
-- Referências do PO (IFC e plantas) ficam fora do repositório (`../openbim-studio-referencias/`). Só abrir arquivo dali se o PO listar no chat quais; nunca copiar para o repositório; testes com elas rodam só na máquina do PO.
+- Referências do PO (IFC e plantas) ficam fora do repositório (`../openbim-studio-referencia/`). Só abrir arquivo dali se o PO listar no chat quais; nunca copiar para o repositório; testes com elas rodam só na máquina do PO.
 
 ## Autorização permanente do PO (registrada em 2026-10-11; vale até o PO revogar)
 1. Pode criar ramos, fazer commit e push **só em ramos de trabalho** (nunca direto no `main`) e abrir PR com `gh`.

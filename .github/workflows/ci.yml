@@ -42,6 +42,11 @@ jobs:
           conda-remove-defaults: "true"
           channel-priority: strict
           miniforge-version: latest
+      - name: Localidade pt_BR na máquina descartável (T26; informativo, não bloqueia)
+        continue-on-error: true
+        run: |
+          if sudo locale-gen pt_BR.UTF-8 >/dev/null 2>&1 && sudo update-locale >/dev/null 2>&1 && locale -a | grep -qi '^pt_BR\.utf-\?8$'; then r="criada"; else r="NÃO criada (os testes da T26 vão pular)"; fi
+          echo "::notice title=localidade pt_BR::${r}"
       - name: Testes
         shell: bash -el {0}
         run: |

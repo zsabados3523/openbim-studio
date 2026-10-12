@@ -2,6 +2,7 @@
 """Abre a janela. Uso: python -m viewport_qrhi [arquivo.ifc] [--api opengl|vulkan]
 
 Sem arquivo: o cubo. Com arquivo: as malhas do IFC chegam em lotes (S03-T05)."""
+import locale
 import sys
 from pathlib import Path
 
@@ -17,6 +18,7 @@ APIS = {"opengl": QRhiWidget.Api.OpenGL, "vulkan": QRhiWidget.Api.Vulkan, "d3d11
 
 def main() -> int:
     app = QApplication(sys.argv)
+    locale.setlocale(locale.LC_NUMERIC, "C")  # o Qt troca a localidade numérica e o IfcOpenShell grava vírgula decimal
     api = None
     if "--api" in sys.argv:
         api = APIS[sys.argv[sys.argv.index("--api") + 1]]

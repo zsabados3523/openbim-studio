@@ -49,3 +49,6 @@ C hospedagem GitHub + espelho Codeberg · D interface híbrida (confirmar na S09
 ## Decisões do PO após a T08-D (2026-10-12)
 - Meta de memória de 6 GB: aceita "atingida na prática" para o arquivo real de 8,6 milhões de triângulos (maior soma ao mesmo tempo 6,2 GB com placa real; conta conservadora 6,8 GB). O valor final da meta é decidido na S04 com o modelo real e revisão do Opus. Windows: a VM do PO não tem placa real; vale só o teste automático (software) e o roteiro funcional.
 - Execução única na tela real autorizada e feita (Linux, placa real): abrir 36,6 s, atraso máximo 62 ms, 60 FPS.
+
+## Decisão do PO após o relatório da S03 (2026-10-12)
+- Portão da S03 dado como atingido (Linux com placa real; Windows em software). Risco registrado: placa de vídeo real e Intel integrada no Windows só medidas num computador físico, antes do portão final da F0 (S10).

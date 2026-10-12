@@ -6,7 +6,13 @@ Guardas de ativação (a suíte não fica vermelha entre cartões): `requer_proc
 `processo_malhas.py`; `requer_limite` liga quando `CarregadorMalhas` aceitar `limite_peca_s`.
 Peça lenta injetada no filho: OBIM_TESTE_PECA_LENTA="<guid>=<s>[,...]"; filho que cai: OBIM_TESTE_MATAR_FILHO="<guid>".
 Teste lento (P6): OBIM_TESTES_LENTOS=1.
+
+P13 a P18 (cartão T08-0b, LOTE_OPUS_7.md §4 item 5): defeitos achados no lote 7. Cada um é `xfail(strict=True)` até a
+S03-T08-E: quando passar, o xfail estrito vira falha e avisa para tirar a marca. Gancho de teste novo:
+OBIM_TESTE_FALHAR_CAIXA="<guid>" (o filho da caixa falha nessa peça; guarda `requer_caixa_falha`).
+OBIM_FORCAR_GUARDAS=1 liga as guardas de ativação mesmo sem o recurso (para ver o caso falhar de verdade).
 """
+import importlib.util
 import inspect
 import multiprocessing
 import os
@@ -28,7 +34,7 @@ sys.path.insert(0, str(RAIZ / "prototypes"))
 from test_viewport_adaptador import _ViewportFalso  # noqa: E402
 from test_viewport_carregador import (  # noqa: E402,F401  (modelos e fixtures compartilhados)
     CarregadorMalhas, LoteMalha, ResumoCarga, _carregar, _novo, _percorrer, _por_produto, m600, m3000,
-    requer_a, requer_processo, TEM_PROCESSO,
+    _caixa, _gerar_defeito, mab, requer_a, requer_processo, TEM_PROCESSO,
 )
 from test_viewport_responsivo import MAX_MS, P95_MS, _medir, _publicar, app  # noqa: E402,F401
 
@@ -38,6 +44,17 @@ requer_divisao = pytest.mark.skipif(
     CarregadorMalhas is None or "max_bytes_lote" not in inspect.signature(CarregadorMalhas.__init__).parameters,
     reason="aguarda S03-T08-B1 (parâmetro max_bytes_lote)",
 )
+
+
+FORCAR = os.environ.get("OBIM_FORCAR_GUARDAS") == "1"
+_spec = importlib.util.find_spec("viewport_qrhi.processo_malhas")
+requer_caixa_falha = pytest.mark.skipif(
+    not (FORCAR or (_spec is not None and "OBIM_TESTE_FALHAR_CAIXA" in Path(_spec.origin).read_text())),
+    reason="aguarda S03-T08-E (gancho OBIM_TESTE_FALHAR_CAIXA no filho da caixa)")
+
+
+def _aguarda_e(item):
+    return pytest.mark.xfail(strict=True, reason=f"aguarda S03-T08-E: {item}")
 
 
 def _lento_ou_pular():
@@ -362,4 +379,169 @@ def test_p8_filho_que_cai(mapeadas1, monkeypatch):
     tri, tri_ref = _triangulos(lotes), _triangulos(ref_lotes)
     assert {i: n for i, n in tri.items() if i != id_l} == {i: n for i, n in tri_ref.items() if i != id_l}
     assert tri[id_l] == 12 and r.produtos_com_malha == 13
+    _regra_de_ouro(r)
+
+
+# ---------- P13 a P18 (cartão T08-0b): defeitos do lote 7 ----------
+def _mundo(lotes):
+    """id_step -> (mínimo, máximo) no mundo (caixa do lote + deslocamento; peça dividida: união dos pedaços)."""
+    saida = {}
+    for lt in lotes:
+        for o in lt.objetos:
+            mn, mx = o["caixa_min"].astype(np.float64) + lt.deslocamento, o["caixa_max"].astype(np.float64) + lt.deslocamento
+            i = int(o["id_step"])
+            saida[i] = (np.minimum(mn, saida[i][0]), np.maximum(mx, saida[i][1])) if i in saida else (mn, mx)
+    return saida
+
+
+def _confere_caixas(lotes, ref_lotes, ids, atol=0.01):
+    a, b = _mundo(lotes), _mundo(ref_lotes)
+    for i in ids:
+        assert i in a, f"a peça {i} não foi mostrada"
+        assert np.allclose(a[i][0], b[i][0], rtol=0, atol=atol) and np.allclose(a[i][1], b[i][1], rtol=0, atol=atol), \
+            f"caixa da peça {i}: {a[i]} contra a real {b[i]} (mais de 1 cm)"
+
+
+@pytest.fixture(scope="session")
+def copias1(tmp_path_factory):
+    return _gerar_mapeadas(tmp_path_factory.mktemp("cop1") / "cop1.ifc", normais=0, lentas=1)
+
+
+@pytest.fixture(scope="session")
+def copias12(tmp_path_factory):
+    return _gerar_mapeadas(tmp_path_factory.mktemp("cop12") / "cop12.ifc", normais=0, lentas=12)
+
+
+@requer_a
+@requer_limite
+def test_p13_copias_da_mesma_familia_em_blocos_diferentes(copias1, copias12, monkeypatch):
+    (c1, [(_, g1)]), (c12, lentas12) = copias1, copias12
+    _lentas(monkeypatch, (g1, 5))
+    _, r1, dt1 = _tempo_carga(c1, limite_peca_s=1.0, tamanho_bloco=1)  # uma cópia, medida nesta execução
+    assert r1.estado == "concluido" and len(r1.simplificadas) == 1
+    _lentas(monkeypatch, *[(g, 5) for _, g in lentas12])
+    _, r, dt12 = _tempo_carga(c12, limite_peca_s=1.0, tamanho_bloco=1)
+    assert r.estado == "concluido", f"estado {r.estado}: {r.erro}"
+    assert len(r.simplificadas) == 12 and {s[0] for s in r.simplificadas} == {i for i, _ in lentas12}
+    assert dt12 <= dt1 + 0.5 * 1.0 + 3.0, f"{dt12:.1f} s > {dt1:.1f} s + 0,5 x limite + 3 s: as cópias foram esperadas de novo"
+    assert r.sem_malha == [] and r.produtos_com_malha == 12
+    _regra_de_ouro(r)
+
+
+def _gerar_sem_geometria(caminho):
+    """3 cubos, uma parede sem geometria (retângulo com XDim = 0) e DEPOIS uma peça lenta: id sem geometria < id lenta."""
+    f, corpo = _novo()
+    cubo, grande = _mapa(f, corpo, 1.0, 1.0, 1.0), _mapa(f, corpo, 2.0, 1.0, 3.0)
+    for i in range(3):
+        _instancia(f, corpo, cubo, (i * 3.0, 0.0, 0.0), f"normal {i}")
+    ruim = ifcopenshell.api.run("root.create_entity", f, ifc_class="IfcWall", name="sem geometria")
+    perfil = f.create_entity("IfcRectangleProfileDef", ProfileType="AREA", XDim=0.0, YDim=0.15)
+    solido = f.create_entity(
+        "IfcExtrudedAreaSolid", SweptArea=perfil, Depth=2.8,
+        Position=f.create_entity("IfcAxis2Placement3D", Location=f.create_entity("IfcCartesianPoint", Coordinates=(0.0, 0.0, 0.0))),
+        ExtrudedDirection=f.create_entity("IfcDirection", DirectionRatios=(0.0, 0.0, 1.0)))
+    rep = f.create_entity("IfcShapeRepresentation", ContextOfItems=corpo, RepresentationIdentifier="Body",
+                          RepresentationType="SweptSolid", Items=[solido])
+    ifcopenshell.api.run("geometry.assign_representation", f, product=ruim, representation=rep)
+    lenta = _instancia(f, corpo, grande, (20.0, 10.0, 0.0), "lenta")
+    f.write(str(caminho))
+    assert ruim.id() < lenta.id()
+    return caminho, ruim.id(), (lenta.id(), lenta.GlobalId)
+
+
+@requer_a
+@requer_limite
+def test_p14_produto_sem_geometria_nao_e_acusado(tmp_path, monkeypatch):
+    caminho, id_ruim, (id_l, guid) = _gerar_sem_geometria(tmp_path / "semgeo.ifc")
+    _lentas(monkeypatch, (guid, 5))
+    _, r, _ = _tempo_carga(caminho, limite_peca_s=1.0)
+    assert r.estado == "concluido", f"estado {r.estado}: {r.erro}"
+    assert [s[0] for s in r.simplificadas] == [id_l], f"simplificadas: {[s[0] for s in r.simplificadas]}"
+    assert [s[0] for s in r.sem_malha] == [id_ruim] and "caixa" not in r.sem_malha[0][3].lower()
+    assert r.produtos_com_malha == 4 and r.produtos_total == 5
+    _regra_de_ouro(r)
+
+
+def _perfil_retangular(f, corpo, nome, pos, deslocar_perfil, solido_sem_posicao):
+    """Parede de perfil retangular extrudado; opcionalmente com posição própria do perfil e `Position` do sólido vazio."""
+    api = ifcopenshell.api.run
+    p2 = f.create_entity("IfcAxis2Placement2D", Location=f.create_entity("IfcCartesianPoint", Coordinates=(1.5 * MM, 0.7 * MM))) if deslocar_perfil else None
+    perfil = f.create_entity("IfcRectangleProfileDef", ProfileType="AREA", XDim=3.0 * MM, YDim=0.2 * MM, Position=p2)  # o arquivo está em mm
+    solido = f.create_entity(
+        "IfcExtrudedAreaSolid", SweptArea=perfil, Depth=2.8 * MM, ExtrudedDirection=f.create_entity("IfcDirection", DirectionRatios=(0.0, 0.0, 1.0)),
+        Position=None if solido_sem_posicao else f.create_entity("IfcAxis2Placement3D", Location=f.create_entity("IfcCartesianPoint", Coordinates=(0.0, 0.0, 0.0))))
+    rep = f.create_entity("IfcShapeRepresentation", ContextOfItems=corpo, RepresentationIdentifier="Body", RepresentationType="SweptSolid", Items=[solido])
+    p = api("root.create_entity", f, ifc_class="IfcWall", name=nome)
+    api("geometry.assign_representation", f, product=p, representation=rep)
+    m = np.eye(4)
+    c, s = np.cos(np.radians(30)), np.sin(np.radians(30))
+    m[:2, :2] = [[c, -s], [s, c]]
+    m[:3, 3] = pos
+    api("geometry.edit_object_placement", f, product=p, matrix=m)
+    return p
+
+
+def _gerar_retangulares(caminho):
+    f, corpo = _novo()
+    _caixa(f, corpo, "IfcWall", (0.0, 0.0, 0.0))
+    a = _perfil_retangular(f, corpo, "perfil deslocado", (10.0, 5.0, 0.0), True, False)
+    b = _perfil_retangular(f, corpo, "posição vazia", (20.0, 5.0, 0.0), False, True)
+    f.write(str(caminho))
+    return caminho, [(a.id(), a.GlobalId), (b.id(), b.GlobalId)]
+
+
+@requer_a
+@requer_limite
+@pytest.mark.parametrize("modelo", ["paredes_e_aberturas", "perfil_retangular", "posicao_vazia"])
+def test_p15_caixa_do_solido_extrudado_dentro_de_1cm(modelo, mab, tmp_path, monkeypatch):
+    if modelo == "paredes_e_aberturas":  # paredes de perfil IfcArbitraryClosedProfileDef com IfcIndexedPolyCurve
+        caminho = mab
+        f = ifcopenshell.open(str(caminho))
+        paredes = sorted(f.by_type("IfcWall"), key=lambda p: p.id())
+        lentas = [(p.id(), p.GlobalId) for p in (paredes[0], paredes[1], paredes[7], paredes[-1])]  # a última é a de 60 m
+        assert paredes[0].Representation.Representations[0].Items[0].SweptArea.is_a("IfcArbitraryClosedProfileDef")
+    else:
+        caminho, lentas = _gerar_retangulares(tmp_path / "retangulares.ifc")
+        lentas = lentas[:1] if modelo == "perfil_retangular" else lentas[1:]  # perfil com posição própria / `Position` vazio
+    ref_lotes, ref, _ = _tempo_carga(caminho)  # geometria real, sem injeção
+    assert ref.estado == "concluido" and ref.sem_malha == []
+    _lentas(monkeypatch, *[(g, 5) for _, g in lentas])
+    lotes, r, _ = _tempo_carga(caminho, limite_peca_s=1.0)
+    assert r.estado == "concluido", f"estado {r.estado}: {r.erro}"
+    assert {s[0] for s in r.simplificadas} == {i for i, _ in lentas}
+    _confere_caixas(lotes, ref_lotes, [i for i, _ in lentas])
+    assert r.sem_malha == []
+    _regra_de_ouro(r)
+
+
+@requer_a
+@requer_limite
+@pytest.mark.parametrize("modelo", [
+    "com_reinicio", "so_caixa"])
+def test_p16_deslocamento_nao_gravavel_em_todo_lote(modelo, mapeadas1, copias1, monkeypatch):
+    caminho, [(_, guid)] = mapeadas1 if modelo == "com_reinicio" else copias1  # só_caixa: o primeiro lote é uma caixa
+    _lentas(monkeypatch, (guid, 5))
+    lotes, r, _ = _tempo_carga(caminho, limite_peca_s=1.0)
+    assert r.estado == "concluido" and len(r.simplificadas) == 1 and lotes
+    for lt in lotes:
+        assert not lt.deslocamento.flags.writeable, f"lote {lt.indice_lote}: deslocamento gravável"
+        assert not any(a.flags.writeable for a in (lt.vertices, lt.indices, lt.objetos))
+    with pytest.raises(ValueError):
+        lotes[-1].deslocamento[0] = 1.0
+
+
+@requer_a
+@requer_limite
+@requer_caixa_falha
+def test_p18_filho_da_caixa_que_falha(mapeadas1, monkeypatch):
+    caminho, [(id_l, guid)] = mapeadas1
+    ref_lotes, _, _ = _tempo_carga(caminho)
+    _lentas(monkeypatch, (guid, 5))
+    monkeypatch.setenv("OBIM_TESTE_FALHAR_CAIXA", guid)
+    lotes, r, _ = _tempo_carga(caminho, limite_peca_s=1.0)
+    assert r.estado == "concluido", f"estado {r.estado}: {r.erro}"
+    assert [s[0] for s in r.sem_malha] == [id_l] and len(r.sem_malha[0][3]) > 10, f"sem_malha: {r.sem_malha}"
+    assert r.simplificadas == []
+    assert r.produtos_com_malha == 12 and id_l not in _mundo(lotes)
+    _confere_caixas(lotes, ref_lotes, [i for i in _mundo(lotes)])  # nenhum cubo na origem esticando a cena
     _regra_de_ouro(r)

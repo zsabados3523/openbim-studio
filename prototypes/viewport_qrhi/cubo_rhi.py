@@ -5,6 +5,7 @@ Se a API do Qt mudar entre versões, só este arquivo precisa de ajuste.
 """
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -66,8 +67,10 @@ class CuboViewport(QRhiWidget, Viewport):
     """Widget 3D (QRhiWidget) que mostra uma malha colorida girando."""
 
     clicado = Signal(object)  # id do objeto clicado (ou None) após clique esquerdo sem arrasto
+    contexto_perdido = Signal()  # a placa foi trocada e lotes liberados não voltam: quem carregou deve recarregar
 
-    def __init__(self, parent=None, api: QRhiWidget.Api | None = None, girar: bool = True):
+    def __init__(self, parent=None, api: QRhiWidget.Api | None = None, girar: bool = True,
+                 liberar_apos_envio: bool = True):
         super().__init__(parent)
         if api is not None:
             self.setApi(api)  # antes de mostrar a janela
@@ -81,6 +84,10 @@ class CuboViewport(QRhiWidget, Viewport):
         self._rhi_antigo = None
         self._cubo = True  # False depois de limpar()/adicionar_lote: só os lotes aparecem
         self._lotes: list[dict] = []
+        # T08-D: depois do envio à placa, o lote perde vértices e índices na memória do programa (só a placa os
+        # guarda); ficam os objetos (caixas e ids) e as contagens. Se a placa for perdida, esses lotes não voltam.
+        self._liberar = bool(liberar_apos_envio)
+        self.lotes_perdidos = 0
         self._buffers_criados = 0
         self._caixa = None  # (min, max) de tudo o que foi adicionado, no espaço do lote
         self.camera = Camera()
@@ -116,7 +123,9 @@ class CuboViewport(QRhiWidget, Viewport):
     def adicionar_lote(self, lote) -> None:
         """Guarda o lote (a T06 usa `objetos`, `pos` e `indices`); o envio à placa é no próximo desenho."""
         self._cubo = False
-        self._lotes.append({"lote": lote, "vbuf": None, "ibuf": None})
+        self._lotes.append({"lote": lote, "vbuf": None, "ibuf": None, "n_idx": int(lote.indices.size),
+                            "n_vert": int(lote.vertices.size), "bytes": int(lote.vertices.nbytes + lote.indices.nbytes),
+                            "livre": False})
         if len(lote.objetos):
             lo, hi = lote.objetos["caixa_min"].min(axis=0), lote.objetos["caixa_max"].max(axis=0)
             if self._caixa is not None:
@@ -137,9 +146,9 @@ class CuboViewport(QRhiWidget, Viewport):
         enviados = [e for e in self._lotes if e["vbuf"] is not None]
         return {
             "lotes": len(self._lotes),
-            "triangulos": sum(int(e["lote"].indices.size) // 3 for e in self._lotes),
-            "vertices": sum(int(e["lote"].vertices.size) for e in self._lotes),
-            "bytes_gpu": sum(int(e["lote"].vertices.nbytes + e["lote"].indices.nbytes) for e in enviados),
+            "triangulos": sum(e["n_idx"] // 3 for e in self._lotes),
+            "vertices": sum(e["n_vert"] for e in self._lotes),
+            "bytes_gpu": sum(e["bytes"] for e in enviados),
             "buffers_criados": self._buffers_criados,
             "pendentes": len(self._lotes) - len(enviados),
         }
@@ -259,12 +268,21 @@ class CuboViewport(QRhiWidget, Viewport):
         """Solta buffers, pipelines e bindings (dono = C++, então deleteLater) e marca tudo para reenvio."""
         for e in self._lotes:  # os lotes voltam a ser enviados, 1 por quadro
             self._soltar(e)
+        if any(e["livre"] for e in self._lotes):  # sem os dados não dá para reenviar: some da tela e fica contado
+            self.lotes_perdidos += sum(1 for e in self._lotes if e["livre"])
+            self._lotes = [e for e in self._lotes if not e["livre"]]
+            self._caixa = None  # a cena não é mais a mesma; o sinal avisa quem pode recarregá-la
+            avisar = True
+        else:
+            avisar = False
         for n in ("_vbuf", "_ibuf", "_ubuf", "_srb", "_pipeline", "_ubuf_m", "_srb_m", "_pipeline_m"):
             o = getattr(self, n, None)
             if o is not None:
                 o.deleteLater()
             setattr(self, n, None)
         self._rhi_antigo, self._pronto, self._malha_nova = None, False, True
+        if avisar:
+            self.contexto_perdido.emit()
 
     def releaseResources(self) -> None:
         self._liberar_recursos()
@@ -312,6 +330,9 @@ class CuboViewport(QRhiWidget, Viewport):
         rub.uploadStaticBuffer(e["vbuf"], 0, len(v), v)
         rub.uploadStaticBuffer(e["ibuf"], 0, len(i), i)
         self._buffers_criados += 2
+        if self._liberar:
+            vazio = np.empty(0, dtype=lote.vertices.dtype), np.empty(0, dtype=lote.indices.dtype)
+            e["lote"], e["livre"] = replace(lote, vertices=vazio[0], indices=vazio[1]), True
         return True
 
     def _carregar(self, nome: str) -> QShader:
@@ -383,5 +404,5 @@ class CuboViewport(QRhiWidget, Viewport):
         for e in self._lotes:  # uma chamada de desenho por lote
             if e["vbuf"] is not None:
                 cb.setVertexInput(0, [(e["vbuf"], 0)], e["ibuf"], 0, QRhiCommandBuffer.IndexUInt32)
-                cb.drawIndexed(int(e["lote"].indices.size))
+                cb.drawIndexed(e["n_idx"])
         cb.endPass()

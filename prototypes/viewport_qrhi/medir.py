@@ -5,6 +5,7 @@ Imprime uma linha JSON. Roda com QT_QPA_PLATFORM=xcb (ou o padrão do sistema), 
 import argparse
 import gc
 import json
+import multiprocessing
 import os
 import sys
 import time
@@ -18,32 +19,7 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from viewport_qrhi.carregador import CarregadorMalhas, LoteMalha, ResumoCarga  # noqa: E402
 from viewport_qrhi.cubo_rhi import CuboViewport  # noqa: E402
-
-
-def pico_memoria_mb() -> float:
-    """Pico do processo (sem psutil): getrusage no Linux; GetProcessMemoryInfo (PeakWorkingSetSize) no Windows."""
-    if sys.platform == "win32":
-        import ctypes
-        from ctypes import wintypes
-
-        class PMC(ctypes.Structure):
-            _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD)] + [
-                (n, ctypes.c_size_t) for n in ("PeakWorkingSetSize", "WorkingSetSize", "QuotaPeakPagedPoolUsage",
-                 "QuotaPagedPoolUsage", "QuotaPeakNonPagedPoolUsage", "QuotaNonPagedPoolUsage", "PagefileUsage", "PeakPagefileUsage")]
-
-        pmc = PMC()
-        pmc.cb = ctypes.sizeof(pmc)
-        k = ctypes.WinDLL("kernel32", use_last_error=True)
-        k.GetCurrentProcess.restype = wintypes.HANDLE
-        k.GetCurrentProcess.argtypes = []
-        f = ctypes.WinDLL("psapi", use_last_error=True).GetProcessMemoryInfo  # B-2: tipos declarados (pseudo-handle -1)
-        f.argtypes = [wintypes.HANDLE, ctypes.POINTER(PMC), wintypes.DWORD]
-        f.restype = wintypes.BOOL
-        if not f(k.GetCurrentProcess(), ctypes.byref(pmc), pmc.cb):
-            raise ctypes.WinError(ctypes.get_last_error())
-        return pmc.PeakWorkingSetSize / 2**20
-    import resource
-    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0  # KB no Linux
+from viewport_qrhi.processo_malhas import pico_memoria_mb  # noqa: E402,F401  (sem Qt; aceita o id de um filho)
 
 
 def esperar(cond, limite_s):
@@ -53,7 +29,40 @@ def esperar(cond, limite_s):
     return cond()
 
 
-def medir(caminho, threads, bloco, png=None, janela=(1280, 720)) -> dict:
+def _rss_mb(pid) -> float:
+    """Memória residente atual (Linux, /proc). Fora do Linux devolve 0 (a soma amostrada é só informativa)."""
+    try:
+        with open(f"/proc/{pid}/status") as a:
+            for linha in a:
+                if linha.startswith("VmRSS:"):
+                    return int(linha.split()[1]) / 1024.0
+    except OSError:
+        pass
+    return 0.0
+
+
+def _filhos_vivos() -> list:
+    return [p for p in multiprocessing.active_children() if p.pid]
+
+
+def medir_cancelamento(caminho, apos_s, biblioteca=None) -> dict:
+    """Cancela a carga depois de `apos_s` e confere se sobrou processo filho (meta: nenhum)."""
+    kw = {"biblioteca": biblioteca} if biblioteca else {}
+    car = CarregadorMalhas(str(caminho), **kw)
+    car.iniciar()
+    time.sleep(apos_s)
+    vivos_antes = len(_filhos_vivos())
+    t = time.perf_counter()
+    car.cancelar()
+    car.aguardar(timeout=60.0)
+    ate = t + 30.0
+    while _filhos_vivos() and time.perf_counter() < ate:
+        time.sleep(0.1)
+    return {"cancelamento": True, "filhos_vivos_antes": vivos_antes, "filhos_sobrando": len(_filhos_vivos()),
+            "cancelar_s": round(time.perf_counter() - t, 2)}
+
+
+def medir(caminho, threads, bloco, png=None, janela=(1280, 720), biblioteca=None) -> dict:
     app = QApplication.instance() or QApplication([])
     w = CuboViewport(girar=False)
     w.resize(*janela)
@@ -90,7 +99,17 @@ def medir(caminho, threads, bloco, png=None, janela=(1280, 720)) -> dict:
     ts.timeout.connect(sonda)
     tc.setInterval(16)
     tc.timeout.connect(consumidor)
-    car = CarregadorMalhas(str(caminho), threads=threads, tamanho_bloco=bloco)
+    kw = {"biblioteca": biblioteca} if biblioteca else {}
+    car = CarregadorMalhas(str(caminho), threads=threads, tamanho_bloco=bloco, **kw)
+    soma_max = [0.0]
+
+    def amostrar():  # número só informativo: pai + filhos vivos, a cada 0,25 s
+        soma_max[0] = max(soma_max[0], _rss_mb(os.getpid()) + sum(_rss_mb(p.pid) for p in _filhos_vivos()))
+
+    ta = QTimer()
+    ta.setInterval(250)
+    ta.timeout.connect(amostrar)
+    ta.start()
     t0 = time.perf_counter()
     ultimo[0] = t0
     marca_primeiro = []
@@ -101,6 +120,7 @@ def medir(caminho, threads, bloco, png=None, janela=(1280, 720)) -> dict:
     QTimer.singleShot(0, car.iniciar)  # já dentro do laço de eventos, para a sonda ver o custo de iniciar()
     loop.exec()
     tc.stop()
+    ta.stop()
     car.aguardar(timeout=30.0)
     resumo = estado["resumo"]
     del car
@@ -126,7 +146,20 @@ def medir(caminho, threads, bloco, png=None, janela=(1280, 720)) -> dict:
         QCoreApplication.processEvents()
     fps = (len(quadros) - n0) / (time.perf_counter() - t1)
     w.close()
+    pico_pai = pico_memoria_mb()
+    pico_filho = float(resumo.pico_filho_mb)
+    filho_rusage = None
+    if sys.platform != "win32":
+        import resource  # conferência no Linux: maior pico entre filhos já finalizados
+        filho_rusage = round(resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss / (2**20 if sys.platform == "darwin" else 1024.0))  # bytes no macOS
+    simp = list(resumo.simplificadas)
     return {
+        "pico_pai_mb": round(pico_pai), "pico_filho_mb": round(pico_filho),
+        "pico_somado_mb": round(pico_pai + pico_filho),  # META D5: pico do pai + maior pico entre os filhos
+        "pico_filho_rusage_mb": filho_rusage, "soma_amostrada_max_mb": round(soma_max[0]),
+        "simplificadas": {"quantidade": len(simp), "lista": [list(map(str, x)) for x in simp[:5]]},
+        "pecas_com_malha": resumo.produtos_com_malha, "pecas_sem_malha": len(resumo.sem_malha),
+        "biblioteca": biblioteca or "padrao", "filhos_sobrando": len(_filhos_vivos()),
         "nucleos": os.cpu_count(), "threads": resumo.threads, "bloco": bloco, "estado": resumo.estado,
         "triangulos": resumo.triangulos, "produtos": resumo.produtos_com_malha, "sem_malha": len(resumo.sem_malha),
         "lotes": est["lotes"], "abrir_s": round(t_abrir, 2),
@@ -142,8 +175,14 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("arquivo")
     ap.add_argument("--threads", type=int, default=None)
-    ap.add_argument("--bloco", type=int, default=4000)
+    ap.add_argument("--bloco", type=int, default=1000)
     ap.add_argument("--png", default=None)
+    ap.add_argument("--biblioteca", default=None, help="ex.: opencascade (padrão: híbrida)")
+    ap.add_argument("--cancelar-apos", type=float, default=None, help="só mede o cancelamento (sem tela), em segundos")
     ap.add_argument("--janela", default="1280x720", help="LxA, ex.: 640x480")
     a = ap.parse_args()
-    print(json.dumps(medir(a.arquivo, a.threads, a.bloco, a.png, tuple(int(v) for v in a.janela.split('x')))))
+    if a.cancelar_apos is not None:
+        print(json.dumps(medir_cancelamento(a.arquivo, a.cancelar_apos, a.biblioteca)))
+    else:
+        print(json.dumps(medir(a.arquivo, a.threads, a.bloco, a.png, tuple(int(v) for v in a.janela.split('x')),
+                               a.biblioteca)))

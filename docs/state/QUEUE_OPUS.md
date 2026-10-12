@@ -28,3 +28,6 @@ Resultado em `docs/state/reports/LOTE_OPUS_2.md`. Tabela mestre APROVADA; v2/05 
 
 ## Lote 3 (pedido pronto em `docs/state/LOTE_OPUS_3.md`, 2026-10-11)
 T17/T18 (correções do lote 2), amostra de T19/T20 e ADR-005 final (T15). Cota semanal usada: 12%. Aguarda o ok do PO.
+
+## Lote 6: FEITO (2026-10-12), resultado em `reports/LOTE_OPUS_6.md`
+Lote 7 (a abrir): revisão do oráculo T08-0, de T08-A/B1/B2 e da T26 (oráculo e código). Cada cartão T3 espera o lote; nada entra no `main` sem aprovado.

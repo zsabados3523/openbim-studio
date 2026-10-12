@@ -65,12 +65,13 @@ def _unitarias(n):
 
 def _produto_para_numpy(geo, paleta):
     """Geometria do iterador -> (pos float64 (n,3), normal float32 (n,3), cor uint8 (n,4), indices uint32 (3m,)) ou None."""
-    faces = np.asarray(geo.faces, dtype=np.int64).reshape(-1, 3)
+    # D2 (LOTE_OPUS_6 §2.2): vetores prontos do IfcOpenShell (int32 e float64) em vez de tuplas; ~17x mais rápido.
+    faces = np.frombuffer(geo.faces_buffer, dtype=np.int32).astype(np.int64).reshape(-1, 3)
     if len(faces) == 0:
         return None
-    pos = np.asarray(geo.verts, dtype=np.float64).reshape(-1, 3)
-    normais = np.asarray(geo.normals, dtype=np.float64).reshape(-1, 3)
-    mids = np.asarray(geo.material_ids, dtype=np.int64)
+    pos = np.frombuffer(geo.verts_buffer, dtype=np.float64).reshape(-1, 3).copy()  # cópia: não depende do buffer do iterador
+    normais = np.frombuffer(geo.normals_buffer, dtype=np.float64).reshape(-1, 3)
+    mids = np.frombuffer(geo.material_ids_buffer, dtype=np.int32).astype(np.int64)
     k = len(paleta) - 1  # última linha = cinza
     tm = np.where((mids < 0) | (mids >= k), k, mids) if len(mids) == len(faces) else np.full(len(faces), k)
     if len(normais) != len(pos):  # sem normais: normal de cada face, vértices separados
@@ -141,9 +142,13 @@ def _agrupar(prods):
 
 
 class CarregadorMalhas:
+    # D1 (LOTE_OPUS_6 §2.2): a híbrida tenta a biblioteca rápida e cai na "opencascade" nos recortes de abertura.
+    # Curiosidade: has_geometry_library() responde falso para esse nome, mas o iterador o aceita.
     def __init__(self, caminho, threads=None, tamanho_bloco=4000, fila_max=4,
-                 excluir=("IfcFeatureElementSubtraction", "IfcSpace")):
+                 excluir=("IfcFeatureElementSubtraction", "IfcSpace"),
+                 biblioteca="hybrid-cgal-simple-opencascade"):
         self.caminho = str(caminho)
+        self.biblioteca = str(biblioteca)
         self.threads = int(threads) if threads else max(1, (os.cpu_count() or 2) - 1)
         self.tamanho_bloco = int(tamanho_bloco)
         self.excluir = tuple(excluir)
@@ -311,7 +316,7 @@ class CarregadorMalhas:
                 est["sem"].append((i, p.GlobalId, p.is_a(), motivo))
 
         try:
-            it = geom.iterator(cfg, arq, self.threads, include=bloco, geometry_library="opencascade")
+            it = geom.iterator(cfg, arq, self.threads, include=bloco, geometry_library=self.biblioteca)
             try:
                 iniciou = it.initialize()
                 if not iniciou:

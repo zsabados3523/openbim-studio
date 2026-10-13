@@ -229,7 +229,7 @@ def c_camera(res):
     res["enq_cls"] = classificar(a)
     nf = np.abs(a[..., :3].astype(int) - np.array(FUNDO)).max(-1) > 25
     res["enq_borda"] = int(nf[:2].sum() + nf[-2:].sum() + nf[:, :2].sum() + nf[:, -2:].sum())
-    res["enq_larg"] = float(np.nonzero(nf.any(0))[0].ptp() + 1) / a.shape[1]
+    res["enq_larg"] = float(np.ptp(np.nonzero(nf.any(0))[0]) + 1) / a.shape[1]
     yield from volta()
     t0, antes = time.perf_counter(), pos(c)
     for _ in range(200):

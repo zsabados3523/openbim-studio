@@ -12,6 +12,7 @@
 //  - Perda de dispositivo (FrameOpDeviceLost ou `perder_contexto`): a QRhi é recriada na thread e a cópia compacta é reenviada.
 //  - Cena (T08): fila de lotes, cópia compacta, sequência e caixa vivem em `cena.*` (mutex próprio). Aqui só o envio à placa: orçamento por quadro
 //    (`ORCAMENTO_BYTES`, ~4 ms), lotes grandes partidos em fatias; a sequência de um quadro = maior prefixo contínuo de lotes já NA placa.
+#include "camera.h"
 #include "cena.h"
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
@@ -59,7 +60,6 @@ const unsigned char QSB_FRAG[] = {
 using namespace obim;
 constexpr size_t ORCAMENTO_BYTES = 2u << 20;  // por quadro (cabe em ~1 ms no software); lote maior é partido em fatias
 constexpr auto ORCAMENTO_TEMPO = std::chrono::milliseconds(4);
-struct Camera { double alvo[3] = {0, 0, 0}, distancia = 3.2, azimute = -45, elevacao = 30; };
 
 class Motor {
  public:
@@ -96,8 +96,7 @@ class Motor {
     }
   }
   // --- cena (thread da janela / Python) ---
-  Camera camera() { std::lock_guard<std::mutex> l(m_); return cam_; }
-  void definir(const Camera& c) { std::lock_guard<std::mutex> l(m_); cam_ = c; }
+  ControleCamera cam_;  // entradas da thread da janela só enfileiram; a thread de desenho aplica (camera.h)
   nb::dict estatisticas() {
     std::lock_guard<std::mutex> l(m_);
     const Totais t = cena_.totais();
@@ -197,7 +196,9 @@ class Motor {
         p.e.n = quint32(p.d->i.size());
         p.e.vb.reset(g.rhi->newBuffer(QRhiBuffer::Immutable, QRhiBuffer::VertexBuffer, quint32(p.d->v.size())));
         p.e.ib.reset(g.rhi->newBuffer(QRhiBuffer::Immutable, QRhiBuffer::IndexBuffer, quint32(p.d->i.size() * 4)));
-        if (!p.e.vb->create() || !p.e.ib->create()) { p = {}; return; }
+        if (!p.e.vb->create() || !p.e.ib->create()) {  // achado 5: o lote NÃO se perde; volta à fila e repete no quadro seguinte
+          --g.cur.n; p = {}; { std::lock_guard<std::mutex> l(m_); info_ = "AVISO: create() de buffer falhou; repetindo no quadro seguinte"; } return;
+        }
       }
       const bool vert = p.voff < p.d->v.size();  // primeiro os vértices, depois os índices
       const size_t total = vert ? p.d->v.size() : p.d->i.size() * 4, off = vert ? p.voff : p.ioff, un = vert ? BYTES_VERTICE : 4;
@@ -219,7 +220,11 @@ class Motor {
       const auto now = Rel::now();
       if (prox < now) prox = now;  // sem rajada para recuperar quadros atrasados
       std::this_thread::sleep_until(prox);
-      if (perdida_) { rb.reset(); soltar = false; continue; }  // soltura estourou 3 s: a swapchain nunca mais é tocada (nem createOrResize)
+      if (perdida_) {  // soltura estourou 3 s: a swapchain nunca mais é tocada (nem createOrResize); com a superfície de volta, `laco` a abandona e recria a QRhi (achado 6)
+        rb.reset(); soltar = false;
+        if (exposta) return Fim::Perdido;
+        continue;
+      }
       if (soltar) {  // a superfície vai ser destruída: libera a swapchain NESTA thread e confirma
         g.pronta = false; g.sc->destroy(); rb.reset(); ++superficies_soltas;
         if (gl_) g.rhi->makeThreadLocalNativeContextCurrent();  // GL: o contexto não fica atual numa janela prestes a ser destruída
@@ -237,9 +242,11 @@ class Motor {
       if (r != QRhi::FrameOpSuccess) continue;
       QRhiResourceUpdateBatch* rub = g.rhi->nextResourceUpdateBatch();
       enviar(g, rub);
-      Camera c; double bmin[3], bmax[3]; bool pedida;
-      { std::lock_guard<std::mutex> l(m_); c = cam_; pedida = cap_pedida_; }
+      bool pedida; double bmin[3], bmax[3];
+      { std::lock_guard<std::mutex> l(m_); pedida = cap_pedida_; }
       const bool com_caixa = cena_.caixa(bmin, bmax);
+      const QSize alvo = g.sc->currentPixelSize();  // tamanho real do backbuffer
+      const Camera c = cam_.aplicar(alvo.height(), double(alvo.width()) / (std::max)(alvo.height(), 1), com_caixa ? bmin : nullptr, com_caixa ? bmax : nullptr);
       if (!pedida) rb.reset();  // `capturar` desistiu: descarta a leitura pendente
       const double az = c.azimute * 3.14159265358979323846 / 180, el = c.elevacao * 3.14159265358979323846 / 180;
       const QVector3D alvo3(float(c.alvo[0]), float(c.alvo[1]), float(c.alvo[2]));
@@ -251,7 +258,6 @@ class Motor {
         longe = ((pos - centro).length() + raio) * 1.1; perto = (std::max)(longe / 10000.0, 0.05);
       }
       QMatrix4x4 proj, vista;
-      const QSize alvo = g.sc->currentPixelSize();  // tamanho real do backbuffer
       proj.perspective(45.0f, float(alvo.width()) / float(alvo.height()), float(perto), float(longe));
       vista.lookAt(pos, alvo3, QVector3D(0, 0, 1));
       const QMatrix4x4 mvp = g.rhi->clipSpaceCorrMatrix() * proj * vista;
@@ -325,7 +331,7 @@ class Motor {
   QWindow* win_ = nullptr; QOffscreenSurface* fb_ = nullptr; QSurfaceFormat fmt_;
   bool rodando_ = false, solto_ = false, cap_pedida_ = false, cap_pronta_ = false;
   int64_t seq_placa_ = 0;  // só a thread de desenho toca
-  Camera cam_; std::string info_, cap_; int cap_w_ = 0, cap_h_ = 0;
+  std::string info_, cap_; int cap_w_ = 0, cap_h_ = 0;
   std::array<std::tuple<double, int64_t>, 4096> anel_{}; size_t n_ = 0;
 };
 
@@ -375,18 +381,31 @@ class Cena {  // objeto Python: só guarda o Motor e ponteiros fracos; o Qt é d
   nb::tuple capturar() { std::tuple<int, int, std::string> r; { nb::gil_scoped_release lib; r = m_->capturar(); }
     return nb::make_tuple(std::get<0>(r), std::get<1>(r), nb::bytes(std::get<2>(r).data(), std::get<2>(r).size())); }
   nb::dict camera() {
-    Camera c = m_->camera(); nb::dict d;
+    Camera c = m_->cam_.ler(); nb::dict d;
     d["alvo"] = nb::make_tuple(c.alvo[0], c.alvo[1], c.alvo[2]); d["distancia"] = c.distancia; d["azimute"] = c.azimute; d["elevacao"] = c.elevacao;
     return d;
   }
   void definir_camera(nb::object alvo, nb::object distancia, nb::object azimute, nb::object elevacao) {
-    Camera c = m_->camera();
-    if (!alvo.is_none()) { auto t = nb::cast<std::vector<double>>(alvo); if (t.size() != 3) throw nb::value_error("alvo = 3 números"); std::copy(t.begin(), t.end(), c.alvo); }
-    if (!distancia.is_none()) c.distancia = std::clamp(nb::cast<double>(distancia), 0.1, 10000.0);
-    if (!azimute.is_none()) c.azimute = nb::cast<double>(azimute);
-    if (!elevacao.is_none()) c.elevacao = std::clamp(nb::cast<double>(elevacao), -89.0, 89.0);
-    m_->definir(c);
+    std::vector<double> t; if (!alvo.is_none()) { t = nb::cast<std::vector<double>>(alvo); if (t.size() != 3) throw nb::value_error("alvo = 3 números"); }
+    const double dist = distancia.is_none() ? 0 : nb::cast<double>(distancia), az = azimute.is_none() ? 0 : nb::cast<double>(azimute), el = elevacao.is_none() ? 0 : nb::cast<double>(elevacao);
+    m_->cam_.modificar([&](Camera& c) {
+      if (!t.empty()) std::copy(t.begin(), t.end(), c.alvo);
+      if (!distancia.is_none()) c.distancia = std::clamp(dist, 0.1, 10000.0);
+      if (!azimute.is_none()) c.azimute = az;
+      if (!elevacao.is_none()) c.elevacao = std::clamp(el, -89.0, 89.0);
+    });
   }
+  // T09: da thread da janela; só enfileiram (a thread de desenho aplica, na ordem). dx, dy em pixels do mouse.
+  void orbitar(double dx, double dy) { m_->cam_.enfileirar({Entrada::Orbitar, dx, dy}); }
+  void mover(double dx, double dy) { m_->cam_.enfileirar({Entrada::Mover, dx, dy}); }
+  void aproximar(double fator) {
+    if (!(fator > 0) || std::isinf(fator)) throw nb::value_error("fator deve ser maior que zero");
+    m_->cam_.enfileirar({Entrada::Aproximar, fator, 0});
+  }
+  void enquadrar() { m_->cam_.enfileirar({Entrada::Enquadrar, 0, 0}); }
+  void animar_orbita(double graus_por_s) { m_->cam_.animar(graus_por_s); }  // por relógio, não por quadro
+  void parar_animacao() { m_->cam_.animar(0); }
+  int64_t atualizar(nb::object lote_novo, nb::object guids_remover) { return m_->cena_.atualizar(lote_novo, guids_remover); }
   nb::dict estatisticas() { return m_->estatisticas(); }
   void perder_contexto() { m_->perder = true; }  // gancho de teste: simula FrameOpDeviceLost
   std::string info() { return m_->info(); }
@@ -404,5 +423,9 @@ void registrar_viewport(nb::module_& m) {
       .def("capturar", &Cena::capturar).def("camera", &Cena::camera)
       .def("definir_camera", &Cena::definir_camera, nb::arg("alvo") = nb::none(), nb::arg("distancia") = nb::none(),
            nb::arg("azimute") = nb::none(), nb::arg("elevacao") = nb::none())
+      .def("orbitar", &Cena::orbitar, nb::arg("dx"), nb::arg("dy")).def("mover", &Cena::mover, nb::arg("dx"), nb::arg("dy"))
+      .def("aproximar", &Cena::aproximar, nb::arg("fator")).def("enquadrar", &Cena::enquadrar)
+      .def("animar_orbita", &Cena::animar_orbita, nb::arg("graus_por_s")).def("parar_animacao", &Cena::parar_animacao)
+      .def("atualizar", &Cena::atualizar, nb::arg("lote_novo").none(), nb::arg("guids_remover"))
       .def("estatisticas", &Cena::estatisticas).def("perder_contexto", &Cena::perder_contexto).def("info", &Cena::info);
 }

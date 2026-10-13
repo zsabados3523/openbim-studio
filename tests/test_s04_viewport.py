@@ -317,19 +317,7 @@ def c_trocar(res):
         (a.showNormal if i % 4 == 3 else a.show)()
         if not (yield from retoma(c)):
             res["falhas"].append(f"esconder {i}")
-    res["img0"] = list(captura(c).shape)  # diagnóstico: captura imediata, antes de esperar
-    yield 1500
-    img = captura(c)
-    res["viva"], res["cls"] = c.viva(), classificar(img)
-    fundo = (np.abs(img[..., :3].astype(int) - (30, 30, 40)).sum(-1) > 30).any(0).nonzero()[0]  # diagnóstico: colunas com algo desenhado
-    res["diag"] = dict(img=list(img.shape), janela=[a.width(), a.height()], cont=[cont.width(), cont.height()], dpr=cont.devicePixelRatioF(),
-                       colunas=[int(fundo.min()), int(fundo.max())] if fundo.size else None)
-    print("DIAG", json.dumps(res["diag"]), flush=True)
-    try:
-        from PIL import Image
-        Image.fromarray(img).save(RAIZ / "out" / "s04_trocar.png")
-    except Exception as e:  # noqa: BLE001
-        print("sem PNG:", e, flush=True)
+    res.update(viva=c.viva(), cls=classificar(img := captura(c)), tam=list(img.shape), cont=[cont.width(), cont.height()], dpr=cont.devicePixelRatioF())
     c.parar()
 
 def c_destruir(res, modo):

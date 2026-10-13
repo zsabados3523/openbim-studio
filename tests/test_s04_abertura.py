@@ -20,11 +20,12 @@ CONTRATO PARA O IMPLEMENTADOR (nomes exatos; o oráculo não depende de mais nad
    d1 a d3 montam o arquivo assim (`_gerar_layout(..., ordem=)`): `lentas_antes` (representações das lentas criadas primeiro, como
    no s25.ifc: lenta com id MAIOR entregue na posição 0) e `inversa` (entrega do maior id para o menor). Exigências: estado
    "concluido" (nunca "erro" por mais de 20 reinícios), todas e só as lentas viram caixa quando o orçamento não estoura, no máximo
-   `_k_filhos` = 2 + ceil(log2(n)) por lenta processos de CONVERSÃO abertos (os da caixa não contam; contados em
-   `multiprocessing.context.SpawnProcess.start` com `target.__name__ == "entrada"`), tempo total < 3 x `_main_estimado` (3 x a
+   `_k_filhos` = 4 + ceil(log2(n)) por lenta processos de CONVERSÃO abertos (os da caixa não contam; contados em
+   `multiprocessing.context.SpawnProcess.start` com `target.__name__ == "entrada"`), tempo total < 3 x `_main_estimado` (d2, com 3 lentas: 5 x) (3 x a
    referência sem lentidão medida na mesma execução + n_lentas x (limite + 1 s), calibrado no `main`: 3,1 s para 1 lenta em 26
-   peças e 6,1 s para 3 lentas em 23). Uma implementação possível (a variante descartável do oráculo): filho em modo "uma peça por
-   iterador" só para as pendentes não anunciadas, depois que a confirmação da primeira candidata não reproduz o travamento.
+   peças e 6,1 s para 3 lentas em 23). Duas implementações provadas contra estes casos (variantes descartáveis, nunca commitadas): (i) dividir ao meio as
+   pendentes não anunciadas e confirmar cada metade com um filho isolado (8 filhos no s25.ifc, ~4,8 s); (ii) um filho em modo "uma
+   peça por iterador" só para as pendentes não anunciadas, depois que a confirmação da primeira candidata não reproduz (5 filhos).
  * Resumo (`ResumoCarga.mensagens`): uma linha com o número EXATO de peças mostradas como caixa de uma vez (as pendentes dos blocos
    cortados, inclusive a que travou), com as palavras "peça" e "caixa", sem jargão (nada de isolado, iterador, bloco, thread, timeout,
    lote, budget). O número aparece sozinho (não colado a outro dígito, ponto ou vírgula). Toda peça cortada entra em `simplificadas`.
@@ -336,8 +337,9 @@ def test_c2_filho_isolado_que_cai_sem_pendentes_nao_vira_erro(tmp_path, monkeypa
 
 # ---------- (d) a ordem de entrega do iterador não é a dos ids (LOTE_OPUS_20, bloqueantes 1 a 3) ----------
 def _k_filhos(n_pecas, n_lentas=1):
-    """Teto de processos de conversão abertos por carga: 2 + log2(n) por peça lenta (divisão ao meio das pendentes)."""
-    return n_lentas * (2 + math.ceil(math.log2(max(n_pecas, 2))))
+    """Teto de processos de conversão abertos por carga: por peça lenta, os 3 fixos (bloco normal, isolado, confirmação da
+    acusada) mais 1 de folga e log2(n) da divisão ao meio das pendentes não anunciadas (a divisão ao meio gasta 8 no s25.ifc)."""
+    return n_lentas * (4 + math.ceil(math.log2(max(n_pecas, 2))))
 
 
 def _main_estimado(medir, n_lentas, limite=1.0):
@@ -368,6 +370,7 @@ def test_d1_lenta_entregue_antes_de_pecas_de_id_menor(tmp_path, monkeypatch, lay
     _confere_resumo(r, 1)
     assert med["filhos"] <= _k_filhos(len(layout)), f"{med['filhos']} processos de conversão (teto {_k_filhos(len(layout))})"
     teto = 3 * _main_estimado(med, 1)
+    print(f"\nS04-T16b d1: {med['t']:.1f} s (teto {teto:.1f} s, referência {med['t_ref']:.2f} s), {med['filhos']} filhos")
     assert med["t"] < teto, f"{med['t']:.1f} s >= 3 x o do main ({teto:.1f} s; referência sem lentidão {med['t_ref']:.2f} s)"
 
 
@@ -384,8 +387,9 @@ def test_d2_varias_lentas_fora_de_ordem_todas_e_so_elas_viram_caixa(tmp_path, mo
     _confere_resumo(r, 3)
     assert not _linhas_de_uma_vez(r), "com 3 peças lentas o orçamento padrão (20) não pode cortar nada"
     assert med["filhos"] <= _k_filhos(len(layout), 3), f"{med['filhos']} processos de conversão (teto {_k_filhos(len(layout), 3)})"
-    teto = 3 * _main_estimado(med, 3)
-    assert med["t"] < teto, f"{med['t']:.1f} s >= 3 x o do main ({teto:.1f} s; referência sem lentidão {med['t_ref']:.2f} s)"
+    teto = 5 * _main_estimado(med, 3)  # 5x, não 3x: várias lentas somam esperas de confirmação (a divisão ao meio gasta ~2,8x o main)
+    print(f"\nS04-T16b d2: {med['t']:.1f} s (teto {teto:.1f} s, referência {med['t_ref']:.2f} s), {med['filhos']} filhos")
+    assert med["t"] < teto, f"{med['t']:.1f} s >= 5 x o do main ({teto:.1f} s; referência sem lentidão {med['t_ref']:.2f} s)"
 
 
 @pytest.mark.parametrize("kw", [{"max_pecas_condenadas": 2}, {"max_espera_s": 3.0}], ids=["orcamento_de_pecas", "orcamento_de_espera"])

@@ -72,3 +72,12 @@ C hospedagem GitHub + espelho Codeberg · D interface híbrida (confirmar na S09
 ## Decisões do PO (2026-10-13): transparência e macOS
 - **macOS: "melhor esforço, sem garantia".** O build de macOS segue experimental, sem teste manual e sem bloquear merge. Isso **deve constar no aviso aos usuários**: README (feito no rascunho de transparência), página de download e instalador/notas de versão, em pt-BR e inglês. Nenhum texto pode prometer suporte a macOS.
 - Pedido do PO após ler críticas da comunidade OSArch a programas feitos com IA: (1) texto de transparência no README (aplicado ao README.md e README.en.md com o ok do PO em 2026-10-13); (2) cartão `F1-PRE-T01` de comportamento básico de janela e navegação com testes de regressão, antes da Fase 1; (3) pacote e convite para revisão humana externa em `docs/review/` (**nada enviado; o PO decide quando e para quem**); (4) este registro do macOS. Nenhuma resposta ou publicação em fórum em nome do PO.
+
+## Decisões do PO (2026-10-13): catálogo de anotação (F3/F4)
+1. **Detalhes 2D entram na 1.0:** linha de detalhe (D1), região preenchida (D2), texto (T1) e itens/componentes de detalhe 2D (D3, com biblioteca pequena própria, sem copiar de outro programa). Chamada e vista de detalhe (D4) ficam para depois da 1.0. "1.0" = o marco F6 do plano (faixa publicada de 21 a 42 meses).
+2. **Nuvem de revisão entra na 1.0** (só a nuvem, para indicar o que corrigir). Controle de revisões completo (letra, data, tabela) fica para versão seguinte; o carimbo tem campo livre "revisão".
+3. **Texto simples sobe para a F3** (junto da tag de ambiente).
+4. **Cota que comanda (cadeado):** versão futura.
+5. **Importar padrões de outro projeto** entra na F3, com **seleção do que importar** (filtrar quais padrões: modelos de vista, estilos de linha e de texto, carimbo), em vez de tudo de uma vez.
+6. **Referências quebradas:** versão mínima (lista e contagem) adiantada para a F3.
+- Efeito: o catálogo da F3/F4 e o escopo da 1.0 (v2/02) devem ser atualizados; a fatia de detalhes 2D ganha lugar no plano (a definir, antes da F3). Escopo é decisão do PO: registrada aqui.

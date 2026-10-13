@@ -270,7 +270,7 @@ Siglas: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz (só para reconh
 
 ### Revisões
 
-#### R1. Revisão e nuvem de revisão (F4) [talvez 1.0]
+#### R1. Revisão e nuvem de revisão (F4) [1.0 só a nuvem de revisão; revisões completas depois, decisão do PO 2026-10-13]
 - **O que faz:** registra as mudanças entre emissões e marca as áreas alteradas na vista.
 - **Como se usa:**
   1. Menu Documentar > Revisões: criar "Revisão A", data, descrição.
@@ -288,23 +288,23 @@ Siglas: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz (só para reconh
 
 Em todos os quatro, o `.ifc` não muda; vive no `.obim` dentro da vista. O PO diz que no projeto executivo "o que não se modela vira detalhe de anotação": por isso estas fichas existem, e a decisão 1 pergunta se sobem.
 
-#### D1. Linha de detalhe [talvez 1.0 / fora]
+#### D1. Linha de detalhe [1.0, decisão do PO 2026-10-13]
 - **O que faz:** desenha linhas e polilinhas 2D soltas na vista (para detalhar o que o modelo não tem).
 - **Como se usa:** **Alt+L**; estilo de linha (cheia, tracejada, traço e ponto) e espessura; clicar os pontos; **Enter** termina. Capturas nos pontos do modelo (como M13).
 - **Altera o modelo?** Não. Só a vista. **Comparação:** Rv e Ac têm; o Rv ainda permite deixar o modelo em meio-tom. **Proposta:** com os mesmos snaps do modelo.
 
-#### D2. Região preenchida (hachura manual) [talvez 1.0 / fora]
+#### D2. Região preenchida (hachura manual) [1.0, decisão do PO 2026-10-13]
 - **O que faz:** desenha uma área 2D com contorno e padrão (concreto, terra, brita).
 - **Como se usa:** **Alt+H**; escolher padrão; desenhar o contorno por cliques; **Enter** fecha; contorno pode ficar invisível.
 - **Na tela:** padrão de **desenho** (acompanha a escala da vista) ou de **modelo** (medida real): opção na barra.
 - **Altera o modelo?** Não. **Comparação:** os dois têm, com categorias de hachura. Nota: as hachuras **automáticas por material** (B3) estão na F3 e **não** dependem desta.
 
-#### D3. Componente de detalhe 2D [talvez 1.0 / fora]
+#### D3. Componente de detalhe 2D [1.0, decisão do PO 2026-10-13]
 - **O que faz:** coloca um elemento 2D de uma biblioteca (peça de fixação, perfil, manta) para montar detalhes.
 - **Como se usa:** pelo botão (sem tecla); escolher na lista, clicar para posicionar; **Espaço** gira 90°; há também repetição em fila.
 - **Altera o modelo?** Não. **Comparação:** Rv tem componentes de detalhe e repetição; Ac guarda símbolos 2D. **Proposta:** depende de uma **biblioteca** (desenhada por nós ou pelo PO). Sem biblioteca, a ferramenta é vazia.
 
-#### D4. Chamada e vista de detalhe [talvez 1.0 / fora]
+#### D4. Chamada e vista de detalhe [depois da 1.0, decisão do PO 2026-10-13]
 - **O que faz:** marca uma região na planta ou no corte e abre uma vista ampliada (1:20, 1:10) onde se desenha e se anota.
 - **Como se usa:** **Alt+Q**; clicar dois cantos do retângulo; a bolha aparece com número; duplo clique na bolha abre a vista de detalhe; na prancha a bolha mostra "detalhe/prancha".
 - **Altera o modelo?** Não. Só o `.obim`. **Comparação:** Rv: a chamada cria vista com anotações de detalhe; Ac: detalhe é só 2D e por padrão não traz cotas e anotações; ao refazer, o que foi desenhado à mão precisa ser refeito (**risco** para nós também). **Proposta:** a vista de detalhe é "recorte ampliado do modelo + camada 2D por cima"; regenerar não apaga a camada 2D.

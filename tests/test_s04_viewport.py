@@ -317,6 +317,8 @@ def c_trocar(res):
         (a.showNormal if i % 4 == 3 else a.show)()
         if not (yield from retoma(c)):
             res["falhas"].append(f"esconder {i}")
+    res["img0"] = list(captura(c).shape)  # diagnóstico: captura imediata, antes de esperar
+    yield 1500
     img = captura(c)
     res["viva"], res["cls"] = c.viva(), classificar(img)
     fundo = (np.abs(img[..., :3].astype(int) - (30, 30, 40)).sum(-1) > 30).any(0).nonzero()[0]  # diagnóstico: colunas com algo desenhado

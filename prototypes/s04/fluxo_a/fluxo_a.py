@@ -141,6 +141,9 @@ class FluxoA:
         self._ponte is not None and self._ponte.texto.emit(texto)
 
     def executar(self, cmd, espera=None):
+        return self.executar_detalhado(cmd, espera)[0]
+
+    def executar_detalhado(self, cmd, espera=None):  # (GlobalIds, detalhe do PRÓPRIO comando: dict novo a cada chamada, sem estado compartilhado entre threads)
         nome = cmd.get("cmd") if isinstance(cmd, dict) else None
         fn = self._camera if nome in CAMERA else getattr(self, "_c_" + str(nome), None)
         if fn is None:
@@ -152,11 +155,8 @@ class FluxoA:
         else:
             if not (self.trava.acquire(blocking=False) if espera == 0 else self.trava.acquire(timeout=-1 if espera is None else espera)):
                 raise ModeloOcupado("o modelo está ocupado por outro comando")
-            try:
+            try:  # a Cena.atualizar roda dentro de `_transacao` e de `_desfaz_ou_refaz`, ainda com a trava
                 guids = self._transacao(fn, cmd, u) if nome in TRANSACAO else fn(cmd, u)
-                if guids and self.cena is not None and nome in TRANSACAO | {"desfazer", "refazer"}:  # sem o que desfazer ou refazer: sem atualizar
-                    u["sequencia"] = int(self.cena.atualizar(self._lote(u["geometria"]) if u["geometria"] else None, u["apagados"] if nome in TRANSACAO else u.pop("remover")))
-                    self.sequencias.append(u["sequencia"])
             finally:
                 self.trava.release()  # só depois de Cena.atualizar (ou do erro)
         u["t_comando_ms"] = self._relogio()
@@ -167,21 +167,37 @@ class FluxoA:
                 u["t_painel_ms"] = self._relogio()
         elif nome == "selecionar":
             self._publicar(self.painel_texto())
-        self.ultimo = {**{k: v for k, v in u.items() if k != "painel"}, "t0_ms": t0}
+        det = {k: (list(v) if isinstance(v, list) else v) for k, v in u.items() if k in ("criados", "alterados", "apagados", "geometria", "sequencia", "t_comando_ms", "t_painel_ms")} | {"t0_ms": t0}
+        self.ultimo = dict(det)  # cópia, só para quem roda numa thread só
         guids and setattr(self, "_ult_guid", guids[-1])
-        return guids
+        return guids, det
+
+    def _enviar(self, u, remover):  # a malha só do que mudou + UMA Cena.atualizar (sem janela: nada); sequência anotada só se a cena aceitou
+        if self.cena is not None:
+            u["sequencia"] = int(self.cena.atualizar(self._lote(u["geometria"]) if u["geometria"] else None, remover))
+            self.sequencias.append(u["sequencia"])
 
     def _transacao(self, fn, cmd, u):
+        sel = self.selecionado
         self.ifc.begin_transaction()
         try:
             fn(cmd, u)
             self.ifc.end_transaction()
         except BaseException:
-            self.ifc.discard_transaction()  # desfaz só a transação aberta (ifc.undo() desfaria a anterior)
+            self.ifc.discard_transaction()  # antes do commit: desfaz só a transação aberta (ifc.undo() desfaria a anterior)
+            self.selecionado = sel
             raise
-        self._g += u.pop("dg", 0)  # paredes criadas: contador que desfazer NÃO devolve
         guids = list(dict.fromkeys(u["criados"] + u["alterados"] + u["apagados"]))
-        self.historico.append({"guids": guids, "alterados": list(u["alterados"])})
+        self.historico.append({"guids": guids, "alterados": list(u["alterados"]), "geometria": list(u["geometria"])})
+        try:
+            self._enviar(u, u["apagados"])
+        except BaseException:  # depois do commit: volta a transação, o registro e a seleção; o commit apagou o refazer do ifcopenshell, então o do fluxo também
+            self.historico.pop()
+            self.ifc.undo()
+            self._refazer.clear()
+            self.selecionado = sel
+            raise
+        self._g += u.pop("dg", 0)  # paredes criadas: contador que desfazer NÃO devolve (nem o comando que falhou)
         self._refazer.clear()
         return guids
 
@@ -201,7 +217,8 @@ class FluxoA:
         v, o = np.empty(len(todos), DTYPE_VERTICE), np.empty(len(gs), DTYPE_OBJETO)
         v["pos"], v["normal"], v["cor"] = todos, nor, np.repeat([np.clip(np.rint(np.asarray(mal[g]["cor"], float).reshape(4) * 255), 0, 255) for g in gs], n, axis=0)
         for j, g in enumerate(gs):  # um índice por vértice (0, 1, 2, ... no lote todo)
-            o[j] = (self.ifc.by_guid(g).id(), g.encode("ascii"), ini[j], n[j], ini[j], n[j], pos[j].min(0), pos[j].max(0))
+            o[j] = (0, g.encode("ascii"),  # id STEP 0: o núcleo não precisa dele (tabela do núcleo, `id_step`)
+                 ini[j], n[j], ini[j], n[j], pos[j].min(0), pos[j].max(0))
         return LoteMalha(len(self.sequencias), v, np.arange(len(todos), dtype=np.uint32), o, np.zeros(3), len(gs), len(gs))
 
     def _produto(self, alvo, erro=True):  # elemento pelo GlobalId (ou "ultimo"); sem `erro`, None se não existe
@@ -231,6 +248,9 @@ class FluxoA:
         corpo, eixo = _contextos(self.ifc)
         for rep in (api("geometry.add_wall_representation", self.ifc, context=corpo, length=comp, height=alt, thickness=esp),
                     api("geometry.add_axis_representation", self.ifc, context=eixo, axis=[(0.0, 0.0), (comp, 0.0)])):
+            if rep.RepresentationIdentifier == "Body":
+                sol = rep.Items[0]
+                sol.Depth = round(sol.Depth, 6)  # a conversão de metros para a unidade do projeto deixa ruído (2799.9999999999995 mm): fica o valor exato
             api("geometry.assign_representation", self.ifc, product=w, representation=rep)
 
     def _paredes(self, c, n, u):
@@ -266,6 +286,8 @@ class FluxoA:
         u["alterados"], u["painel"] = [w.GlobalId], self._texto_painel()
 
     def _c_mudar_comprimento(self, c, u):
+        if self.ifc.schema == "IFC2X3":  # só IFC4 em diante: a curva do perfil é IfcIndexedPolyCurve
+            raise ValueError("mudar_comprimento só funciona em IFC4 ou mais novo (o modelo é IFC2X3)")
         w, comp = self._produto(c["alvo"]), float(c["comprimento"])
         reps = {r.RepresentationIdentifier: r for r in (w.Representation.Representations if w.Representation else [])}
         if "Body" not in reps or comp <= 0 or not reps["Body"].Items[0].is_a("IfcExtrudedAreaSolid"):
@@ -295,18 +317,22 @@ class FluxoA:
 
     def _desfaz_ou_refaz(self, u, desfazer):
         de, para = (self.historico, self._refazer) if desfazer else (self._refazer, self.historico)
-        u["remover"] = []
         if not de:
             return []
-        reg = de.pop()
+        reg = de[-1]  # o registro só sai da pilha depois de o undo()/redo() dar certo (e da cena aceitar)
         existe = lambda: {g: bool(self._produto(g, False)) for g in reg["guids"]}  # noqa: E731
         antes = existe()
         (self.ifc.undo if desfazer else self.ifc.redo)()
+        try:
+            depois = existe()  # a cena segue o ESTADO RESULTANTE: sai o que sumiu; vai só a malha do que o comando original mexeu na geometria ou do que acabou de aparecer (propriedade nunca manda malha)
+            u["criados"], u["apagados"], u["alterados"] = ([g for g in reg["guids"] if depois[g] and not antes[g]], [g for g in reg["guids"] if antes[g] and not depois[g]], list(reg["alterados"]))
+            u["geometria"] = [g for g in reg["guids"] if depois[g] and (g in reg["geometria"] or not antes[g]) and getattr(self.ifc.by_guid(g), "Representation", None) is not None]
+            self._enviar(u, [g for g in reg["guids"] if not depois[g]])
+        except BaseException:
+            (self.ifc.redo if desfazer else self.ifc.undo)()  # volta o modelo; o registro nunca saiu da pilha de origem
+            raise
+        de.pop()
         para.append(reg)
-        depois = existe()  # a cena segue o ESTADO RESULTANTE: o que existe e tem representação é re-malhado; o que sumiu sai
-        u["criados"], u["apagados"], u["alterados"] = ([g for g in reg["guids"] if depois[g] and not antes[g]], [g for g in reg["guids"] if antes[g] and not depois[g]], list(reg["alterados"]))
-        u["geometria"] = [g for g in reg["guids"] if depois[g] and getattr(self.ifc.by_guid(g), "Representation", None) is not None]
-        u["remover"] = [g for g in reg["guids"] if not depois[g]]
         if self.selecionado:
             u["painel"] = self._texto_painel()
         return list(reg["guids"])
@@ -368,7 +394,7 @@ class FluxoA:
                     cmd["alvo"] = lista[k]
                 if isinstance(cmd.get("nome"), str):
                     cmd["nome"] = cmd["nome"].replace("{r}", str(r))
-                guids, u = self.executar(cmd), self.ultimo
+                guids, u = self.executar_detalhado(cmd)  # o detalhe do próprio comando (não `ultimo`)
                 tq = self._quadro(u["sequencia"], u["t0_ms"], u["t_comando_ms"]) if self.cena is not None and u["sequencia"] is not None and (u["geometria"] or u["apagados"] or cmd["cmd"] == "abrir") else u["t_comando_ms"]
                 rep = {"r": r, "guids": guids, **{k: u[k] for k in ("criados", "alterados", "apagados", "geometria", "sequencia", "t0_ms", "t_comando_ms", "t_painel_ms") if k in u}, "t_quadro_ms": tq,
                        "ms_total": tq - u["t0_ms"], "triangulos_cena": None if self.cena is None else int(self.cena.estatisticas()["triangulos"])}

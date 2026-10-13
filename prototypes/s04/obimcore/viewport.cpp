@@ -10,7 +10,9 @@
 //    estourar 3 s, a swapchain é marcada perdida: a thread nunca mais a toca e `solturas_atrasadas` sobe.
 //  - Ritmo de 60 quadros/s; no Windows, timeBeginPeriod(1) (passo de relógio de 1 ms em vez de 15,6 ms; achado 5).
 //  - Perda de dispositivo (FrameOpDeviceLost ou `perder_contexto`): a QRhi é recriada na thread e a cópia compacta é reenviada.
-// A cena completa (fila de lotes com orçamento por quadro) é da T08; aqui cada quadro envia no máximo 1 lote (regra da S03).
+//  - Cena (T08): fila de lotes, cópia compacta, sequência e caixa vivem em `cena.*` (mutex próprio). Aqui só o envio à placa: orçamento por quadro
+//    (`ORCAMENTO_BYTES`, ~4 ms), lotes grandes partidos em fatias; a sequência de um quadro = maior prefixo contínuo de lotes já NA placa.
+#include "cena.h"
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
@@ -54,17 +56,17 @@ const unsigned char QSB_VERT[] = {
 const unsigned char QSB_FRAG[] = {
 #include "malha_frag.inc"
 };
-constexpr int BYTES_VERTICE = 28;  // pos f4x3, normal f4x3, cor u1x4 (DTYPE_VERTICE da S03)
-
-struct Dados {  // cópia compacta de um lote (vive no C++; a placa é reenviada a partir dela)
-  std::vector<unsigned char> v; std::vector<uint32_t> i; int64_t seq = 0;
-};
+using namespace obim;
+constexpr size_t ORCAMENTO_BYTES = 2u << 20;  // por quadro (cabe em ~1 ms no software); lote maior é partido em fatias
+constexpr auto ORCAMENTO_TEMPO = std::chrono::milliseconds(4);
 struct Camera { double alvo[3] = {0, 0, 0}, distancia = 3.2, azimute = -45, elevacao = 30; };
 
 class Motor {
  public:
   std::atomic<bool> exposta{false}, soltar{false}, perder{false}, parar_{false}, perdida_{false}, terminou_{true};
   std::atomic<int> contextos{0}, tri_placa{0}, superficies_soltas{0}, solturas_atrasadas{0};
+  std::atomic<int64_t> fatias_{0};
+  DadosCena cena_;  // fila de lotes, cópia compacta, sequência e caixa (T08); o Python entra direto, com mutex próprio
   explicit Motor(bool gl) : gl_(gl) {}
   ~Motor() { parar(); }
   void ligar(QWindow* w, QOffscreenSurface* fb) { std::lock_guard<std::mutex> l(m_); win_ = w; fb_ = fb; fmt_ = w->format(); }
@@ -94,36 +96,22 @@ class Motor {
     }
   }
   // --- cena (thread da janela / Python) ---
-  int64_t adicionar(std::shared_ptr<Dados> d) {
-    std::lock_guard<std::mutex> l(m_);
-    d->seq = ++seq_; lotes_.push_back(d);
-    const auto* p = d->v.data();
-    for (size_t k = 0; k + BYTES_VERTICE <= d->v.size(); k += BYTES_VERTICE) {
-      float f[3]; std::memcpy(f, p + k, 12);
-      for (int a = 0; a < 3; ++a) { cmin_[a] = (std::min)(cmin_[a], double(f[a])); cmax_[a] = (std::max)(cmax_[a], double(f[a])); }
-    }
-    return d->seq;
-  }
-  void limpar() {
-    std::lock_guard<std::mutex> l(m_); lotes_.clear(); ++geracao_;
-    for (int a = 0; a < 3; ++a) { cmin_[a] = 1e30; cmax_[a] = -1e30; }
-  }
   Camera camera() { std::lock_guard<std::mutex> l(m_); return cam_; }
   void definir(const Camera& c) { std::lock_guard<std::mutex> l(m_); cam_ = c; }
   nb::dict estatisticas() {
     std::lock_guard<std::mutex> l(m_);
-    size_t tri = 0, vert = 0;
-    for (auto& d : lotes_) { tri += d->i.size() / 3; vert += d->v.size() / BYTES_VERTICE; }
+    const Totais t = cena_.totais();
     nb::dict r;
-    r["lotes"] = lotes_.size(); r["triangulos"] = tri; r["vertices"] = vert;
+    r["lotes"] = t.lotes; r["triangulos"] = t.triangulos; r["vertices"] = t.vertices; r["fatias_enviadas"] = fatias_.load();
     r["triangulos_na_placa"] = tri_placa.load(); r["contextos"] = contextos.load();
     r["superficies_soltas"] = superficies_soltas.load(); r["solturas_atrasadas"] = solturas_atrasadas.load();
     return r;
   }
   std::vector<std::tuple<double, int64_t>> relogio() {
-    std::lock_guard<std::mutex> l(mq_);
-    std::vector<std::tuple<double, int64_t>> r;
-    for (size_t k = n_ > anel_.size() ? n_ - anel_.size() : 0; k < n_; ++k) r.push_back(anel_[k % anel_.size()]);
+    std::vector<std::tuple<double, int64_t>> r; size_t n;
+    auto copia = std::make_unique<decltype(anel_)>();
+    { std::lock_guard<std::mutex> l(mq_); *copia = anel_; n = n_; }  // o mutex só cobre a cópia do anel; a conversão para lista fica fora dele
+    for (size_t k = n > copia->size() ? n - copia->size() : 0; k < n; ++k) r.push_back((*copia)[k % copia->size()]);
     return r;
   }
   std::tuple<int, int, std::string> capturar() {  // pede à thread o próximo quadro e espera (sem o bloqueio do interpretador)
@@ -155,10 +143,12 @@ class Motor {
     return true;
   }
   struct L { std::unique_ptr<QRhiBuffer> vb, ib; quint32 n; };
+  struct Pend { std::shared_ptr<Dados> d; L e; size_t voff = 0, ioff = 0; };  // lote em envio, em fatias
   struct Gpu {  // a ordem importa: o destruidor libera de baixo para cima e a QRhi por último
     std::unique_ptr<QRhi> rhi; std::unique_ptr<QRhiSwapChain> sc; std::unique_ptr<QRhiRenderBuffer> ds;
     std::unique_ptr<QRhiRenderPassDescriptor> rp; std::unique_ptr<QRhiBuffer> ub; std::unique_ptr<QRhiShaderResourceBindings> srb;
     std::unique_ptr<QRhiGraphicsPipeline> pipe; std::vector<L> lotes; bool pronta = false;
+    Cursor cur; Pend pend;  // o que a fila já entregou e o lote pela metade (somem junto com a placa: a perda de contexto reenvia tudo)
   };
   bool criar(Gpu& g) {
     QRhi::Flags fl;  // renderizador por software só com a variável do Qt (o CI a liga no WARP)
@@ -192,23 +182,32 @@ class Motor {
     g.pipe->setRenderPassDescriptor(g.rp.get());
     g.pipe->setDepthTest(true); g.pipe->setDepthWrite(true);  // sem descarte de faces de trás, como na S03
     if (!g.pipe->create()) return false;
-    ++contextos; consumido_ = 0; tri_placa = 0; geracao_vista_ = -1;
+    ++contextos; tri_placa = 0; seq_placa_ = 0;
     return true;
   }
-  void enviar_um(Gpu& g, QRhiResourceUpdateBatch* rub) {  // no máximo 1 lote por quadro; sempre da cópia compacta
-    std::shared_ptr<Dados> d;
-    { std::lock_guard<std::mutex> l(m_);
-      if (geracao_vista_ != geracao_) { g.lotes.clear(); consumido_ = 0; tri_placa = 0; geracao_vista_ = geracao_; }
-      if (consumido_ < lotes_.size()) d = lotes_[consumido_++]; }
-    if (!d || d->i.empty()) return;
-    L e; e.n = quint32(d->i.size());
-    e.vb.reset(g.rhi->newBuffer(QRhiBuffer::Immutable, QRhiBuffer::VertexBuffer, quint32(d->v.size())));
-    e.ib.reset(g.rhi->newBuffer(QRhiBuffer::Immutable, QRhiBuffer::IndexBuffer, quint32(d->i.size() * 4)));
-    if (!e.vb->create() || !e.ib->create()) return;
-    rub->uploadStaticBuffer(e.vb.get(), 0, quint32(d->v.size()), d->v.data());
-    rub->uploadStaticBuffer(e.ib.get(), 0, quint32(d->i.size() * 4), d->i.data());
-    tri_placa += int(d->i.size() / 3); seq_placa_ = (std::max)(seq_placa_, d->seq);
-    g.lotes.push_back(std::move(e));
+  void enviar(Gpu& g, QRhiResourceUpdateBatch* rub) {  // orçamento por quadro; sempre da cópia compacta; só lotes COMPLETOS entram em `lotes`
+    if (cena_.geracao() != g.cur.ger) { g.lotes.clear(); g.pend = {}; g.cur = {}; tri_placa = 0; seq_placa_ = 0; }  // limpar(): a placa volta a zero
+    size_t gasto = 0; const auto t0 = Rel::now();
+    while (gasto < ORCAMENTO_BYTES && Rel::now() - t0 < ORCAMENTO_TEMPO) {
+      Pend& p = g.pend;
+      if (!p.d) {
+        if (!(p.d = cena_.proximo(g.cur))) break;
+        if (p.d->i.empty()) { seq_placa_ = p.d->seq; p = {}; continue; }  // lote sem triângulos: já "na placa"
+        p.e.n = quint32(p.d->i.size());
+        p.e.vb.reset(g.rhi->newBuffer(QRhiBuffer::Immutable, QRhiBuffer::VertexBuffer, quint32(p.d->v.size())));
+        p.e.ib.reset(g.rhi->newBuffer(QRhiBuffer::Immutable, QRhiBuffer::IndexBuffer, quint32(p.d->i.size() * 4)));
+        if (!p.e.vb->create() || !p.e.ib->create()) { p = {}; return; }
+      }
+      const bool vert = p.voff < p.d->v.size();  // primeiro os vértices, depois os índices
+      const size_t total = vert ? p.d->v.size() : p.d->i.size() * 4, off = vert ? p.voff : p.ioff, un = vert ? BYTES_VERTICE : 4;
+      const size_t n = (std::min)(total - off, (std::max)(un, (ORCAMENTO_BYTES - gasto) / un * un));
+      const unsigned char* dados = vert ? p.d->v.data() : reinterpret_cast<const unsigned char*>(p.d->i.data());
+      rub->uploadStaticBuffer(vert ? p.e.vb.get() : p.e.ib.get(), quint32(off), quint32(n), dados + off);
+      (vert ? p.voff : p.ioff) += n; gasto += n; ++fatias_;
+      if (p.voff == p.d->v.size() && p.ioff == p.d->i.size() * 4) {  // completo: entra no desenho e a sequência avança (prefixo contínuo)
+        tri_placa += int(p.d->i.size() / 3); seq_placa_ = p.d->seq; g.lotes.push_back(std::move(p.e)); p = {};
+      }
+    }
   }
   enum class Fim { Parar, Perdido };
   Fim quadros(Gpu& g) {
@@ -236,15 +235,16 @@ class Motor {
       if (r == QRhi::FrameOpDeviceLost) return Fim::Perdido;
       if (r != QRhi::FrameOpSuccess) continue;
       QRhiResourceUpdateBatch* rub = g.rhi->nextResourceUpdateBatch();
-      enviar_um(g, rub);
+      enviar(g, rub);
       Camera c; double bmin[3], bmax[3]; bool pedida;
-      { std::lock_guard<std::mutex> l(m_); c = cam_; std::copy(cmin_, cmin_ + 3, bmin); std::copy(cmax_, cmax_ + 3, bmax); pedida = cap_pedida_; }
+      { std::lock_guard<std::mutex> l(m_); c = cam_; pedida = cap_pedida_; }
+      const bool com_caixa = cena_.caixa(bmin, bmax);
       if (!pedida) rb.reset();  // `capturar` desistiu: descarta a leitura pendente
       const double az = c.azimute * 3.14159265358979323846 / 180, el = c.elevacao * 3.14159265358979323846 / 180;
       const QVector3D alvo3(float(c.alvo[0]), float(c.alvo[1]), float(c.alvo[2]));
       const QVector3D pos = alvo3 + float(c.distancia) * QVector3D(float(std::cos(el) * std::cos(az)), float(std::cos(el) * std::sin(az)), float(std::sin(el)));
       double longe = 20000, perto = 0.05;
-      if (bmin[0] <= bmax[0]) {  // perto/longe pela caixa da cena a cada quadro (como a S03)
+      if (com_caixa) {  // perto/longe pela caixa da cena a cada quadro (como a S03)
         const QVector3D centro(float(bmin[0] + bmax[0]) / 2, float(bmin[1] + bmax[1]) / 2, float(bmin[2] + bmax[2]) / 2);
         const double raio = std::sqrt(std::pow(bmax[0] - bmin[0], 2) + std::pow(bmax[1] - bmin[1], 2) + std::pow(bmax[2] - bmin[2], 2)) / 2;
         longe = ((pos - centro).length() + raio) * 1.1; perto = (std::max)(longe / 10000.0, 0.05);
@@ -323,8 +323,7 @@ class Motor {
   std::mutex m_, mq_, th_m_; std::condition_variable cv_; std::thread th_;
   QWindow* win_ = nullptr; QOffscreenSurface* fb_ = nullptr; QSurfaceFormat fmt_;
   bool rodando_ = false, solto_ = false, cap_pedida_ = false, cap_pronta_ = false;
-  std::vector<std::shared_ptr<Dados>> lotes_; int64_t seq_ = 0, geracao_ = 0, geracao_vista_ = -1, seq_placa_ = 0; size_t consumido_ = 0;
-  double cmin_[3] = {1e30, 1e30, 1e30}, cmax_[3] = {-1e30, -1e30, -1e30};
+  int64_t seq_placa_ = 0;  // só a thread de desenho toca
   Camera cam_; std::string info_, cap_; int cap_w_ = 0, cap_h_ = 0;
   std::array<std::tuple<double, int64_t>, 4096> anel_{}; size_t n_ = 0;
 };
@@ -368,15 +367,9 @@ class Cena {  // objeto Python: só guarda o Motor e ponteiros fracos; o Qt é d
   void iniciar() { m_->iniciar(); }
   void parar() { nb::gil_scoped_release lib; m_->parar(); }
   bool viva() { return m_->viva(); }
-  int64_t adicionar_lote(nb::object lote) {
-    auto d = std::make_shared<Dados>();
-    auto bytes = [&](const char* campo) { nb::bytes b = nb::cast<nb::bytes>(lote.attr(campo).attr("tobytes")()); return std::string(b.c_str(), b.size()); };
-    const std::string v = bytes("vertices"), i = bytes("indices");
-    if (v.size() % BYTES_VERTICE || i.size() % 12) throw nb::value_error("lote com tamanho inválido (vértice 28 bytes, índices uint32 em triângulos)");
-    d->v.assign(v.begin(), v.end()); d->i.resize(i.size() / 4); std::memcpy(d->i.data(), i.data(), i.size());
-    return m_->adicionar(d);
-  }
-  void limpar() { m_->limpar(); }
+  int64_t adicionar_lote(nb::object lote) { return m_->cena_.adicionar_lote(lote); }  // valida/copia sem o bloqueio e sem o mutex do Motor
+  void limpar() { m_->cena_.limpar(); }
+  nb::dict objetos(int64_t seq) { return m_->cena_.objetos(seq); }
   std::vector<std::tuple<double, int64_t>> relogio() { return m_->relogio(); }
   nb::tuple capturar() { std::tuple<int, int, std::string> r; { nb::gil_scoped_release lib; r = m_->capturar(); }
     return nb::make_tuple(std::get<0>(r), std::get<1>(r), nb::bytes(std::get<2>(r).data(), std::get<2>(r).size())); }
@@ -406,7 +399,7 @@ void registrar_viewport(nb::module_& m) {
   nb::class_<Cena>(m, "Cena")
       .def(nb::init<bool>(), nb::arg("gl"))
       .def("viewport_ptr", &Cena::viewport_ptr).def("iniciar", &Cena::iniciar).def("parar", &Cena::parar).def("viva", &Cena::viva)
-      .def("adicionar_lote", &Cena::adicionar_lote, nb::arg("lote")).def("limpar", &Cena::limpar).def("relogio", &Cena::relogio)
+      .def("adicionar_lote", &Cena::adicionar_lote, nb::arg("lote")).def("limpar", &Cena::limpar).def("objetos", &Cena::objetos, nb::arg("sequencia")).def("relogio", &Cena::relogio)
       .def("capturar", &Cena::capturar).def("camera", &Cena::camera)
       .def("definir_camera", &Cena::definir_camera, nb::arg("alvo") = nb::none(), nb::arg("distancia") = nb::none(),
            nb::arg("azimute") = nb::none(), nb::arg("elevacao") = nb::none())

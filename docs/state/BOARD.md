@@ -15,6 +15,7 @@
 | F0-S08 | Corpus e gabaritos | P, contínuo | — (pasta `corpus/` nasce na S01-T03) | CONTÍNUA (não iniciada) | — | Downloads só com ok do PO. Corpus do PO entra depois, sem bloquear |
 | F0-S09 | UX com o PO (wireframes) | M | — (paralelo) | NÃO INICIADA | — | Precisa de 1 h de entrevista com o PO |
 | F0-S10 | Calibração e portão | P | S03, S04, S05, S06, S07 | NÃO INICIADA | — | Mede cota; avalia gatilho de plano |
+| F1-PRE-T01 | Comportamento básico de janela e navegação (testes de regressão) | M | S04 (T12) | NÃO INICIADA | docs/state/cards/F1-PRE-T01.md; antes da Fase 1; pedido do PO 2026-10-13 | T2 (viewport em lote opus) |
 | Portão F0 | Go/no-go | — | S10 e S09 | — | — | Regras em `03` §5 |
 
 ## Cartões de S01 e S02

@@ -185,6 +185,7 @@ class Motor {
   enum class Fim { Parar, Perdido };
   Fim quadros(Gpu& g) {
     auto prox = Rel::now();
+    int tentativas = 0;
     std::unique_ptr<QRhiReadbackResult> rb;  // captura em andamento (o resultado chega depois do fim do quadro)
     while (!parar_) {
       prox += std::chrono::milliseconds(16);
@@ -196,8 +197,14 @@ class Motor {
       }
       if (perder) { perder = false; return Fim::Perdido; }
       if (!exposta) { prox = Rel::now(); continue; }
-      const QSize alvo(larg, alt);
-      if (!g.pronta || g.sc->surfacePixelSize() != alvo) { g.pronta = g.sc->createOrResize(); if (!g.pronta) continue; }
+      // Tamanho esperado = o da janela em pixels de dispositivo. O que vale para desenhar é o tamanho REAL do backbuffer.
+      // Se divergirem, refaz a swapchain (no máximo 5 quadros seguidos; depois desenha com o tamanho real, sem laço infinito).
+      const QSize esperado(larg, alt);
+      if (!g.pronta || g.sc->currentPixelSize() != esperado || g.sc->surfacePixelSize() != esperado) {
+        const bool casa = g.pronta && g.sc->currentPixelSize() == esperado;
+        if (!casa && tentativas < 5) { ++tentativas; g.pronta = g.sc->createOrResize(); if (!g.pronta) continue; }
+      } else tentativas = 0;
+      if (g.sc->currentPixelSize() == esperado) tentativas = 0;
       auto r = g.rhi->beginFrame(g.sc.get());
       if (r == QRhi::FrameOpSwapChainOutOfDate) { g.pronta = g.sc->createOrResize(); continue; }
       if (r == QRhi::FrameOpDeviceLost) return Fim::Perdido;
@@ -216,6 +223,7 @@ class Motor {
         longe = ((pos - centro).length() + raio) * 1.1; perto = (std::max)(longe / 10000.0, 0.05);
       }
       QMatrix4x4 proj, vista;
+      const QSize alvo = g.sc->currentPixelSize().isEmpty() ? esperado : g.sc->currentPixelSize();  // tamanho real do backbuffer
       proj.perspective(45.0f, float(alvo.width()) / float(alvo.height()), float(perto), float(longe));
       vista.lookAt(pos, alvo3, QVector3D(0, 0, 1));
       const QMatrix4x4 mvp = g.rhi->clipSpaceCorrMatrix() * proj * vista;

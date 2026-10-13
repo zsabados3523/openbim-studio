@@ -28,6 +28,17 @@ Traga o que for fácil. Nada é obrigatório.
 | 49–55 | Dores e o que NÃO perder | As 3 maiores dores e os 3 hábitos que o programa novo não pode quebrar. O que você abandonaria sem dó? |
 | 55–60 | Híbrido e fechamento | Revisamos juntos as perguntas da seção 4 que sobraram e combinamos as datas das duas revisões. |
 
+### Perguntas extras sobre anotação (para os blocos Pranchas e Dores)
+Respostas curtas bastam. Servem ao catálogo `docs/design/catalogo-ferramentas-f3-anotacao.md`.
+1. **Cotas:** quais você usa mais (linear, alinhada, de nível, de ponto, angular)? Precisa que a cota **siga o desenho** quando a parede muda? Já digitou um valor na cota para mover a parede (cota "que comanda"), e quer isso?
+2. **Tags:** o que você etiqueta (portas, janelas, ambientes, outros)? A numeração das esquadrias é automática ou à mão?
+3. **Textos:** que tipos usa (nota, título de vista, especificação)? Algum modelo de nota que você reutiliza?
+4. **Detalhes 2D:** no executivo, o que você desenha em 2D por cima do modelo (linhas, hachuras, textos, peças)? Quantos detalhes tem uma casa típica? Aceitaria que na 1.0 só houvesse linhas, hachuras e texto, sem biblioteca de peças e sem chamada?
+5. **Quadros:** quais quadros você coloca na prancha (áreas, esquadrias, materiais, legenda)? Quais colunas são indispensáveis? Você edita pelo quadro ou só lê?
+6. **Carimbo:** quais campos ele tem? Quantos modelos de carimbo você usa? Revisão: nuvem no desenho ou só uma letra e data no carimbo?
+7. **Prefeitura contra executivo:** o que a prefeitura exige a mais que você não faria no executivo (cotas, quadro, carimbo, textos)? E o contrário?
+8. **Dor:** qual anotação consome mais tempo hoje (rótulos, tags, textos, chamadas, legendas, tabelas, carimbo)? O que você quer que o programa novo faça sozinho?
+
 Dica de ritmo: se um bloco estourar, o líder anota o ponto e volta nele na revisão, em vez de tirar tempo do bloco seguinte.
 
 ## 4. Perguntas objetivas

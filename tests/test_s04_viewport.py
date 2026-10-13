@@ -48,17 +48,26 @@ def viewport():
     if not (os.environ.get("CI") or os.environ.get("OBIM_S04_TELA_VIRTUAL") == "1") if sys.platform == "win32" else not shutil.which("xvfb-run"):
         pular("\n!!! sem tela virtual (xvfb-run; no Windows só no CI ou com OBIM_S04_TELA_VIRTUAL=1): nunca na tela real !!!\n")
 
-def caso(nome, *args, limite=400):
+_CACHE = {}  # o mesmo caso (nome, args, ambiente) roda uma vez por sessão; os testes de contadores (T07b) reaproveitam o resultado
+def caso(nome, *args, limite=400, extra=(), alvo=None):
+    chave = (str(alvo), nome, args, tuple(extra))
+    if chave in _CACHE:
+        return _CACHE[chave]
     env = {k: v for k, v in os.environ.items() if k not in ("DISPLAY", "WAYLAND_DISPLAY")} | {"LC_ALL": "C"}
     win = sys.platform == "win32"
     env.update(QT_QPA_PLATFORM="windows", RHI="d3d11") if win else env.update(QT_QPA_PLATFORM="xcb", LIBGL_ALWAYS_SOFTWARE="1")
     pre = [] if win else ["xvfb-run", "-a", "-s", "-screen 0 1280x800x24"]
+    env.update(dict(extra))  # ex.: QT_SCALE_FACTOR (nos dois sistemas)
     env["OBIM_LIMITE"] = str(limite)  # o subprocesso despeja a pilha das threads 20 s antes do tempo
-    p = subprocess.run([*pre, sys.executable, str(ESTE), nome, *map(str, args)], env=env, capture_output=True, text=True, timeout=limite)
+    p = subprocess.run([*pre, sys.executable, str(alvo or ESTE), nome, *map(str, args)], env=env, capture_output=True, text=True, timeout=limite)
     linhas = [x for x in p.stdout.splitlines() if x.startswith("RESULTADO ")]
     assert p.returncode == 0 and linhas, f"o caso {nome} CAIU, travou ou não devolveu resultado (código {p.returncode}):\n{p.stdout[-1500:]}\n{p.stderr[-2500:]}"
     r = json.loads(linhas[-1][10:])
-    return r if "erro" not in r else pytest.fail(r["erro"])
+    _CACHE[chave] = r if "erro" not in r else pytest.fail(r["erro"])
+    return _CACHE[chave]
+
+def tamanho_ok(a, cont, dpr):  # (g) a captura (HxWx4) tem o tamanho do contêiner em pixels físicos, ±2
+    return abs(a[0] - round(cont[1] * dpr)) <= 2 and abs(a[1] - round(cont[0] * dpr)) <= 2
 
 def classificar(a):  # imagem HxWx4 -> {cor: (pixels, x médio)} para vermelho (v), verde (g), azul (a)
     r, g, b = (a[..., i].astype(int) for i in range(3))
@@ -117,9 +126,11 @@ def test_intervalo_maximo_com_o_bloqueio_preso(viewport):  # caso do T05, crité
         assert min(r["hb"][k]) >= 500, f"controle falhou na fase {k}: a thread da janela só parou {r['hb'][k]} ms"
     assert not (erros := veredito(r["fases"])), f"{erros}\nrodadas: {r['fases']}"
 
-def test_trocar_de_janela_setparent_esconder_e_redimensionar_sem_queda(viewport):  # armadilha 4 e achado 4(b): recriar a superfície
-    r = caso("trocar")
+@pytest.mark.parametrize("escala", ["1", "1.25"])  # (h) 1,25: tamanho fracionário na tela (LOTE_OPUS_13 achado 1); nos dois sistemas
+def test_trocar_de_janela_setparent_esconder_e_redimensionar_sem_queda(viewport, escala):  # armadilha 4 e achado 4(b): recriar a superfície
+    r = caso("trocar", extra=[("QT_SCALE_FACTOR", escala)])
     assert not r["falhas"] and r["viva"] and all(v[0] >= 500 for v in r["cls"].values()), r  # e a imagem final tem os 3 cubos
+    assert abs(r["dpr"] - float(escala)) < 1e-6 and tamanho_ok(r["tam"], r["cont"], r["dpr"]), f"(g) captura {r['tam']} x contêiner {r['cont']} dpr {r['dpr']}"
 
 @pytest.mark.parametrize("modo", ["janela", "conteiner", "sair"])
 def test_destruir_com_a_thread_rodando_sem_parar(viewport, modo):  # achado 3 e 4(a): vida da thread presa à da janela
@@ -200,6 +211,9 @@ def segurar(s):  # chamada C que NÃO solta o bloqueio (PyDLL), como a de 0,75 s
     import ctypes
     ctypes.PyDLL("kernel32").Sleep(int(s * 1000)) if sys.platform == "win32" else ctypes.PyDLL(None).usleep(int(s * 1e6))
 
+def soltas(c):  # contadores da T07b; None enquanto a chave não existir
+    return {k: c.estatisticas().get(k) for k in ("superficies_soltas", "solturas_atrasadas")}
+
 def maps(res):  # R1-e: núcleos que o módulo vê e núcleos que o SO mapeou (Linux)
     import re
     import ifcopenshell.geom  # noqa: F401  (carrega geometry e OCCT)
@@ -219,12 +233,14 @@ def c_imagem(res, ordem=""):  # `ordem`: já importada pelo __main__ (R1-e nas d
     res.update(na_janela=cont.window() is w and cont.isVisible() and w.isVisible(), tam=list(a.shape), cont=[cont.width(), cont.height()],
                cls=classificar(a), cores=len({tuple(p) for p in a[::4, ::4].reshape(-1, 4)}), placa=st["triangulos_na_placa"], tri=st["triangulos"],
                cantos=[a[y, x, :3].tolist() for y in (2, -3) for x in (2, -3)])
+    res["info"] = c.info() if hasattr(c, "info") else None  # qual desenho foi usado (OpenGL ou D3D11)
     c.limpar()
     yield from esperar(lambda: c.estatisticas()["triangulos"] == 0)
     yield 500
     res.update(apos_limpar=[classificar(captura(c))[k][0] for k in "vga"], tri_limpo=c.estatisticas()["triangulos"])
     c.adicionar_lote(lote())
     res["recolocado"] = yield from esperar(lambda: c.estatisticas()["triangulos_na_placa"] == 7200)
+    res["solt"] = soltas(c)
     c.parar()
 
 def c_relogio(res):
@@ -235,7 +251,7 @@ def c_relogio(res):
         res["marcas"].append([agora(), c.adicionar_lote(um(i))])
         yield 120
     yield 600
-    res["quadros"] = quadros(c)
+    res["quadros"], res["solt"] = quadros(c), soltas(c)
     c.parar()
 
 def lote_api(dur):  # lote de ifcopenshell.api numa thread Python (como o T05)
@@ -285,6 +301,7 @@ def c_intervalo(res):
             if fase in "CD":
                 hh = [x for x in hb if p0 <= x <= p1]
                 res["hb"][fase].append(max(b - a for a, b in zip(hh, hh[1:])) if len(hh) > 1 else 1e9)
+    res["solt"] = soltas(c)
     c.parar()
 
 def c_trocar(res):
@@ -317,7 +334,9 @@ def c_trocar(res):
         (a.showNormal if i % 4 == 3 else a.show)()
         if not (yield from retoma(c)):
             res["falhas"].append(f"esconder {i}")
-    res.update(viva=c.viva(), cls=classificar(img := captura(c)), tam=list(img.shape), cont=[cont.width(), cont.height()], dpr=cont.devicePixelRatioF())
+        elif not tamanho_ok(captura(c).shape, [cont.width(), cont.height()], cont.devicePixelRatioF()):  # (g) depois de cada redimensionamento
+            res["falhas"].append(f"tamanho {i}: captura {captura(c).shape} contêiner {cont.width()}x{cont.height()} dpr {cont.devicePixelRatioF()}")
+    res.update(viva=c.viva(), cls=classificar(img := captura(c)), tam=list(img.shape), cont=[cont.width(), cont.height()], dpr=cont.devicePixelRatioF(), solt=soltas(c))
     c.parar()
 
 def c_destruir(res, modo):
@@ -342,6 +361,7 @@ def c_destruir(res, modo):
         yield 250
     c, w, cont = novo(30)
     res["final_ok"] = yield from retoma(c, 10)
+    res["solt"] = soltas(c)
     VIVAS.append((c, w, cont)) if modo == "sair" else (c.parar(), w.close())
 
 def c_contexto(res):  # `lote()` não fica em variável: o reenvio sai só da cópia compacta do C++
@@ -365,7 +385,7 @@ def c_contexto(res):  # `lote()` não fica em variável: o reenvio sai só da c�
         res[k] = dif()
     c.adicionar_lote(um(0))
     yield from esperar(lambda: c.estatisticas()["triangulos_na_placa"] == 7212)
-    res["novo_lote"] = c.estatisticas()["triangulos"]
+    res["novo_lote"], res["solt"] = c.estatisticas()["triangulos"], soltas(c)
     c.parar()
 
 def _cam(c):

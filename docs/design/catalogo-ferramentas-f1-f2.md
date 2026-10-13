@@ -1,6 +1,6 @@
 # Catálogo de ferramentas das Fases 1 e 2
 
-- Autor: agente sonnet (líder técnico) · Data: 2026-10-12
+- Autor: agente sonnet (líder técnico) · Data: 2026-10-12 · Atualizado em 2026-10-13 (decisões do PO: Laje e piso viram o **Piso** M8; entram **Forro** M8b e **Rodapé** M8c; fundações candidatas da F4; atalhos de duas letras)
 - Para: Rafael (PO), que vai desenhar o visual à mão a partir deste documento.
 - Base: a ficha de pesquisa `docs/research/2026-10-12-ferramentas-revit-archicad-f1-f2.md`, o plano `v2/02` (Fases 1 e 2) e o padrão híbrido da `v2/03` (F0-S09).
 - Estado: **proposta**. Nada aqui vira especificação sem a sua aprovação.
@@ -42,7 +42,7 @@ O padrão assumido na F0-S09: **navegador do projeto e propriedades ao jeito do 
 |              |        +---------+   [cubo de vistas]           |                 |
 | [Selecionar] |        |  3D ou  | [mini-barra:                 |  Elemento: Parede|
 | [Parede]     |        | planta  |  Mover Copiar Girar ...]     |  Tipo: [ v ] [Editar tipo]|
-| [Laje]       |        |         |        campo junto ao cursor |  Comprimento ... |
+| [Piso]       |        |         |        campo junto ao cursor |  Comprimento ... |
 | [Pilar]      |        +---------+        +---------------+     |  Altura ...      |
 | [Viga]       |                           | 3,25 m | 90°  |     |  Material ...    |
 | [Porta]      |                           +---------------+     |  (lista longa    |
@@ -74,7 +74,7 @@ Observação: o navegador do projeto (6) pode ficar à esquerda, em cima da caix
 
 1. **Barra de menu.** Arquivo, Editar, Vista, Modelo, Ajuda. Os botões de desfazer e refazer ficam sempre à vista.
 2. **Barra de opções.** Faixa fina logo abaixo do menu. **Muda sozinha** conforme a ferramenta ativa: ao escolher Parede, mostra tipo, linha de localização, altura, "encadear". Sem ferramenta, fica vazia ou mostra opções da vista. É onde ficam as escolhas "antes de desenhar" e as escolhas **durante o uso** das ferramentas de Editar (copiar várias vezes, restringir a direção). A distância ou o ângulo se digitam no **campo junto ao cursor**. Desfazer e refazer continuam no topo.
-3. **Caixa de ferramentas** (esquerda). Botões das ferramentas, agrupados: Selecionar; Modelar (parede, laje, pilar, viga, porta, janela); **Editar** (mover, copiar, girar, espelhar, alinhar, aparar e estender), logo abaixo de Modelar; Referências (nível, eixo); Medir. Os seis botões de Editar ficam **apagados quando nada está selecionado** e **acesos quando há seleção**. Abaixo, os **ajustes salvos**: ajustes prontos de uma ferramenta (por exemplo "Parede 15 cm, bloco, reboco duplo"). Clicar num ajuste ativa a ferramenta já configurada.
+3. **Caixa de ferramentas** (esquerda). Botões das ferramentas, agrupados: Selecionar; Modelar (parede, piso, forro, rodapé, pilar, viga, porta, janela); **Editar** (mover, copiar, girar, espelhar, alinhar, aparar e estender), logo abaixo de Modelar; Referências (nível, eixo); Medir. Os seis botões de Editar ficam **apagados quando nada está selecionado** e **acesos quando há seleção**. Abaixo, os **ajustes salvos**: ajustes prontos de uma ferramenta (por exemplo "Parede 15 cm, bloco, reboco duplo"). Clicar num ajuste ativa a ferramenta já configurada.
    - **Mini-barra de edição.** Uma faixa pequena com os mesmos seis botões de Editar aparece **junto ao elemento selecionado** e também ao **clicar com o botão direito** sobre ele. É um atalho: faz o mesmo que os botões da caixa de ferramentas.
 4. **Painel de propriedades** (direita). Sempre aberto. Mostra os dados do que está selecionado; sem seleção, mostra os da vista ativa. Tem o botão "Editar tipo". Mudar a **instância** altera só o elemento; mudar o **tipo** altera todos daquele tipo.
 5. **Área de trabalho.** O desenho: planta, corte ou 3D. Mostra o **cubo de vistas** (canto), os **campos junto ao cursor** (número digitável ao lado do ponteiro) e as **cotas temporárias** (medidas que aparecem sobre o elemento enquanto você desenha ou seleciona).
@@ -109,9 +109,11 @@ Observação: o navegador do projeto (6) pode ficar à esquerda, em cima da caix
 V1 Orbitar, deslocar e aproximar · V2 Cubo de vistas · V3 Enquadrar tudo e enquadrar seleção · V4 Selecionar · V5 Filtro da seleção · V6 Navegador do projeto e árvore espacial · V7 Filtro por classe · V8 Painel de propriedades (leitura) · V9 Ocultar e isolar (temporário) · V10 Ocultar na vista (salvo) · V11 Transparência · V12 Cor por propriedade · V13 Caixa de corte 3D · V14 Plano de corte · V15 Medir entre dois pontos · V16 Medir somando trechos · V17 Salvar sem perdas
 
 **Fase 2: modelagem básica**
-M1 Desfazer, refazer e recuperação automática · M2 Novo projeto a partir do modelo brasileiro · M3 Níveis · M4 Eixos · M5 Parede · M6 Camadas e linha de localização da parede · M7 Junções de parede (L e T) · M8 Laje · M9 Pilar · M10 Viga · M11 Porta · M12 Janela · M13 Snaps (pontos de captura) · M14 Entrada numérica junto ao cursor · M15 Cotas temporárias · M16 Mover · M17 Copiar · M18 Girar · M19 Espelhar · M20 Alinhar · M21 Aparar e estender · M22 Tipos e edição de propriedades · M23 Ajustes salvos (favoritos)
+M1 Desfazer, refazer e recuperação automática · M2 Novo projeto a partir do modelo brasileiro · M3 Níveis · M4 Eixos · M5 Parede · M6 Camadas e linha de localização da parede · M7 Junções de parede (L e T) · M8 Piso (laje e acabamento, uma só ferramenta) · M8b Forro · M8c Rodapé · M9 Pilar · M10 Viga · M11 Porta · M12 Janela · M13 Snaps (pontos de captura) · M14 Entrada numérica junto ao cursor · M15 Cotas temporárias · M16 Mover · M17 Copiar · M18 Girar · M19 Espelhar · M20 Alinhar · M21 Aparar e estender · M22 Tipos e edição de propriedades · M23 Ajustes salvos (favoritos)
 
-**Depois (só resumo):** T1 Telhado · T2 Escada
+**Depois (só resumo):** T1 Telhado · T2 Escada · T3 Fundações (sapata, bloco, estaca; candidatas da F4)
+
+> **Sobre as teclas citadas nas fichas.** As fichas foram escritas com teclas de **uma letra**. Em 13/10 o PO decidiu que o padrão de fábrica é de **duas letras** (TR, AL, MM, MI, RR, CC, TG, WA; ver a tabela de atalhos, seção 3). Onde a ficha e a tabela de atalhos divergirem, **vale a tabela**; as fichas serão acertadas quando a tabela for aprovada.
 
 Siglas de comparação: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz. São só para você reconhecer o fluxo; não copiamos nada.
 
@@ -131,6 +133,18 @@ Siglas de comparação: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz.
 - **Altera o modelo:** NÃO altera nada. Só a câmera.
 - **Entra em:** F1-S02.
 - **Comparação e proposta:** Rv resolve com 3 gestos fixos; Ac usa modos e teclas. **Proposta:** oferecer os dois como "Modo A" e "Modo B" (nomes neutros, sem marca). **Recomendação:** modo A como padrão, por ser mais simples. Teclas do modo B no pan: não usamos a barra de espaço (ela fica livre para virar porta). **A confirmar com teste do PO:** orbitar com e sem seleção, para conferir a sensação.
+
+#### V1b. Voar (caminhar no 3D) (F1-S02; pedido do PO, entrevista S09)
+- **Nome nosso:** Voar.
+- **O que faz:** move a câmera como quem anda dentro do modelo, para conferir uma ligação entre elementos ou um detalhe visto de perto, sem mexer no modelo.
+- **Como se usa:**
+  1. Ativar pelo botão "Voar" do grupo Ver (ou pela tecla configurável).
+  2. Segurar o **botão direito** e mover o mouse gira o olhar; as teclas **W, A, S, D** andam para frente, esquerda, trás e direita; Q e E sobem e descem (a confirmar).
+  3. A roda do mouse muda a velocidade. Esc ou soltar o botão direito e clicar no botão sai do modo.
+- **Na tela:** cursor de olhar, indicador da velocidade na barra de estado; sem barra de opções.
+- **Altera o modelo:** NÃO. Só a câmera.
+- **Entra em:** F1-S02 (junto da navegação 3D), com a câmera já no motor de desenho (T09).
+- **Comparação e proposta:** pedido do PO, que usa esse gesto no Revit para ver conexões e o visual 3D de um elemento. **Proposta:** adotar exatamente esse gesto. **Recomendação:** adotar.
 
 #### V2. Cubo de vistas (F1-S02)
 - **Nome nosso:** Cubo de vistas (a ficha sugere "cubo de orientação"; o nome final fica para o PO).
@@ -414,18 +428,48 @@ Siglas de comparação: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz.
 - **Entra em:** F2-S04.
 - **Comparação e proposta:** Rv: tipos topo, esquadria e esquadrejar; Ac: ordem de junção por prioridade. Meia-esquadria entre parede e o meio de outra não existe nos dois. **Proposta:** vocabulário comum e regra de prioridade explícita: função da camada, depois ordem. **As regras exatas saem do caderno de joins do PO** (20 casos). **A confirmar com teste do PO** (caderno de joins). **Recomendação:** adotar; o caderno é o oráculo.
 
-#### M8. Laje (F2-S05)
-- **Nome nosso:** Laje.
-- **O que faz:** cria uma laje a partir de um contorno fechado, com ou sem furos.
+#### M8. Piso (F2-S05) (antes "Laje"; decisão do PO, 13/10)
+- **Nome nosso:** Piso. **Laje e piso são uma só ferramenta**: não existe ferramenta separada de acabamento.
+- **O que faz:** cria um piso a partir de um contorno fechado, com ou sem furos. O **tipo** de piso é feito de **camadas** (por exemplo: estrutura, contrapiso, acabamento), do mesmo jeito que o tipo de parede (M6).
 - **Como se usa:**
-  1. Tecla **L**. Escolher tipo e nível na barra de opções.
+  1. Tecla **L** (de uma letra) ou **PI** (padrão de fábrica de duas letras; proposta nossa). Escolher o **tipo** e o nível na barra de opções. O tipo pode ser de dois jeitos: **completo** (estrutura + acabamento) ou **só acabamento** para pôr sobre outro piso (ver "A decidir" abaixo).
   2. Clicar os cantos do contorno, um a um; fechar no primeiro ponto (ou Enter).
-  3. **Furo:** selecionar a laje, ativar "Adicionar furo" e desenhar outro contorno fechado **dentro** da laje.
-  4. Editar o contorno depois: duplo clique na laje, ajustar pontos, Enter.
-- **Na tela:** contorno em linha tracejada, área da laje em tempo real na barra de estado, furos com borda diferente.
-- **Altera o modelo:** cria a laje com o contorno; furos viram vazios dentro dela.
+  3. **Furo:** selecionar o piso, ativar "Adicionar furo" e desenhar outro contorno fechado **dentro** dele.
+  4. Editar o contorno depois: duplo clique no piso, ajustar pontos, Enter. Duplo clique no tipo (painel, "Editar tipo") abre a lista de camadas (M22).
+- **Na tela:** contorno em linha tracejada, área do piso em tempo real na barra de estado, furos com borda diferente. No painel, a lista de camadas do tipo, com função, material e espessura.
+- **Altera o modelo?** Cria o piso com o contorno, o tipo e as camadas; furos viram vazios dentro dele. Mudar o tipo de piso altera todos os pisos daquele tipo.
+- **Quadros:** o **quadro de área por tipo de piso** (F3-S07, ficha Q1 do catálogo de anotação) e o quadro de materiais (Q3, F4) **leem do tipo**: o nome do tipo, o material de acabamento e a área vêm do piso, sem digitar de novo.
+- **A decidir na especificação** (não prometido): numa laje contínua com acabamentos diferentes (cerâmica na cozinha, madeira no quarto), dividir o contorno por acabamento divide também a estrutura em pedaços. A alternativa é pôr um piso **só de acabamento** por cima da estrutura. Qual das duas fica, e como evitar contar a estrutura duas vezes nas quantidades, **a confirmar com teste do PO** (como ele faz hoje) e na especificação.
 - **Entra em:** F2-S05.
-- **Comparação e proposta:** Rv: contorno fechado, abertura dentro do contorno; Ac: contorno e furo desenhado dentro. **Proposta:** o mesmo fluxo; poço que atravessa vários níveis fica para depois. **Recomendação:** adotar.
+- **Comparação e proposta:** Rv: contorno fechado, abertura dentro do contorno; Ac: contorno e furo desenhado dentro (a pesquisa de 12/10 cobre só a laje; como cada programa trata o acabamento de piso: **a confirmar com teste do PO**). **Proposta:** a mesma ferramenta para estrutura e acabamento, com camadas no tipo; poço que atravessa vários níveis fica para depois. **Recomendação:** adotar.
+
+#### M8b. Forro (proposta: nova fatia na F2, depois da F2-S07; a criar no v2/02 com o ok do PO)
+- **Nome nosso:** Forro.
+- **O que faz:** cria o forro de um ambiente a partir de um contorno fechado, a uma altura em relação ao nível, com tipo de camadas e furos.
+- **Como se usa:**
+  1. Tecla proposta **FO** (duas letras; proposta nossa). Escolher o **tipo** (camadas: placa, estrutura de fixação, acabamento) e a **altura** em relação ao nível, na barra de opções.
+  2. Clicar os cantos do contorno e fechar no primeiro ponto (ou Enter). O forro se comporta como o Piso (M8) desenhado de cabeça para baixo.
+  3. **Furos** (sanca, caixa de luminária, abertura): mesmo método do Piso, um contorno fechado dentro do forro.
+  4. **"Por ambiente"** (clicar dentro de um espaço fechado e o contorno vem pronto): a opção aparece **apagada** até existirem ambientes (F3-S01); então passa a funcionar sem mudar o resto da ferramenta.
+  5. Editar contorno, altura e tipo depois, como no Piso.
+- **Na tela:** contorno tracejado, altura do forro no campo junto ao cursor, área na barra de estado; no 3D e no corte, o forro aparece abaixo da laje de cima. Uma **planta de forro** (vista de cima para baixo) depende das vistas da F3-S02; na F2 não prometemos além do 3D e do corte.
+- **Altera o modelo?** Cria o forro (guardado no modelo como forro, classe exata a definir na especificação), com contorno, tipo e camadas. **Não** corta nem aparece em paredes ou pilares; o encontro com as paredes é só visual na F2.
+- **Entra em:** proposta de nova fatia na F2, **depois da F2-S07** (o contorno livre só depende do mecanismo de contorno do Piso, F2-S05; mas é natural testar com paredes e portas já colocadas). O plano `v2/02` hoje põe "forros" na **F4**; antecipar é mudança de escopo, que está em `docs/design/mudancas-de-escopo-2026-10-13.md`.
+- **Comparação e proposta:** como Revit e ArchiCAD tratam forro (contorno, "por ambiente", altura): **a confirmar com teste do PO**; antes da especificação é preciso uma **ficha de pesquisa** em `docs/research/` (regra do projeto). **Proposta:** reaproveitar o mecanismo do Piso. **Recomendação:** adotar; o forro "por ambiente" é uma extensão posterior à F3-S01.
+
+#### M8c. Rodapé (proposta: nova fatia na F2, depois da F2-S07; a criar no v2/02 com o ok do PO)
+- **Nome nosso:** Rodapé.
+- **O que faz:** coloca o rodapé ao pé de uma ou mais paredes, com tipo, altura e espessura; ele acompanha a parede e para nas portas.
+- **Como se usa:**
+  1. Tecla proposta **RD** (duas letras; proposta nossa). Escolher o **tipo** (material), a **altura**, a **espessura** e o lado (face interna, externa ou as duas) na barra de opções.
+  2. Clicar numa parede: o rodapé aparece de ponta a ponta da parede, em prévia. Com **Ctrl**, clicar em várias paredes. Para um **trecho**, clicar o início e o fim sobre a parede (ou digitar o comprimento, M14).
+  3. Nas portas o rodapé **interrompe** sozinho, no vão. (Em janelas com peitoril acima da altura do rodapé, nada muda.)
+  4. Enter conclui. O rodapé fica **preso à parede**: se a parede for movida, esticada ou encurtada, ou se uma porta mudar de lugar, o rodapé acompanha.
+- **Na tela:** faixa fina colorida junto ao pé da parede, comprimento total na barra de estado, prévia dos trechos que serão interrompidos.
+- **Altera o modelo?** Cria o rodapé como peça ligada à parede (como a porta é ligada, M11). Não altera a parede nem o piso. Em cantos (L e T), como as pontas se encontram (esquadria ou topo): **a definir na especificação**.
+- **Quantitativo:** cada rodapé vira peça com **comprimento em metros**, que entra no quadro de materiais (Q3, F4) e na quantidade do tipo. Até o quadro existir (F4), o valor fica gravado no modelo e visível no painel de propriedades.
+- **Entra em:** proposta de nova fatia na F2, **depois da F2-S07**, porque depende de **paredes (F2-S04) e de portas (F2-S07)**. Clicar por **parede** não precisa de ambientes. Já o modo **"por ambiente"** (rodapé em todo o contorno de um cômodo) depende de **F3-S01**: fica como extensão da F3. **Alternativa** se o PO preferir esperar: entregar o Rodapé só na F3, junto dos ambientes, com os dois modos de uma vez. O plano `v2/02` não prevê rodapé; é escopo novo.
+- **Comparação e proposta:** como os dois programas tratam rodapé (se é elemento próprio, se para nas portas sozinho): **a confirmar com teste do PO**; precisa de **ficha de pesquisa** antes da especificação. **Proposta:** elemento próprio preso à parede. **Recomendação:** adotar na F2 (modo por parede) e acrescentar o modo "por ambiente" na F3.
 
 #### M9. Pilar (F2-S06)
 - **Nome nosso:** Pilar.
@@ -488,7 +532,7 @@ Siglas de comparação: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz.
 - **Na tela:** marcador, etiqueta e guias tracejadas.
 - **Altera o modelo:** NÃO. A grade de captura é ajuda de tela.
 - **Entra em:** F2-S08 (V15 e V16, medir com captura, usam a mesma captura já na F1-S07).
-- **Comparação e proposta:** Rv tem diálogo de captura e atalhos de duas letras; Ac tem guias de alinhamento e linhas permanentes. **Proposta:** captura sempre ligada, mais guias de alinhamento. **Recomendação:** adotar; atalhos de duas letras ficam para depois.
+- **Comparação e proposta:** Rv tem diálogo de captura e atalhos de duas letras; Ac tem guias de alinhamento e linhas permanentes. **Proposta:** captura sempre ligada, mais guias de alinhamento. **Recomendação:** adotar; os atalhos de duas letras (decisão do PO de 13/10) estão na tabela de atalhos, seção 3.
 
 #### M14. Entrada numérica junto ao cursor (F2-S08)
 - **Nome nosso:** Campos junto ao cursor (a ficha lembra que o nome original é marca; este é nosso).
@@ -632,6 +676,12 @@ Siglas de comparação: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz.
 - **Altera o modelo:** criaria lances de escada e patamares.
 - **Nossa proposta:** detalhar na F4.
 
+#### T3. Fundações: sapata, bloco e estaca (F4, candidatas; decisão do PO, 13/10)
+- **O que faz:** colocaria os elementos de fundação sob pilares e paredes (sapata isolada ou corrida, bloco sobre estacas, estaca).
+- **Situação:** **candidata da Fase 4**, sem fatia no plano. É modelagem do **elemento** (forma e posição), não cálculo estrutural: o plano `v2/02` deixa estrutura e instalações fora da 1.0 (coluna "Won't"), então o PO precisa confirmar que só o desenho do elemento entra.
+- **Altera o modelo:** criaria elementos de fundação ligados aos pilares.
+- **Nossa proposta:** ficha de pesquisa e catálogo detalhado só quando a F4 for planejada. Nesta fase, nada.
+
 ---
 
 ## 3. Tabela resumo
@@ -664,7 +714,9 @@ Siglas de comparação: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz.
 | M5 | Parede | P | F2-S04 | Sim |
 | M6 | Camadas e linha de localização | via tipo | F2-S04 | Sim (no tipo) |
 | M7 | Junção de paredes | menu | F2-S04 | Sim (forma) |
-| M8 | Laje | L | F2-S05 | Sim |
+| M8 | Piso (laje e acabamento) | L ou PI | F2-S05 | Sim |
+| M8b | Forro | FO (proposta) | F2, depois da S07 (nova fatia, a aprovar) | Sim |
+| M8c | Rodapé | RD (proposta) | F2, depois da S07 (nova fatia, a aprovar) | Sim |
 | M9 | Pilar | K | F2-S06 | Sim |
 | M10 | Viga | V | F2-S06 | Sim |
 | M11 | Porta | D | F2-S07 | Sim (porta e vão) |
@@ -682,10 +734,31 @@ Siglas de comparação: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz.
 | M23 | Ajustes salvos | Ctrl+3 (caixa) | a decidir | Não |
 | T1 | Telhado | (depois) | F4 | Sim |
 | T2 | Escada | (depois) | F4 | Sim |
+| T3 | Fundações (sapata, bloco, estaca) | (depois) | F4, candidata | Sim |
 
-Total: 40 fichas na Fase 1 e 2 (17 de visualizador, 23 de modelagem) mais 2 resumos (telhado e escada).
+Total: 43 fichas na Fase 1 e 2 (18 de visualizador, contando V1b Voar; 25 de modelagem, contando M8b e M8c) mais 3 resumos (telhado, escada e fundações).
+
+### Atalhos de duas letras: padrão de fábrica (decisão do PO, 13/10)
+Em 13/10 o PO escolheu atalhos de **duas letras** como padrão de fábrica, com a mão no mouse; todos **configuráveis**. Os oito abaixo são dele; os três últimos são **propostas nossas** (ele troca como quiser).
+
+| Duas letras | Faz | Origem |
+|---|---|---|
+| WA | Parede (M5) | PO |
+| MM | Mover (M16) | PO |
+| MI | Espelhar (M19) | PO |
+| RR | Girar (M18) | PO |
+| CC | Copiar (M17) | PO |
+| AL | Alinhar (M20) | PO |
+| TR | Aparar e estender (M21) | PO |
+| TG | Tag (F3, catálogo de anotação) | PO |
+| PI | Piso (M8) | proposta |
+| FO | Forro (M8b) | proposta |
+| RD | Rodapé (M8c) | proposta |
+
+Conferido: os 11 códigos são diferentes entre si. Fora da lista dos 8 do PO, PI, FO e RD não repetem nenhum deles. O PO também citou as teclas do Revit que usa (MV mover, **MM espelhar**, RO girar, CO copiar); no conjunto do Revit, **MM é espelhar**, no nosso padrão **MM é mover**. Se o PO quiser oferecer as teclas do Revit como conjunto alternativo, esse conflito de MM tem de ser resolvido (**pergunta 6**).
 
 ### Atalhos de teclado propostos (sem repetição)
+Esta é a primeira proposta, de **uma letra**. Continua valendo como **alternativa** e para as ferramentas que o PO ainda não deu atalho de duas letras (nível, eixos, pilar, viga, porta, janela etc.). A coluna "Duas letras" mostra o padrão de fábrica de 13/10 quando existe.
 
 Teclas de uma letra funcionam quando nenhum campo de texto tem o foco e quando **não** há um número sendo digitado (ver M14).
 
@@ -703,25 +776,25 @@ Teclas de uma letra funcionam quando nenhum campo de texto tem o foco e quando *
 | R | Medir (régua) | |
 | N | Nível | |
 | E | Eixos | |
-| P | Parede | |
-| L | Laje | |
+| P (duas letras: WA) | Parede | |
+| L (duas letras: PI) | Piso (laje e acabamento, M8) | L ficou por já estar livre; "P" não serve, é a Parede. Forro: FO; Rodapé: RD (duas letras, sem tecla de uma letra) |
 | K | Pilar | |
 | V | Viga | |
 | D | Porta | |
 | J | Janela | |
-| M | Mover | Também pelo botão do grupo Editar, pela mini-barra e pelo clique direito (só com seleção) |
-| C | Copiar | Igual a Mover: botão Editar, mini-barra, clique direito |
-| G | Girar | Igual a Mover: botão Editar, mini-barra, clique direito |
-| F | Espelhar | Igual a Mover: botão Editar, mini-barra, clique direito |
-| A | Alinhar | Igual a Mover: botão Editar, mini-barra, clique direito |
-| T | Aparar e estender | Igual a Mover: botão Editar, mini-barra, clique direito |
+| M (duas letras: MM) | Mover | Também pelo botão do grupo Editar, pela mini-barra e pelo clique direito (só com seleção) |
+| C (duas letras: CC) | Copiar | Igual a Mover: botão Editar, mini-barra, clique direito |
+| G (duas letras: RR) | Girar | Igual a Mover: botão Editar, mini-barra, clique direito |
+| F (duas letras: MI) | Espelhar | Igual a Mover: botão Editar, mini-barra, clique direito |
+| A (duas letras: AL) | Alinhar | Igual a Mover: botão Editar, mini-barra, clique direito |
+| T (duas letras: TR) | Aparar e estender | Igual a Mover: botão Editar, mini-barra, clique direito |
 | Ctrl+Z / Ctrl+Y | Desfazer / Refazer | Ctrl+Shift+Z também refaz |
 | Ctrl+S / Ctrl+N / Ctrl+O | Salvar / Novo / Abrir | |
 | Ctrl+1 / Ctrl+2 / Ctrl+3 | Mostrar ou esconder Propriedades / Navegador / Caixa de ferramentas | |
 | Ctrl+E | Editar tipo do selecionado | |
 | Shift (segurando) | Trava na horizontal ou vertical | Durante o desenho |
 
-Conflitos verificados na lista: nenhuma letra está duplicada; **A** e **D** não conflitam com campos numéricos porque as letras de ferramenta ficam desligadas durante a digitação. As letras seguem a regra "primeira letra do nome em português" onde foi possível; D (porta) e K (pilar) e R (medir) são os casos que fogem, para não colidir. A combinação completa de atalhos é nossa, **não** copia o pacote de nenhum programa; os dois modos de mouse chamam-se "Modo A" e "Modo B" (não "modo Revit"), como a ficha recomenda.
+Conflitos verificados na lista: nenhuma letra está duplicada; **A** e **D** não conflitam com campos numéricos porque as letras de ferramenta ficam desligadas durante a digitação. As letras seguem a regra "primeira letra do nome em português" onde foi possível; D (porta), K (pilar), R (medir) e agora **L (piso, antes laje)** são os casos que fogem, para não colidir. A combinação completa de atalhos é nossa, **não** copia o pacote de nenhum programa; os dois modos de mouse chamam-se "Modo A" e "Modo B" (não "modo Revit"), como a ficha recomenda.
 
 ---
 
@@ -751,6 +824,14 @@ Recomendação: **manter a meta de 30 s** (está no aceite do F2-S01), mas escre
 Itens que os dois programas têm, mas que pedem muito trabalho ou dado extra no `.obim`: **trava de alinhamento** (cadeado), **matriz** (copiar em grade), **elevar**, **poço que atravessa níveis**, **abertura solta** (sem porta) e **ajustes salvos**.
 Recomendação: **adiar todos**. Porta e janela entram sempre presas à parede (assim "mover a porta move o vão", como o aceite do F2-S07 pede).
 
+**6. Atalhos de uma letra e de duas letras convivem como?** (aberta, depois de 13/10)
+Letras como M, C, T, A, R e P são **começo** de atalhos de duas letras (MM, CC, TR, AL, RR, RD, PI). Se as duas formas ficarem ligadas ao mesmo tempo, o programa teria de esperar um instante para saber se vem a segunda letra. Opções: (a) padrão de fábrica só com as de duas letras e as de uma letra num conjunto alternativo que o PO liga em Preferências; (b) as duas valem, com uma pequena espera. Também falta decidir o conjunto alternativo com as teclas do Revit (MM é espelhar lá e mover aqui).
+Recomendação: **(a)**, sem espera. Medir (R) ganharia outro código de duas letras na aprovação da tabela.
+
+**7. Forro e rodapé na F2: depois da F2-S07, ou só com os ambientes na F3?**
+O forro por contorno e o rodapé por parede só precisam de paredes e portas. Os modos "por ambiente" precisam da F3-S01.
+Recomendação: **F2, depois da F2-S07**, só por contorno (forro) e por parede (rodapé); o "por ambiente" entra na F3. O plano `v2/02` hoje põe forro na F4 e não tem rodapé; ver `docs/design/mudancas-de-escopo-2026-10-13.md`.
+
 ### Testes que o PO pode fazer para confirmar o que a ficha não confirmou
 Se tiver tempo, no Revit e no ArchiCAD que você usa, com modelo próprio (nada vai para o repositório):
 1. Junção L, T e X com camadas diferentes (o caderno de joins).
@@ -761,3 +842,5 @@ Se tiver tempo, no Revit e no ArchiCAD que você usa, com modelo próprio (nada 
 6. Orbitar com e sem seleção (o centro da rotação muda?).
 7. Tab com paredes ligadas: pega a corrente inteira?
 8. Os modos de aparar do ArchiCAD (conteúdo não lido na pesquisa).
+9. Piso com acabamento: você usa um piso só (com camadas) ou dois (estrutura e acabamento)? Como divide quando o acabamento muda de cômodo?
+10. Forro e rodapé: como você os coloca hoje (por contorno, por ambiente, por parede)? O rodapé para sozinho nas portas? Como fica nos cantos?

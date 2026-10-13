@@ -72,3 +72,23 @@ C hospedagem GitHub + espelho Codeberg · D interface híbrida (confirmar na S09
 ## Decisões do PO (2026-10-13): transparência e macOS
 - **macOS: "melhor esforço, sem garantia".** O build de macOS segue experimental, sem teste manual e sem bloquear merge. Isso **deve constar no aviso aos usuários**: README (feito no rascunho de transparência), página de download e instalador/notas de versão, em pt-BR e inglês. Nenhum texto pode prometer suporte a macOS.
 - Pedido do PO após ler críticas da comunidade OSArch a programas feitos com IA: (1) texto de transparência no README (aplicado ao README.md e README.en.md com o ok do PO em 2026-10-13); (2) cartão `F1-PRE-T01` de comportamento básico de janela e navegação com testes de regressão, antes da Fase 1; (3) pacote e convite para revisão humana externa em `docs/review/` (**nada enviado; o PO decide quando e para quem**); (4) este registro do macOS. Nenhuma resposta ou publicação em fórum em nome do PO.
+
+## Decisões do PO (2026-10-13): catálogo de anotação (F3/F4)
+1. **Detalhes 2D entram na 1.0:** linha de detalhe (D1), região preenchida (D2), texto (T1) e itens/componentes de detalhe 2D (D3, com biblioteca pequena própria, sem copiar de outro programa). Chamada e vista de detalhe (D4) ficam para depois da 1.0. "1.0" = o marco F6 do plano (faixa publicada de 21 a 42 meses).
+2. **Nuvem de revisão entra na 1.0** (só a nuvem, para indicar o que corrigir). Controle de revisões completo (letra, data, tabela) fica para versão seguinte; o carimbo tem campo livre "revisão".
+3. **Texto simples sobe para a F3** (junto da tag de ambiente).
+4. **Cota que comanda (cadeado):** versão futura.
+5. **Importar padrões de outro projeto** entra na F3, com **seleção do que importar** (filtrar quais padrões: modelos de vista, estilos de linha e de texto, carimbo), em vez de tudo de uma vez.
+6. **Referências quebradas:** versão mínima (lista e contagem) adiantada para a F3.
+- Efeito: o catálogo da F3/F4 e o escopo da 1.0 (v2/02) devem ser atualizados; a fatia de detalhes 2D ganha lugar no plano (a definir, antes da F3). Escopo é decisão do PO: registrada aqui.
+
+## Entrevista S09 (2026-10-13): partes 1 a 3 feitas
+- Resumo, fluxos, ferramentas prioritárias, atalhos, dores e "não pode perder" em `docs/research/2026-10-13-entrevista-s09-resumo.md`. **Aguarda o aceite do PO** (roteiro, seção 7: o resumo reflete o que disse; respostas da seção 4; decisão D híbrida). Só depois começam os desenhos de tela (wireframes).
+- Novas decisões do PO a registrar no plano: (a) **atalhos de duas letras** como padrão de fábrica (TR, AL, MM mover, MI espelhar, RR girar, CC copiar, TG tag, WA parede), configuráveis; (b) **tags por atributo sem criar família por atributo**; (c) **"Por que não vejo isto?"** (explicar por que um elemento não aparece); (d) **folha a partir de modelo de folha**; (e) **análises (solar, energia etc.) fora do núcleo**, como plugins opcionais.
+
+## Decisões do PO (2026-10-13): piso, forro, rodapé e fundações
+1. **Laje e piso viram uma só ferramenta, chamada "Piso"** (ficha M8 do catálogo F1/F2). O tipo de piso tem camadas (estrutura e acabamento); não há ferramenta separada de acabamento; o quadro de área por tipo de piso lê do tipo.
+2. **Forro e rodapé são essenciais e entram** (fichas M8b e M8c). Proposta de fase: **F2**, depois da F2-S07 (rodapé depende de paredes e portas). O plano `v2/02` hoje põe forro na F4 e não tem rodapé: mudança de escopo a aprovar (ver `docs/design/mudancas-de-escopo-2026-10-13.md`).
+3. **Fundações (sapata, bloco, estaca) entram na Fase 4 como candidatas** (resumo T3 no catálogo F1/F2). Só o desenho do elemento, sem cálculo estrutural; a confirmar com o PO.
+4. **Telhado e escada continuam na F4** (nada na F2).
+- Pendentes de resposta do PO: como as teclas de uma e de duas letras convivem (pergunta 6 do catálogo F1/F2) e se forro e rodapé ficam na F2 depois da S07 ou só com os ambientes na F3 (pergunta 7).

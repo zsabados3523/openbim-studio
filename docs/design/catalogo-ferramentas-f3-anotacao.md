@@ -133,7 +133,7 @@ Siglas: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz (só para reconh
 - **Comparação e proposta:** Rv: cotas permanentes lineares, com opção de alinhada; o cadeado cria restrição (ver C5). Ac: linear associativa; a associação depende do tipo de ponto de referência. **Proposta:** associativa por padrão, sem cadeado nesta fase; "cadeia" e "igualdade em partes" ficam para depois. **Recomendação:** adotar. **A confirmar com teste do PO:** quais referências ele cota mais (eixo, face de acabamento, face estrutural).
 
 #### C2. Cota de nível (F3-S04) [1.0]
-- **O que faz:** escreve a altura de um nível ou de um ponto (piso acabado, topo de laje) em corte, fachada e planta.
+- **O que faz:** escreve a altura de um nível ou de um ponto (piso acabado, topo do piso estrutural; ver o Piso, M8, no catálogo F1/F2) em corte, fachada e planta.
 - **Como se usa:** **Alt+C**, tipo "Nível"; clicar a linha de nível (ou ponto no corte), mover para o lado e clicar; "Origem" escolhe o zero (nível 0,00 da obra ou altitude).
 - **Na tela:** símbolo de nível (triângulo e linha) com a altura em metros, duas casas.
 - **Altera o modelo?** Só o `.obim`. O valor segue o nível: **mudar a cota do nível (M3) atualiza a cota de nível**. Mudar o valor na própria cota **não** move o nível.
@@ -211,7 +211,7 @@ Siglas: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz (só para reconh
 
 #### Q1. Quadro de áreas (F3-S07) [1.0]
 - **O que faz:** monta o quadro de áreas dos ambientes (e totais) e o coloca na prancha.
-- **Como se usa:** menu Documentar > Novo quadro > "Áreas"; escolher colunas (número, nome, área, pé-direito), agrupar por pavimento ou categoria, ligar totais; arrastar o quadro do navegador para a prancha.
+- **Como se usa:** menu Documentar > Novo quadro > "Áreas"; escolher colunas (número, nome, área, pé-direito), agrupar por pavimento ou categoria, ligar totais; um quadro de **área por tipo de piso** lê do **tipo do Piso** (M8, catálogo F1/F2: tipo com camadas de estrutura e acabamento); arrastar o quadro do navegador para a prancha.
 - **Na tela:** painel de tabelas (ver 1.5) e, na prancha, uma tabela vetorial.
 - **Altera o modelo?** Ler: não. Mudar um nome ou número direto no quadro **altera o ambiente no `.ifc`**; na primeira versão o quadro é **só leitura**.
 - **Entra em:** F3-S07. Aceite: igual ao cálculo manual do PO. O quadro legal brasileiro (áreas computáveis, taxa de ocupação, etc.): pacote Brasil; **textos da norma não entram**, só as colunas.
@@ -226,7 +226,7 @@ Siglas: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz (só para reconh
 
 #### Q3. Quadro de materiais (F4) [1.0]
 - **O que faz:** soma quantidades por material ou por tipo (m², m³, unidades).
-- **Como se usa:** como Q1, tipo "Materiais"; escolher agrupamento (por material, por pavimento).
+- **Como se usa:** como Q1, tipo "Materiais"; escolher agrupamento (por material, por pavimento). Entram as camadas dos tipos de **Piso** (M8), o comprimento em metros do **Rodapé** (M8c) e a área do **Forro** (M8b), vindos do catálogo F1/F2.
 - **Altera o modelo?** Não (só leitura).
 - **Entra em:** F4 (depende das quantidades automáticas, também F4). **Proposta:** adotar.
 
@@ -270,7 +270,7 @@ Siglas: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz (só para reconh
 
 ### Revisões
 
-#### R1. Revisão e nuvem de revisão (F4) [talvez 1.0]
+#### R1. Revisão e nuvem de revisão (F4) [1.0 só a nuvem de revisão; revisões completas depois, decisão do PO 2026-10-13]
 - **O que faz:** registra as mudanças entre emissões e marca as áreas alteradas na vista.
 - **Como se usa:**
   1. Menu Documentar > Revisões: criar "Revisão A", data, descrição.
@@ -288,23 +288,23 @@ Siglas: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz (só para reconh
 
 Em todos os quatro, o `.ifc` não muda; vive no `.obim` dentro da vista. O PO diz que no projeto executivo "o que não se modela vira detalhe de anotação": por isso estas fichas existem, e a decisão 1 pergunta se sobem.
 
-#### D1. Linha de detalhe [talvez 1.0 / fora]
+#### D1. Linha de detalhe [1.0, decisão do PO 2026-10-13]
 - **O que faz:** desenha linhas e polilinhas 2D soltas na vista (para detalhar o que o modelo não tem).
 - **Como se usa:** **Alt+L**; estilo de linha (cheia, tracejada, traço e ponto) e espessura; clicar os pontos; **Enter** termina. Capturas nos pontos do modelo (como M13).
 - **Altera o modelo?** Não. Só a vista. **Comparação:** Rv e Ac têm; o Rv ainda permite deixar o modelo em meio-tom. **Proposta:** com os mesmos snaps do modelo.
 
-#### D2. Região preenchida (hachura manual) [talvez 1.0 / fora]
+#### D2. Região preenchida (hachura manual) [1.0, decisão do PO 2026-10-13]
 - **O que faz:** desenha uma área 2D com contorno e padrão (concreto, terra, brita).
 - **Como se usa:** **Alt+H**; escolher padrão; desenhar o contorno por cliques; **Enter** fecha; contorno pode ficar invisível.
 - **Na tela:** padrão de **desenho** (acompanha a escala da vista) ou de **modelo** (medida real): opção na barra.
 - **Altera o modelo?** Não. **Comparação:** os dois têm, com categorias de hachura. Nota: as hachuras **automáticas por material** (B3) estão na F3 e **não** dependem desta.
 
-#### D3. Componente de detalhe 2D [talvez 1.0 / fora]
+#### D3. Componente de detalhe 2D [1.0, decisão do PO 2026-10-13]
 - **O que faz:** coloca um elemento 2D de uma biblioteca (peça de fixação, perfil, manta) para montar detalhes.
 - **Como se usa:** pelo botão (sem tecla); escolher na lista, clicar para posicionar; **Espaço** gira 90°; há também repetição em fila.
 - **Altera o modelo?** Não. **Comparação:** Rv tem componentes de detalhe e repetição; Ac guarda símbolos 2D. **Proposta:** depende de uma **biblioteca** (desenhada por nós ou pelo PO). Sem biblioteca, a ferramenta é vazia.
 
-#### D4. Chamada e vista de detalhe [talvez 1.0 / fora]
+#### D4. Chamada e vista de detalhe [depois da 1.0, decisão do PO 2026-10-13]
 - **O que faz:** marca uma região na planta ou no corte e abre uma vista ampliada (1:20, 1:10) onde se desenha e se anota.
 - **Como se usa:** **Alt+Q**; clicar dois cantos do retângulo; a bolha aparece com número; duplo clique na bolha abre a vista de detalhe; na prancha a bolha mostra "detalhe/prancha".
 - **Altera o modelo?** Não. Só o `.obim`. **Comparação:** Rv: a chamada cria vista com anotações de detalhe; Ac: detalhe é só 2D e por padrão não traz cotas e anotações; ao refazer, o que foi desenhado à mão precisa ser refeito (**risco** para nós também). **Proposta:** a vista de detalhe é "recorte ampliado do modelo + camada 2D por cima"; regenerar não apaga a camada 2D.
@@ -347,7 +347,7 @@ Em todos os quatro, o `.ifc` não muda; vive no `.obim` dentro da vista. O PO di
 Total: 26 fichas (3 de base, 5 de cotas, 5 de textos e tags, 4 de quadros e legendas, 4 de pranchas, 1 de revisão, 4 de desenho 2D). Pelo plano v2/02, C3, C4, T1, T3, T4, T5, Q2, Q3, Q4 e R1 são F4, e D1 a D4 são "detalhes" da F4 ("Should").
 
 ### Atalhos de teclado propostos para anotações
-As letras soltas dos catálogos F1/F2 (S Z H I B Q R N E P L K V D J M C G F A T) **continuam como estão**. Para não colidir, as anotações usam **Alt + letra**, só em vista 2D. Combinações novas: Ctrl+4, Ctrl+5, Ctrl+P. Nenhuma repete as do catálogo F1/F2 (Ctrl+1, 2, 3, E, S, N, O, Z, Y). Atenção: Alt+letra também é usado pelos menus em alguns sistemas; nossos menus **não** terão letra sublinhada de acesso, para evitar conflito.
+As letras soltas dos catálogos F1/F2 (S Z H I B Q R N E P L K V D J M C G F A T) continuam como alternativa; o **padrão de fábrica decidido em 13/10 é de duas letras** (TR, AL, MM, MI, RR, CC, **TG para tag**, WA; ver a tabela de atalhos do catálogo F1/F2). A tag (T2, T3) passa a ter **TG** como atalho de fábrica; o Alt+R fica como alternativa, até a tabela ser aprovada. Para não colidir, as anotações usam **Alt + letra**, só em vista 2D. Combinações novas: Ctrl+4, Ctrl+5, Ctrl+P. Nenhuma repete as do catálogo F1/F2 (Ctrl+1, 2, 3, E, S, N, O, Z, Y). Atenção: Alt+letra também é usado pelos menus em alguns sistemas; nossos menus **não** terão letra sublinhada de acesso, para evitar conflito.
 
 | Tecla | Faz | Observação |
 |---|---|---|

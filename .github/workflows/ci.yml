@@ -120,6 +120,21 @@ jobs:
           mkdir -p out
           bash prototypes/cpp_probe_3b/run.sh out docs/acceptance/amostras/casa-simples.ifc 2>&1 | tee out/sonda-3b.txt
           echo "::notice title=sonda 3b no ${RUNNER_OS}::$(grep SONDA3B out/sonda-3b.txt || echo sem resultado)"
+      - name: Módulo obimcore (S04-T03; compila com a ponte e roda o oráculo R1-a a R1-i; bloqueia o merge)
+        shell: bash -el {0}
+        run: |
+          # Ambiente criado pela trava (T01); nada é instalado aqui. Build limpo e depois incremental, com os tempos no resumo.
+          set +e
+          exec > >(tee "$RUNNER_TEMP/obimcore.log") 2>&1
+          trap 'rc=$?; if [ $rc -ne 0 ]; then msg=$(tail -n 40 "$RUNNER_TEMP/obimcore.log" | sed ":a;N;\$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g"); echo "::error title=obimcore falhou::$msg"; fi' EXIT
+          set -e
+          CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04 | tee "$RUNNER_TEMP/b1.txt"
+          touch prototypes/s04/obimcore/ponte.cpp
+          bash prototypes/s04/obimcore/build.sh out/s04 | tee "$RUNNER_TEMP/b2.txt"
+          echo "obimcore ${RUNNER_OS}: limpo $(grep OBIMCORE "$RUNNER_TEMP/b1.txt") | incremental $(grep OBIMCORE "$RUNNER_TEMP/b2.txt")" >> "$GITHUB_STEP_SUMMARY"
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          export OBIM_S04_OBRIGATORIO=1  # pulo vira falha (T04c entregou versao()["registro_ifc4"])
+          QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_ponte.py
       - name: REUSE (ferramenta só no CI, ambiente separado)
         shell: bash -el {0}
         run: |
@@ -245,6 +260,21 @@ jobs:
           mkdir -p out
           bash prototypes/cpp_probe_3b/run.sh out docs/acceptance/amostras/casa-simples.ifc 2>&1 | tee out/sonda-3b.txt
           echo "::notice title=sonda 3b no ${RUNNER_OS}::$(grep SONDA3B out/sonda-3b.txt || echo sem resultado)"
+      - name: Módulo obimcore (S04-T03; compila com a ponte e roda o oráculo R1-a a R1-i; bloqueia o merge)
+        shell: bash -el {0}
+        run: |
+          # Ambiente criado pela trava (T01); nada é instalado aqui. Build limpo e depois incremental, com os tempos no resumo.
+          set +e
+          exec > >(tee "$RUNNER_TEMP/obimcore.log") 2>&1
+          trap 'rc=$?; if [ $rc -ne 0 ]; then msg=$(tail -n 40 "$RUNNER_TEMP/obimcore.log" | sed ":a;N;\$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g"); echo "::error title=obimcore falhou::$msg"; fi' EXIT
+          set -e
+          CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04 | tee "$RUNNER_TEMP/b1.txt"
+          touch prototypes/s04/obimcore/ponte.cpp
+          bash prototypes/s04/obimcore/build.sh out/s04 | tee "$RUNNER_TEMP/b2.txt"
+          echo "obimcore ${RUNNER_OS}: limpo $(grep OBIMCORE "$RUNNER_TEMP/b1.txt") | incremental $(grep OBIMCORE "$RUNNER_TEMP/b2.txt")" >> "$GITHUB_STEP_SUMMARY"
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          export OBIM_S04_OBRIGATORIO=1  # pulo vira falha (T04c entregou versao()["registro_ifc4"])
+          QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_ponte.py
       - name: Instalador Windows (ambiente de runtime e NSIS)
         shell: bash -el {0}
         run: |

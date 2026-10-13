@@ -17,8 +17,8 @@ CAMADAS = [0.02, 0.11, 0.02]
 PAR = dict(tipo="PAR15", comprimento=4.0, altura=2.8, espessura=0.15)
 # Geometria de apoio: o contrato deixa livre COMO ela é montada (compartilhar ou não ponto/direção, perfil retangular ou arbitrário, polilinha ou curva indexada);
 # a geometria em si é conferida por create_shape e a ausência de sobras pela checagem de órfãs. Toda outra classe tem de bater em número com o fluxo A.
-# EXCEÇÃO: o fluxo A compartilha UM IfcMaterialLayerSetUsage (e uma relação de material) entre as paredes de um lote (efeito de `type.assign_type` com várias paredes; desvio a corrigir
-# na T11). B cria 1 uso e 1 relação por parede (e 1 relação por tipo); isso é conferido à parte (`materiais`), não contra A.
+# Sem exceção (T11c): A e B criam 1 IfcMaterialLayerSetUsage e 1 relação de material por parede (e 1 relação por tipo); a contagem de TODA classe é comparada entre A e B.
+# `materiais` segue sendo conferido à parte também (B sozinho: 1 uso por parede, 1 relação por parede e por tipo).
 MATERIAL = {"IfcMaterialLayerSetUsage", "IfcRelAssociatesMaterial"}
 LIVRES = {"IfcCartesianPoint", "IfcDirection", "IfcAxis2Placement2D", "IfcAxis2Placement3D", "IfcCartesianPointList2D", "IfcCartesianPointList3D", "IfcIndexedPolyCurve",
           "IfcPolyline", "IfcArbitraryClosedProfileDef", "IfcRectangleProfileDef"}
@@ -69,7 +69,7 @@ def assinatura(caminho):  # tudo o que o contrato exige que A e B tenham igual; 
     f = ifcopenshell.open(str(caminho))
     forma = formas(f)
     par = lambda x: None if x is None else x.Name  # noqa: E731
-    sig = {"esquema": f.schema, "classes": dict(Counter(e.is_a() for e in f if e.is_a() not in LIVRES | MATERIAL)),
+    sig = {"esquema": f.schema, "classes": dict(Counter(e.is_a() for e in f if e.is_a() not in LIVRES)),
            "materiais": {c: len(f.by_type(c, include_subtypes=False)) for c in sorted(MATERIAL)},
            "orfas": sorted(e.is_a() for e in f if not e.is_a("IfcRoot") and not e.is_a("IfcRepresentationContext") and not f.get_inverse(e)),
            "nomes": {c: sorted(e.Name for e in f.by_type(c)) for c in ("IfcProject", "IfcSite", "IfcBuilding", "IfcBuildingStorey")},
@@ -181,9 +181,10 @@ def percorrer(a, b, passos):  # executa nos dois, grava e compara depois de CADA
         ua, ub = a.ultimo(), b.ultimo()  # antes de gravar (o comando gravar do fluxo A zera o `ultimo`)
         pa, pb = a.gravar(), b.gravar()
         sa, sb = assinatura(pa), assinatura(pb)
-        d = igual({k: v for k, v in sa.items() if k != "materiais"}, {k: v for k, v in sb.items() if k != "materiais"}, "ifc")
+        d = igual(sa, sb, "ifc")  # inclusive "classes" (sem exceção de material) e "materiais" (A e B iguais)
         nw, nt = len(sb["paredes"]), len(sb["tipos"])
         d += [f"B: usos de camadas/relações de material {sb['materiais']} (esperado 1 uso por parede e 1 relação por parede e por tipo: {nw}, {nw + nt})"] * (sb["materiais"] != {"IfcMaterialLayerSetUsage": nw, "IfcRelAssociatesMaterial": nw + nt})
+        d += [f"A: usos de camadas/relações de material {sa['materiais']} (esperado 1 uso por parede e 1 relação por parede e por tipo: {nw}, {nw + nt}; T11c)"] * (sa["materiais"] != {"IfcMaterialLayerSetUsage": nw, "IfcRelAssociatesMaterial": nw + nt})
         mapa.update({gb: ga for ga, gb in zip(a.ws + [a.tipo], b.ws + [b.tipo])})
         if ra is not None:  # nos marcos não houve comando (o gravar do fluxo A zera o `ultimo`)
             d += igual(ua, {k: [mapa.get(g, g) for g in v] for k, v in ub.items()}, "ultimo") + igual(ra, [mapa.get(g, g) for g in rb], "retorno")

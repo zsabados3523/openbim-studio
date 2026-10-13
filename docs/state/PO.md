@@ -81,3 +81,7 @@ C hospedagem GitHub + espelho Codeberg · D interface híbrida (confirmar na S09
 5. **Importar padrões de outro projeto** entra na F3, com **seleção do que importar** (filtrar quais padrões: modelos de vista, estilos de linha e de texto, carimbo), em vez de tudo de uma vez.
 6. **Referências quebradas:** versão mínima (lista e contagem) adiantada para a F3.
 - Efeito: o catálogo da F3/F4 e o escopo da 1.0 (v2/02) devem ser atualizados; a fatia de detalhes 2D ganha lugar no plano (a definir, antes da F3). Escopo é decisão do PO: registrada aqui.
+
+## Entrevista S09 (2026-10-13): partes 1 a 3 feitas
+- Resumo, fluxos, ferramentas prioritárias, atalhos, dores e "não pode perder" em `docs/research/2026-10-13-entrevista-s09-resumo.md`. **Aguarda o aceite do PO** (roteiro, seção 7: o resumo reflete o que disse; respostas da seção 4; decisão D híbrida). Só depois começam os desenhos de tela (wireframes).
+- Novas decisões do PO a registrar no plano: (a) **atalhos de duas letras** como padrão de fábrica (TR, AL, MM mover, MI espelhar, RR girar, CC copiar, TG tag, WA parede), configuráveis; (b) **tags por atributo sem criar família por atributo**; (c) **"Por que não vejo isto?"** (explicar por que um elemento não aparece); (d) **folha a partir de modelo de folha**; (e) **análises (solar, energia etc.) fora do núcleo**, como plugins opcionais.

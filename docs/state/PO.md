@@ -85,3 +85,10 @@ C hospedagem GitHub + espelho Codeberg · D interface híbrida (confirmar na S09
 ## Entrevista S09 (2026-10-13): partes 1 a 3 feitas
 - Resumo, fluxos, ferramentas prioritárias, atalhos, dores e "não pode perder" em `docs/research/2026-10-13-entrevista-s09-resumo.md`. **Aguarda o aceite do PO** (roteiro, seção 7: o resumo reflete o que disse; respostas da seção 4; decisão D híbrida). Só depois começam os desenhos de tela (wireframes).
 - Novas decisões do PO a registrar no plano: (a) **atalhos de duas letras** como padrão de fábrica (TR, AL, MM mover, MI espelhar, RR girar, CC copiar, TG tag, WA parede), configuráveis; (b) **tags por atributo sem criar família por atributo**; (c) **"Por que não vejo isto?"** (explicar por que um elemento não aparece); (d) **folha a partir de modelo de folha**; (e) **análises (solar, energia etc.) fora do núcleo**, como plugins opcionais.
+
+## Decisões do PO (2026-10-13): piso, forro, rodapé e fundações
+1. **Laje e piso viram uma só ferramenta, chamada "Piso"** (ficha M8 do catálogo F1/F2). O tipo de piso tem camadas (estrutura e acabamento); não há ferramenta separada de acabamento; o quadro de área por tipo de piso lê do tipo.
+2. **Forro e rodapé são essenciais e entram** (fichas M8b e M8c). Proposta de fase: **F2**, depois da F2-S07 (rodapé depende de paredes e portas). O plano `v2/02` hoje põe forro na F4 e não tem rodapé: mudança de escopo a aprovar (ver `docs/design/mudancas-de-escopo-2026-10-13.md`).
+3. **Fundações (sapata, bloco, estaca) entram na Fase 4 como candidatas** (resumo T3 no catálogo F1/F2). Só o desenho do elemento, sem cálculo estrutural; a confirmar com o PO.
+4. **Telhado e escada continuam na F4** (nada na F2).
+- Pendentes de resposta do PO: como as teclas de uma e de duas letras convivem (pergunta 6 do catálogo F1/F2) e se forro e rodapé ficam na F2 depois da S07 ou só com os ambientes na F3 (pergunta 7).

@@ -6,8 +6,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 - Autor: agente sonnet (documentação, T1) · Data: 2026-10-13
 - Para: Rafael (PO), que vai desenhar o visual à mão a partir deste documento. Continua o catálogo `docs/design/catalogo-ferramentas-f1-f2.md` (mesmo formato; leia a seção "Como ler cada ficha" de lá).
 - Base: a ficha `docs/research/2026-10-13-ferramentas-anotacao-revit-archicad-f3-f4.md`, o plano `v2/02` (F3, F4 e §6) e as falas da entrevista da S09 (parte 1: muito tempo em rótulos, tags, textos, chamadas, detalhes, legendas, tabelas e carimbo; prefeitura = simples, executivo = detalhado).
-- Estado: **proposta**. Nada aqui vira especificação sem a sua aprovação. Nomes e palavras são nossos. Onde a pesquisa não confirmou um comportamento: **"a confirmar com teste do PO"**.
-- Marcas: **[1.0]** obrigatório na 1.0 ("Must" do plano v2/02 §8) · **[talvez 1.0]** "Should": entra se o calendário permitir (o plano põe **revisões** e **detalhes 2D** aí; o pedido do PO é tratá-los como fora da 1.0) · **[fora da 1.0]** sem lugar no plano.
+- Estado: **proposta, atualizada em 13/10 com as suas decisões** (ver a seção 4 e `docs/design/mudancas-de-escopo-2026-10-13.md`; o plano `v2/02` está na Revisão 3). Nada aqui vira especificação sem a sua aprovação. Nomes e palavras são nossos. Onde a pesquisa não confirmou um comportamento: **"a confirmar com teste do PO"**.
+- Marcas: **[1.0]** obrigatório na 1.0 ("Must" do plano v2/02 §8) · **[talvez 1.0]** "Should": entra se o calendário permitir (hoje só as **fundações**, no catálogo F1/F2) · **[depois da 1.0]** ou **[fora da 1.0]** sem lugar na 1.0. Desde 13/10, **detalhes 2D (D1 a D3), texto simples e a nuvem de revisão são [1.0]**.
 
 ## A regra de ouro desta parte
 O arquivo `.ifc` fica limpo. **Cotas, textos, tags, símbolos, quadros, pranchas, carimbos e revisões vivem no arquivo lateral `.obim`**, ao lado do `.ifc`, ligados aos elementos pelo identificador (GlobalId) mais uma âncora geométrica (v2/02 §6). Só o que é dado do edifício vai para o `.ifc`: ambientes, tipos, materiais, números de marca, quantidades. Se um elemento sumir, a cota ou tag ligada a ele **não é apagada**: fica cinza tracejada ("órfã") e entra no painel "Referências quebradas".
@@ -30,12 +30,13 @@ Entre "Medir" e os ajustes salvos, a caixa de ferramentas ganha um grupo **Anota
 | [Hachura]            |
 | [Quadro]  -> painel de tabelas |
 | [Nuvem de revisão]   |
-| -- Desenho 2D --     |  <- fora da 1.0
+| -- Desenho 2D --     |  <- na 1.0 (F2-S11)
 | [Linha de detalhe]   |
 | [Região preenchida]  |
-| [Chamada]            |
+| [Item de detalhe]    |
+| [Chamada]            |  <- depois da 1.0
 ```
-Na F1/F2 o grupo existe vazio (ou escondido). Em vista 3D ele fica apagado; a barra de estado mostra a escala da vista ("1:50").
+Na F1 o grupo existe vazio (ou escondido); o bloco "Desenho 2D" passa a funcionar na F2 (F2-S11), o resto na F3 em diante. Em vista 3D ele fica apagado; a barra de estado mostra a escala da vista ("1:50").
 
 ### 1.2 Barra de opções
 Muda sozinha como as outras. Exemplos: **Cota** → Tipo [linear/alinhada/nível] · Estilo [ v ] · Referência [face / eixo / centro] · [x] Segue o desenho. **Tag** → Estilo [ v ] · [ ] Linha de chamada · Orientação [horizontal/vertical]. **Texto** → Estilo · Tamanho em milímetros no papel · Alinhamento.
@@ -76,11 +77,11 @@ Siglas: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz (só para reconh
 
 **Base da documentação** (não fica no grupo Anotar): B1 Ambiente · B2 Vistas de planta e corte · B3 Gráfico por categoria e hachuras
 **Cotas:** C1 Cota linear e alinhada · C2 Cota de nível · C3 Cota angular e radial · C4 Cota de ponto · C5 Cota que comanda (travada)
-**Textos e tags:** T1 Texto · T2 Tag de ambiente · T3 Tag por categoria · T4 Símbolo · T5 Painel de referências quebradas
+**Textos e tags:** T1 Texto · T2 Tag de ambiente · T3 Tag por categoria · T4 Símbolo · T5 Painel de referências quebradas (mínimo na F3)
 **Quadros e legendas:** Q1 Quadro de áreas · Q2 Quadro de esquadrias · Q3 Quadro de materiais · Q4 Legenda
-**Pranchas:** P1 Prancha e carimbo · P2 Viewport · P3 Exportar PDF · P4 Pacote `.obimpack`
-**Revisões:** R1 Revisão e nuvem de revisão
-**Desenho 2D (fora da 1.0 por pedido; "Should" no plano):** D1 Linha de detalhe · D2 Região preenchida · D3 Componente de detalhe 2D · D4 Chamada e vista de detalhe
+**Pranchas:** P1 Prancha e carimbo (a partir de modelo de folha) · P2 Viewport · P3 Exportar PDF · P4 Pacote `.obimpack` · P5 Importar padrões de outro projeto
+**Revisões:** R1 Nuvem de revisão (1.0) e revisões completas (depois)
+**Desenho 2D (D1 a D3 na 1.0, fatia F2-S11; D4 depois da 1.0):** D1 Linha de detalhe · D2 Região preenchida · D3 Item de detalhe 2D · D4 Chamada e vista de detalhe
 
 ---
 
@@ -113,7 +114,7 @@ Siglas: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz (só para reconh
 - **Na tela:** janela com tabela e pré-visualização em escala.
 - **Altera o modelo?** Só o `.obim`.
 - **Entra em:** F3-S03 (modelo brasileiro de vistas). PO aprova visualmente em 1:50, 1:100 e 1:200.
-- **Comparação e proposta:** Rv: visibilidade e gráficos por categoria; Ac: sobreposições gráficas com regras. **Proposta:** tabela de categorias (simples) mais regras por propriedade já existentes (V12). **Recomendação:** adotar. Os "modelos de vista" que o PO transfere entre projetos vêm daqui: ver decisão 5.
+- **Comparação e proposta:** Rv: visibilidade e gráficos por categoria; Ac: sobreposições gráficas com regras. **Proposta:** tabela de categorias (simples) mais regras por propriedade já existentes (V12). **Recomendação:** adotar. Os "modelos de vista" que o PO transfere entre projetos vêm daqui: ver a ficha P5 (importar padrões) e a decisão 5.
 
 ---
 
@@ -159,18 +160,18 @@ Siglas: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz (só para reconh
 - **O que faz:** quando você digita um valor numa cota travada, o desenho se move para respeitar.
 - **Como se usa:** (como no Revit) cadeado na cota; destravar, digitar o valor novo, o elemento move.
 - **Altera o modelo?** **Sim** (o `.ifc`: a parede muda de lugar) e cria uma regra no `.obim`. É a ficha que mais **aumenta o risco**: pode ficar "restrição demais" e travar o projeto.
-- **Entra em:** nenhuma fatia do plano. **Proposta:** **não fazer na 1.0**. O PO já tem "eixo que segura parede" (F2-S03) como forma de restrição. Ver decisão 4.
+- **Entra em:** nenhuma fatia do plano. **Proposta:** **não fazer na 1.0**. O PO já tem "eixo que segura parede" (F2-S03) como forma de restrição. Decisão do PO (13/10): versão futura (seção 4, decisão 4).
 
 ---
 
 ### Textos e tags
 
-#### T1. Texto (F4) [1.0]
+#### T1. Texto (F3-S04) [1.0]
 - **O que faz:** escreve uma nota na vista, com ou sem linha de chamada.
 - **Como se usa:** **Alt+T**; clicar o ponto (com chamada: clicar a ponta da seta e depois o texto); digitar; **Enter** em linha em branco ou clique fora termina.
 - **Na tela:** caixa de texto no tamanho de papel (ex.: 2,5 mm, 3,5 mm); estilos prontos ("nota", "título de vista", "especificação") do pacote Brasil. Barra: estilo, alinhamento, [ ] chamada.
 - **Altera o modelo?** Só o `.obim`. Se o texto citar campo ("área", "marca") o valor vem do elemento.
-- **Entra em:** F4 (o plano F3 não inclui texto livre). **Recomendação:** subir um mínimo de texto para a F3, porque a planta legal e o quadro precisam de títulos e notas. Ver decisão 3.
+- **Entra em:** **F3-S04**, junto da tag de ambiente (decisão do PO, 13/10: texto simples sobe da F5 para a F3, porque a planta legal e o quadro precisam de títulos e notas).
 - **Comparação e proposta:** Rv: nota de texto com linha opcional, tamanho por escala; Ac: blocos de texto formatáveis e rótulos. **Proposta:** estilos de texto em mm no papel.
 
 #### T2. Tag de ambiente (F3-S04) [1.0]
@@ -178,15 +179,15 @@ Siglas: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz (só para reconh
 - **Como se usa:** **Alt+R**, tipo "Ambiente"; clicar dentro do ambiente; a tag aparece no centro, arrastar para deslocar. Opção "Etiquetar todos".
 - **Na tela:** texto em duas ou três linhas (nome, área). Estilo "prefeitura" mostra só nome e área; estilo "executivo" soma pé-direito e revestimento (pacote Brasil).
 - **Altera o modelo?** Só o `.obim`. O conteúdo vem do ambiente no `.ifc`; renomear o ambiente (painel ou quadro) atualiza as tags.
-- **Entra em:** F3-S04.
-- **Comparação e proposta:** Rv: tag de ambiente com número, nome, área e volume, igual no quadro; Ac: etiqueta de zona, cuja aparência vem da categoria. **Proposta:** estilos por categoria, como o Ac; edição do nome pelo painel, como o Rv. **Recomendação:** adotar.
+- **Entra em:** F3-S04. **Tag por atributo (decisão do PO, 13/10):** a tag mostra os **campos que você escolhe** do ambiente (nome, número, área, pé-direito, revestimento...), sem criar uma família nova para cada combinação de atributos.
+- **Comparação e proposta:** Rv: tag de ambiente com número, nome, área e volume, igual no quadro; Ac: etiqueta de zona, cuja aparência vem da categoria. **Proposta:** estilos por categoria, como o Ac; edição do nome pelo painel, como o Rv; campos escolhidos pelo usuário. **Recomendação:** adotar.
 
 #### T3. Tag por categoria (F4) [1.0]
 - **O que faz:** escreve a identificação de um elemento (marca da porta, tipo da janela).
 - **Como se usa:** **Alt+R**, tipo "Por categoria"; clicar o elemento; a tag da categoria certa entra; opção "Etiquetar todos da vista". Barra: [ ] linha de chamada (presa ou livre), horizontal/vertical.
 - **Na tela:** bolha ou texto pequeno; o campo vem do elemento (marca, tipo, largura × altura).
 - **Altera o modelo?** A tag, não. **A marca (ex.: P1, J3) é dado do elemento:** quando criada ou renumerada, **muda o `.ifc`**. Renumerar automático por ordem na planta: opção.
-- **Entra em:** F4 (junto com o quadro de esquadrias).
+- **Entra em:** F4 (junto com o quadro de esquadrias). **Tag por atributo (decisão do PO, 13/10):** a tag mostra os campos escolhidos do **tipo** ou do elemento (marca, largura × altura, material), sem criar uma família nova para cada atributo.
 - **Comparação e proposta:** Rv numera pela "marca"; Ac usa rótulos associativos (detalhe: **a confirmar com teste do PO**). **Recomendação:** adotar o fluxo do Rv; lembrar que a marca é o elo com o quadro Q2.
 
 #### T4. Símbolo (F4) [1.0]
@@ -197,12 +198,12 @@ Siglas: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz (só para reconh
 - **Entra em:** F4. Biblioteca própria de símbolos (desenhada por nós, sem copiar os de outros programas).
 - **Comparação e proposta:** Rv: símbolos de anotação; Ac: salvar 2D como objeto. **Proposta:** biblioteca fixa na 1.0; criar símbolos próprios é depois.
 
-#### T5. Painel de referências quebradas (F4) [1.0]
+#### T5. Painel de referências quebradas (versão mínima na F3-S04b; religar na F5) [1.0]
 - **O que faz:** lista as cotas e tags que perderam a referência e deixa religar.
 - **Como se usa:** abre sozinho ao abrir o projeto se houver órfãs (contagem por vista e por prancha); selecionar mostra a anotação; "Religar" pede clicar o novo elemento; "Manter órfã" marca como resolvida sem religar.
 - **Na tela:** lista em painel lateral; anotação órfã cinza tracejada na vista.
 - **Altera o modelo?** Só o `.obim`. Nunca apaga em silêncio.
-- **Entra em:** F4 (v2/02 §6.3). Como as cotas entram na F3, **recomendamos adiantar a versão mínima** (só contagem e lista) para a F3. Ver decisão 6.
+- **Entra em:** **F3-S04b** a versão mínima (só lista e contagem, decisão do PO de 13/10); **religar** e a reassociação assistida ficam na **F5** (v2/02 §6.3).
 - **Comparação:** os dois reclamam quando o elemento some, de formas diferentes; nossa regra é a de v2/02.
 
 ---
@@ -242,11 +243,11 @@ Siglas: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz (só para reconh
 
 #### P1. Prancha e carimbo (F3-S05) [1.0]
 - **O que faz:** cria uma folha A0 a A4 com carimbo (moldura e dados do projeto).
-- **Como se usa:** (1) clicar "Nova prancha"; (2) formato, orientação e carimbo (modelo do pacote Brasil); (3) preencher número, nome, autor, data nos campos do carimbo; (4) a lista de pranchas vive no navegador.
+- **Como se usa:** (1) clicar "Nova prancha" e **escolher um modelo de folha** (tamanho, orientação, carimbo e campos já definidos; decisão do PO, 13/10); (2) ajustar formato, orientação e carimbo se precisar (modelo do pacote Brasil); (3) preencher número, nome, autor, data e o campo livre "revisão" nos campos do carimbo; (4) a lista de pranchas vive no navegador.
 - **Na tela:** a folha em escala real de papel, com margens. O carimbo é editável em um editor próprio (campos, logotipo do escritório). Campos podem vir do projeto (nome da obra, endereço, responsável).
 - **Altera o modelo?** Só o `.obim` (`sheets/<id>.json`, `titleblocks/*`).
-- **Entra em:** F3-S05. Aceite: montar uma prancha em até 15 minutos.
-- **Comparação e proposta:** Rv: folha com carimbo (família); Ac: Livro de layouts com layout mestre. **Proposta:** carimbo como modelo que se escolhe e edita; "layout mestre" nosso nome: "modelo de prancha". **Recomendação:** adotar. **A confirmar com teste do PO:** quais campos do carimbo a prefeitura da cidade dele exige a mais.
+- **Entra em:** F3-S05. Aceite: montar uma prancha em até 15 minutos, **partindo de um modelo de folha**.
+- **Comparação e proposta:** Rv: folha com carimbo (família); Ac: Livro de layouts com layout mestre. **Proposta:** carimbo como modelo que se escolhe e edita; "layout mestre" nosso nome: "modelo de folha". **Recomendação:** adotar. **A confirmar com teste do PO:** quais campos do carimbo a prefeitura da cidade dele exige a mais.
 
 #### P2. Viewport: vista na prancha (F3-S05) [1.0]
 - **O que faz:** coloca uma vista (planta, corte, quadro, legenda) na prancha, com escala e título.
@@ -266,12 +267,18 @@ Siglas: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz (só para reconh
 - **Como se usa:** Arquivo > Exportar pacote; abrir o pacote em outra máquina e ver a mesma coisa.
 - **Altera o modelo?** Não. **Entra em:** F3-S05. **Comparação:** Rv e Ac têm pacote próprio. **Proposta:** adotar. Um colega com Revit ou ArchiCAD recebe só o `.ifc` mais PDFs.
 
+#### P5. Importar padrões de outro projeto (F3-S05b) [1.0]
+- **O que faz:** traz para o projeto aberto os seus padrões de outro projeto: modelos de vista, estilos de linha, estilos de texto e carimbo. **Você escolhe o que importar** (decisão do PO, 13/10), em vez de trazer tudo.
+- **Como se usa:** (1) Arquivo > Importar padrões; (2) escolher o outro projeto (`.obim`); (3) marcar na lista só os itens que quer (modelos de vista, estilos de linha, estilos de texto, carimbos); (4) **Importar**. Se um nome já existe, o programa pergunta: manter, substituir ou renomear.
+- **Altera o modelo?** Só o `.obim`; o `.ifc` não muda. Não é sincronização: é uma cópia feita uma vez.
+- **Entra em:** F3-S05b, depois da primeira prancha pronta. **Comparação:** Rv e Ac têm transferência de padrões. **Proposta:** adotar, com a seleção por itens.
+
 ---
 
 ### Revisões
 
-#### R1. Revisão e nuvem de revisão (F4) [1.0 só a nuvem de revisão; revisões completas depois, decisão do PO 2026-10-13]
-- **O que faz:** registra as mudanças entre emissões e marca as áreas alteradas na vista.
+#### R1. Revisão e nuvem de revisão (F5) [1.0 só a nuvem de revisão; revisões completas depois, decisão do PO 2026-10-13]
+- **O que faz:** na **1.0** só marca as áreas alteradas na vista (**nuvem de revisão**), para indicar o que corrigir; o carimbo tem o campo livre "revisão". O **controle completo** (letra, data, tabela de revisões no carimbo, travar a revisão anterior) fica para **depois da 1.0**; os passos 1, 3 e 4 abaixo descrevem essa versão futura.
 - **Como se usa:**
   1. Menu Documentar > Revisões: criar "Revisão A", data, descrição.
   2. Ferramenta **Nuvem de revisão** (**Alt+N**): clicar os pontos do contorno; **Enter** fecha; escolher a revisão.
@@ -279,14 +286,14 @@ Siglas: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz (só para reconh
   4. Ao emitir, a revisão anterior fica travada (só a última edita).
 - **Na tela:** nuvem de arcos em volta da área; tabela no carimbo.
 - **Altera o modelo?** Só o `.obim` (`revisions.json`).
-- **Entra em:** F4. No plano (v2/02 §8) "revisões" está na coluna "Should" da 1.0, ou seja, só se o calendário permitir. Pede decisão: ver decisão 2.
+- **Entra em:** F5 (nuvem de revisão, "Must" da 1.0). O controle completo de revisões está na coluna "Won't" do plano (v2/02 §8, Revisão 3).
 - **Comparação e proposta:** Rv: revisões com nuvens e tabela no carimbo; Ac: mudanças ligadas a elementos, que numeram sozinhas as pranchas afetadas. **Proposta:** modelo do Rv (nuvem manual), mais simples; ligar a elementos fica para depois.
 
 ---
 
-### Desenho 2D [pedido do PO: fora da 1.0; no plano v2/02 §8 é "Should"]
+### Desenho 2D [D1 a D3 na 1.0, fatia F2-S11; D4 depois da 1.0; decisão do PO, 13/10]
 
-Em todos os quatro, o `.ifc` não muda; vive no `.obim` dentro da vista. O PO diz que no projeto executivo "o que não se modela vira detalhe de anotação": por isso estas fichas existem, e a decisão 1 pergunta se sobem.
+Em todos os quatro, o `.ifc` não muda; vive no `.obim` dentro da vista. O PO diz que no projeto executivo "o que não se modela vira detalhe de anotação": por isso D1, D2 e D3 entram na 1.0 (decisão 1).
 
 #### D1. Linha de detalhe [1.0, decisão do PO 2026-10-13]
 - **O que faz:** desenha linhas e polilinhas 2D soltas na vista (para detalhar o que o modelo não tem).
@@ -299,10 +306,10 @@ Em todos os quatro, o `.ifc` não muda; vive no `.obim` dentro da vista. O PO di
 - **Na tela:** padrão de **desenho** (acompanha a escala da vista) ou de **modelo** (medida real): opção na barra.
 - **Altera o modelo?** Não. **Comparação:** os dois têm, com categorias de hachura. Nota: as hachuras **automáticas por material** (B3) estão na F3 e **não** dependem desta.
 
-#### D3. Componente de detalhe 2D [1.0, decisão do PO 2026-10-13]
+#### D3. Item de detalhe 2D [1.0, decisão do PO 2026-10-13; biblioteca pequena própria]
 - **O que faz:** coloca um elemento 2D de uma biblioteca (peça de fixação, perfil, manta) para montar detalhes.
 - **Como se usa:** pelo botão (sem tecla); escolher na lista, clicar para posicionar; **Espaço** gira 90°; há também repetição em fila.
-- **Altera o modelo?** Não. **Comparação:** Rv tem componentes de detalhe e repetição; Ac guarda símbolos 2D. **Proposta:** depende de uma **biblioteca** (desenhada por nós ou pelo PO). Sem biblioteca, a ferramenta é vazia.
+- **Altera o modelo?** Não. **Comparação:** Rv tem componentes de detalhe e repetição; Ac guarda símbolos 2D. **Proposta:** depende de uma **biblioteca** (desenhada por nós ou pelo PO). Sem biblioteca, a ferramenta é vazia; a biblioteca é **pequena e própria**, desenhada por nós, sem copiar de outro programa. Se a faixa de prazo subir depois da medição da F0, este é um dos candidatos a sair.
 
 #### D4. Chamada e vista de detalhe [depois da 1.0, decisão do PO 2026-10-13]
 - **O que faz:** marca uma região na planta ou no corte e abre uma vista ampliada (1:20, 1:10) onde se desenha e se anota.
@@ -325,11 +332,11 @@ Em todos os quatro, o `.ifc` não muda; vive no `.obim` dentro da vista. O PO di
 | C3 | Cota angular e radial | Alt+C | F4 | Depois da F3 | Só o `.obim` |
 | C4 | Cota de ponto | Alt+C | F4 | Só elevação | Só o `.obim` |
 | C5 | Cota que comanda (travada) | (cadeado) | nenhuma | **Fora** | **Sim** |
-| T1 | Texto | Alt+T | F4 (pedimos F3) | Sim | Só o `.obim` |
+| T1 | Texto | Alt+T | F3-S04 | Sim | Só o `.obim` |
 | T2 | Tag de ambiente | Alt+R | F3-S04 | Sim | Só o `.obim` |
 | T3 | Tag por categoria | Alt+R | F4 | Sim | A marca: **Sim**; a tag: `.obim` |
 | T4 | Símbolo | Alt+S | F4 | Sim | Só o `.obim` |
-| T5 | Referências quebradas | painel | F4 (versão mínima na F3) | Sim | Só o `.obim` |
+| T5 | Referências quebradas | painel | F3-S04b (mínimo); religar na F5 | Sim | Só o `.obim` |
 | Q1 | Quadro de áreas | menu, Ctrl+4 | F3-S07 | Sim | Não (só leitura) |
 | Q2 | Quadro de esquadrias | menu, Ctrl+4 | F4 | Sim | Editar: **Sim** |
 | Q3 | Quadro de materiais | menu, Ctrl+4 | F4 | Sim | Não |
@@ -338,13 +345,14 @@ Em todos os quatro, o `.ifc` não muda; vive no `.obim` dentro da vista. O PO di
 | P2 | Viewport | arrastar | F3-S05 | Sim | Só o `.obim` |
 | P3 | Exportar PDF | Ctrl+P | F3-S06 | Sim | Não |
 | P4 | Pacote `.obimpack` | menu | F3-S05 | Sim | Não |
-| R1 | Revisão e nuvem | Alt+N | F4 | Talvez (Should) | Só o `.obim` |
-| D1 | Linha de detalhe | Alt+L | F4+ | Fora (pedido) / Should | Só o `.obim` |
-| D2 | Região preenchida | Alt+H | F4+ | Fora (pedido) / Should | Só o `.obim` |
-| D3 | Componente de detalhe 2D | botão | F4+ | Fora (pedido) / Should | Só o `.obim` |
-| D4 | Chamada e vista de detalhe | Alt+Q | F4+ | Fora (pedido) / Should | Só o `.obim` |
+| P5 | Importar padrões de outro projeto | menu | F3-S05b | Sim | Só o `.obim` |
+| R1 | Nuvem de revisão (revisões completas depois) | Alt+N | F5 | Sim (só a nuvem) | Só o `.obim` |
+| D1 | Linha de detalhe | Alt+L | F2-S11 | Sim | Só o `.obim` |
+| D2 | Região preenchida | Alt+H | F2-S11 | Sim | Só o `.obim` |
+| D3 | Item de detalhe 2D | botão | F2-S11 (biblioteca a definir) | Sim | Só o `.obim` |
+| D4 | Chamada e vista de detalhe | Alt+Q | nenhuma | Depois da 1.0 | Só o `.obim` |
 
-Total: 26 fichas (3 de base, 5 de cotas, 5 de textos e tags, 4 de quadros e legendas, 4 de pranchas, 1 de revisão, 4 de desenho 2D). Pelo plano v2/02, C3, C4, T1, T3, T4, T5, Q2, Q3, Q4 e R1 são F4, e D1 a D4 são "detalhes" da F4 ("Should").
+Total: 27 fichas (3 de base, 5 de cotas, 5 de textos e tags, 4 de quadros e legendas, 5 de pranchas, 1 de revisão, 4 de desenho 2D). Pelo plano v2/02 (Revisão 3), C3, C4, T3, T4, Q2, Q3 e Q4 são F4; T1 e T5 (mínimo) vêm para a F3; R1 (nuvem) é F5; D1 a D3 são da F2-S11; só a D4 fica para depois da 1.0.
 
 ### Atalhos de teclado propostos para anotações
 As letras soltas dos catálogos F1/F2 (S Z H I B Q R N E P L K V D J M C G F A T) continuam como alternativa; o **padrão de fábrica decidido em 13/10 é de duas letras** (TR, AL, MM, MI, RR, CC, **TG para tag**, WA; ver a tabela de atalhos do catálogo F1/F2). A tag (T2, T3) passa a ter **TG** como atalho de fábrica; o Alt+R fica como alternativa, até a tabela ser aprovada. Para não colidir, as anotações usam **Alt + letra**, só em vista 2D. Combinações novas: Ctrl+4, Ctrl+5, Ctrl+P. Nenhuma repete as do catálogo F1/F2 (Ctrl+1, 2, 3, E, S, N, O, Z, Y). Atenção: Alt+letra também é usado pelos menus em alguns sistemas; nossos menus **não** terão letra sublinhada de acesso, para evitar conflito.
@@ -356,8 +364,8 @@ As letras soltas dos catálogos F1/F2 (S Z H I B Q R N E P L K V D J M C G F A T
 | Alt+R | Tag (ambiente ou por categoria) | |
 | Alt+S | Símbolo | |
 | Alt+A | Ambiente | |
-| Alt+N | Nuvem de revisão | [A decidir] |
-| Alt+L / Alt+H / Alt+Q | Linha de detalhe / Região preenchida / Chamada | [fora da 1.0] |
+| Alt+N | Nuvem de revisão | |
+| Alt+L / Alt+H / Alt+Q | Linha de detalhe / Região preenchida / Chamada | Alt+Q (chamada) é depois da 1.0 |
 | Ctrl+4 | Painel de tabelas | |
 | Ctrl+5 | Lista de pranchas | |
 | Ctrl+P | Exportar PDF | |
@@ -368,33 +376,20 @@ Conferido: nenhuma combinação se repete; Alt+C, Alt+A e Alt+L não têm confli
 
 ---
 
-## 4. Decisões para o PO
+## 4. Decisões do PO (resolvidas em 13/10/2026)
 
-Se concordar com tudo, basta responder "de acordo".
+As seis perguntas foram respondidas pelo PO. Registro em `docs/state/PO.md`; mudanças no plano em `v2/02` (Revisão 3).
 
-**1. Detalhes 2D (linha, região preenchida, componente, chamada) entram na 1.0?**
-O plano v2/02 lista como "Should" (só se o calendário permitir) e você pediu tratar como fora, mas você disse que no executivo "o que não se modela vira detalhe". Sem eles, a prancha de detalhe sai com outro programa.
-Recomendação: **manter fora da 1.0, mas subir um mínimo**: linha de detalhe, região preenchida e texto, em vista de **corte e planta já geradas** (D1, D2 e T1), sem chamada e sem biblioteca de componentes. Cobre a maior parte do detalhe de obra residencial e custa menos que D3 e D4. Chamada e componentes ficam para depois da 1.0.
+| # | Pergunta | Decisão do PO | Onde cai |
+|---|---|---|---|
+| 1 | Detalhes 2D entram na 1.0? | **Sim:** linha de detalhe (D1), região preenchida (D2), texto (T1) e itens de detalhe 2D (D3, biblioteca pequena própria, sem copiar de outro programa). **Chamada e vista de detalhe (D4) ficam para depois da 1.0** | D1 a D3: fatia nova **F2-S11**, antes da F3; T1: F3-S04 |
+| 2 | Revisões e nuvem de revisão na 1.0? | **Só a nuvem de revisão** (para indicar o que corrigir). Controle completo (letra, data, tabela) fica para a versão seguinte; o carimbo tem o campo livre "revisão" | Nuvem: F5; campo livre: F3-S05 |
+| 3 | Texto simples sobe para a F3? | **Sim**, junto da tag de ambiente | F3-S04 |
+| 4 | Cota que comanda (cadeado) fica de fora? | **Sim, versão futura.** A cota só mostra e segue o desenho (a cota que acompanha o desenho é indispensável) | Fora da 1.0 |
+| 5 | Importar padrões de outro projeto? | **Sim, na F3, escolhendo o que importar** (modelos de vista, estilos de linha e de texto, carimbo), depois da primeira prancha pronta | F3-S05b (ficha P5) |
+| 6 | Referências quebradas na F3? | **Sim, versão mínima** (lista e contagem); religar continua na F5 | F3-S04b (ficha T5) |
 
-**2. Revisões e nuvem de revisão entram na 1.0?**
-O plano as põe na F4 e como "Should" da 1.0; você disse que o executivo "tem revisões".
-Recomendação: **adiar para depois da 1.0** e, enquanto isso, o carimbo tem um campo livre "revisão" (letra e data) editável à mão. Sem nuvem automática.
-
-**3. Texto livre sobe para a F3?**
-O plano põe "textos/tags/símbolos" na F4, mas a planta legal precisa de títulos e notas.
-Recomendação: **sim, só texto simples (T1) vai para a F3** (junto da tag de ambiente). Tags por categoria e símbolos ficam na F4.
-
-**4. Cota que comanda (cadeado) fica de fora?**
-Move paredes ao digitar o valor da cota; é potente, mas arriscado, e o eixo que segura a parede (F2-S03) já cobre a maior parte.
-Recomendação: **fora da 1.0**. A cota só mostra e segue o desenho.
-
-**5. Transferir padrões entre projetos (modelos de vista, estilos de linha, estilos de texto, carimbos) entra quando?**
-Você diz que reaproveita muito por transferência de padrões. Neste catálogo ficam no `.obim` (modelos de vista em B3; carimbos em P1; estilos de texto em T1).
-Recomendação: **na F3, "importar padrões de outro projeto" (vistas, estilos, carimbo) como uma única ação**, depois da primeira prancha pronta; sem sincronização contínua.
-
-**6. Referências quebradas: adiantar a versão mínima para a F3?**
-O plano põe o painel na F4, mas as cotas já nascem na F3 e podem ficar órfãs.
-Recomendação: **adiantar uma versão mínima** (lista e contagem; religar fica para a F4).
+Decisões da entrevista S09 que também mexem neste catálogo: **tags por atributo** (sem criar família para cada atributo; T2 e T3), **folha criada a partir de um modelo de folha** (P1), **"Por que não vejo isto?"** (F1-S05 mínimo, completo na F3-S03) e **análises fora do núcleo**.
 
 ### Testes que o PO pode fazer para confirmar o que a ficha não confirmou
 No Revit (e no ArchiCAD, se quiser), com modelo próprio (nada vai para o repositório):

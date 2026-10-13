@@ -135,6 +135,28 @@ jobs:
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_S04_OBRIGATORIO=1  # pulo vira falha (T04c entregou versao()["registro_ifc4"])
           QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_ponte.py
+      - name: Viewport C++ (S04-T06/T07; bloqueia o merge)
+        shell: bash -el {0}
+        timeout-minutes: 30
+        run: |
+          # O oráculo abre a tela virtual sozinho em subprocesso (xvfb-run no Linux; no Windows, WARP). Nada na tela real.
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          OBIM_S04_OBRIGATORIO=1 OBIM_S04_VIEWPORT_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_viewport.py
+      - name: Sonda da thread de desenho (S04-T05; informativo, não bloqueia)
+        shell: bash -el {0}
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          # Desenho por software (Linux: tela virtual + Mesa; Windows: WARP). Nenhuma janela na tela real.
+          mkdir -p out/s04_sonda
+          B="$(python -c 'import os; print(os.path.abspath("out/s04_sonda/build"))')"; O="$(python -c 'import os; print(os.path.abspath("out/s04_sonda"))')"
+          if [ "${RUNNER_OS}" = "Windows" ]; then GEN=(-A x64); else GEN=(-G Ninja); fi
+          cmake -S prototypes/s04/sonda_desenho -B "$B" "${GEN[@]}" -DCMAKE_BUILD_TYPE=Release -DOBIM_SAIDA="$O" -DCMAKE_PREFIX_PATH="$CONDA_PREFIX"
+          cmake --build "$B" --config Release
+          QT_QPA_PLATFORM=xcb LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x800x24" python prototypes/s04/sonda_desenho/sonda.py "$O" out/s04_sonda/sonda.json; rc=$?
+          cat out/s04_sonda/sonda.json || true
+          echo "::notice title=sonda da thread de desenho no ${RUNNER_OS}::$(python -c "import json; r=json.load(open('out/s04_sonda/sonda.json')); print('rc=$rc meta_atingida=%s' % r.get('meta_atingida'), {k:v.get('maior_intervalo_ms') for k,v in r['fases'].items() if isinstance(v,dict)})" || echo sem resultado)"
+          true
       - name: REUSE (ferramenta só no CI, ambiente separado)
         shell: bash -el {0}
         run: |
@@ -275,6 +297,29 @@ jobs:
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_S04_OBRIGATORIO=1  # pulo vira falha (T04c entregou versao()["registro_ifc4"])
           QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_ponte.py
+      - name: Viewport C++ (S04-T06/T07; bloqueia o merge)
+        shell: bash -el {0}
+        timeout-minutes: 30
+        run: |
+          # O oráculo abre a tela virtual sozinho em subprocesso (xvfb-run no Linux; no Windows, WARP). Nada na tela real.
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          export OBIM_S04_TELA_VIRTUAL=1 QSG_RHI_BACKEND=d3d11 QSG_RHI_PREFER_SOFTWARE_RENDERER=1  # WARP, como no passo do cubo
+          OBIM_S04_OBRIGATORIO=1 OBIM_S04_VIEWPORT_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_viewport.py
+      - name: Sonda da thread de desenho (S04-T05; informativo, não bloqueia)
+        shell: bash -el {0}
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          # Desenho por software (Linux: tela virtual + Mesa; Windows: WARP). Nenhuma janela na tela real.
+          mkdir -p out/s04_sonda
+          B="$(python -c 'import os; print(os.path.abspath("out/s04_sonda/build"))')"; O="$(python -c 'import os; print(os.path.abspath("out/s04_sonda"))')"
+          if [ "${RUNNER_OS}" = "Windows" ]; then GEN=(-A x64); else GEN=(-G Ninja); fi
+          cmake -S prototypes/s04/sonda_desenho -B "$B" "${GEN[@]}" -DCMAKE_BUILD_TYPE=Release -DOBIM_SAIDA="$O" -DCMAKE_PREFIX_PATH="$CONDA_PREFIX"
+          cmake --build "$B" --config Release
+          QT_QPA_PLATFORM=windows RHI=d3d11 python prototypes/s04/sonda_desenho/sonda.py "$O" out/s04_sonda/sonda.json; rc=$?
+          cat out/s04_sonda/sonda.json || true
+          echo "::notice title=sonda da thread de desenho no ${RUNNER_OS}::$(python -c "import json; r=json.load(open('out/s04_sonda/sonda.json')); print('rc=$rc meta_atingida=%s' % r.get('meta_atingida'), {k:v.get('maior_intervalo_ms') for k,v in r['fases'].items() if isinstance(v,dict)})" || echo sem resultado)"
+          true
       - name: Instalador Windows (ambiente de runtime e NSIS)
         shell: bash -el {0}
         run: |

@@ -36,14 +36,15 @@ int64_t DadosCena::adicionar_lote(nb::object lote) {
   for (const char* c : {"vertices", "indices"})
     if (!nb::hasattr(lote, c)) throw nb::type_error("lote sem vertices/indices (esperado LoteMalha)");
   nb::object dt = nb::module_::import_("numpy").attr("dtype");
-  const Vista V = vetor(lote.attr("vertices"), dt(nb::eval("[('pos','<f4',(3,)),('normal','<f4',(3,)),('cor','u1',(4,))]")), "vertices");
-  const Vista I = vetor(lote.attr("indices"), dt("<u4"), "indices");
+  nb::object va = lote.attr("vertices"), ia = lote.attr("indices");  // referências próprias: os arrays não morrem sem o bloqueio
+  const Vista V = vetor(va, dt(nb::eval("[('pos','<f4',(3,)),('normal','<f4',(3,)),('cor','u1',(4,))]")), "vertices");
+  const Vista I = vetor(ia, dt("<u4"), "indices");
   Vista O; nb::object oo = nb::hasattr(lote, "objetos") ? nb::object(lote.attr("objetos")) : nb::object();
   if (oo.is_valid() && !oo.is_none())
     O = vetor(oo, dt(nb::eval("[('id_step','<i4'),('guid','S22'),('primeiro_indice','<u4'),('n_indices','<u4'),('primeiro_vertice','<u4'),('n_vertices','<u4'),('caixa_min','<f4',(3,)),('caixa_max','<f4',(3,))]")), "objetos");
   if (I.n % 3) throw nb::value_error("indices: o número de índices não é múltiplo de 3");
   auto d = std::make_shared<Dados>(); double mn[3] = {1e30, 1e30, 1e30}, mx[3] = {-1e30, -1e30, -1e30}; const char* erro = nullptr;
-  {  // a única cópia; nenhum objeto Python aqui dentro (os arrays estão presos por `lote`)
+  {  // a única cópia; nenhum objeto Python aqui dentro (os arrays estão presos por `va`/`ia`)
     nb::gil_scoped_release livre;
     d->v.assign(V.p, V.p + V.n * BYTES_VERTICE); d->i.resize(I.n); std::memcpy(d->i.data(), I.p, I.n * 4);
     for (size_t k = 0; k < V.n; ++k) {
@@ -75,7 +76,7 @@ void DadosCena::limpar() {
 
 std::shared_ptr<Dados> DadosCena::proximo(Cursor& c) {
   std::lock_guard<std::mutex> l(m_);
-  if (c.ger != ger_) { c.n = 0; c.ger = ger_; }
+  if (c.ger != ger_) return nullptr;  // limpar() no meio do quadro: quem chama zera a placa no próximo quadro
   return c.n < lotes_.size() ? lotes_[c.n++] : nullptr;
 }
 

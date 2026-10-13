@@ -163,6 +163,6 @@ def fim():
     app.exit(0 if bom else 1)
 
 
-faulthandler.dump_traceback_later(240, exit=True)  # diagnóstico: pilha de todas as threads se travar
+faulthandler.dump_traceback_later(180, exit=True)  # diagnóstico: pilha de todas as threads se travar
 QTimer.singleShot(0, lambda: passo(fases()))
 sys.exit(app.exec())

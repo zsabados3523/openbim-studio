@@ -27,7 +27,7 @@ class DadosCena {
   int64_t adicionar_lote(nb::object lote);  // Python (com o bloqueio): valida, copia e calcula a caixa SEM ele e fora do mutex; só o push é sob mutex
   void limpar();
   int64_t geracao() { std::lock_guard<std::mutex> l(m_); return ger_; }
-  std::shared_ptr<Dados> proximo(Cursor& c);  // próximo lote ainda não visto (nullptr se não há); quem chama já conferiu `geracao()`
+  std::shared_ptr<Dados> proximo(Cursor& c);  // próximo lote ainda não visto (nullptr se não há); devolve nullptr se a geração mudou: quem chama zera a placa
   bool caixa(double mn[3], double mx[3]);     // false se a cena está vazia
   Totais totais();
   nb::dict objetos(int64_t seq);              // tabela de objetos do lote `seq` (T09/T10)

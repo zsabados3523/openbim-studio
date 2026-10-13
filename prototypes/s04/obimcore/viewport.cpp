@@ -186,7 +186,8 @@ class Motor {
     return true;
   }
   void enviar(Gpu& g, QRhiResourceUpdateBatch* rub) {  // orçamento por quadro; sempre da cópia compacta; só lotes COMPLETOS entram em `lotes`
-    if (cena_.geracao() != g.cur.ger) { g.lotes.clear(); g.pend = {}; g.cur = {}; tri_placa = 0; seq_placa_ = 0; }  // limpar(): a placa volta a zero
+    const int64_t ger = cena_.geracao();
+    if (ger != g.cur.ger) { g.lotes.clear(); g.pend = {}; g.cur = Cursor{0, ger}; tri_placa = 0; seq_placa_ = 0; }  // limpar(): a placa volta a zero
     size_t gasto = 0; const auto t0 = Rel::now();
     while (gasto < ORCAMENTO_BYTES && Rel::now() - t0 < ORCAMENTO_TEMPO) {
       Pend& p = g.pend;

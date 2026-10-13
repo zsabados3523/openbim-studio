@@ -39,6 +39,16 @@ void caixa_de(Dados& d) {  // caixa dos vértices (pura, sem Python)
   }
 }
 
+// Caixa do objeto pelos TRIÂNGULOS dele (vértices apontados por seus índices), nunca pela tabela do carregador (T10c achado 3). Sem geometria: NaN.
+void caixa_do_objeto(const Dados& d, Objeto& o) {
+  if (!o.ni || !o.nv) { for (int a = 0; a < 3; ++a) o.cmin[a] = o.cmax[a] = std::nanf(""); return; }
+  for (int a = 0; a < 3; ++a) { o.cmin[a] = 1e30f; o.cmax[a] = -1e30f; }
+  for (uint32_t k = 0; k < o.ni; ++k) {
+    float f[3]; std::memcpy(f, d.v.data() + size_t(d.i[o.pi + k]) * BYTES_VERTICE, 12);
+    for (int a = 0; a < 3; ++a) { o.cmin[a] = (std::min)(o.cmin[a], f[a]); o.cmax[a] = (std::max)(o.cmax[a], f[a]); }
+  }
+}
+
 // Cópia de `d` sem os objetos de `rem` (nullptr se nenhum está no lote). Mantém a sequência e o deslocamento; descarta índices e vértices dos removidos
 // e renumera o resto (qualquer lote serve: não supõe que cada objeto só use os seus vértices).
 std::shared_ptr<Dados> sem(const Dados& d, const std::set<std::string>& rem) {
@@ -56,7 +66,7 @@ std::shared_ptr<Dados> sem(const Dados& d, const std::set<std::string>& rem) {
   for (Objeto o : d.objs) {
     if (rem.count(o.guid)) continue;
     const uint32_t a = pi[o.pi], b = pi[o.pi + o.ni], c = pv[o.pv], e = pv[o.pv + o.nv];
-    o.pi = a; o.ni = b - a; o.pv = c; o.nv = e - c; r->objs.push_back(std::move(o));
+    o.pi = a; o.ni = b - a; o.pv = c; o.nv = e - c; caixa_do_objeto(*r, o); r->objs.push_back(std::move(o));
   }
   caixa_de(*r);
   return r;
@@ -106,7 +116,7 @@ std::shared_ptr<Dados> DadosCena::preparar(nb::object lote) {
       std::memcpy(&o.pv, p + O_PV, 4); std::memcpy(&o.nv, p + O_NV, 4); std::memcpy(o.cmin, p + O_MIN, 12); std::memcpy(o.cmax, p + O_MAX, 12);
       o.guid.assign(reinterpret_cast<const char*>(p + 4), strnlen(reinterpret_cast<const char*>(p + 4), 22));
       if (uint64_t(o.pi) + o.ni > I.n || uint64_t(o.pv) + o.nv > V.n) { erro = "objetos: faixa fora do lote"; break; }
-      if (!o.ni || !o.nv) for (int a = 0; a < 3; ++a) o.cmin[a] = o.cmax[a] = std::nanf("");  // sem geometria: NaN, nunca [0,0,0,0,0,0]
+      caixa_do_objeto(*d, o);  // pelos triângulos; sem geometria: NaN, nunca [0,0,0,0,0,0]
       d->objs.push_back(std::move(o));
     }
   }
@@ -176,7 +186,8 @@ bool DadosCena::caixa(double mn[3], double mx[3]) {
 Totais DadosCena::totais() {
   std::lock_guard<std::mutex> l(m_); Totais t; t.lotes = lotes_.size();
   for (auto& d : lotes_) { t.triangulos += d->i.size() / 3; t.vertices += d->v.size() / BYTES_VERTICE;
-    t.bytes += d->v.capacity() + d->i.capacity() * 4 + d->objs.capacity() * sizeof(Objeto); }
+    t.bytes += d->v.capacity() + d->i.capacity() * 4 + d->objs.capacity() * sizeof(Objeto);
+    for (auto& o : d->objs) if (o.guid.capacity() > 15) t.bytes += o.guid.capacity() + 1; }  // texto do GlobalId fora do std::string (T10c achado 6)
   return t;
 }
 

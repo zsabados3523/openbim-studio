@@ -10,9 +10,10 @@
 #include <string>
 #include <vector>
 namespace obim {
-struct Raio { double o[3], d[3]; };  // origem e direção (unitária)
-// (x, y) em pixels do backbuffer, origem no canto superior esquerdo, y para baixo; larg e alt > 0.
-Raio raio_do_pixel(const Camera& c, int larg, int alt, double x, double y);
+struct Raio { double o[3], d[3]; double tmin = 0; };  // origem, direção (unitária) e distância inicial (plano perto do desenho; T10c achado 4)
+// (x, y) em pixels FÍSICOS do backbuffer, origem no canto superior esquerdo, y para baixo; larg e alt > 0. `perto`: plano de recorte do desenho (0 = sem recorte);
+// o raio só vale a partir dele (distância medida ao longo do raio = perto / cos do ângulo com o eixo da câmera).
+Raio raio_do_pixel(const Camera& c, int larg, int alt, double x, double y, double perto = 0);
 // GlobalId do objeto cujo triângulo o raio acerta primeiro; nullopt se nenhum (ou se o mais perto é geometria sem objeto).
 std::optional<std::string> selecionar(const std::vector<std::shared_ptr<Dados>>& lotes, const Raio& r);
 }  // namespace obim

@@ -39,26 +39,29 @@ O padrão assumido na F0-S09: **navegador do projeto e propriedades ao jeito do 
 +--------------+-------------------------------------------------+-----------------+
 | [3] CAIXA DE | [5] ÁREA DE TRABALHO (desenho)                  | [4] PAINEL DE   |
 |  FERRAMENTAS |                                                 |  PROPRIEDADES   |
-|              |        +---------+   [cubo de vistas]           |                 |
+| -Selecionar- |        +---------+   [cubo de vistas]           |                 |
 | [Selecionar] |        |  3D ou  | [mini-barra:                 |  Elemento: Parede|
+|  -Modelar-   |        |         |                              |                  |
 | [Parede]     |        | planta  |  Mover Copiar Girar ...]     |  Tipo: [ v ] [Editar tipo]|
 | [Laje]       |        |         |        campo junto ao cursor |  Comprimento ... |
 | [Pilar]      |        +---------+        +---------------+     |  Altura ...      |
 | [Viga]       |                           | 3,25 m | 90°  |     |  Material ...    |
 | [Porta]      |                           +---------------+     |  (lista longa    |
 | [Janela]     |   (clique direito no elemento abre a mesma      |   com rolagem)   |
-| -- Editar -- |    mini-barra)                                  |                 |
+|   -Editar-   |    mini-barra)                                  |                 |
 | [Mover]      |                                                 |                 |
 | [Copiar]     |                                                 |                 |
 | [Girar]      |                                                 |                 |
 | [Espelhar]   |                                                 |                 |
 | [Alinhar]    |                                                 |                 |
 | [Aparar/est.]|                                                 |                 |
+|-Referências- |                                                 |                 |
 | [Nível/Eixo] +-------------------------------------------------+-----------------+
+|   -Medir-    |                                                                    |
 | [Medir]      | [6] NAVEGADOR DO PROJETO (árvore)                                  |
 |              |   Casa                                                             |
-| -- Ajustes   |    +- Pavimentos: Térreo, Cobertura                                |
-|    salvos -- |    +- Vistas: Planta Térreo, 3D, Corte A                           |
+|  -Ajustes-   |    +- Pavimentos: Térreo, Cobertura                                |
+|   -salvos-   |    +- Vistas: Planta Térreo, 3D, Corte A                           |
 | Parede 15cm  |    +- Tipos: Paredes, Portas, Janelas ...                          |
 | Parede 20cm  |    +- Modelo por classe: Paredes (12), Portas (4) ...              |
 +--------------+--------------------------------------------------------------------+
@@ -72,7 +75,7 @@ Observação: o navegador do projeto (6) pode ficar à esquerda, em cima da caix
 
 1. **Barra de menu.** Arquivo, Editar, Vista, Modelo, Ajuda. Os botões de desfazer e refazer ficam sempre à vista.
 2. **Barra de opções.** Faixa fina logo abaixo do menu. **Muda sozinha** conforme a ferramenta ativa: ao escolher Parede, mostra tipo, linha de localização, altura, "encadear". Sem ferramenta, fica vazia ou mostra opções da vista. É onde ficam as escolhas "antes de desenhar" e as escolhas **durante o uso** das ferramentas de Editar (copiar várias vezes, restringir a direção). A distância ou o ângulo se digitam no **campo junto ao cursor**. Desfazer e refazer continuam no topo.
-3. **Caixa de ferramentas** (esquerda). Botões das ferramentas, agrupados: Selecionar; Modelar (parede, laje, pilar, viga, porta, janela); **Editar** (mover, copiar, girar, espelhar, alinhar, aparar e estender), logo abaixo de Modelar; Referências (nível, eixo); Medir. Os seis botões de Editar ficam **apagados quando nada está selecionado** e **acesos quando há seleção**. Abaixo, os **ajustes salvos**: ajustes prontos de uma ferramenta (por exemplo "Parede 15 cm, bloco, reboco duplo"). Clicar num ajuste ativa a ferramenta já configurada.
+3. **Caixa de ferramentas** (esquerda). Botões das ferramentas, em grupos, cada um com título no desenho: **Selecionar**; **Modelar** (parede, laje, pilar, viga, porta, janela); **Editar** (mover, copiar, girar, espelhar, alinhar, aparar e estender), logo abaixo de Modelar; **Referências** (nível, eixo); **Medir**. Os seis botões de Editar ficam **apagados quando nada está selecionado** e **acesos quando há seleção**. Abaixo, o grupo **Ajustes salvos**: ajustes prontos de uma ferramenta (por exemplo "Parede 15 cm, bloco, reboco duplo"). Clicar num ajuste ativa a ferramenta já configurada.
    - **Mini-barra de edição.** Uma faixa pequena com os mesmos seis botões de Editar aparece **junto ao elemento selecionado** e também ao **clicar com o botão direito** sobre ele. É um atalho: faz o mesmo que os botões da caixa de ferramentas.
 4. **Painel de propriedades** (direita). Sempre aberto. Mostra os dados do que está selecionado; sem seleção, mostra os da vista ativa. Tem o botão "Editar tipo". Mudar a **instância** altera só o elemento; mudar o **tipo** altera todos daquele tipo.
 5. **Área de trabalho.** O desenho: planta, corte ou 3D. Mostra o **cubo de vistas** (canto), os **campos junto ao cursor** (número digitável ao lado do ponteiro) e as **cotas temporárias** (medidas que aparecem sobre o elemento enquanto você desenha ou seleciona).

@@ -135,9 +135,10 @@ def test_perda_de_contexto_volta_com_os_mesmos_triangulos_e_a_mesma_camera(viewp
         assert d["triangulos"] == d["triangulos_na_placa"] == 7200, f"perda {i}: voltou com {d} (eram 7200)"
         assert d["recuperou_s"] < 5.0, f"perda {i}: levou {d['recuperou_s']:.1f} s (a S03 esperava 5 s)"  # defeito 3 do lote 8
         assert np.allclose(d["camera"], r["camera0"], atol=1e-9), f"perda {i}: câmera {d['camera']} != {r['camera0']}"
-        assert d["dif_imagem"] < 2.0, f"perda {i}: imagem difere do quadro de antes ({d['dif_imagem']:.2f} de 255)"
-    assert r["dif_controle"] > 3.0, "controle: trocar a câmera não muda a imagem (a captura não vê a câmera)"
-    assert r["dif_volta"] < 2.0 and r["novo_lote"] == 7212, r  # lote novo depois da perda entra; câmera restaurada reproduz o quadro
+        assert d["dif_imagem"] < 0.5, f"perda {i}: imagem difere do quadro de antes ({d['dif_imagem']:.2f} de 255)"
+    # cubos pequenos na imagem: a diferença média /255 é baixa (2,1 medido), mas > 2x o limiar da repetida (0,5; medido 0,0)
+    assert r["dif_controle"] > 1.0, "controle: trocar a câmera não muda a imagem (a captura não vê a câmera)"
+    assert r["dif_volta"] < 0.5 and r["novo_lote"] == 7212, r  # lote novo depois da perda entra; câmera restaurada reproduz o quadro
 
 def cubo(c, r, i):
     p, n, idx = [], [], []
@@ -328,6 +329,7 @@ def c_destruir(res, modo):
             w.close()
             shiboken6.delete(w) if i % 2 else w.deleteLater()
         elif modo == "conteiner":  # só o contêiner some; a janela-pai fica
+            cont.setParent(None)  # PySide6 puro: delete() de filho que ainda está no layout derruba o processo ao destruir a janela-pai
             shiboken6.delete(cont)
             yield 200
             c.parar() if i % 2 else None

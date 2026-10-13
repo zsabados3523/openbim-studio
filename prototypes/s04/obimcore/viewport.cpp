@@ -345,7 +345,10 @@ class Janela : public QWindow {
 #ifdef Q_OS_WIN
     if (!gl) setSurfaceType(QSurface::Direct3DSurface);
 #endif
-    if (gl) { setSurfaceType(QSurface::OpenGLSurface); setFormat(QSurfaceFormat::defaultFormat()); fb_->setFormat(QSurfaceFormat::defaultFormat()); fb_->create(); }
+    if (gl) {  // o formato do GL tem de pedir profundidade e stencil (24/8, como o antigo adjustedFormat); o padrão do Qt pode não ter buffer de profundidade no framebuffer da janela
+      QSurfaceFormat f = QSurfaceFormat::defaultFormat(); f.setDepthBufferSize(24); f.setStencilBufferSize(8);
+      setSurfaceType(QSurface::OpenGLSurface); setFormat(f); fb_->setFormat(f); fb_->create();
+    }
     resize(320, 240);
     m_->ligar(this, fb_);  // fb_ é filha desta janela: some junto, depois da thread
     // A saída do programa para a thread antes de a QGuiApplication sumir (caso "sair" do oráculo).

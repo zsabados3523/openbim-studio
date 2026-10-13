@@ -1,14 +1,30 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Oráculo da S04-T16 (abertura: orçamento de peças lentas, modo isolado mais barato) e da S03-T08-G. Sem tela, sem Qt.
-Especificação: docs/state/reports/LOTE_OPUS_9.md (T16), LOTE_OPUS_8.md §2.3 itens 3 e 4, LOTE_OPUS_7.md §1.4 (opção ii). Casos P13/P14/P18
+Especificação: docs/state/reports/LOTE_OPUS_9.md (T16), LOTE_OPUS_8.md §2.3 itens 3 e 4, LOTE_OPUS_7.md §1.4 (opção ii), LOTE_OPUS_20.md (T16b: ordem do iterador, orçamento no laço de confirmações, cópias fora da contagem). Casos P13/P14/P18
 ficam em test_viewport_processo.py (rodar junto: devem continuar verdes); aqui há também as condições do P14 com o modo isolado novo.
 GUARDA: pula enquanto `CarregadorMalhas.__init__` não aceitar `max_pecas_condenadas` e `max_espera_s`; FALHA com OBIM_S04_T16_OBRIGATORIO=1.
 CONTRATO PARA O IMPLEMENTADOR (nomes exatos; o oráculo não depende de mais nada):
- * CarregadorMalhas(..., max_pecas_condenadas=20, max_espera_s=120.0). Orçamento estourado = (peças já mostradas como caixa por lentidão
-   ou queda) > N  OU  (soma, em segundos, de TODAS as esperas por peça lenta: a do bloco no modo normal, a do modo isolado e a da
-   confirmação) > T. Só é conferido quando um bloco estoura `limite_peca_s` no modo normal. Estourado: TODAS as peças ainda pendentes
-   daquele bloco, inclusive a que travou, viram caixa de uma vez (sem modo isolado); os blocos seguintes seguem no modo normal. Sem o
-   orçamento estourado, nada muda (modo isolado). Peça sem geometria nunca entra nesse caso (os casos não a põem no bloco).
+ * CarregadorMalhas(..., max_pecas_condenadas=20, max_espera_s=120.0). Orçamento estourado = (número de peças ACUSADAS e confirmadas
+   por lentidão ou queda; as cópias da mesma peça-base NÃO contam, uma peça "membro" com 285 cópias conta 1) > N  OU  (soma, em
+   segundos, de TODAS as esperas por peça lenta: a do bloco no modo normal, a do modo isolado e a da confirmação) > T.
+   Quando é conferido (LOTE_OPUS_20, bloqueante 2): (1) quando um bloco estoura `limite_peca_s` no modo normal; (2) em qualquer
+   falha (espera estourada ou queda do conversor) que aconteça DEPOIS da primeira acusada confirmada da carga, mesmo dentro do
+   isolamento/confirmação das pendentes (é o que protege o laço de confirmações: nunca "erro" por reinício). A 1ª acusada de uma
+   carga nunca é cortada por isso, e uma acusada que acabou de ser confirmada não leva as vizinhas já pendentes do mesmo bloco só
+   porque o orçamento passou (os casos a1/a2 dependem disto). Estourado: TODAS as peças ainda pendentes daquele bloco (ou das
+   pendentes em isolamento), inclusive a que travou, viram caixa de uma vez; os blocos seguintes seguem no modo normal. Sem o
+   orçamento estourado, nada muda (modo isolado). Peça sem geometria dentro de um bloco cortado vira CAIXA (não `sem_malha`),
+   comportamento atual registrado em d5; fora de um bloco cortado ela continua indo para `sem_malha`.
+ * Ordem do iterador (LOTE_OPUS_20, bloqueante 1 e 3): o iterador do IfcOpenShell entrega as peças na ordem das REPRESENTAÇÕES, não na
+   dos ids (threads=1: a das representações; threads>1: embaralhada). Nada no carregador pode supor ids crescentes na entrega. Casos
+   d1 a d3 montam o arquivo assim (`_gerar_layout(..., ordem=)`): `lentas_antes` (representações das lentas criadas primeiro, como
+   no s25.ifc: lenta com id MAIOR entregue na posição 0) e `inversa` (entrega do maior id para o menor). Exigências: estado
+   "concluido" (nunca "erro" por mais de 20 reinícios), todas e só as lentas viram caixa quando o orçamento não estoura, no máximo
+   `_k_filhos` = 2 + ceil(log2(n)) por lenta processos de CONVERSÃO abertos (os da caixa não contam; contados em
+   `multiprocessing.context.SpawnProcess.start` com `target.__name__ == "entrada"`), tempo total < 3 x `_main_estimado` (3 x a
+   referência sem lentidão medida na mesma execução + n_lentas x (limite + 1 s), calibrado no `main`: 3,1 s para 1 lenta em 26
+   peças e 6,1 s para 3 lentas em 23). Uma implementação possível (a variante descartável do oráculo): filho em modo "uma peça por
+   iterador" só para as pendentes não anunciadas, depois que a confirmação da primeira candidata não reproduz o travamento.
  * Resumo (`ResumoCarga.mensagens`): uma linha com o número EXATO de peças mostradas como caixa de uma vez (as pendentes dos blocos
    cortados, inclusive a que travou), com as palavras "peça" e "caixa", sem jargão (nada de isolado, iterador, bloco, thread, timeout,
    lote, budget). O número aparece sozinho (não colado a outro dígito, ponto ou vírgula). Toda peça cortada entra em `simplificadas`.
@@ -27,9 +43,12 @@ CONTRATO PARA O IMPLEMENTADOR (nomes exatos; o oráculo não depende de mais nad
    em posição zero). Régua do custo (b): CI virtual = mediana das razões dos casos <= 2,0 e nenhuma >= 4,0; OBIM_S04_ESTRITO=1 = todas <= 2,0.
 Nada aqui usa a tela real; os casos de carga rodam o filho de verdade (spawn)."""
 import inspect
+import math
+import multiprocessing.context
 import os
 import re
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -43,7 +62,7 @@ import ifcopenshell.geom
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_viewport_processo import (  # noqa: E402,F401  (modelos, fixtures e ajudantes compartilhados)
-    _confere_caixas, _instancia, _lentas, _mapa, _gerar_mapeadas, _mundo, _regra_de_ouro, _tempo_carga, m600,
+    MM, _confere_caixas, _instancia, _lentas, _mapa, _gerar_mapeadas, _mundo, _regra_de_ouro, _tempo_carga, m600,
     sem_filhos_sobrando,
 )
 from test_viewport_carregador import CarregadorMalhas, _novo, _por_produto  # noqa: E402
@@ -53,7 +72,7 @@ ESTRITO = os.environ.get("OBIM_S04_ESTRITO") == "1"
 PARAMS = ("max_pecas_condenadas", "max_espera_s")
 TEM_T16 = CarregadorMalhas is not None and all(p in inspect.signature(CarregadorMalhas.__init__).parameters for p in PARAMS)
 LARANJA = (255, 140, 0, 255)
-PROIBIDAS = ("isolad", "iterador", "bloco", "thread", "timeout", "lote", "budget")
+PROIBIDAS = ("isolad", "iterador", "bloco", "thread", "timeout", "lote", "budget", "reinici")
 LENTA_S = 4  # atraso injetado; o limite de cada caso é 1 s
 
 
@@ -66,35 +85,59 @@ def t16():
     TEM_T16 or _pular(f"CarregadorMalhas sem os parâmetros {PARAMS}")
 
 
-def _parede_sem_geometria(f, corpo):
-    p = ifcopenshell.api.run("root.create_entity", f, ifc_class="IfcWall", name="sem geometria")
+def _rep_sem_geometria(f, corpo, p):
     perfil = f.create_entity("IfcRectangleProfileDef", ProfileType="AREA", XDim=0.0, YDim=0.15)
     solido = f.create_entity("IfcExtrudedAreaSolid", SweptArea=perfil, Depth=2.8,
                              Position=f.create_entity("IfcAxis2Placement3D", Location=f.create_entity("IfcCartesianPoint", Coordinates=(0.0, 0.0, 0.0))),
                              ExtrudedDirection=f.create_entity("IfcDirection", DirectionRatios=(0.0, 0.0, 1.0)))
     rep = f.create_entity("IfcShapeRepresentation", ContextOfItems=corpo, RepresentationIdentifier="Body", RepresentationType="SweptSolid", Items=[solido])
     ifcopenshell.api.run("geometry.assign_representation", f, product=p, representation=rep)
-    return p
 
 
-def _gerar_layout(caminho, layout):
+def _ordem_das_representacoes(layout, ordem):
+    """Ordem (índices do layout) em que as representações são criadas. Com threads=1 o iterador do IfcOpenShell entrega as
+    peças na ordem das representações, NÃO na ordem dos ids (LOTE_OPUS_20, bloqueante 1). `ids`: igual à dos ids (caso antigo);
+    `lentas_antes`: as lentas (S, B, L) primeiro, depois o resto (a lenta é entregue antes de peças de id menor, como no s25.ifc);
+    `inversa`: do maior id para o menor (a entrega é a dos ids de trás para a frente)."""
+    todos = list(range(len(layout)))
+    if ordem == "ids":
+        return todos
+    if ordem == "inversa":
+        return todos[::-1]
+    assert ordem == "lentas_antes", ordem
+    return [k for k in todos if layout[k] in "SBL"] + [k for k in todos if layout[k] not in "SBL"]
+
+
+def _gerar_layout(caminho, layout, ordem="ids"):
     """Uma peça por letra, em ordem de id: n normal (todas da mesma família), S lenta (família própria), R sem geometria,
-    B lenta com posição ilegível (RefDirection de 2 componentes: o conversor lê, o cálculo da caixa em Python não)."""
+    B lenta com posição ilegível (RefDirection de 2 componentes: o conversor lê, o cálculo da caixa em Python não),
+    L lenta da família G e c cópia (não lenta) da mesma família G (uma peça "membro" com muitas cópias), K peça em que o
+    conversor cai (OBIM_TESTE_MATAR_FILHO; família própria). Os produtos são criados primeiro (ids crescentes na ordem do
+    layout); as representações vêm depois, na ordem `ordem` (ver `_ordem_das_representacoes`)."""
     f, corpo = _novo()
-    cubo, prods = _mapa(f, corpo, 1.0, 1.0, 1.0), []
+    cubo, familia_g, prods = _mapa(f, corpo, 1.0, 1.0, 1.0), _mapa(f, corpo, 3.0, 1.0, 1.0), []
     for k, t in enumerate(layout):
+        prods.append(ifcopenshell.api.run("root.create_entity", f, ifc_class="IfcWall", name=f"{t}{k}"))
+    for k in _ordem_das_representacoes(layout, ordem):
+        t, p = layout[k], prods[k]
         pos = (k % 10 * 3.0, k // 10 * 3.0, 0.0)
         if t == "R":
-            p = _parede_sem_geometria(f, corpo)
+            _rep_sem_geometria(f, corpo, p)
         else:
-            p = _instancia(f, corpo, cubo if t == "n" else _mapa(f, corpo, 2.0, 1.0, 3.0), pos, f"{t}{k}")
+            mapa = cubo if t == "n" else familia_g if t in "Lc" else _mapa(f, corpo, 2.0, 1.0, 3.0)
+            alvo = f.createIfcCartesianTransformationOperator3D(LocalOrigin=f.createIfcCartesianPoint((1.0 * MM, 0.5 * MM, 0.25 * MM)))
+            rep = f.createIfcShapeRepresentation(corpo, "Body", "MappedRepresentation", [f.createIfcMappedItem(MappingSource=mapa, MappingTarget=alvo)])
+            ifcopenshell.api.run("geometry.assign_representation", f, product=p, representation=rep)
+        m = np.eye(4)
+        m[:3, 3] = pos
+        ifcopenshell.api.run("geometry.edit_object_placement", f, product=p, matrix=m)
         if t == "B":
             p.ObjectPlacement.RelativePlacement.RefDirection = f.createIfcDirection((0.0, 1.0))
-        prods.append(p)
     f.write(str(caminho))
     ids = [p.id() for p in prods]
     assert ids == sorted(ids)
-    return SimpleNamespace(caminho=caminho, ids=ids, lentas=[(p.id(), p.GlobalId) for p, t in zip(prods, layout) if t in "SB"],
+    return SimpleNamespace(caminho=caminho, ids=ids, lentas=[(p.id(), p.GlobalId) for p, t in zip(prods, layout) if t in "SBL"],
+                           caidas=[(p.id(), p.GlobalId) for p, t in zip(prods, layout) if t == "K"],
                            por_tipo=lambda t: [i for i, x in zip(ids, layout) if x == t])
 
 
@@ -113,12 +156,26 @@ def _laranjas(lotes):
     return saida
 
 
-def _carga(m, monkeypatch, lentas=True, **kw):
-    """(lotes, resumo, laranjas, referência sem lentidão); confere o que vale em todo caso."""
+def _carga(m, monkeypatch, lentas=True, medir=None, matar=None, **kw):
+    """(lotes, resumo, laranjas, referência sem lentidão); confere o que vale em todo caso. `medir` (dict) recebe
+    `t_ref` e `t` (segundos da carga de referência e da carga com lentidão), `filhos` (processos de conversão abertos na
+    carga com lentidão; os da caixa não contam) e `ref_estado`. `matar`: guid da peça em que o conversor cai (só depois da referência)."""
+    t0 = time.perf_counter()
     ref_lotes, ref, _ = _tempo_carga(m.caminho)
+    t_ref = time.perf_counter() - t0
     assert ref.estado == "concluido" and ref.simplificadas == []
     lentas and _lentas(monkeypatch, *[(g, LENTA_S) for _, g in m.lentas])
-    lotes, r, _ = _tempo_carga(m.caminho, limite_peca_s=1.0, **kw)
+    matar and monkeypatch.setenv("OBIM_TESTE_MATAR_FILHO", matar)
+    filhos, original = [0], multiprocessing.context.SpawnProcess.start
+
+    def contando(self):
+        filhos[0] += getattr(self._target, "__name__", "") == "entrada"
+        return original(self)
+
+    with mock.patch.object(multiprocessing.context.SpawnProcess, "start", contando):
+        lotes, r, dt = _tempo_carga(m.caminho, limite_peca_s=1.0, **kw)
+    if medir is not None:
+        medir.update(t_ref=t_ref, t=dt, filhos=filhos[0])
     assert r.estado == "concluido", f"estado {r.estado}: {r.erro}"
     ids = [int(i) for lt in lotes for i in lt.objetos["id_step"]]
     assert len(ids) == len(set(ids)), "peça entregue duas vezes"
@@ -128,11 +185,19 @@ def _carga(m, monkeypatch, lentas=True, **kw):
     return lotes, r, lar, ref_lotes
 
 
+def _sem_jargao(r):
+    """Toda linha do resumo que fala de peça ou caixa está em português simples (nenhuma das palavras de PROIBIDAS)."""
+    for x in r.mensagens:
+        if "caixa" in x.lower() or "peça" in x.lower():
+            assert not [w for w in PROIBIDAS if w in x.lower()], f"jargão no resumo: {x!r}"
+
+
 def _confere_resumo(r, n):
     linhas = [x for x in r.mensagens if re.search(rf"(?<![\d.,]){n}(?![\d.,])", x) and "caixa" in x.lower() and "peça" in x.lower()]
     assert linhas, f"nenhuma linha do resumo diz '{n}' peça(s) em caixa: {r.mensagens}"
     for x in linhas:
         assert not [w for w in PROIBIDAS if w in x.lower()], f"jargão no resumo: {x!r}"
+    _sem_jargao(r)
 
 
 # ---------- (a) orçamento total ----------
@@ -267,3 +332,123 @@ def test_c2_filho_isolado_que_cai_sem_pendentes_nao_vira_erro(tmp_path, monkeypa
     monkeypatch.setenv("OBIM_TESTE_MATAR_NO_FIM", "1")
     lotes, r, lar, _ = _carga(m, monkeypatch, tamanho_bloco=4)
     assert lar == {m.lentas[0][0]} and r.erro is None and r.sem_malha == [] and r.produtos_com_malha == 4
+
+
+# ---------- (d) a ordem de entrega do iterador não é a dos ids (LOTE_OPUS_20, bloqueantes 1 a 3) ----------
+def _k_filhos(n_pecas, n_lentas=1):
+    """Teto de processos de conversão abertos por carga: 2 + log2(n) por peça lenta (divisão ao meio das pendentes)."""
+    return n_lentas * (2 + math.ceil(math.log2(max(n_pecas, 2))))
+
+
+def _main_estimado(medir, n_lentas, limite=1.0):
+    """Tempo que o `main` gasta no mesmo modelo, estimado a partir da referência medida NESTA execução (escala igual no CI
+    do Windows). Calibrado no `main` de 2026-10-13: 1 lenta em 26 peças = 3,1 s (referência 0,4 s); 3 lentas em 23 = 6,1 s."""
+    return 3 * medir["t_ref"] + n_lentas * (limite + 1.0)
+
+
+def _linhas_de_uma_vez(r):
+    return [x for x in r.mensagens if "de uma vez" in x.lower()]
+
+
+def _tem_numero(x, n):
+    return re.search(rf"(?<![\d.,]){n}(?![\d.,])", x) is not None
+
+
+@pytest.mark.parametrize("layout, ordem", [("n" * 25 + "S", "lentas_antes"), ("n" * 12 + "S" + "n" * 12, "inversa")], ids=["s25", "meio_inversa"])
+def test_d1_lenta_entregue_antes_de_pecas_de_id_menor(tmp_path, monkeypatch, layout, ordem):
+    """a) Modelo como o s25.ifc: 25 paredes normais de id menor, com as representações criadas depois (a lenta sai na
+    posição 0 do iterador). Esperado: concluído, só a lenta vira caixa, poucos filhos, tempo < 3x o do `main`."""
+    m = _gerar_layout(tmp_path / "d1.ifc", layout, ordem)
+    med = {}
+    lotes, r, lar, ref = _carga(m, monkeypatch, tamanho_bloco=1000, medir=med)
+    [(lenta, _)] = m.lentas
+    assert lar == {lenta}, f"só a lenta vira caixa; viraram: {sorted(lar)}"
+    assert r.sem_malha == [] and r.produtos_com_malha == len(layout) and r.erro is None
+    _confere_caixas(lotes, ref, m.ids)
+    _confere_resumo(r, 1)
+    assert med["filhos"] <= _k_filhos(len(layout)), f"{med['filhos']} processos de conversão (teto {_k_filhos(len(layout))})"
+    teto = 3 * _main_estimado(med, 1)
+    assert med["t"] < teto, f"{med['t']:.1f} s >= 3 x o do main ({teto:.1f} s; referência sem lentidão {med['t_ref']:.2f} s)"
+
+
+@pytest.mark.parametrize("ordem", ["lentas_antes", "inversa"])
+def test_d2_varias_lentas_fora_de_ordem_todas_e_so_elas_viram_caixa(tmp_path, monkeypatch, ordem):
+    """b) Três lentas espalhadas, entregues fora da ordem dos ids: todas e só elas viram caixa (orçamento padrão intacto)."""
+    layout = "nnnnn" + "S" + "nnnnn" + "S" + "nnnnn" + "S" + "nnnnn"
+    m = _gerar_layout(tmp_path / "d2.ifc", layout, ordem)
+    med = {}
+    lotes, r, lar, ref = _carga(m, monkeypatch, tamanho_bloco=1000, medir=med)
+    assert lar == {i for i, _ in m.lentas} and len(lar) == 3, f"todas e só as lentas: {sorted(lar)} contra {m.lentas}"
+    assert r.sem_malha == [] and r.produtos_com_malha == len(layout) and r.erro is None
+    _confere_caixas(lotes, ref, m.ids)
+    _confere_resumo(r, 3)
+    assert not _linhas_de_uma_vez(r), "com 3 peças lentas o orçamento padrão (20) não pode cortar nada"
+    assert med["filhos"] <= _k_filhos(len(layout), 3), f"{med['filhos']} processos de conversão (teto {_k_filhos(len(layout), 3)})"
+    teto = 3 * _main_estimado(med, 3)
+    assert med["t"] < teto, f"{med['t']:.1f} s >= 3 x o do main ({teto:.1f} s; referência sem lentidão {med['t_ref']:.2f} s)"
+
+
+@pytest.mark.parametrize("kw", [{"max_pecas_condenadas": 2}, {"max_espera_s": 3.0}], ids=["orcamento_de_pecas", "orcamento_de_espera"])
+def test_d3_o_orcamento_protege_o_laco_de_confirmacoes(tmp_path, monkeypatch, kw):
+    """c) Muitas lentas fora de ordem entre muitas peças normais: nunca termina em erro por reinício; passou do orçamento, o
+    que ainda estava pendente vira caixa de uma vez e a carga conclui. Toda lenta termina em caixa."""
+    layout = "n" * 22 + "SSSS"
+    m = _gerar_layout(tmp_path / "d3.ifc", layout, "lentas_antes")
+    lotes, r, lar, ref = _carga(m, monkeypatch, tamanho_bloco=1000, **kw)
+    assert r.erro is None and r.sem_malha == [] and r.produtos_com_malha == len(layout)
+    assert {i for i, _ in m.lentas} <= lar, "toda peça lenta termina em caixa"
+    acusadas = {s[0] for s in r.simplificadas if "limite" in s[4].lower()}
+    cortadas = lar - acusadas
+    assert cortadas, "o orçamento tinha de cortar o que sobrou, de uma vez"
+    assert "max_pecas_condenadas" not in kw or len(acusadas) <= kw["max_pecas_condenadas"] + 1, \
+        f"{len(acusadas)} acusadas confirmadas; passou de {kw['max_pecas_condenadas']} só pode haver mais uma, a que estourou"
+    _confere_caixas(lotes, ref, m.ids)
+    _confere_resumo(r, len(cortadas))
+    assert any(_tem_numero(x, len(cortadas)) for x in _linhas_de_uma_vez(r)), f"nenhuma linha 'de uma vez' diz {len(cortadas)}: {r.mensagens}"
+
+
+def test_d4_cada_copia_nao_conta_no_orcamento_so_as_acusadas_confirmadas(tmp_path, monkeypatch):
+    """d) Uma peça "membro" lenta com 32 cópias (mesma peça-base) e, depois, outra peça lenta de outra família. As 32 cópias
+    não podem estourar sozinhas o limite de 20 (conta só as acusadas confirmadas: 2): a segunda lenta é isolada e só ela
+    vira caixa; as vizinhas dela continuam reais."""
+    layout = "Lnnn" + "c" * 32 + "nnnS"
+    m = _gerar_layout(tmp_path / "d4.ifc", layout)
+    lotes, r, lar, ref = _carga(m, monkeypatch, tamanho_bloco=4)
+    [(l, _), (s, _)] = m.lentas
+    copias = set(m.por_tipo("c"))
+    assert lar == {l, s} | copias, f"deviam virar caixa a lenta, as 32 cópias e a outra lenta; sobraram/faltaram: {sorted(lar ^ ({l, s} | copias))}"
+    assert not lar & set(m.por_tipo("n")), "peça normal vizinha da segunda lenta não pode virar caixa (o orçamento não estourou)"
+    assert r.sem_malha == [] and r.produtos_com_malha == len(layout)
+    _confere_caixas(lotes, ref, m.ids)
+    assert not _linhas_de_uma_vez(r)
+    _sem_jargao(r)
+
+
+def test_d5_peca_sem_geometria_dentro_de_bloco_cortado_vira_caixa(tmp_path, monkeypatch):
+    """e) COMPORTAMENTO ATUAL, registrado conforme o cartão: o bloco cortado pelo orçamento vira caixa inteiro, inclusive a
+    peça sem geometria (ela NÃO vai para `sem_malha`). Fora de um bloco cortado ela continua indo para `sem_malha`."""
+    m = _gerar_layout(tmp_path / "d5.ifc", "nSnn" "nnnS" "SnRn" "nRnn")
+    lotes, r, lar, ref = _carga(m, monkeypatch, tamanho_bloco=4, max_pecas_condenadas=1)
+    b1, b2, b3, b4 = _blocos(m)
+    r3, r4 = m.por_tipo("R")
+    assert set(b3) <= lar and r3 in lar, "bloco cortado vira caixa inteiro, inclusive a peça sem geometria"
+    assert r3 in {s[0] for s in r.simplificadas} and r3 not in {x[0] for x in r.sem_malha}
+    assert r4 in {x[0] for x in r.sem_malha} and r4 not in lar, "depois do corte, bloco sem peça lenta: a sem geometria continua em `sem_malha`"
+    assert r.produtos_com_malha == 15 and r.produtos_total == 16
+    _sem_jargao(r)
+
+
+def test_d6_texto_do_resumo_em_portugues_simples_com_as_tres_causas(tmp_path, monkeypatch):
+    """f) Limite, queda do conversor e corte do orçamento no mesmo arquivo: uma linha por causa, com o número exato, sem jargão
+    (nada de bloco, isolado, iterador, thread, reiniciar, lote)."""
+    m = _gerar_layout(tmp_path / "d6.ifc", "nSnn" "nKnn" "SnSn")
+    [(_, guid_k)] = m.caidas
+    lotes, r, lar, ref = _carga(m, monkeypatch, tamanho_bloco=4, max_pecas_condenadas=1, matar=guid_k)
+    b1, b2, b3 = _blocos(m)
+    assert lar & set(b1) == {b1[1]} and lar & set(b2) == {b2[1]} and set(b3) <= lar
+    assert r.sem_malha == [] and r.produtos_com_malha == 12
+    for n in (1, 4):
+        _confere_resumo(r, n)
+    assert [x for x in _linhas_de_uma_vez(r) if _tem_numero(x, 4)], r.mensagens
+    assert any("limite" not in x.lower() and "caiu" in x.lower() for x in r.mensagens), "linha da queda do conversor"
+    assert any(_tem_numero(x, 1) and "passaram de 1 s" in x for x in r.mensagens), "linha do limite de tempo"

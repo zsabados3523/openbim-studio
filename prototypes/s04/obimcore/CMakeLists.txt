@@ -23,7 +23,7 @@ list(APPEND CMAKE_PREFIX_PATH "${NB_DIR}")
 find_package(nanobind CONFIG REQUIRED)
 find_package(IfcOpenShell CONFIG REQUIRED)
 find_package(OpenCASCADE CONFIG REQUIRED)
-find_package(Qt6 COMPONENTS Core Gui Widgets GuiPrivate REQUIRED)  # GuiPrivate: QRhi é semi-público (R13; versão do Qt fixa na trava)
+find_package(Qt6 COMPONENTS Core Gui Widgets GuiPrivate REQUIRED)  # GuiPrivate: QRhi é semi-público (R13; versão do Qt fixa na trava). T07b(g): só Qt6::Gui NÃO compila (rhi/qrhi.h não é achado; testado no Linux)
 
 # Versão e build do ifcopenshell vistos na compilação (a trava do ambiente fixa os dois; R1-a compara com a execução).
 file(GLOB META "${CONDA}/conda-meta/ifcopenshell-[0-9]*.json")

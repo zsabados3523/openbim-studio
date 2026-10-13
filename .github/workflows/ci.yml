@@ -138,6 +138,7 @@ jobs:
       - name: Sonda da thread de desenho (S04-T05; informativo, não bloqueia)
         shell: bash -el {0}
         continue-on-error: true
+        timeout-minutes: 5
         run: |
           # Desenho por software (Linux: tela virtual + Mesa; Windows: WARP). Nenhuma janela na tela real.
           mkdir -p out/s05
@@ -292,6 +293,7 @@ jobs:
       - name: Sonda da thread de desenho (S04-T05; informativo, não bloqueia)
         shell: bash -el {0}
         continue-on-error: true
+        timeout-minutes: 5
         run: |
           # Desenho por software (Linux: tela virtual + Mesa; Windows: WARP). Nenhuma janela na tela real.
           mkdir -p out/s05

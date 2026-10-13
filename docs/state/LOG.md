@@ -124,3 +124,4 @@ Uma linha por tarefa concluída ou escalada, e por mudança de classe de tarefa.
 - 2026-10-13 | F0-S04-T11b | T3 | opus aprovou (lote 19, sem bloqueantes); PR 77 com auto-merge. Pendências anotadas nos cartões T12 e T15; oráculo da T11b com ~520 linhas de diff aceito (precedente lotes 14 e 18). Relatório: reports/LOTE_OPUS_19.md
 - 2026-10-13 | F0-S04-T16 | T3 | opus REPROVOU (lote 20, 1ª reprovação): ordem do iterador ≠ ordem de id causa laço de confirmações. Correção: cartão T16b (oráculo novo com layout estilo s25.ifc; implementação por divisão ao meio e orçamento nas confirmações; contar só acusadas confirmadas). Relatório: reports/LOTE_OPUS_20.md
 2026-10-13 | S04-T13 | T3 | Opus lote 22 APROVADO (itens 1-4 vão à T14); diff 434 linhas fora dos testes, exceção aceita | merge PR 79
+2026-10-13 | S04-T16b | T3 | Opus lote 21 APROVADO; diff 552+/65- (458 de oráculo), exceção aceita | merge PR 78 após Windows verde

@@ -57,3 +57,10 @@ C hospedagem GitHub + espelho Codeberg · D interface híbrida (confirmar na S09
 - Regra do "3 vezes mais lento": o portão do híbrido são as metas absolutas (M1 a M5). A razão contra o C++ puro (M6) é número de acompanhamento, registrado no ADR-001; só pesa se alguma meta absoluta ficar com menos de 2× de folga.
 - Ambiente: autorizado acrescentar `zlib`, `libxml2-devel` e `libboost-devel` (conda-forge) e guardar a lista travada de pacotes dos dois sistemas (cartão S04-T01). Qualquer outro pacote pede novo ok.
 - Regra do processo: o líder abre o lote Opus como subagente e mescla T3 aprovada com testes verdes (CLAUDE.md, item 6 e 3, editado pelo PO).
+
+## Decisões do PO sobre catálogo de ferramentas e entrevista S09 (2026-10-12)
+- "Pode seguir com as recomendações" nas 5 decisões do catálogo (`docs/design/catalogo-ferramentas-f1-f2.md`): telhado e escada na F4 (o plano v2/02 prevalece); pavimento com uma única ação (mudar a cota); manter a meta de 30 s de recuperação com aviso honesto; PO testa à mão os 6 comportamentos antes da F2-S04 e F2-S08; nomes nossos em português ("Modo A/B", cubo de vistas, ajustes salvos).
+- Entrevista S09: só anotações (sem áudio). Programa mais usado pelo PO: Revit (já usou ArchiCAD); referência de atalhos e navegação 3D = Revit.
+
+## Exceção de ausência do PO (2026-10-12, pedida no chat)
+- O PO vai ficar longe do computador e pediu que o desenvolvimento siga sozinho; "se precisar de autorização, abra esse período como exceção". Valor: o líder segue as próprias recomendações nas decisões que normalmente pediria ao PO, **dentro** da autorização permanente do CLAUDE.md. Continuam do PO e ficam na fila `PO.md` (o líder para essa frente e segue com outra): ADR, meta do portão, escopo, licença, regras do processo e CLAUDE.md, instalar ferramenta nova, baixar arquivo, cota extra, apagar dados, credenciais, `main` direto, execução na tela real, meta de F0 não atingida. Lotes Opus só com uso semanal >25% restante e janela <60%.

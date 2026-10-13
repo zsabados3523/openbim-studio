@@ -132,6 +132,10 @@ def test_trocar_de_janela_setparent_esconder_e_redimensionar_sem_queda(viewport,
     assert not r["falhas"] and r["viva"] and all(v[0] >= 500 for v in r["cls"].values()), r  # e a imagem final tem os 3 cubos
     assert abs(r["dpr"] - float(escala)) < 1e-6 and tamanho_ok(r["tam"], r["cont"], r["dpr"]), f"(g) captura {r['tam']} x contêiner {r['cont']} dpr {r['dpr']}"
 
+def test_recriar_superficie_destruindo_a_janela_nativa_com_a_thread_desenhando(viewport):  # soltar a swapchain de verdade e voltar a apresentar
+    r = caso("recriar_superficie")
+    assert r["viva0"] and not r["falhas"] and r["viva"] and all(v[0] >= 500 for v in r["cls"].values()), r  # e a imagem final tem os 3 cubos
+
 @pytest.mark.parametrize("modo", ["janela", "conteiner", "sair"])
 def test_destruir_com_a_thread_rodando_sem_parar(viewport, modo):  # achado 3 e 4(a): vida da thread presa à da janela
     r = caso("destruir", modo)
@@ -337,6 +341,29 @@ def c_trocar(res):
         elif not tamanho_ok(captura(c).shape, [cont.width(), cont.height()], cont.devicePixelRatioF()):  # (g) depois de cada redimensionamento
             res["falhas"].append(f"tamanho {i}: captura {captura(c).shape} contêiner {cont.width()}x{cont.height()} dpr {cont.devicePixelRatioF()}")
     res.update(viva=c.viva(), cls=classificar(img := captura(c)), tam=list(img.shape), cont=[cont.width(), cont.height()], dpr=cont.devicePixelRatioF(), solt=soltas(c))
+    c.parar()
+
+def c_recriar_superficie(res):  # destrói de verdade a janela nativa interna (QWindow.destroy) com a thread desenhando, e a recria
+    from PySide6.QtGui import QGuiApplication, QSurface
+    c, w, cont = novo(60)
+    res["falhas"], res["viva0"] = [], (yield from retoma(c))
+    for i in range(5):
+        # a Janela interna do contêiner: a única QWindow filha com superfície de GL/D3D (as outras são raster); sem gancho novo no C++
+        js = [x for x in QGuiApplication.allWindows() if x.parent() is not None and x.surfaceType() != QSurface.SurfaceType.RasterSurface]
+        if len(js) != 1:
+            res["falhas"].append(f"janelas internas {i}: {len(js)}")
+            break
+        js[0].destroy()  # PlatformSurface -> SurfaceAboutToBeDestroyed -> a thread solta a swapchain
+        yield 300
+        if not c.viva():
+            res["falhas"].append(f"caiu {i}")
+            break
+        w.hide()
+        w.show()  # o contêiner recria a janela nativa
+        cont.setVisible(True)
+        if not (yield from retoma(c)):
+            res["falhas"].append(f"recriar {i}")
+    res.update(viva=c.viva(), cls=classificar(img := captura(c)), tam=list(img.shape), solt=soltas(c))
     c.parar()
 
 def c_destruir(res, modo):

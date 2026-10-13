@@ -15,7 +15,7 @@ bool caixa_raio(const Raio& r, const double* inv, const float* mn, const float* 
   double diag = 0;
   for (int a = 0; a < 3; ++a) diag += double(mx[a] - mn[a]) * (mx[a] - mn[a]);
   const double folga = 1e-5 * std::sqrt(diag) + 1e-6;
-  double t0 = 0, t1 = 1e300;
+  double t0 = r.tmin, t1 = 1e300;
   for (int a = 0; a < 3; ++a) {
     double ta = (mn[a] - folga - r.o[a]) * inv[a], tb = (mx[a] + folga - r.o[a]) * inv[a];
     if (ta > tb) std::swap(ta, tb);
@@ -40,11 +40,11 @@ inline double triangulo(const Raio& r, const float* a, const float* b, const flo
   const double v = (r.d[0] * q[0] + r.d[1] * q[1] + r.d[2] * q[2]) * inv;
   if (v < -EPS_BARI || u + v > 1 + EPS_BARI) return -1;
   const double t = (e2[0] * q[0] + e2[1] * q[1] + e2[2] * q[2]) * inv;
-  return t > 0 ? t : -1;
+  return t > r.tmin ? t : -1;
 }
 }  // namespace
 
-Raio raio_do_pixel(const Camera& c, int larg, int alt, double x, double y) {
+Raio raio_do_pixel(const Camera& c, int larg, int alt, double x, double y, double perto) {
   const double az = c.azimute * PI / 180, el = c.elevacao * PI / 180, tv = std::tan(MEIO_FOV), th = tv * double(larg) / alt;
   const double para[3] = {std::cos(el) * std::cos(az), std::cos(el) * std::sin(az), std::sin(el)};  // do alvo para a câmera
   const double dir[3] = {-std::sin(az), std::cos(az), 0}, cima[3] = {-std::sin(el) * std::cos(az), -std::sin(el) * std::sin(az), std::cos(el)};
@@ -53,6 +53,8 @@ Raio raio_do_pixel(const Camera& c, int larg, int alt, double x, double y) {
   for (int k = 0; k < 3; ++k) { r.o[k] = c.alvo[k] + c.distancia * para[k]; r.d[k] = -para[k] + nx * dir[k] + ny * cima[k]; n += r.d[k] * r.d[k]; }
   n = std::sqrt(n);
   for (double& v : r.d) v /= n;
+  const double cosang = -(r.d[0] * para[0] + r.d[1] * para[1] + r.d[2] * para[2]);  // d . frente (frente = -para): o plano perto é perpendicular ao eixo
+  r.tmin = perto > 0 && cosang > 1e-9 ? perto / cosang : 0;
   return r;
 }
 

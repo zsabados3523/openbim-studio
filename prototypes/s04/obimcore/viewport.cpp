@@ -23,6 +23,8 @@
 #include <QOffscreenSurface>
 #include <QPlatformSurfaceEvent>
 #include <QPointer>
+#include <QResizeEvent>
+#include <QScreen>
 #include <QThread>
 #include <QWidget>
 #include <QWindow>
@@ -67,7 +69,11 @@ class Motor {
   std::atomic<bool> exposta{false}, soltar{false}, perder{false}, parar_{false}, perdida_{false}, terminou_{true};
   std::atomic<int> contextos{0}, tri_placa{0}, superficies_soltas{0}, solturas_atrasadas{0};
   std::atomic<int64_t> fatias_{0};
-  std::atomic<int> larg_{0}, alt_{0};  // tamanho real do backbuffer do último quadro (T10: a seleção usa o mesmo)
+  // T10c: o que o último quadro APRESENTADO usou (câmera aplicada, tamanho real do backbuffer, plano perto), gravado junto, sob um só mutex folha (`mc_`),
+  // depois do endFrame; a seleção lê tudo de uma vez (nunca câmera de um quadro com tamanho de outro).
+  struct Quadro { Camera c; int larg = 0, alt = 0; double perto = 0.05; bool ok = false; };
+  std::mutex mc_; Quadro quadro_;
+  std::atomic<double> dpr_{1.0}, escala_teste_{0.0};  // dpr_: devicePixelRatio da janela (atualizado na thread da janela); escala_teste_ > 0 o substitui (gancho de teste)
   DadosCena cena_;  // fila de lotes, cópia compacta, sequência e caixa (T08); o Python entra direto, com mutex próprio
   explicit Motor(bool gl) : gl_(gl) {}
   ~Motor() { parar(); }
@@ -248,7 +254,6 @@ class Motor {
       { std::lock_guard<std::mutex> l(m_); pedida = cap_pedida_; }
       const bool com_caixa = cena_.caixa(bmin, bmax);
       const QSize alvo = g.sc->currentPixelSize();  // tamanho real do backbuffer
-      larg_ = alvo.width(); alt_ = alvo.height();
       const Camera c = cam_.aplicar(alvo.height(), double(alvo.width()) / (std::max)(alvo.height(), 1), com_caixa ? bmin : nullptr, com_caixa ? bmax : nullptr);
       if (!pedida) rb.reset();  // `capturar` desistiu: descarta a leitura pendente
       const double az = c.azimute * 3.14159265358979323846 / 180, el = c.elevacao * 3.14159265358979323846 / 180;
@@ -283,6 +288,7 @@ class Motor {
       cb->endPass(rub2);
       const auto fim = g.rhi->endFrame(g.sc.get());
       if (fim == QRhi::FrameOpDeviceLost) return Fim::Perdido;
+      { std::lock_guard<std::mutex> l(mc_); quadro_ = {c, alvo.width(), alvo.height(), perto, true}; }  // T10c: câmera, tamanho e perto do quadro apresentado
       const double t = agora_ms();  // quadro apresentado (armadilha 6)
       { std::lock_guard<std::mutex> l(mq_); anel_[n_++ % anel_.size()] = {t, seq_placa_}; }
       if (rb && !rb->data.isEmpty()) {
@@ -350,13 +356,16 @@ class Janela : public QWindow {
       setSurfaceType(QSurface::OpenGLSurface); setFormat(f); fb_->setFormat(f); fb_->create();
     }
     resize(320, 240);
+    m_->dpr_ = devicePixelRatio();
+    QObject::connect(this, &QWindow::screenChanged, this, [this](QScreen*) { m_->dpr_ = devicePixelRatio(); });
     m_->ligar(this, fb_);  // fb_ é filha desta janela: some junto, depois da thread
     // A saída do programa para a thread antes de a QGuiApplication sumir (caso "sair" do oráculo).
     QObject::connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, this, [m = m_] { m->parar(); });
   }
   ~Janela() override { m_->desligar(); }  // para e ESPERA a thread de desenho antes de a janela deixar de existir
  protected:
-  void exposeEvent(QExposeEvent*) override { m_->exposta = isExposed(); }
+  void exposeEvent(QExposeEvent*) override { m_->exposta = isExposed(); m_->dpr_ = devicePixelRatio(); }
+  void resizeEvent(QResizeEvent* e) override { m_->dpr_ = devicePixelRatio(); QWindow::resizeEvent(e); }
   bool event(QEvent* e) override {
     if (e->type() == QEvent::PlatformSurface && static_cast<QPlatformSurfaceEvent*>(e)->surfaceEventType() == QPlatformSurfaceEvent::SurfaceAboutToBeDestroyed)
       m_->soltar_superficie();
@@ -413,13 +422,20 @@ class Cena {  // objeto Python: só guarda o Motor e ponteiros fracos; o Qt é d
   void parar_animacao() { m_->cam_.animar(0); }
   int64_t atualizar(nb::object lote_novo, nb::object guids_remover) { return m_->cena_.atualizar(lote_novo, guids_remover); }
   nb::dict estatisticas() { return m_->estatisticas(); }
-  // T10: thread da janela. Câmera já aplicada + tamanho do último quadro; trabalha sobre cópia imutável dos dados (nenhum mutex do Motor é pedido).
+  // T10/T10c: (x, y) em pixels LÓGICOS (os do mouse do Qt); o pixel físico do backbuffer é lógico * devicePixelRatio. Câmera, tamanho e `perto` vêm juntos do último
+  // quadro apresentado; trabalha sobre cópia imutável dos dados (nenhum mutex do Motor é pedido).
   nb::object selecionar(double x, double y) {
-    const int w = m_->larg_, h = m_->alt_;
-    if (!std::isfinite(x) || !std::isfinite(y) || w <= 0 || h <= 0 || x < 0 || y < 0 || x >= w || y >= h) throw nb::value_error("selecionar: ponto fora da janela");
-    const Camera c = m_->cam_.ler(); const auto lotes = m_->cena_.lotes(); std::optional<std::string> r;
-    { nb::gil_scoped_release lib; r = obim::selecionar(lotes, raio_do_pixel(c, w, h, x, y)); }
-    return r ? nb::object(nb::str(r->c_str())) : nb::none();
+    Motor::Quadro q; { std::lock_guard<std::mutex> l(m_->mc_); q = m_->quadro_; }
+    double r = m_->escala_teste_.load(); if (!(r > 0)) r = m_->dpr_.load();
+    const double px = x * r, py = y * r;
+    if (!q.ok || !std::isfinite(x) || !std::isfinite(y) || q.larg <= 0 || q.alt <= 0 || x < 0 || y < 0 || px >= q.larg || py >= q.alt) throw nb::value_error("selecionar: ponto fora da janela");
+    const auto lotes = m_->cena_.lotes(); std::optional<std::string> res;
+    { nb::gil_scoped_release lib; res = obim::selecionar(lotes, raio_do_pixel(q.c, q.larg, q.alt, px, py, q.perto)); }
+    return res ? nb::object(nb::str(res->c_str())) : nb::none();
+  }
+  void definir_escala_teste(double r) {  // gancho de teste: usa r (> 0) no lugar do devicePixelRatio real
+    if (!std::isfinite(r) || r <= 0) throw nb::value_error("escala deve ser maior que zero");
+    m_->escala_teste_ = r;
   }
   void perder_contexto() { m_->perder = true; }  // gancho de teste: simula FrameOpDeviceLost
   std::string info() { return m_->info(); }
@@ -441,5 +457,5 @@ void registrar_viewport(nb::module_& m) {
       .def("aproximar", &Cena::aproximar, nb::arg("fator")).def("enquadrar", &Cena::enquadrar)
       .def("animar_orbita", &Cena::animar_orbita, nb::arg("graus_por_s")).def("parar_animacao", &Cena::parar_animacao)
       .def("atualizar", &Cena::atualizar, nb::arg("lote_novo").none(), nb::arg("guids_remover"))
-      .def("selecionar", &Cena::selecionar, nb::arg("x"), nb::arg("y")).def("estatisticas", &Cena::estatisticas).def("perder_contexto", &Cena::perder_contexto).def("info", &Cena::info);
+      .def("selecionar", &Cena::selecionar, nb::arg("x"), nb::arg("y")).def("definir_escala_teste", &Cena::definir_escala_teste, nb::arg("r")).def("estatisticas", &Cena::estatisticas).def("perder_contexto", &Cena::perder_contexto).def("info", &Cena::info);
 }

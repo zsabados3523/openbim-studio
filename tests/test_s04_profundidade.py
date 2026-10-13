@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Oráculo mínimo da ORDEM DE PROFUNDIDADE da viewport (S04-T10b). Roda em subprocesso sob `xvfb-run` (nunca na tela real), como `test_s04_selecao.py`.
-FALHA ESPERADA HOJE: com xvfb/GL por software o teste de profundidade não funciona; o cubo grande de trás sai por cima do pequeno da frente
-(achado do implementador da T10: cubos parecem semitransparentes; `Cena.selecionar` devolve o certo, o DESENHO é que erra).
+Historico: a janela GL nao tinha buffer de profundidade (corrigido na T10b: 24/8 bits em `Janela::Janela`); o teste agora protege contra a volta do defeito.
 Regra: um cubo opaco PERTO da câmera, alinhado com um cubo maior ATRÁS, tem de dar a cor do perto no pixel central, em qualquer ordem de inserção.
 OBIM_S04_T10B_OBRIGATORIO=1 transforma pulo em falha."""
 import importlib.util, os, shutil, sys  # noqa: E401

@@ -68,6 +68,8 @@ O padrão assumido na F0-S09: **navegador do projeto e propriedades ao jeito do 
 
 Observação: o navegador do projeto (6) pode ficar à esquerda, em cima da caixa de ferramentas, em abas. Quem decide a posição final é o seu desenho; aqui só dizemos **o que existe** e **o que cada parte faz**.
 
+> **Onde entram as anotações (cotas, textos, tags, quadros, pranchas, revisões).** Nas Fases 1 e 2 a caixa de ferramentas ganha um grupo **"Anotar"**, **vazio** (ou escondido): nada de anotação existe ainda. Ele passa a ter ferramentas na Fase 3, junto de um painel de tabelas e de um editor de prancha. Tudo isso está em `docs/design/catalogo-ferramentas-f3-anotacao.md`. A medida da ferramenta Medir (V15) e as cotas temporárias (M15) continuam sendo só leitura, nunca viram cota permanente.
+
 ### O que é cada parte
 
 1. **Barra de menu.** Arquivo, Editar, Vista, Modelo, Ajuda. Os botões de desfazer e refazer ficam sempre à vista.

@@ -40,13 +40,20 @@ O padrão assumido na F0-S09: **navegador do projeto e propriedades ao jeito do 
 | [3] CAIXA DE | [5] ÁREA DE TRABALHO (desenho)                  | [4] PAINEL DE   |
 |  FERRAMENTAS |                                                 |  PROPRIEDADES   |
 |              |        +---------+   [cubo de vistas]           |                 |
-| [Selecionar] |        |  3D ou  |                              |  Elemento: Parede|
-| [Parede]     |        | planta  |        campo junto ao cursor |  Tipo: [ v ] [Editar tipo]|
-| [Laje]       |        |         |        +---------------+     |  Comprimento ... |
-| [Pilar]      |        +---------+        | 3,25 m | 90°  |     |  Altura ...      |
-| [Viga]       |                           +---------------+     |  Material ...    |
-| [Porta]      |                                                 |  (lista longa    |
-| [Janela]     |                                                 |   com rolagem)   |
+| [Selecionar] |        |  3D ou  | [mini-barra:                 |  Elemento: Parede|
+| [Parede]     |        | planta  |  Mover Copiar Girar ...]     |  Tipo: [ v ] [Editar tipo]|
+| [Laje]       |        |         |        campo junto ao cursor |  Comprimento ... |
+| [Pilar]      |        +---------+        +---------------+     |  Altura ...      |
+| [Viga]       |                           | 3,25 m | 90°  |     |  Material ...    |
+| [Porta]      |                           +---------------+     |  (lista longa    |
+| [Janela]     |   (clique direito no elemento abre a mesma      |   com rolagem)   |
+| -- Editar -- |    mini-barra)                                  |                 |
+| [Mover]      |                                                 |                 |
+| [Copiar]     |                                                 |                 |
+| [Girar]      |                                                 |                 |
+| [Espelhar]   |                                                 |                 |
+| [Alinhar]    |                                                 |                 |
+| [Aparar/est.]|                                                 |                 |
 | [Nível/Eixo] +-------------------------------------------------+-----------------+
 | [Medir]      | [6] NAVEGADOR DO PROJETO (árvore)                                  |
 |              |   Casa                                                             |
@@ -64,8 +71,9 @@ Observação: o navegador do projeto (6) pode ficar à esquerda, em cima da caix
 ### O que é cada parte
 
 1. **Barra de menu.** Arquivo, Editar, Vista, Modelo, Ajuda. Os botões de desfazer e refazer ficam sempre à vista.
-2. **Barra de opções.** Faixa fina logo abaixo do menu. **Muda sozinha** conforme a ferramenta ativa: ao escolher Parede, mostra tipo, linha de localização, altura, "encadear". Sem ferramenta, fica vazia ou mostra opções da vista. É onde ficam as escolhas "antes de desenhar".
-3. **Caixa de ferramentas** (esquerda). Botões das ferramentas, agrupados: Selecionar; Modelar (parede, laje, pilar, viga, porta, janela); Referências (nível, eixo); Medir. Abaixo, os **ajustes salvos**: ajustes prontos de uma ferramenta (por exemplo "Parede 15 cm, bloco, reboco duplo"). Clicar num ajuste ativa a ferramenta já configurada.
+2. **Barra de opções.** Faixa fina logo abaixo do menu. **Muda sozinha** conforme a ferramenta ativa: ao escolher Parede, mostra tipo, linha de localização, altura, "encadear". Sem ferramenta, fica vazia ou mostra opções da vista. É onde ficam as escolhas "antes de desenhar" e as escolhas **durante o uso** das ferramentas de Editar (copiar várias vezes, restringir a direção). A distância ou o ângulo se digitam no **campo junto ao cursor**. Desfazer e refazer continuam no topo.
+3. **Caixa de ferramentas** (esquerda). Botões das ferramentas, agrupados: Selecionar; Modelar (parede, laje, pilar, viga, porta, janela); **Editar** (mover, copiar, girar, espelhar, alinhar, aparar e estender), logo abaixo de Modelar; Referências (nível, eixo); Medir. Os seis botões de Editar ficam **apagados quando nada está selecionado** e **acesos quando há seleção**. Abaixo, os **ajustes salvos**: ajustes prontos de uma ferramenta (por exemplo "Parede 15 cm, bloco, reboco duplo"). Clicar num ajuste ativa a ferramenta já configurada.
+   - **Mini-barra de edição.** Uma faixa pequena com os mesmos seis botões de Editar aparece **junto ao elemento selecionado** e também ao **clicar com o botão direito** sobre ele. É um atalho: faz o mesmo que os botões da caixa de ferramentas.
 4. **Painel de propriedades** (direita). Sempre aberto. Mostra os dados do que está selecionado; sem seleção, mostra os da vista ativa. Tem o botão "Editar tipo". Mudar a **instância** altera só o elemento; mudar o **tipo** altera todos daquele tipo.
 5. **Área de trabalho.** O desenho: planta, corte ou 3D. Mostra o **cubo de vistas** (canto), os **campos junto ao cursor** (número digitável ao lado do ponteiro) e as **cotas temporárias** (medidas que aparecem sobre o elemento enquanto você desenha ou seleciona).
 6. **Navegador do projeto.** Árvore com: pavimentos, vistas salvas, tipos e o modelo por classe (a "árvore espacial": projeto, terreno, edifício, pavimento, elementos). Duplo clique abre a vista. Clicar num item seleciona no desenho, e vice-versa.
@@ -515,7 +523,7 @@ Siglas de comparação: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz.
   3. Opção **"Restringir"** (barra de opções): só na direção perpendicular ou ao longo do elemento.
   4. Opção **"Desconectar"**: quebra as relações antes de mover (a porta pode trocar de parede, por exemplo).
   5. Os valores das opções ficam lembrados.
-- **Na tela:** linha do deslocamento com distância ao vivo; a sombra do elemento no destino.
+- **Na tela:** **Onde fica e como ativar:** botão no grupo "Editar" da caixa de ferramentas (aceso só com seleção), botão igual na mini-barra junto à seleção, item no clique com o botão direito, ou tecla **M**. Durante o uso: linha do deslocamento com distância ao vivo; a sombra do elemento no destino. "Restringir" e "Desconectar" ficam na barra de opções; a distância se digita no campo junto ao cursor.
 - **Altera o modelo:** muda a posição dos elementos. Elementos presos (porta numa parede) vão junto, a menos que "Desconectar" esteja marcado.
 - **Entra em:** F2-S09.
 - **Comparação e proposta:** os dois fazem de forma parecida; o Ac tem um menu "Editar > Mover". **Proposta:** adotar as opções do Rv. **Recomendação:** adotar.
@@ -524,7 +532,7 @@ Siglas de comparação: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz.
 - **Nome nosso:** Copiar.
 - **O que faz:** faz uma cópia de elementos num novo lugar.
 - **Como se usa:** como Mover, com tecla **C**. Opção **"Múltiplo"** mantém a ferramenta ativa para várias cópias seguidas.
-- **Na tela:** igual a Mover; a cópia aparece como fantasma.
+- **Na tela:** **Onde fica e como ativar:** botão no grupo "Editar" da caixa de ferramentas (aceso só com seleção), botão igual na mini-barra junto à seleção, item no clique com o botão direito, ou tecla **C**. Durante o uso: igual a Mover; a cópia aparece como fantasma. "Múltiplo" fica na barra de opções.
 - **Altera o modelo:** cria novos elementos, **cada um com identificação própria nova**. Não altera o original.
 - **Entra em:** F2-S09.
 - **Comparação e proposta:** Rv: restringir, desconectar, múltiplo; Ac: cópia por arrastar com Ctrl+Alt, "Multiplicar" (matriz). **Proposta:** só cópia simples e múltipla. **Matriz** (copiar em grade ou círculo) **fica para depois**. **Recomendação:** adotar.
@@ -537,7 +545,7 @@ Siglas de comparação: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz.
   2. Clicar o centro de rotação.
   3. Clicar o ângulo inicial, clicar o ângulo final; ou digitar o ângulo (M14).
   4. Opção "Copiar" gira uma cópia e deixa o original.
-- **Na tela:** transferidor leve ao redor do centro e valor do ângulo ao vivo.
+- **Na tela:** **Onde fica e como ativar:** botão no grupo "Editar" da caixa de ferramentas (aceso só com seleção), botão igual na mini-barra junto à seleção, item no clique com o botão direito, ou tecla **G**. Durante o uso: transferidor leve ao redor do centro e valor do ângulo ao vivo; o ângulo se digita no campo junto ao cursor e "Copiar" fica na barra de opções.
 - **Altera o modelo:** muda a posição e a orientação. Não altera o tipo.
 - **Entra em:** F2-S09.
 - **Comparação e proposta:** os dois têm. **Proposta:** com o campo de ângulo. **Recomendação:** adotar.
@@ -549,7 +557,7 @@ Siglas de comparação: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz.
   1. Selecionar. Tecla **F** ("flip").
   2. Escolher "Usar um eixo existente" (clicar numa linha) ou "Desenhar o eixo" (dois cliques).
   3. Opção "Copiar": ligada, deixa o original; desligada, só espelha.
-- **Na tela:** a linha do eixo e a imagem fantasma espelhada.
+- **Na tela:** **Onde fica e como ativar:** botão no grupo "Editar" da caixa de ferramentas (aceso só com seleção), botão igual na mini-barra junto à seleção, item no clique com o botão direito, ou tecla **F**. Durante o uso: a linha do eixo e a imagem fantasma espelhada; "Copiar" e a escolha do eixo ficam na barra de opções.
 - **Altera o modelo:** espelha os elementos (ou cria cópias espelhadas, com identificação nova).
 - **Entra em:** F2-S09.
 - **Comparação e proposta:** os dois têm. **Proposta:** igual ao Rv, com opção "Copiar" explícita. **Recomendação:** adotar.
@@ -562,7 +570,7 @@ Siglas de comparação: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz.
   2. Clicar a referência (o que **fica parado**).
   3. Clicar o elemento a alinhar (o que **se move**).
   4. Alinhamento múltiplo: segurar **Ctrl** e clicar vários.
-- **Na tela:** linha tracejada de referência e a mudança de posição ao vivo.
+- **Na tela:** **Onde fica e como ativar:** botão no grupo "Editar" da caixa de ferramentas (aceso só com seleção), botão igual na mini-barra junto à seleção, item no clique com o botão direito, ou tecla **A**. Durante o uso: linha tracejada de referência e a mudança de posição ao vivo; a preferência (faces, eixos...) fica na barra de opções.
 - **Altera o modelo:** muda a posição do elemento movido. **NÃO** guarda uma "trava": o alinhamento acontece uma vez só.
 - **Entra em:** F2-S09.
 - **Comparação e proposta:** Rv oferece um cadeado que mantém o alinhamento se um dos dois mover. Isso exige **restrições guardadas no `.obim`** (o IFC não guarda). **Proposta:** adiar o cadeado. **Recomendação:** adiar (ver pergunta 5).
@@ -573,7 +581,7 @@ Siglas de comparação: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz.
 - **Como se usa:**
   1. Tecla **T**. Escolher o modo: "Até o canto" (duas paredes, clicando em cada uma na parte que fica), "Um elemento" (contra um limite) ou "Vários".
   2. Clicar o limite e depois o que será aparado ou estendido.
-- **Na tela:** a parte que será removida fica esmaecida antes do clique.
+- **Na tela:** **Onde fica e como ativar:** botão no grupo "Editar" da caixa de ferramentas (aceso só com seleção), botão igual na mini-barra junto à seleção, item no clique com o botão direito, ou tecla **T**. Durante o uso: a parte que será removida fica esmaecida antes do clique; o modo (até o canto, um elemento, vários) fica na barra de opções.
 - **Altera o modelo:** muda o comprimento do elemento. Não altera o tipo.
 - **Entra em:** F2-S09.
 - **Comparação e proposta:** Rv tem três modos. O Ac tem "ajustar" e "tesoura" (a documentação lida do Ac não detalha: **a confirmar com teste do PO**). **Proposta:** os três modos do Rv. **Recomendação:** adotar.
@@ -662,12 +670,12 @@ Siglas de comparação: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz.
 | M13 | Captura de pontos | automático | F2-S08 | Não |
 | M14 | Campos junto ao cursor | digitar | F2-S08 | Não (só define medida) |
 | M15 | Cotas temporárias | clicar no número | F2-S08 | Sim, ao editar |
-| M16 | Mover | M | F2-S09 | Sim |
-| M17 | Copiar | C | F2-S09 | Sim (cria) |
-| M18 | Girar | G | F2-S09 | Sim |
-| M19 | Espelhar | F | F2-S09 | Sim |
-| M20 | Alinhar | A | F2-S09 | Sim |
-| M21 | Aparar e estender | T | F2-S09 | Sim |
+| M16 | Mover | botão Editar, mini-barra, clique direito ou M | F2-S09 | Sim |
+| M17 | Copiar | botão Editar, mini-barra, clique direito ou C | F2-S09 | Sim (cria) |
+| M18 | Girar | botão Editar, mini-barra, clique direito ou G | F2-S09 | Sim |
+| M19 | Espelhar | botão Editar, mini-barra, clique direito ou F | F2-S09 | Sim |
+| M20 | Alinhar | botão Editar, mini-barra, clique direito ou A | F2-S09 | Sim |
+| M21 | Aparar e estender | botão Editar, mini-barra, clique direito ou T | F2-S09 | Sim |
 | M22 | Tipos e propriedades | Ctrl+E (editar tipo) | F2-S10 | Sim |
 | M23 | Ajustes salvos | Ctrl+3 (caixa) | a decidir | Não |
 | T1 | Telhado | (depois) | F4 | Sim |
@@ -699,12 +707,12 @@ Teclas de uma letra funcionam quando nenhum campo de texto tem o foco e quando *
 | V | Viga | |
 | D | Porta | |
 | J | Janela | |
-| M | Mover | |
-| C | Copiar | |
-| G | Girar | |
-| F | Espelhar | |
-| A | Alinhar | |
-| T | Aparar e estender | |
+| M | Mover | Também pelo botão do grupo Editar, pela mini-barra e pelo clique direito (só com seleção) |
+| C | Copiar | Igual a Mover: botão Editar, mini-barra, clique direito |
+| G | Girar | Igual a Mover: botão Editar, mini-barra, clique direito |
+| F | Espelhar | Igual a Mover: botão Editar, mini-barra, clique direito |
+| A | Alinhar | Igual a Mover: botão Editar, mini-barra, clique direito |
+| T | Aparar e estender | Igual a Mover: botão Editar, mini-barra, clique direito |
 | Ctrl+Z / Ctrl+Y | Desfazer / Refazer | Ctrl+Shift+Z também refaz |
 | Ctrl+S / Ctrl+N / Ctrl+O | Salvar / Novo / Abrir | |
 | Ctrl+1 / Ctrl+2 / Ctrl+3 | Mostrar ou esconder Propriedades / Navegador / Caixa de ferramentas | |

@@ -135,6 +135,20 @@ jobs:
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_S04_OBRIGATORIO=1  # pulo vira falha (T04c entregou versao()["registro_ifc4"])
           QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_ponte.py
+      - name: Sonda da thread de desenho (S04-T05; informativo, não bloqueia)
+        shell: bash -el {0}
+        continue-on-error: true
+        run: |
+          # Desenho por software (Linux: tela virtual + Mesa; Windows: WARP). Nenhuma janela na tela real.
+          mkdir -p out/s05
+          B="$(python -c 'import os; print(os.path.abspath("out/s05/build"))')"; O="$(python -c 'import os; print(os.path.abspath("out/s05"))')"
+          if [ "${RUNNER_OS}" = "Windows" ]; then GEN=(-A x64); else GEN=(-G Ninja); fi
+          cmake -S prototypes/s04/sonda_desenho -B "$B" "${GEN[@]}" -DCMAKE_BUILD_TYPE=Release -DOBIM_SAIDA="$O" -DCMAKE_PREFIX_PATH="$CONDA_PREFIX"
+          cmake --build "$B" --config Release
+          QT_QPA_PLATFORM=xcb LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x800x24" python prototypes/s04/sonda_desenho/sonda.py "$O" out/s05/sonda.json || true
+          cat out/s05/sonda.json || true
+          echo "::notice title=sonda da thread de desenho no ${RUNNER_OS}::$(python -c "import json; r=json.load(open('out/s05/sonda.json')); print('meta_atingida=%s' % r.get('meta_atingida'), {k:v.get('maior_intervalo_ms') for k,v in r['fases'].items() if isinstance(v,dict)})" || echo sem resultado)"
+          exit 0
       - name: REUSE (ferramenta só no CI, ambiente separado)
         shell: bash -el {0}
         run: |
@@ -275,6 +289,20 @@ jobs:
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_S04_OBRIGATORIO=1  # pulo vira falha (T04c entregou versao()["registro_ifc4"])
           QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_ponte.py
+      - name: Sonda da thread de desenho (S04-T05; informativo, não bloqueia)
+        shell: bash -el {0}
+        continue-on-error: true
+        run: |
+          # Desenho por software (Linux: tela virtual + Mesa; Windows: WARP). Nenhuma janela na tela real.
+          mkdir -p out/s05
+          B="$(python -c 'import os; print(os.path.abspath("out/s05/build"))')"; O="$(python -c 'import os; print(os.path.abspath("out/s05"))')"
+          if [ "${RUNNER_OS}" = "Windows" ]; then GEN=(-A x64); else GEN=(-G Ninja); fi
+          cmake -S prototypes/s04/sonda_desenho -B "$B" "${GEN[@]}" -DCMAKE_BUILD_TYPE=Release -DOBIM_SAIDA="$O" -DCMAKE_PREFIX_PATH="$CONDA_PREFIX"
+          cmake --build "$B" --config Release
+          QT_QPA_PLATFORM=windows RHI=d3d11 python prototypes/s04/sonda_desenho/sonda.py "$O" out/s05/sonda.json || true
+          cat out/s05/sonda.json || true
+          echo "::notice title=sonda da thread de desenho no ${RUNNER_OS}::$(python -c "import json; r=json.load(open('out/s05/sonda.json')); print('meta_atingida=%s' % r.get('meta_atingida'), {k:v.get('maior_intervalo_ms') for k,v in r['fases'].items() if isinstance(v,dict)})" || echo sem resultado)"
+          exit 0
       - name: Instalador Windows (ambiente de runtime e NSIS)
         shell: bash -el {0}
         run: |

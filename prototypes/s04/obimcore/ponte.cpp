@@ -26,6 +26,7 @@ namespace nb = nanobind;
 
 ifcopenshell::file* emprestar(nb::handle obj);  // definida abaixo
 void registrar_malhas(nb::module_& m);  // malha.cpp
+void registrar_viewport(nb::module_& m);  // viewport.cpp
 
 // Confere o tipo (ifcopenshell.file, e não uma entidade, que também tem file_pointer()), chama file_pointer() e
 // devolve o ponteiro emprestado. Zero ou tipo errado vira erro Python limpo.
@@ -53,6 +54,7 @@ express::entity achar(ifcopenshell::file* f, const std::string& guid) {
 
 NB_MODULE(_obimcore, m) {
     registrar_malhas(m);
+    registrar_viewport(m);
     m.def("versao", [] {
         nb::dict d;
         d["ifcopenshell"] = OBIM_IFC_VERSAO;

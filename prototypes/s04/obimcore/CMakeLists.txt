@@ -23,7 +23,7 @@ list(APPEND CMAKE_PREFIX_PATH "${NB_DIR}")
 find_package(nanobind CONFIG REQUIRED)
 find_package(IfcOpenShell CONFIG REQUIRED)
 find_package(OpenCASCADE CONFIG REQUIRED)
-find_package(Qt6 COMPONENTS Core REQUIRED)
+find_package(Qt6 COMPONENTS Core Gui Widgets GuiPrivate REQUIRED)  # GuiPrivate: QRhi é semi-público (R13; versão do Qt fixa na trava)
 
 # Versão e build do ifcopenshell vistos na compilação (a trava do ambiente fixa os dois; R1-a compara com a execução).
 file(GLOB META "${CONDA}/conda-meta/ifcopenshell-[0-9]*.json")
@@ -35,7 +35,17 @@ message(STATUS "ifcopenshell ${IFC_VERSAO} build ${IFC_BUILD}")
 
 # O .pyd/.so fica dentro do pacote `obimcore` (a pasta de saída), ao lado do __init__.py gerado pelo build.sh.
 file(TO_CMAKE_PATH "${OBIM_SAIDA}" OBIM_SAIDA)
-nanobind_add_module(_obimcore ponte.cpp malha.cpp)
+# Shaders da S03 (QSB já compilados) embutidos como bytes: o módulo não procura arquivo em tempo de execução.
+set(OBIM_SHADERS "${CMAKE_CURRENT_SOURCE_DIR}/../../viewport_qrhi/shaders" CACHE PATH "shaders QSB da S03")
+foreach(sh malha_vert malha_frag)
+  string(REPLACE "_" "." arq "${sh}")
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${OBIM_SHADERS}/${arq}.qsb")
+  file(READ "${OBIM_SHADERS}/${arq}.qsb" hex HEX)
+  string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," hex "${hex}")
+  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/${sh}.inc" "${hex}")
+endforeach()
+nanobind_add_module(_obimcore ponte.cpp malha.cpp viewport.cpp)
+target_include_directories(_obimcore PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 set_target_properties(_obimcore PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${OBIM_SAIDA}/obimcore")
 foreach(cfg DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
   set_target_properties(_obimcore PROPERTIES LIBRARY_OUTPUT_DIRECTORY_${cfg} "${OBIM_SAIDA}/obimcore")
@@ -45,14 +55,14 @@ target_include_directories(_obimcore PRIVATE ${OpenCASCADE_INCLUDE_DIR})
 target_link_libraries(_obimcore PRIVATE
   IfcOpenShell::IfcParse IfcOpenShell::IfcGeom IfcOpenShell::parse_schema_ifc2x3 IfcOpenShell::parse_schema_ifc4
   IfcOpenShell::parse_schema_ifc4x1 IfcOpenShell::parse_schema_ifc4x3_add2
-  TKernel Qt6::Core)
+  TKernel Qt6::Core Qt6::Gui Qt6::Widgets Qt6::GuiPrivate)
 if(MSVC)
   target_compile_options(_obimcore PRIVATE /utf-8)
 endif()
 if(WIN32)
   # O Boost aparece nas dependências só pelo nome (boost_*.lib): o MSVC precisa saber onde o conda guarda as bibliotecas.
   target_link_directories(_obimcore PRIVATE "${CONDA}/Library/lib")
-  target_link_libraries(_obimcore PRIVATE psapi)
+  target_link_libraries(_obimcore PRIVATE psapi winmm)  # winmm: timeBeginPeriod (relógio de 1 ms para a thread de desenho)
 elseif(UNIX AND NOT APPLE)
   # As bibliotecas dos esquemas se registram ao carregar; sem isto o ligador as descarta.
   target_link_options(_obimcore PRIVATE -Wl,--no-as-needed)

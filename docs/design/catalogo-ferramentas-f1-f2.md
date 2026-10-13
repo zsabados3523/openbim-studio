@@ -132,6 +132,18 @@ Siglas de comparação: **Rv** = como o Revit faz; **Ac** = como o ArchiCAD faz.
 - **Entra em:** F1-S02.
 - **Comparação e proposta:** Rv resolve com 3 gestos fixos; Ac usa modos e teclas. **Proposta:** oferecer os dois como "Modo A" e "Modo B" (nomes neutros, sem marca). **Recomendação:** modo A como padrão, por ser mais simples. Teclas do modo B no pan: não usamos a barra de espaço (ela fica livre para virar porta). **A confirmar com teste do PO:** orbitar com e sem seleção, para conferir a sensação.
 
+#### V1b. Voar (caminhar no 3D) (F1-S02; pedido do PO, entrevista S09)
+- **Nome nosso:** Voar.
+- **O que faz:** move a câmera como quem anda dentro do modelo, para conferir uma ligação entre elementos ou um detalhe visto de perto, sem mexer no modelo.
+- **Como se usa:**
+  1. Ativar pelo botão "Voar" do grupo Ver (ou pela tecla configurável).
+  2. Segurar o **botão direito** e mover o mouse gira o olhar; as teclas **W, A, S, D** andam para frente, esquerda, trás e direita; Q e E sobem e descem (a confirmar).
+  3. A roda do mouse muda a velocidade. Esc ou soltar o botão direito e clicar no botão sai do modo.
+- **Na tela:** cursor de olhar, indicador da velocidade na barra de estado; sem barra de opções.
+- **Altera o modelo:** NÃO. Só a câmera.
+- **Entra em:** F1-S02 (junto da navegação 3D), com a câmera já no motor de desenho (T09).
+- **Comparação e proposta:** pedido do PO, que usa esse gesto no Revit para ver conexões e o visual 3D de um elemento. **Proposta:** adotar exatamente esse gesto. **Recomendação:** adotar.
+
 #### V2. Cubo de vistas (F1-S02)
 - **Nome nosso:** Cubo de vistas (a ficha sugere "cubo de orientação"; o nome final fica para o PO).
 - **O que faz:** mostra para onde o modelo aponta e salta para vistas prontas (frente, topo, canto).

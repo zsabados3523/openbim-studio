@@ -1,17 +1,15 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo da viewport C++ e do relógio (S04-T06; LOTE_OPUS_9 §2.3/§4; LOTE_OPUS_11 achado 4). Cada caso gráfico roda em SUBPROCESSO
-sob `xvfb-run` (nunca na tela real; Windows só no CI ou com OBIM_S04_TELA_VIRTUAL=1): queda vira falha clara. GUARDA: pula (mensagem em
-destaque) enquanto `obimcore.Cena` ou seus métodos não existirem (T07/T08); falha quando OBIM_S04_OBRIGATORIO=1 **e**
-OBIM_S04_VIEWPORT_OBRIGATORIO=1 (o líder liga a segunda quando a T08 entrar). API ESPERADA (o Opus confere):
- obimcore.agora() -> ms, MESMO relógio de relogio() (steady_clock) · obimcore.Cena(gl: bool) (True OpenGL, False D3D11)
- Cena.viewport_ptr() -> int  QWidget contêiner (shiboken6.wrapInstance(ptr, QWidget)), posto num layout Python
- Cena.iniciar()/parar()/viva() (a thread é do C++; parar() espera) · Cena.adicionar_lote(LoteMalha do carregador.py) -> int (sequência
- crescente; cópia compacta no C++) · Cena.limpar() · Cena.relogio() -> [(tempo_ms, sequencia)] dos quadros APRESENTADOS retidos (buffer
- circular >= 2000, não zera) · Cena.capturar() -> (largura, altura, bytes RGBA8888, de cima para baixo) · Cena.camera() ->
- dict(alvo, distancia, azimute, elevacao) · Cena.definir_camera(alvo=, distancia=, azimute=, elevacao=) (S03: Z para cima, graus,
- posição = alvo + distancia*(cos e cos a, cos e sin a, sin e)) · Cena.estatisticas() -> dict(lotes, triangulos, vertices,
- triangulos_na_placa, contextos) (contextos = QRhi criadas) · Cena.perder_contexto() (gancho de teste: simula FrameOpDeviceLost; a thread
- recria a QRhi e reenvia a cópia). CONVENÇÕES: fundo (30,30,40) como na S03; faces CCW; azimute -90: +X à direita."""
+"""Oráculo da viewport C++ e do relógio (S04-T06; LOTE_OPUS_9 §2.3/§4; LOTE_OPUS_11/12). Cada caso gráfico roda em SUBPROCESSO sob
+`xvfb-run` (nunca na tela real; Windows só no CI ou com OBIM_S04_TELA_VIRTUAL=1). GUARDA: pula enquanto `obimcore.Cena` ou seus métodos
+não existirem (T07/T08); falha com OBIM_S04_OBRIGATORIO=1 **e** OBIM_S04_VIEWPORT_OBRIGATORIO=1. API ESPERADA (o Opus confere):
+ obimcore.agora() -> ms (mesmo relógio de relogio(): steady_clock) · obimcore.Cena(gl: bool) (True OpenGL, False D3D11) · viewport_ptr()
+ -> int (QWidget contêiner; shiboken6.wrapInstance) · iniciar()/parar()/viva() · adicionar_lote(LoteMalha) -> int (sequência crescente)
+ · limpar() · relogio() -> [(tempo_ms, sequencia)] dos quadros APRESENTADOS (buffer >= 2000) · capturar() -> (larg, alt, RGBA8888 de cima
+ para baixo) · camera() -> dict(alvo, distancia, azimute, elevacao) · definir_camera(...) (S03: Z para cima, graus, posição = alvo +
+ distancia*(cos e cos a, cos e sin a, sin e)) · estatisticas() -> dict(lotes, triangulos, vertices, triangulos_na_placa, contextos) ·
+ perder_contexto() (simula FrameOpDeviceLost). CONVENÇÕES: fundo (30,30,40) como na S03; faces CCW; azimute -90: +X à direita."""
+import faulthandler
+import importlib
 import importlib.util
 import json
 import os
@@ -55,6 +53,7 @@ def caso(nome, *args, limite=400):
     win = sys.platform == "win32"
     env.update(QT_QPA_PLATFORM="windows", RHI="d3d11") if win else env.update(QT_QPA_PLATFORM="xcb", LIBGL_ALWAYS_SOFTWARE="1")
     pre = [] if win else ["xvfb-run", "-a", "-s", "-screen 0 1280x800x24"]
+    env["OBIM_LIMITE"] = str(limite)  # o subprocesso despeja a pilha das threads 20 s antes do tempo
     p = subprocess.run([*pre, sys.executable, str(ESTE), nome, *map(str, args)], env=env, capture_output=True, text=True, timeout=limite)
     linhas = [x for x in p.stdout.splitlines() if x.startswith("RESULTADO ")]
     assert p.returncode == 0 and linhas, f"o caso {nome} CAIU, travou ou não devolveu resultado (código {p.returncode}):\n{p.stdout[-1500:]}\n{p.stderr[-2500:]}"
@@ -111,9 +110,9 @@ def test_relogio_crescente_e_casa_sequencia_com_quadro(viewport):
         q = next((x for x in fr if x[1] >= s), None)
         assert q and t < q[0] <= t + 500, f"sequência {s}: pedido em {t}, primeiro quadro com ela {q}"
 
-def test_intervalo_maximo_com_o_bloqueio_preso(viewport, record_property):  # caso do T05, critério do lote 11, sensibilidade (c)
+def test_intervalo_maximo_com_o_bloqueio_preso(viewport):  # caso do T05, critério do lote 11, sensibilidade (c)
     r = caso("intervalo", limite=900)
-    record_property("rodadas", json.dumps(r["fases"]))  # todas as rodadas ficam no relatório
+    print("RODADAS", json.dumps({"fases": r["fases"], "hb": r["hb"]}))  # por rodada e fase: max, p99, lentos (>33 ms); hb = batimento da thread da janela
     for k in "CD":  # controle: o bloqueio ficou preso mesmo (a thread da janela parou >= 500 ms; só então a medida vale)
         assert min(r["hb"][k]) >= 500, f"controle falhou na fase {k}: a thread da janela só parou {r['hb'][k]} ms"
     assert not (erros := veredito(r["fases"])), f"{erros}\nrodadas: {r['fases']}"
@@ -130,6 +129,7 @@ def test_destruir_com_a_thread_rodando_sem_parar(viewport, modo):  # achado 3 e 
 def test_perda_de_contexto_volta_com_os_mesmos_triangulos_e_a_mesma_camera(viewport):  # lote 8 §2.3 item 5; S03 p17
     r = caso("contexto", limite=600)
     assert r["antes"]["triangulos_na_placa"] == r["antes"]["triangulos"] == 7200, r
+    print("DIFS", json.dumps({"dif_imagem": [d["dif_imagem"] for d in r["depois"]], "dif_controle": r["dif_controle"], "dif_volta": r["dif_volta"]}))
     for i, d in enumerate(r["depois"]):
         assert d["contextos"] >= r["antes"]["contextos"] + i + 1, f"perda {i}: a QRhi não foi recriada ({d})"
         assert d["triangulos"] == d["triangulos_na_placa"] == 7200, f"perda {i}: voltou com {d} (eram 7200)"
@@ -191,12 +191,14 @@ def esperar(cond, ms=8000):  # espera o quanto precisar sem travar a janela de t
     while not cond() and (time.perf_counter() - t) * 1000 < ms:
         yield 50
     return cond()
+def agora():  # importa o obimcore só na hora da chamada (a ordem de importação é do __main__)
+    return __import__("obimcore").agora()
 def retoma(c, n=5):
     t0 = agora()
     return (yield from esperar(lambda: c.viva() and len(quadros(c, t0)) >= n, 4000))
 def segurar(s):  # chamada C que NÃO solta o bloqueio (PyDLL), como a de 0,75 s do T05
     import ctypes
-    (ctypes.PyDLL("kernel32").Sleep(int(s * 1000)) if sys.platform == "win32" else ctypes.PyDLL(None).usleep(int(s * 1e6)))
+    ctypes.PyDLL("kernel32").Sleep(int(s * 1000)) if sys.platform == "win32" else ctypes.PyDLL(None).usleep(int(s * 1e6))
 
 def maps(res):  # R1-e: núcleos que o módulo vê e núcleos que o SO mapeou (Linux)
     import re
@@ -209,9 +211,7 @@ def maps(res):  # R1-e: núcleos que o módulo vê e núcleos que o SO mapeou (L
     res["real"] = agrupar({ln.split(None, 5)[5] for ln in Path("/proc/self/maps").read_text().splitlines() if len(ln.split(None, 5)) == 6}) \
         if sys.platform.startswith("linux") else None  # Windows: só a lista do módulo
 
-def c_imagem(res, ordem="obimcore"):  # `ordem`: módulos importados antes, na ordem dada (R1-e nas duas ordens)
-    import importlib
-    [importlib.import_module(n) for n in ordem.split(",")]
+def c_imagem(res, ordem=""):  # `ordem`: já importada pelo __main__ (R1-e nas duas ordens)
     c, w, cont = novo()
     res["viva"] = yield from esperar(lambda: c.viva() and len(quadros(c)) > 5 and c.estatisticas()["triangulos_na_placa"] == 7200)
     maps(res)
@@ -328,9 +328,12 @@ def c_destruir(res, modo):
         if modo == "janela":  # destrói a janela com a thread rodando e SEM parar()
             w.close()
             shiboken6.delete(w) if i % 2 else w.deleteLater()
-        elif modo == "conteiner":  # só o contêiner some; a janela-pai fica
-            cont.setParent(None)  # PySide6 puro: delete() de filho que ainda está no layout derruba o processo ao destruir a janela-pai
-            shiboken6.delete(cont)
+        elif modo == "conteiner":  # só o contêiner some; a janela-pai fica. Pares: deleteLater() ainda no layout; ímpares: soltar e apagar
+            if i % 2:
+                cont.setParent(None)  # PySide6 puro: delete() de filho que ainda está no layout derruba o processo ao destruir a janela-pai
+                shiboken6.delete(cont)
+            else:
+                cont.deleteLater()
             yield 200
             c.parar() if i % 2 else None
             w.close()
@@ -339,11 +342,7 @@ def c_destruir(res, modo):
         yield 250
     c, w, cont = novo(30)
     res["final_ok"] = yield from retoma(c, 10)
-    if modo == "sair":
-        VIVAS.append((c, w, cont))
-    else:
-        c.parar()
-        w.close()
+    VIVAS.append((c, w, cont)) if modo == "sair" else (c.parar(), w.close())
 
 def c_contexto(res):  # `lote()` não fica em variável: o reenvio sai só da cópia compacta do C++
     c, w, _ = novo(0, CAM2)
@@ -360,12 +359,10 @@ def c_contexto(res):  # `lote()` não fica em variável: o reenvio sai só da c�
         s, dt = c.estatisticas(), time.perf_counter() - t0
         yield 500
         res["depois"].append(dict(s, recuperou_s=dt, camera=list(_cam(c)), dif_imagem=dif()))
-    c.definir_camera(**CAM)
-    yield 600
-    res["dif_controle"] = dif()
-    c.definir_camera(**CAM2)
-    yield 600
-    res["dif_volta"] = dif()
+    for k, cam in (("dif_controle", CAM), ("dif_volta", CAM2)):
+        c.definir_camera(**cam)
+        yield 600
+        res[k] = dif()
     c.adicionar_lote(um(0))
     yield from esperar(lambda: c.estatisticas()["triangulos_na_placa"] == 7212)
     res["novo_lote"] = c.estatisticas()["triangulos"]
@@ -378,6 +375,7 @@ def _cam(c):
 def rodar(corpo, limite=500):
     from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QApplication
+    faulthandler.dump_traceback_later(int(os.environ.get("OBIM_LIMITE", limite)) - 20, exit=True)  # diagnóstico: pilha de todas as threads
     app, res = QApplication(sys.argv[:1]), {}
     app.setQuitOnLastWindowClosed(False)
     fim = lambda r: (print("RESULTADO " + json.dumps(r, ensure_ascii=False), flush=True), app.exit(0))  # noqa: E731
@@ -396,7 +394,7 @@ def rodar(corpo, limite=500):
 
 if __name__ == "__main__":
     sys.path.insert(0, str(RAIZ / "prototypes"))
-    import ifcopenshell  # noqa: F401  (antes do obimcore)
-    from obimcore import agora  # noqa: F401  (usado pelos casos)
     nome, *resto = sys.argv[1:]
+    assert not {"obimcore", "PySide6.QtCore"} & sys.modules.keys(), "o oráculo importou Qt ou obimcore antes da ordem pedida"
+    [importlib.import_module(m) for m in (resto[0] if nome == "imagem" and resto else "ifcopenshell,obimcore").split(",")]
     rodar(lambda r: globals()["c_" + nome](r, *resto))

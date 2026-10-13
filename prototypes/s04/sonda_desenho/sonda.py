@@ -4,6 +4,7 @@ Mede o MAIOR intervalo entre quadros apresentados (meta < 50 ms) parado, com o l
 com a chamada C de 0,75 s (em thread e na thread principal) e depois de 20 ciclos de redimensionar/esconder/mostrar e
 20 aberturas e fechamentos. Nunca roda na tela real: use xvfb-run (Linux) ou o CI (Windows).
 Uso: python sonda.py <pasta-do-modulo> <saida.json>   (RHI=gl|d3d11 escolhe o desenho; padrão: d3d11 no Windows, gl no resto)"""
+import faulthandler
 import json
 import os
 import sys
@@ -162,5 +163,6 @@ def fim():
     app.exit(0 if bom else 1)
 
 
+faulthandler.dump_traceback_later(240, exit=True)  # diagnóstico: pilha de todas as threads se travar
 QTimer.singleShot(0, lambda: passo(fases()))
 sys.exit(app.exec())

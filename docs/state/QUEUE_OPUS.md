@@ -34,3 +34,4 @@ Lote 7 (a abrir): revisão do oráculo T08-0, de T08-A/B1/B2 e da T26 (oráculo 
 
 ## Lote 9 (a preparar): especificação da S04 (ponte Python↔C++, híbrido vs C++ puro; TA + T3)
 Itens: especificar os dois fluxos (A híbrido e B C++ puro), o corpus, o oráculo das metas de v2/03 (compartilhar o modelo sem cópia, 200 ms p95 por parede, GIL, 1.000 paredes em 20 s), ADR-001 e ADR-004 (threads); dividir em cartões ≤400 linhas. Incluir os pontos do lote 8 §2.3 (iterador por peça, orçamento de peças lentas) e a seleção por triângulo. Aguarda o PO.
+- 2026-10-12 | Conferência curta do lote 10 (PR 55: T02b + T04c, linux e windows verdes) + revisão T05 e T16 | Espera a janela de 5 h renovar (79% em uso, regra: abaixo de 60%; renova 02:30Z de 13/10). Semanal 41% (59% restante, ok).

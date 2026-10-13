@@ -2,6 +2,7 @@
 
 > Substitui `implementation_plan.md` quando aprovado pelo PO. O original permanece como histórico. Itens **[verificar F0]** são hipóteses que só um teste prático responde; **[verificado em 2026-10-10]** remete a `07_verificacoes_web.md`.
 > **Revisão 2 (decisões do PO):** corte da 1.0 aprovado; AGPL v3 confirmada; plano Claude Pro; Windows+Linux testados pelo PO, macOS "melhor esforço" até pós-1.0; **vistas, pranchas, carimbos, viewports e revisões em arquivo lateral `.obim` ao lado de um IFC limpo** (§6); corpus do PO entra depois da F0.
+> **Revisão 3 (decisões do PO de 13/10/2026; ver `../docs/state/PO.md` e `../docs/design/mudancas-de-escopo-2026-10-13.md`):** 14 mudanças de escopo aplicadas numa única revisão: detalhes 2D e nuvem de revisão na 1.0; texto simples, importar padrões e referências quebradas (versão mínima) na F3; Piso unificado, forro e rodapé na F2; fundações candidatas da F4; voar no 3D, atalhos de duas letras, tags por atributo, "Por que não vejo isto?" e folha a partir de modelo de folha; análises fora do núcleo. **Os números de prazo (§14) não foram recalculados**: a faixa de 21 a 42 meses será refeita depois da medição da F0 (portão S10).
 > Correção de item menor: o link do plano original para `claude_code_setup.md` apontava para `~/.gemini/...`; nesta v2 todos os links são relativos à pasta do projeto (ex.: `../claude_code_setup.md`, superado por `04_processo_agentes_v2.md`).
 
 ## 1. Visão
@@ -105,8 +106,8 @@ flowchart TD
 | Vista (planta, corte, fachada, situação, cobertura) | `Casa.obim` | `views/<id>.json`: tipo, plano de corte/câmera, faixa de vista, escala, template, sobreposições por elemento (GlobalId) |
 | Template de vista e gráfico por categoria | `Casa.obim` | `styles/*.json` (espessuras, hachuras por material, cortado/vista) |
 | Prancha, carimbo, viewports | `Casa.obim` | `sheets/<id>.json` (formato, viewports com posição/escala/vista), `titleblocks/*.svg` + campos |
-| Revisões | `Casa.obim` | `revisions.json` (número, data, descrição, pranchas afetadas) |
-| Cotas, textos, tags, símbolos 2D | `Casa.obim` | dentro da vista; âncoras por GlobalId + referência geométrica (ver §6.3) |
+| Revisões | `Casa.obim` | `revisions.json` (número, data, descrição, pranchas afetadas). **Na 1.0 só a nuvem de revisão** (na vista) e o campo livre "revisão" do carimbo; o controle completo (letra, data, tabela) fica para depois da 1.0 |
+| Cotas, textos, tags, símbolos 2D, linhas e regiões de detalhe, nuvens de revisão | `Casa.obim` | dentro da vista; âncoras por GlobalId + referência geométrica (ver §6.3) |
 | Logos, fontes de carimbo | `Casa.obim` | `assets/` |
 | Histórico/oplog, autosave | pasta local do usuário (`…/OpenBIMStudio/projetos/<LadoId>/`) | Não viaja com o projeto; apagar não perde nada além do histórico |
 | Cache de geometria e de desenhos | pasta local do usuário | Descartável |
@@ -125,7 +126,7 @@ flowchart TD
 - Nosso programa **nunca muda GlobalId** de elemento existente (ifcopenshell preserva). Dividir/juntar paredes gera novos GlobalIds e o comando atualiza as referências na mesma transação.
 - Cotas e tags guardam: GlobalId do elemento + **âncora geométrica** (ex.: "face de acabamento externa da camada 1", "eixo") + última posição conhecida em coordenadas da vista. Se a âncora não puder ser resolvida, a cota mantém a posição e fica marcada.
 - **Quando GlobalIds somem ou mudam** (IFC editado em outro programa; o Revit, por exemplo, pode gerar GlobalIds novos ao reimportar, relato não oficial em `07` §2):
-  1. Ao abrir, o programa resolve todas as referências e mostra um **painel "Referências quebradas"** com contagem por vista/prancha.
+  1. Ao abrir, o programa resolve todas as referências e mostra um **painel "Referências quebradas"** com contagem por vista/prancha (versão mínima, só lista e contagem, na F3; religar na F5).
   2. Oferece **reassociação assistida**: candidato com mesma classe IFC + Name/Tag + caixa envolvente próxima (tolerância configurável); o usuário confirma em lote ("aceitar todas as sugestões com confiança alta").
   3. O que não for reassociado fica **órfão visível** (cota cinza tracejada), nunca apagado em silêncio.
 
@@ -175,10 +176,10 @@ Saída: decisão go/no-go do stack, ADRs, CI Windows+Linux obrigatório (macOS m
 | ID | Fatia | Aceite verificável pelo PO | Tam. |
 |---|---|---|---|
 | F1-S01 | Abrir IFC 2x3/4/4.3 com progresso | 95% do corpus público abre; quando o PO entregar seus projetos, eles abrem e "parecem certos" (lado a lado com captura do Revit/ArchiCAD) | M |
-| F1-S02 | Navegação 3D (presets Revit/ArchiCAD), ViewCube, zoom extents | Roteiro de 10 passos; FPS exibido na barra de status | M |
-| F1-S03 | Árvore espacial e filtro por classe | Clicar na árvore seleciona no 3D e vice-versa | M |
+| F1-S02 | Navegação 3D (presets Revit/ArchiCAD), ViewCube, zoom extents, **voar** (botão direito do mouse mais W, A, S, D), **atalhos configuráveis** (padrão de fábrica de duas letras; tela de atalhos em Preferências) | Roteiro de 10 passos, incluindo voar pelo modelo; FPS exibido na barra de status; as teclas de navegação trocam na tela de atalhos | M |
+| F1-S03 | Árvore espacial e filtro por classe; navegador do projeto **organizável pelo usuário** (pastas livres, com agrupamentos prontos) | Clicar na árvore seleciona no 3D e vice-versa; criar uma pasta e arrastar itens para ela | M |
 | F1-S04 | Propriedades (atributos, psets, qtos, material, tipo) | Mesmos valores que BIMvision/Bonsai em 10 elementos sorteados | M |
-| F1-S05 | Visibilidade: ocultar/isolar/transparência/cor por propriedade | Roteiro | P |
+| F1-S05 | Visibilidade: ocultar/isolar/transparência/cor por propriedade; **"Por que não vejo isto?"** (versão mínima: explica a regra de visibilidade que esconde um elemento) | Roteiro; escolher um elemento escondido e ver a regra que o esconde | P |
 | F1-S06 | Planos e caixa de corte | Roteiro | M |
 | F1-S07 | Medição com snaps | Medidas batem com cotas conhecidas do corpus (±1 mm); projetos do PO quando disponíveis | M |
 | F1-S08 | Salvar sem perdas | Diff semântico zero no corpus (ferramenta: ifcdiff/IfcOpenShell) | M |
@@ -192,32 +193,36 @@ Saída: decisão go/no-go do stack, ADRs, CI Windows+Linux obrigatório (macOS m
 | F2-S02 | Novo projeto a partir do template BR | Gera par `Casa.ifc` (válido) + `Casa.obim` com pavimentos, materiais e vistas padrão | M |
 | F2-S03 | Níveis e eixos | Mudar cota do nível move elementos dependentes | M |
 | F2-S04 | Paredes retas com camadas, linha de localização, joins L/T | 20 casos de join do "caderno de joins" do PO renderizam igual à referência visual | G |
-| F2-S05 | Lajes por contorno, com furos | Roteiro + IFC válido | M |
+| F2-S05 | **Piso** por contorno, com furos: laje e acabamento numa ferramenta só, com tipo de camadas (estrutura e acabamento) | Roteiro; tipo de piso com camadas; IFC válido | M |
 | F2-S06 | Pilares e vigas por perfil | Roteiro | M |
 | F2-S07 | Portas e janelas hospedadas (tipos fixos) com vão | Mover porta move o vão; IFC com IfcOpeningElement/IfcRelFillsElement | G |
+| F2-S07b | **Forro e rodapé** (por contorno e por parede; o rodapé depende de paredes e portas) | Roteiro; rodapé acompanha paredes e abre nos vãos das portas; IFC válido. Os modos "por ambiente" ficam para depois da F3-S01 | M |
 | F2-S08 | Snaps, entrada numérica, cotas temporárias | Desenhar casa de 60 m² sem medir com mouse | G |
-| F2-S09 | Edição: mover, copiar, rotacionar, espelhar, alinhar, aparar | Roteiro | G |
-| F2-S10 | Navegador de tipos e edição de propriedades | Editar o tipo atualiza instâncias | M |
+| F2-S09 | Edição: mover, copiar, rotacionar, espelhar, alinhar, aparar; **conjunto de atalhos de duas letras** (TR, AL, MM, MI, RR, CC, TG, WA), todos configuráveis na tela de atalhos | Roteiro; trocar um atalho na tela de atalhos e usar a nova tecla. Padrão de fábrica só de duas letras; o conjunto de uma letra é opcional, ligado em Preferências | G |
+| F2-S10 | Navegador de tipos e edição de propriedades; navegador do projeto **organizável pelo usuário** (pastas livres, com agrupamentos prontos) | Editar o tipo atualiza instâncias; criar uma pasta e mover vistas para ela | M |
+| F2-S11 | **Desenho 2D**: linha de detalhe (D1), região preenchida (D2) e itens de detalhe 2D de uma biblioteca pequena própria (D3). Chamada e vista de detalhe (D4) ficam para depois da 1.0. *Fatia nova; divisão e tamanho a definir no planejamento da F2 (a biblioteca D3 pode virar fatia própria, ainda antes da F3)* | Roteiro: desenhar linha, região com hachura e montar um detalhe com itens da biblioteca; tudo gravado no `.obim`, sem alterar o `.ifc` | M a G |
 **Portão F2:** casa térrea 60 m² modelada em ≤ 2 h pelo PO; IFC4 passa no validador buildingSMART; exportação IFC2x3 abre no Revit/ArchiCAD de um colega ou no Bonsai.
 
 ### F3. Documentação essencial (v0.3 "Planta Legal", primeiro MVP de uso real)
 | ID | Fatia | Aceite | Tam. |
 |---|---|---|---|
-| F3-S01 | Ambientes (IfcSpace) por fechamento, área, perímetro, pé-direito | Áreas batem com cálculo manual do PO (±0,01 m²) | G |
+| F3-S01 | Ambientes (IfcSpace) por fechamento, área, perímetro, pé-direito; libera os modos "por ambiente" de forro e rodapé | Áreas batem com cálculo manual do PO (±0,01 m²) | G |
 | F3-S02 | Vistas (no `.obim`): planta e corte gerados do modelo (HLR) | Planta/corte comparados lado a lado com prancha de referência do PO (ou referência pública aprovada por ele) | G |
-| F3-S03 | Gráfico por categoria (espessura, hachura por material, cortado/vista) e template BR | PO aprova visualmente em 3 escalas (1:50, 1:100, 1:200) | G |
-| F3-S04 | Cotas associativas lineares e de nível; tags de ambiente | Mover parede atualiza cota | G |
-| F3-S05 | Pranchas A0–A4 com carimbo configurável e viewports (no `.obim`); Exportar pacote `.obimpack` | Prancha montada em ≤ 15 min; pacote enviado e reaberto em outra máquina igual | G |
+| F3-S03 | Gráfico por categoria (espessura, hachura por material, cortado/vista) e template BR; **"Por que não vejo isto?"** em versão completa (regras das vistas) | PO aprova visualmente em 3 escalas (1:50, 1:100, 1:200); o botão explica por que um elemento não aparece numa vista | G |
+| F3-S04 | Cotas associativas lineares e de nível (a cota acompanha o desenho; a "cota que comanda" fica para versão futura); tags de ambiente; **texto simples** (T1). As tags mostram os campos escolhidos do ambiente ou do tipo (**tag por atributo**), sem criar uma família nova para cada atributo | Mover parede atualiza cota; trocar os campos mostrados na tag sem criar tipo novo | G |
+| F3-S04b | **Referências quebradas, versão mínima**: lista e contagem por vista e prancha (religar fica na F5) | Apagar um elemento cotado e ver a cota cinza tracejada na lista, sem sumir | P |
+| F3-S05 | Pranchas A0–A4 criadas **a partir de um modelo de folha** (tamanho, carimbo e campos), com carimbo configurável (incluindo campo livre "revisão") e viewports (no `.obim`); Exportar pacote `.obimpack` | Prancha montada em ≤ 15 min, partindo do modelo de folha; pacote enviado e reaberto em outra máquina igual | G |
+| F3-S05b | **Importar padrões de outro projeto**, escolhendo o que importar (modelos de vista, estilos de linha, estilos de texto, carimbo). Depois da primeira prancha pronta; sem sincronização contínua | Importar só os estilos de texto e o carimbo de um projeto para outro, sem trazer o resto | M |
 | F3-S06 | Exportar PDF vetorial | PDF imprime em A1 com espessuras corretas (régua na impressão) | M |
 | F3-S07 | Quadro de áreas | Tabela na prancha igual ao cálculo manual | M |
 **Portão v0.3:** PO produz planta baixa, 1 corte, situação simples e quadro de áreas de uma casa térrea, em PDF, num dia de trabalho.
 
 ### F4. Modelagem residencial completa (v0.5)
-Coberturas (águas por aresta, recorte de paredes), escadas retas/L/U, guarda-corpos, forros, revestimentos por ambiente, terreno simples (pontos/curvas, platô), componentes de biblioteca (tipos fixos), **tipos paramétricos por script** (esquadrias de correr, portas, com parâmetros largura/altura/peitoril), fases simples (existente/demolir/construir: necessário para reforma no legal brasileiro).
+Coberturas (águas por aresta, recorte de paredes), escadas retas/L/U, guarda-corpos, revestimentos por ambiente (só o que não for piso; o forro e o rodapé vêm da F2), **fundações (sapata, bloco, estaca): candidatas, ainda não fechadas, só o desenho do elemento e sua ligação com os pilares, sem cálculo estrutural**, terreno simples (pontos/curvas, platô), componentes de biblioteca (tipos fixos), **tipos paramétricos por script** (esquadrias de correr, portas, com parâmetros largura/altura/peitoril), fases simples (existente/demolir/construir: necessário para reforma no legal brasileiro). **Tags por categoria** mostram os campos escolhidos do tipo, sem uma família nova por atributo.
 **Portão:** sobrado 2 pavimentos com cobertura 4 águas e escada em U.
 
 ### F5. Documentação executiva e dados (v0.8)
-Fachadas e elevações, cortes múltiplos, planta de cobertura, detalhes (callout + desenho 2D), textos/tags/símbolos, revisões, painel de referências quebradas e reassociação (§6.3), tabelas (esquadrias, materiais, ambientes) em prancha, Qto_* automáticos, classificação (estrutura de códigos configurável; ver `05` sobre NBR 15965), vínculo SINAPI básico (importar planilha baixada pelo usuário, sem redistribuir; associar composição a tipo, quantitativo × preço), exportar DXF com mapa de layers configurável, CSV/XLSX, BCF importar/exportar, IDS (validar modelo contra arquivo IDS).
+Fachadas e elevações, cortes múltiplos, planta de cobertura, **nuvem de revisão** (o controle completo de revisões fica para depois da 1.0), símbolos, **religar referências quebradas** e reassociação assistida (§6.3; lista e contagem já vêm da F3). O desenho 2D de detalhe e o texto simples já foram entregues antes (F2-S11 e F3-S04); a chamada e vista de detalhe (D4) ficam para depois da 1.0. tabelas (esquadrias, materiais, ambientes) em prancha, Qto_* automáticos, classificação (estrutura de códigos configurável; ver `05` sobre NBR 15965), vínculo SINAPI básico (importar planilha baixada pelo usuário, sem redistribuir; associar composição a tipo, quantitativo × preço), exportar DXF com mapa de layers configurável, CSV/XLSX, BCF importar/exportar, IDS (validar modelo contra arquivo IDS).
 **Portão:** projeto legal completo + 5 pranchas executivas do sobrado; DXF abre no LibreCAD/AutoCAD; IFC2x3 exportado abre no Revit/ArchiCAD de um colega.
 
 ### F6. Estabilização e 1.0
@@ -227,7 +232,9 @@ Desempenho, estabilidade (fuzzing do importador), UX com o PO, manual pt-BR, pro
 ## 8. MoSCoW da 1.0
 | Must (1.0 não sai sem) | Should (entra se o calendário permitir) | Could | Won't (2.0+) |
 |---|---|---|---|
-| Visualizador Windows/Linux; paredes/lajes/pilares/vigas/esquadrias/cobertura/escada simples; ambientes e áreas; planta, corte, fachada, cobertura, situação; cotas e tags; pranchas ABNT com carimbo; PDF; DXF; IFC4 válido + exportação IFC2x3; arquivo lateral `.obim` com detecção de divergência; undo/autosave; template BR; quadro de áreas e esquadrias; tipos paramétricos por script | Terreno; fases de reforma; SINAPI básico; BCF; IDS; detalhes 2D; revisões; CSV/XLSX | macOS com instalador testado; DWG (via conversor); glTF; 4.3 gravação; impressão direta; presets de navegação extras; console Python | Editor gráfico de famílias com restrições; colaboração (reserva/sync); tempo real; opções de projeto; clash detection completo; COBie; fachada cortina completa; regras ABNT automáticas (NBR 9050 etc.); renderização; estrutura/MEP |
+| Visualizador Windows/Linux; paredes/lajes/pilares/vigas/esquadrias/cobertura/escada simples; ambientes e áreas; planta, corte, fachada, cobertura, situação; cotas e tags (incluindo texto simples e tag por atributo); pranchas ABNT com carimbo, criadas a partir de modelo de folha; importar padrões de outro projeto; **Piso** (laje e acabamento numa ferramenta), **forro e rodapé**; **detalhes 2D** (linha de detalhe, região preenchida e itens de detalhe 2D de biblioteca pequena própria); **nuvem de revisão**; referências quebradas (lista e contagem); PDF; DXF; IFC4 válido + exportação IFC2x3; arquivo lateral `.obim` com detecção de divergência; undo/autosave; template BR; quadro de áreas e esquadrias; tipos paramétricos por script | Terreno; fases de reforma; SINAPI básico; BCF; IDS; CSV/XLSX; **fundações (sapata, bloco, estaca; só o elemento, candidatas da F4)** | macOS com instalador testado; DWG (via conversor); glTF; 4.3 gravação; impressão direta; presets de navegação extras; console Python | Editor gráfico de famílias com restrições; colaboração (reserva/sync); tempo real; opções de projeto; clash detection completo; COBie; fachada cortina completa; regras ABNT automáticas (NBR 9050 etc.); renderização; estrutura/MEP (cálculo e dimensionamento; o desenho do elemento de fundação é só candidato da F4); **análises fora do núcleo** (solar, iluminação, energia, estrutural: possíveis como plugin opcional); **cota que comanda (cadeado)**; **chamada e vista de detalhe (D4)**; **controle completo de revisões** (letra, data, tabela) |
+
+**Revisão 3:** detalhes 2D (D1, D2, D3) subiram de "Should" para "Must"; revisões foram divididas (só a nuvem é "Must"); fundações entram como "Should" candidato. As análises e a cota que comanda ficam fora do núcleo da 1.0 (D4 e controle completo de revisões ficam para depois da 1.0).
 
 **Design preparado para 2.0:** transações com operações por elemento (reserva), tipos paramétricos com gerador versionado (base do editor de famílias), lateral em JSON por objeto (vistas/pranchas mescláveis).
 
@@ -330,7 +337,11 @@ O problema: testes escritos por um modelo a partir da mesma especificação pode
 | F5 | 16–32 semanas | 18,2–36,5 meses | volume de recursos |
 | F6 (1.0) | 10–20 semanas | **20,6–41,1 meses** | testes com usuários |
 
-**Faixa publicada para a 1.0: ~21 a ~42 meses.** Comparação honesta: soma real do plano anterior 15,7–31,4 meses (publicado como 18–36). **O teto sobe de 36 para ~42 meses (+6)**, e de 31,4 para 41,1 (+~10) se compararmos somas reais; o motivo principal é a cota do Pro, que tira paralelismo e uso de `opus`. Se o PO subir para Max 5x depois da F0, a expectativa é voltar para algo próximo de 17–33 meses (a recalibrar com dados).
+**Faixa publicada para a 1.0: ~21 a ~42 meses (não recalculada na Revisão 3).**
+
+**Nota da Revisão 3 (13/10/2026):** o escopo cresceu (detalhes 2D, forro e rodapé, texto simples, importar padrões, referências quebradas mínimas, nuvem de revisão, fundações candidatas), em parte compensado por escopo que saiu ou ficou neutro (Piso unificado, análises fora do núcleo). As faixas por fase acima e o total **não foram recalculados**: serão **refeitos depois da medição da F0** (portão S10), quando a velocidade real for conhecida. Pela regra de cortar escopo antes de aceitar atraso acima de 30%, se a faixa recalibrada subir, os candidatos naturais a sair são **fundações, importar padrões e os itens de biblioteca de detalhe (D3)**.
+
+ Comparação honesta: soma real do plano anterior 15,7–31,4 meses (publicado como 18–36). **O teto sobe de 36 para ~42 meses (+6)**, e de 31,4 para 41,1 (+~10) se compararmos somas reais; o motivo principal é a cota do Pro, que tira paralelismo e uso de `opus`. Se o PO subir para Max 5x depois da F0, a expectativa é voltar para algo próximo de 17–33 meses (a recalibrar com dados).
 
 Honestidade: não existe base histórica de "agentes de IA construindo BIM". A F0 mede velocidade (fatias/semana, retrabalho) e **custo de cota por fatia** (`04` §6) e recalibra esta tabela. A regra é **cortar escopo antes de aceitar atraso acima de 30%** sobre a faixa recalibrada.
 

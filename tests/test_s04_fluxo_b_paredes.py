@@ -4,7 +4,8 @@ GUARDA: pula enquanto o módulo nanobind `fluxo_b_paredes` não puder ser import
 A "saída igual" é conferida PASSO A PASSO: o mesmo roteiro curto vai ao fluxo A (Python, FluxoA sem janela) e à biblioteca C++, ambos gravam e reabrem o IFC depois de cada passo, e a
 assinatura (classes, nomes, camadas, posição, representações, psets, triângulos/caixa/volume por create_shape, relações, desfazer/refazer) tem de ser igual a 1e-6 m. GlobalIds diferem.
 Suposições do oráculo (o Opus confere): (1) classes de geometria de apoio (ponto, direção, eixo, lista de pontos, curva, perfil) NÃO são contadas, mas qualquer entidade sem referência
-(órfã) reprova; as demais classes, inclusive relações, batem em número com A (1 relação de tipo e 1 de pavimento, compartilhadas; 1 uso de camadas e 1 relação de material por parede);
+(órfã) reprova; as demais classes, inclusive relações, batem em número com A (1 relação de tipo e 1 de pavimento, compartilhadas), EXCETO uso de camadas e relação de material: o
+fluxo A compartilha 1 de cada entre as paredes de um lote (desvio da T11, achado desta tarefa); B tem 1 uso por parede e 1 relação por parede e por tipo, conferido sozinho;
 (2) o gancho `definir_falha(k)` conta TODA mutação do modelo (criar instância, alterar atributo, remover instância) feita pelo comando; (3) tipo e parede são achados pelo nome e pela posição.
 Sentinelas sem o módulo: contrato, `validate` com regras EXPRESS, e o roteiro curto no próprio fluxo A (prova que o oráculo é satisfazível)."""
 import gc
@@ -208,6 +209,7 @@ def test_gancho_vale_so_para_o_proximo_comando_de_edicao(mod, tmp_path):
     b.criar_parede(**PAR)  # faria mais de 40 mutações: com o gancho ainda armado falharia
     b.definir_falha(1)
     b.desfazer()  # desfazer, refazer e gravar não consomem o gancho
+    b.refazer()
     b.gravar(str(tmp_path / "g.ifc"))
     with pytest.raises(RuntimeError):
         b.criar_parede(**PAR)

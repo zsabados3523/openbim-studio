@@ -87,13 +87,26 @@ def rss():
         pass
     if sys.platform.startswith("linux"):
         return int(Path("/proc/self/statm").read_text().split()[1]) * os.sysconf("SC_PAGE_SIZE")
-    import ctypes
-    from ctypes import wintypes
-    class PMC(ctypes.Structure):
-        _fields_ = [("cb", wintypes.DWORD), ("pf", wintypes.DWORD)] + [(f"s{i}", ctypes.c_size_t) for i in range(8)]
-    p = PMC(cb=ctypes.sizeof(PMC))
-    ctypes.windll.psapi.GetProcessMemoryInfo(ctypes.windll.kernel32.GetCurrentProcess(), ctypes.byref(p), p.cb)
-    return int(p.s1)  # WorkingSetSize
+    try:
+        import ctypes
+        from ctypes import wintypes
+        class PMC(ctypes.Structure):  # PROCESS_MEMORY_COUNTERS_EX
+            _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD), ("PeakWorkingSetSize", ctypes.c_size_t),
+                        ("WorkingSetSize", ctypes.c_size_t), ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                        ("QuotaPagedPoolUsage", ctypes.c_size_t), ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                        ("QuotaNonPagedPoolUsage", ctypes.c_size_t), ("PagefileUsage", ctypes.c_size_t),
+                        ("PeakPagefileUsage", ctypes.c_size_t), ("PrivateUsage", ctypes.c_size_t)]
+        k32, ps = ctypes.WinDLL("kernel32", use_last_error=True), ctypes.WinDLL("psapi", use_last_error=True)
+        k32.GetCurrentProcess.restype, k32.GetCurrentProcess.argtypes = wintypes.HANDLE, []
+        ps.GetProcessMemoryInfo.restype = wintypes.BOOL
+        ps.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(PMC), wintypes.DWORD]
+        p = PMC()
+        p.cb = ctypes.sizeof(PMC)
+        if not ps.GetProcessMemoryInfo(k32.GetCurrentProcess(), ctypes.byref(p), p.cb):
+            return 0
+        return int(p.WorkingSetSize)
+    except Exception:
+        return 0  # leitura inválida: quem chama trata como "sem medida"
 
 def um_objeto(cubos, guid):  # vários cubos num ÚNICO objeto (a caixa do objeto cobre os vazios entre eles)
     from viewport_qrhi.carregador import DTYPE_OBJETO
@@ -270,6 +283,8 @@ def c_milhao(res, modo):  # (5) 1 milhão de triângulos: tempo de 50 consultas 
     yield 1500
     r1 = rss()
     res["rss_mb"], res["bytes_por_tri"] = [r0 / 2**20, r1 / 2**20], (r1 - r0) / tri
+    res["rss_valido"] = r0 > 0 and r1 > 0
+    res["bytes_copia_tri"] = c.estatisticas().get("bytes_copia", 0) / tri
     res["chaves"] = sorted(k for k in c.estatisticas() if "byte" in k.lower() or "mem" in k.lower())
     a = captura(c)
     d = a[..., 0].astype(int) - a[..., 1].astype(int)  # vermelho (d > 40) ou verde (d < -40), qualquer sombreado
@@ -363,9 +378,14 @@ def test_um_milhao_de_triangulos_50_consultas_dentro_de_100_ms(sel, modo):
 @pytest.mark.parametrize("modo", ["unico", "ladrilhos"])
 def test_memoria_da_copia_compacta_com_um_milhao_de_triangulos_e_relatada(sel, modo):
     r = caso("milhao", modo, limite=700)  # a mesma cena do teste de tempo (cache da sessão)
-    print(f"MEMORIA_COPIA {modo}: {r['bytes_por_tri']:.1f} bytes por triângulo (RSS {r['rss_mb'][0]:.0f} -> {r['rss_mb'][1]:.0f} MB, "
-          f"{r['tri']} triângulos, cena na placa: {r['placa']}; chaves de memória em estatisticas(): {r['chaves']})")
-    assert r["copia"] and 0 < r["bytes_por_tri"] < 200, f"memória acrescentada pela cena: {r['bytes_por_tri']:.1f} bytes/triângulo (limite folgado: 200)"
+    print(f"MEMORIA_COPIA {modo}: cópia compacta {r['bytes_copia_tri']:.1f} bytes por triângulo (limite principal: 60); RSS "
+          f"{r['bytes_por_tri']:.1f} bytes/triângulo (RSS {r['rss_mb'][0]:.0f} -> {r['rss_mb'][1]:.0f} MB, {r['tri']} triângulos, "
+          f"cena na placa: {r['placa']}; chaves de memória em estatisticas(): {r['chaves']})")
+    assert r["copia"] and 0 < r["bytes_copia_tri"] < 60, f"cópia compacta: {r['bytes_copia_tri']:.1f} bytes/triângulo (esperado ~26, limite 60)"
+    if r["rss_valido"]:
+        assert r["bytes_por_tri"] < 200, f"memória acrescentada pela cena: {r['bytes_por_tri']:.1f} bytes/triângulo (limite folgado: 200)"
+    else:
+        print(f"AVISO: leitura de RSS inválida neste sistema ({r['rss_mb']}); só vale a medida da cópia compacta")
 
 if __name__ == "__main__":
     sys.path.insert(0, str(RAIZ / "prototypes"))

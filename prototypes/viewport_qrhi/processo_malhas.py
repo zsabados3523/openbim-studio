@@ -2,12 +2,15 @@
 """Processo filho que converte o IFC em malhas (S03-T08-B1; LOTE_OPUS_6.md §2.2 D3). Python puro, sem Qt.
 
 O filho abre o arquivo, lista os produtos, converte com `ifcopenshell.geom.iterator` e manda mensagens
-`(tipo, dados)` por um `Pipe` de mão única: `fase`, `inicio`, `lote`, `feitos`, `sem_malha`, `erro`, `fim`.
+`(tipo, dados)` por um `Pipe` de mão única: `fase`, `inicio`, `lote`, `feitos`, `atual`, `sem_malha`, `erro`, `fim`.
 Quem lê e vigia é a thread do `CarregadorMalhas`. O filho nunca importa Qt.
 Ganchos de teste (só valem se a variável existir): OBIM_TESTE_PECA_LENTA="<guid>=<s>[,<guid>=<s>]" e
 OBIM_TESTE_MATAR_FILHO="<guid>" (o filho sai com código 3 nessa peça) e OBIM_TESTE_FALHAR_CAIXA="<guid>" (o filho da
 caixa falha só nessa peça) e OBIM_TESTE_MATAR_NO_FIM=1 (o filho em modo isolado sai com código 3 depois do último
 `lote` e antes do `fim`).
+Modos: normal (blocos, várias threads), isolado (`isolado`: 1 thread, UM iterador para os ids pedidos) e uma peça por vez
+(`isolado` e `por_peca`: um iterador por peça; antes de cada peça o filho manda `atual` com o id dela, e a peça em conversão
+quando o filho para ou cai é a acusada).
 """
 from __future__ import annotations
 
@@ -178,7 +181,7 @@ def _converter(enviar, params):
 
     feitos = 0
     t = time.perf_counter()
-    if isolado:  # UM iterador para todas as peças pedidas (S04-T16); cada peça é entregue assim que sai
+    if isolado:  # UM iterador para todas as peças pedidas (S04-T16), ou um por peça (`por_peca`); cada peça sai assim que fica pronta
         enviar("fase", "convertendo")
         buffer, t_buf = [], 0.0
 
@@ -196,7 +199,13 @@ def _converter(enviar, params):
             if time.perf_counter() - t_buf >= 0.2:
                 soltar()
 
-        _, sem = _bloco(ifcopenshell, cfg, arq, produtos, params, enviar, lentas, matar, juntar)
+        if params.get("por_peca"):
+            sem = []
+            for p in produtos:
+                enviar("atual", p.id())  # antes de criar o iterador: a conversão da peça começa em initialize()
+                sem.extend(_bloco(ifcopenshell, cfg, arq, [p], params, enviar, lentas, matar, juntar)[1])
+        else:
+            _, sem = _bloco(ifcopenshell, cfg, arq, produtos, params, enviar, lentas, matar, juntar)
         soltar()
         if sem:
             enviar("sem_malha", sem)
@@ -257,9 +266,9 @@ def _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar, entrega
     except Exception as e:
         if entregar and len(porid) > 1:  # não dá para dizer qual peça deu erro: cai, e o pai confirma uma a uma
             os._exit(3)
-        falhou([i for i in porid if i not in achados], f"erro no iterador: {type(e).__name__}: {e}")
+        falhou([i for i in porid if i not in achados], f"o conversor falhou nesta peça: {type(e).__name__}: {e}")
     else:
-        falhou([i for i in porid if i not in achados], "o iterador não devolveu geometria")
+        falhou([i for i in porid if i not in achados], "o conversor não devolveu geometria para esta peça")
     return [] if entregar else [(i, porid[i].GlobalId, *achados[i]) for i in sorted(achados)], sem
 
 
@@ -307,7 +316,7 @@ def _pontos_item(util_p, item, m, saida, t_fim):
 
 
 def _caixa_produto(util_p, prod, escala):
-    """(mínimo, máximo) em metros, no mundo. Pontos da representação; qualquer falha ou estouro: cubo de 0,5 m."""
+    """(mínimo, máximo) em metros, no mundo. Pontos da representação; falha ou estouro ao ler os pontos: cubo de 0,5 m na posição da peça; posição ilegível: a peça falha (vai para `sem_malha`)."""
     # S03-T08-G: posição ilegível = a peça falha (vai para `sem_malha`); nunca uma caixa em posição zero
     m = util_p.get_local_placement(prod.ObjectPlacement) if prod.ObjectPlacement is not None else np.eye(4)
     try:

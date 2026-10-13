@@ -259,7 +259,7 @@ def c_camera(res):  # (4) a seleção acompanha a câmera já aplicada: depois d
     c.parar()
 
 def c_milhao(res, modo):  # (5) 1 milhão de triângulos: tempo de 50 consultas e (6) memória da cópia
-    c, w, _ = novo(0)
+    c, w, _ = novo(0, dict(alvo=(0.0, 0.0, 0.0), distancia=7.0, azimute=-90.0, elevacao=70.0))  # perto: o ladrilho tem de ter pixels de sobra
     yield 1000
     g, res["modo"] = (grade(707) if modo == "unico" else ladrilhos()), modo
     res["tri"] = tri = len(g.indices) // 3
@@ -318,7 +318,7 @@ def test_vao_de_parede_e_dado_pelo_triangulo_nao_pela_caixa(sel):  # precisão d
     assert r["n_vao"] >= 100 and r["n_azul"] >= 100, f"controle: o vão deveria mostrar fundo e o cubo azul de trás: {r}"
     assert "W" * 22 not in r["vao"], f"o vão da parede selecionou a parede (seleção só pela caixa): {r['vao']}"
     assert set(r["vao"]) <= {"None"}, f"pixel de fundo dentro do vão devolveu {r['vao']}"
-    assert sem_erros(r["varredura"]), f"parede -> W, cubo visto pelo vão -> B, fundo -> None: {r['varredura']}"
+    assert sem_erros(r["varredura"], minimo=20), f"parede -> W, cubo visto pelo vão -> B, fundo -> None: {r['varredura']}"
 
 def test_objeto_dividido_em_lotes_nao_e_selecionavel_no_intervalo(sel):  # S03: peça dividida em vários lotes é um objeto só, mas o vão é vazio
     r = caso("dividido")

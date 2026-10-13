@@ -242,7 +242,7 @@ def c_camera(res):  # (4) a seleção acompanha a câmera já aplicada: depois d
     a_ant, res["passos"] = captura(c), {}
     pontos = lambda a: {G(i): (cent(a, k)[1] + 0.5, cent(a, k)[2] + 0.5, cent(a, k)[0]) for i, k in enumerate("vga")}  # noqa: E731
     ant = pontos(a_ant)
-    for nome, f, args in (("orbitar_x", c.orbitar, (120, 0)), ("orbitar_y", c.orbitar, (0, 30)), ("mover", c.mover, (60, -20)), ("aproximar", c.aproximar, (1.5,))):
+    for nome, f, args in (("orbitar_x", c.orbitar, (240, 0)), ("orbitar_y", c.orbitar, (0, 30)), ("mover", c.mover, (60, -20)), ("aproximar", c.aproximar, (1.5,))):
         antes = pos(c)
         f(*args)
         yield from esperar(lambda: pos(c) != antes, 3000)

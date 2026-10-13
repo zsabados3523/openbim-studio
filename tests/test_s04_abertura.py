@@ -16,6 +16,11 @@ CONTRATO PARA O IMPLEMENTADOR (nomes exatos; o oráculo não depende de mais nad
    com as chaves de hoje (caminho, threads, tamanho_bloco, excluir, biblioteca, max_bytes_lote, ids, isolado, desl). Com
    isolado=True o filho cria UM `ifcopenshell.geom.iterator` para todos os ids pedidos (a confirmação da peça acusada é outro filho,
    com ids=[acusada], e só acontece quando o pai vê a espera estourar) e entrega as peças como hoje (`lote`, `sem_malha`, `fim`).
+ * O oráculo conta iteradores trocando o atributo `ifcopenshell.geom.iterator`: o filho tem de chamá-lo como
+   `ifcopenshell.geom.iterator(...)` na hora da chamada (nada de `from ifcopenshell.geom import iterator` no topo).
+ * Custo (b): roda `entrada` neste processo e divide `fim["tempos"]["geometria_s"]` pelo número de ids; a referência é o modo
+   normal (isolado=False) com threads=1 nos mesmos ids; razão = mediana do isolado / mediana do normal (5 rodadas alternadas, 2 modelos).
+ * Caixa substituta = peça cujos vértices são todos laranja (255, 140, 0, 255); o conjunto dessas peças tem de ser igual a `simplificadas`.
  * Gancho novo no filho (S03-T08-G, item 2): OBIM_TESTE_MATAR_NO_FIM=1 faz um filho em modo isolado sair com código 3 depois do
    último `lote` e antes do `fim`. Pai: sem pendentes depois de um filho que cai, segue (não termina em "erro").
  * S03-T08-G item 1: peça cuja posição (ObjectPlacement) não pode ser lida pela caixa vai para `sem_malha` com motivo (nunca caixa

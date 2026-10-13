@@ -266,8 +266,8 @@ class FluxoA:
             m = np.eye(4)
             m[:2, 3] = (g % 50) * 5.0, (g // 50) * 4.0
             api("geometry.edit_object_placement", self.ifc, product=w, matrix=m)
+            api("type.assign_type", self.ifc, related_objects=[w], relating_type=tipo)  # uma parede por chamada: cada uma ganha o seu IfcMaterialLayerSetUsage e o seu IfcRelAssociatesMaterial (T11c); a relação de tipo segue 1 só
             ws.append(w)
-        api("type.assign_type", self.ifc, related_objects=ws, relating_type=tipo)
         api("spatial.assign_container", self.ifc, products=ws, relating_structure=min(pavs, key=lambda s: s.Name or ""))
         u["criados"], u["geometria"] = [w.GlobalId for w in ws], [w.GlobalId for w in ws]
         u["dg"] = n

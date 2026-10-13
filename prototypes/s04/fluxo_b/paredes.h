@@ -44,7 +44,7 @@ class Paredes {
     void definir_falha(int k) { falha_ = k; }
   private:
     struct Passo { bool criado; unsigned id; const ifcopenshell::declaration* decl; Atributos attrs; int idx; Valor antes, depois; };
-    struct Registro { std::vector<Passo> passos; Lista guids, alterados; };
+    struct Registro { std::vector<Passo> passos; Lista guids, alterados, geometria; };
     template <class F> Lista transacao(F&& corpo);
     express::base cru(const char* classe, Atributos attrs);  // sem diário: só o esqueleto do modelo
     express::base criar(const char* classe, Atributos attrs);

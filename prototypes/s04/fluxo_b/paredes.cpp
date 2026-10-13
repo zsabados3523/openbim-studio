@@ -93,7 +93,7 @@ template <class F> Lista Paredes::transacao(F&& corpo) {  // uma transação = u
     falha_ativa_ = 0;
     for (const Lista* l : {&em_curso_.criados, &em_curso_.alterados, &em_curso_.apagados})
         for (auto& g : *l) if (std::find(reg_.guids.begin(), reg_.guids.end(), g) == reg_.guids.end()) reg_.guids.push_back(g);
-    reg_.alterados = em_curso_.alterados, ultimo_ = std::move(em_curso_);
+    reg_.alterados = em_curso_.alterados, reg_.geometria = em_curso_.geometria, ultimo_ = std::move(em_curso_);
     historico_.push_back(std::move(reg_)), refazer_.clear();
     return historico_.back().guids;
 }
@@ -216,7 +216,7 @@ Lista Paredes::voltar(bool desfazer) {
         base e = achar(reg.guids[i]);
         if (e && !antes[i]) ultimo_.criados.push_back(reg.guids[i]);
         if (!e && antes[i]) ultimo_.apagados.push_back(reg.guids[i]);
-        if (e && e.declaration().is("IfcProduct") && ref(e, 6)) ultimo_.geometria.push_back(reg.guids[i]);
+        if (e && e.declaration().is("IfcProduct") && ref(e, 6) && (std::find(reg.geometria.begin(), reg.geometria.end(), reg.guids[i]) != reg.geometria.end() || !antes[i])) ultimo_.geometria.push_back(reg.guids[i]);
     }
     ultimo_.alterados = reg.alterados;
     Lista guids = reg.guids;

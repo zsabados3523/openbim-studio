@@ -37,6 +37,7 @@
 #include <cstring>
 #include <memory>
 #include <mutex>
+#include "selecao.h"
 #include <stdexcept>
 #include <thread>
 #include <tuple>
@@ -66,6 +67,7 @@ class Motor {
   std::atomic<bool> exposta{false}, soltar{false}, perder{false}, parar_{false}, perdida_{false}, terminou_{true};
   std::atomic<int> contextos{0}, tri_placa{0}, superficies_soltas{0}, solturas_atrasadas{0};
   std::atomic<int64_t> fatias_{0};
+  std::atomic<int> larg_{0}, alt_{0};  // tamanho real do backbuffer do último quadro (T10: a seleção usa o mesmo)
   DadosCena cena_;  // fila de lotes, cópia compacta, sequência e caixa (T08); o Python entra direto, com mutex próprio
   explicit Motor(bool gl) : gl_(gl) {}
   ~Motor() { parar(); }
@@ -101,7 +103,7 @@ class Motor {
     std::lock_guard<std::mutex> l(m_);
     const Totais t = cena_.totais();
     nb::dict r;
-    r["lotes"] = t.lotes; r["triangulos"] = t.triangulos; r["vertices"] = t.vertices; r["fatias_enviadas"] = fatias_.load();
+    r["bytes_copia"] = t.bytes; r["lotes"] = t.lotes; r["triangulos"] = t.triangulos; r["vertices"] = t.vertices; r["fatias_enviadas"] = fatias_.load();
     r["triangulos_na_placa"] = tri_placa.load(); r["contextos"] = contextos.load();
     r["superficies_soltas"] = superficies_soltas.load(); r["solturas_atrasadas"] = solturas_atrasadas.load();
     return r;
@@ -246,6 +248,7 @@ class Motor {
       { std::lock_guard<std::mutex> l(m_); pedida = cap_pedida_; }
       const bool com_caixa = cena_.caixa(bmin, bmax);
       const QSize alvo = g.sc->currentPixelSize();  // tamanho real do backbuffer
+      larg_ = alvo.width(); alt_ = alvo.height();
       const Camera c = cam_.aplicar(alvo.height(), double(alvo.width()) / (std::max)(alvo.height(), 1), com_caixa ? bmin : nullptr, com_caixa ? bmax : nullptr);
       if (!pedida) rb.reset();  // `capturar` desistiu: descarta a leitura pendente
       const double az = c.azimute * 3.14159265358979323846 / 180, el = c.elevacao * 3.14159265358979323846 / 180;
@@ -407,6 +410,14 @@ class Cena {  // objeto Python: só guarda o Motor e ponteiros fracos; o Qt é d
   void parar_animacao() { m_->cam_.animar(0); }
   int64_t atualizar(nb::object lote_novo, nb::object guids_remover) { return m_->cena_.atualizar(lote_novo, guids_remover); }
   nb::dict estatisticas() { return m_->estatisticas(); }
+  // T10: thread da janela. Câmera já aplicada + tamanho do último quadro; trabalha sobre cópia imutável dos dados (nenhum mutex do Motor é pedido).
+  nb::object selecionar(double x, double y) {
+    const int w = m_->larg_, h = m_->alt_;
+    if (!std::isfinite(x) || !std::isfinite(y) || w <= 0 || h <= 0 || x < 0 || y < 0 || x >= w || y >= h) throw nb::value_error("selecionar: ponto fora da janela");
+    const Camera c = m_->cam_.ler(); const auto lotes = m_->cena_.lotes(); std::optional<std::string> r;
+    { nb::gil_scoped_release lib; r = obim::selecionar(lotes, raio_do_pixel(c, w, h, x, y)); }
+    return r ? nb::object(nb::str(r->c_str())) : nb::none();
+  }
   void perder_contexto() { m_->perder = true; }  // gancho de teste: simula FrameOpDeviceLost
   std::string info() { return m_->info(); }
  private:
@@ -427,5 +438,5 @@ void registrar_viewport(nb::module_& m) {
       .def("aproximar", &Cena::aproximar, nb::arg("fator")).def("enquadrar", &Cena::enquadrar)
       .def("animar_orbita", &Cena::animar_orbita, nb::arg("graus_por_s")).def("parar_animacao", &Cena::parar_animacao)
       .def("atualizar", &Cena::atualizar, nb::arg("lote_novo").none(), nb::arg("guids_remover"))
-      .def("estatisticas", &Cena::estatisticas).def("perder_contexto", &Cena::perder_contexto).def("info", &Cena::info);
+      .def("selecionar", &Cena::selecionar, nb::arg("x"), nb::arg("y")).def("estatisticas", &Cena::estatisticas).def("perder_contexto", &Cena::perder_contexto).def("info", &Cena::info);
 }

@@ -1,0 +1,18 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Seleção por triângulo (S04-T10; LOTE_OPUS_9 §1 a §6). Raio do pixel a partir da câmera JÁ APLICADA e do tamanho real do backbuffer; caixas por objeto
+// primeiro, triângulos (Möller–Trumbore) só dos candidatos, sobre a cópia compacta da cena. Puro: sem Qt, sem Python, sem mutex (quem chama segura os
+// `shared_ptr<Dados>`, imutáveis depois de publicados). Mesma convenção de projeção do viewport.cpp: perspectiva de 45 graus VERTICAL, Z para cima.
+#pragma once
+#include "camera.h"
+#include "cena.h"
+#include <memory>
+#include <optional>
+#include <string>
+#include <vector>
+namespace obim {
+struct Raio { double o[3], d[3]; };  // origem e direção (unitária)
+// (x, y) em pixels do backbuffer, origem no canto superior esquerdo, y para baixo; larg e alt > 0.
+Raio raio_do_pixel(const Camera& c, int larg, int alt, double x, double y);
+// GlobalId do objeto cujo triângulo o raio acerta primeiro; nullopt se nenhum (ou se o mais perto é geometria sem objeto).
+std::optional<std::string> selecionar(const std::vector<std::shared_ptr<Dados>>& lotes, const Raio& r);
+}  // namespace obim

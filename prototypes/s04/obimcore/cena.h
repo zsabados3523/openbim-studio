@@ -21,7 +21,7 @@ struct Dados {  // imutável depois de publicado (atualizar() troca o ponteiro, 
   double desl[3] = {0, 0, 0}, cmin[3] = {1e30, 1e30, 1e30}, cmax[3] = {-1e30, -1e30, -1e30};  // deslocamento do lote (T09) e caixa dos vértices
 };
 struct Cursor { size_t n = 0; int64_t ger = -1; };  // o que a thread de desenho já tirou da fila (a placa é uma visão da fila)
-struct Totais { size_t lotes = 0, triangulos = 0, vertices = 0; };
+struct Totais { size_t lotes = 0, triangulos = 0, vertices = 0, bytes = 0; };  // bytes: memória da cópia compacta (T10)
 
 class DadosCena {
  public:
@@ -35,6 +35,7 @@ class DadosCena {
   std::shared_ptr<Dados> proximo(Cursor& c);  // próximo lote ainda não visto (nullptr se não há); devolve nullptr se a geração mudou: quem chama zera a placa
   bool caixa(double mn[3], double mx[3]);     // false se a cena está vazia
   Totais totais();
+  std::vector<std::shared_ptr<Dados>> lotes() { std::lock_guard<std::mutex> l(m_); return lotes_; }  // T10: instantâneo imutável para a seleção (mutex só na cópia dos ponteiros)
   nb::dict objetos(int64_t seq);              // tabela de objetos do lote `seq` (T09/T10)
  private:
   std::shared_ptr<Dados> preparar(nb::object lote);  // valida e copia (sem o mutex); não publica

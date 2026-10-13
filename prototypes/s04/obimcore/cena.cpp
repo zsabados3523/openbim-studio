@@ -175,7 +175,8 @@ bool DadosCena::caixa(double mn[3], double mx[3]) {
 
 Totais DadosCena::totais() {
   std::lock_guard<std::mutex> l(m_); Totais t; t.lotes = lotes_.size();
-  for (auto& d : lotes_) { t.triangulos += d->i.size() / 3; t.vertices += d->v.size() / BYTES_VERTICE; }
+  for (auto& d : lotes_) { t.triangulos += d->i.size() / 3; t.vertices += d->v.size() / BYTES_VERTICE;
+    t.bytes += d->v.capacity() + d->i.capacity() * 4 + d->objs.capacity() * sizeof(Objeto); }
   return t;
 }
 

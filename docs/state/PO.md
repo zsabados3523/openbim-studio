@@ -92,3 +92,9 @@ C hospedagem GitHub + espelho Codeberg · D interface híbrida (confirmar na S09
 3. **Fundações (sapata, bloco, estaca) entram na Fase 4 como candidatas** (resumo T3 no catálogo F1/F2). Só o desenho do elemento, sem cálculo estrutural; a confirmar com o PO.
 4. **Telhado e escada continuam na F4** (nada na F2).
 - Pendentes de resposta do PO: como as teclas de uma e de duas letras convivem (pergunta 6 do catálogo F1/F2) e se forro e rodapé ficam na F2 depois da S07 ou só com os ambientes na F3 (pergunta 7).
+
+## 2026-10-13: respostas às 4 perguntas do catálogo (PO: "de acordo com as recomendações")
+1. Atalhos: padrão de fábrica só de duas letras; conjunto de uma letra opcional em Preferências (Medir troca de código; FO=Forro, RD=Rodapé).
+2. Forro e rodapé na F2 depois da F2-S07 (por contorno e por parede); "por ambiente" na F3.
+3. Fundações só como elemento, sem cálculo estrutural (F4, candidatas).
+4. Atualizar `v2/02` numa única revisão com as 14 mudanças de escopo; **não** recalcular 21–42 meses antes da medição da F0.

@@ -76,10 +76,22 @@ def c_orcamento(res):
     g, t0 = grade(707), agora()  # 2*707² = 999 698 triângulos
     res["tri"] = len(g.indices) // 3
     c.adicionar_lote(g)
-    res["ok"] = yield from esperar(lambda: c.estatisticas()["triangulos_na_placa"] == res["tri"], 90000)
-    yield 500
+    t_ant, limite, cheio = t0, agora() + 90000.0, lambda: c.estatisticas()["triangulos_na_placa"] == res["tri"]
+    while not cheio() and agora() < limite:  # sonda a cada 10 ms; t_ant = última sonda ainda SEM o lote completo
+        t_ant = agora()
+        yield 10
+    t_fim = agora()  # primeira sonda com o lote completo na placa
+    res["ok"] = cheio()
+    res["fatias"] = c.estatisticas()["fatias_enviadas"]
+    yield 1500
     ts = [t for t, _ in quadros(c, t0)]
-    res["maior_ms"], res["quadros"] = max([b - a for a, b in zip(ts, ts[1:])] or [1e9]), len(ts)
+    iv = [(a, b, b - a) for a, b in zip(ts, ts[1:])]  # (início, fim, duração ms)
+    env = [d for a, b, d in iv if b <= t_ant]  # intervalos inteiros durante o envio
+    ini = [t for t in ts if t >= t0]
+    env = [(ini[0] - t0) if ini else 1e9] + env  # inclui o intervalo entre a chamada de adicionar_lote e o 1º quadro
+    est = [d for a, b, d in iv if a >= t_fim]  # intervalos inteiros com o lote completo, cena estável
+    res.update(env_n=len(env), env_max=max(env or [1e9]), est_n=len(est), est_max=max(est or [1e9]),
+               est_med=float(np.median(est)) if est else 1e9, envio_ms=t_ant - t0)
     c.parar()
 
 def c_sequencia(res):
@@ -137,10 +149,20 @@ def exige_t08(r):
         "\n!!! aguarda S04-T08: estatisticas() sem 'fatias_enviadas' (orçamento/sequência/tipos NÃO FORAM EXECUTADOS) !!!\n")
 
 def test_orcamento_por_quadro_lote_de_um_milhao_de_triangulos(viewport):
+    """Régua (decisão do líder, S04-T06b): o que o caso prova é que o ENVIO em fatias não congela a thread de desenho.
+    (1) durante o envio (triangulos_na_placa < total; ~200 ms no llvmpipe, no máx. ~12 quadros a 60 Hz, então o piso é de 8 quadros e não 20): >= 8 quadros e nenhum intervalo > 50 ms;
+    (2) com o lote completo e a cena estável: maior intervalo <= 3 x a mediana dos intervalos (regra da razão do lote 11) e nenhum >= 200 ms.
+    Por que não "50 ms com o lote completo": no desenho por software do CI (llvmpipe) desenhar 1 milhão de triângulos subpixel custa
+    ~52 ms por quadro, limite do renderizador e não do envio. A meta absoluta de 50 ms por quadro (v2/03 §2.1/§2.3) vale na máquina do PO,
+    com placa real; o número oficial é medido lá."""
     r = caso("orcamento", limite=300)
     exige_t08(r)
-    assert r["ok"] and r["quadros"] >= 20, r
-    assert r["maior_ms"] <= 50, f"maior intervalo entre quadros {r['maior_ms']:.0f} ms > 50 com o lote de {r['tri']} triângulos"
+    assert r["ok"] and r["fatias"] >= 2, r
+    assert r["env_n"] >= 8, f"poucos quadros durante o envio ({r['env_n']} em {r['envio_ms']:.0f} ms, {r['fatias']} fatias): {r}"
+    assert r["env_max"] <= 50, f"intervalo de {r['env_max']:.0f} ms > 50 durante o envio de {r['tri']} triângulos: {r}"
+    assert r["est_n"] >= 5, r
+    assert r["est_max"] <= 3 * r["est_med"], f"cena estável: maior {r['est_max']:.0f} ms > 3 x mediana {r['est_med']:.0f} ms: {r}"
+    assert r["est_max"] < 200, f"cena estável: intervalo de {r['est_max']:.0f} ms >= 200: {r}"
 
 def test_sequencia_volta_depois_da_perda_e_depois_de_limpar(viewport):
     r = caso("sequencia", limite=300)

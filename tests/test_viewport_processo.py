@@ -9,10 +9,9 @@ Teste lento (P6): OBIM_TESTES_LENTOS=1.
 
 P13 a P18 (cartão T08-0b, LOTE_OPUS_7.md §4 item 5): defeitos achados no lote 7. Cada um é `xfail(strict=True)` até a
 S03-T08-E: quando passar, o xfail estrito vira falha e avisa para tirar a marca. Gancho de teste novo:
-OBIM_TESTE_FALHAR_CAIXA="<guid>" (o filho da caixa falha nessa peça; guarda `requer_caixa_falha`).
-OBIM_FORCAR_GUARDAS=1 liga as guardas de ativação mesmo sem o recurso (para ver o caso falhar de verdade).
+OBIM_TESTE_FALHAR_CAIXA="<guid>" (o filho da caixa falha nessa peça). As guardas `requer_caixa_falha` e `OBIM_FORCAR_GUARDAS`
+saíram na S04-T16 (cartão S03-T08-G): o recurso já está no `main`.
 """
-import importlib.util
 import inspect
 import multiprocessing
 import os
@@ -34,7 +33,7 @@ sys.path.insert(0, str(RAIZ / "prototypes"))
 from test_viewport_adaptador import _ViewportFalso  # noqa: E402
 from test_viewport_carregador import (  # noqa: E402,F401  (modelos e fixtures compartilhados)
     CarregadorMalhas, LoteMalha, ResumoCarga, _carregar, _novo, _percorrer, _por_produto, m600, m3000,
-    _caixa, _gerar_defeito, mab, requer_a, requer_processo, TEM_PROCESSO,
+    _caixa, mab, requer_a, requer_processo, TEM_PROCESSO,
 )
 from test_viewport_responsivo import MAX_MS, P95_MS, _medir, _publicar, app  # noqa: E402,F401
 
@@ -44,13 +43,6 @@ requer_divisao = pytest.mark.skipif(
     CarregadorMalhas is None or "max_bytes_lote" not in inspect.signature(CarregadorMalhas.__init__).parameters,
     reason="aguarda S03-T08-B1 (parâmetro max_bytes_lote)",
 )
-
-
-FORCAR = os.environ.get("OBIM_FORCAR_GUARDAS") == "1"
-_spec = importlib.util.find_spec("viewport_qrhi.processo_malhas")
-requer_caixa_falha = pytest.mark.skipif(
-    not (FORCAR or (_spec is not None and "OBIM_TESTE_FALHAR_CAIXA" in Path(_spec.origin).read_text())),
-    reason="aguarda S03-T08-E (gancho OBIM_TESTE_FALHAR_CAIXA no filho da caixa)")
 
 
 def _aguarda_e(item):
@@ -532,7 +524,6 @@ def test_p16_deslocamento_nao_gravavel_em_todo_lote(modelo, mapeadas1, copias1, 
 
 @requer_a
 @requer_limite
-@requer_caixa_falha
 def test_p18_filho_da_caixa_que_falha(mapeadas1, monkeypatch):
     caminho, [(id_l, guid)] = mapeadas1
     ref_lotes, _, _ = _tempo_carga(caminho)

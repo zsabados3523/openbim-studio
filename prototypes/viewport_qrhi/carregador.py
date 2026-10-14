@@ -28,6 +28,8 @@ MAX_BYTES_LOTE = 8 * 1024 * 1024
 CINZA = (204, 204, 204, 255)
 ORANGE = (255, 140, 0, 255)  # caixa substituta (D4)
 FATIA_S = 0.05
+MOTIVO_SEM_GEOMETRIA = "o conversor não achou geometria nesta peça"
+MOTIVO_CORTE = "esta carga já tinha peças lentas demais; a peça foi mostrada como caixa sem tentar de novo"
 
 
 @dataclass(frozen=True)
@@ -137,13 +139,16 @@ class CarregadorMalhas:
     def __init__(self, caminho, threads=None, tamanho_bloco=1000, fila_max=4,
                  excluir=("IfcFeatureElementSubtraction", "IfcSpace"),
                  biblioteca="hybrid-cgal-simple-opencascade", max_bytes_lote=MAX_BYTES_LOTE, manter_arquivo=False,
-                 limite_peca_s=20.0, limite_abrir_s=600.0):
+                 limite_peca_s=20.0, limite_abrir_s=600.0, max_pecas_condenadas=20, max_espera_s=120.0):
         self.caminho = str(caminho)
         self.biblioteca = str(biblioteca)
         self.max_bytes_lote = int(max_bytes_lote)
         self.manter_arquivo = bool(manter_arquivo)
         self.limite_peca_s = None if limite_peca_s is None else float(limite_peca_s)  # None desliga
         self.limite_abrir_s = None if limite_abrir_s is None else float(limite_abrir_s)
+        # S04-T16: orçamento da carga (peças mostradas como caixa por lentidão ou queda; segundos gastos em esperas)
+        self.max_pecas_condenadas = int(max_pecas_condenadas)
+        self.max_espera_s = float(max_espera_s)
         # T08-D: no máximo 8 fios por padrão (cada fio a mais custa ~70 MB no filho e quase não ganha tempo)
         self.threads = int(threads) if threads else max(1, min(8, (os.cpu_count() or 2) - 1))
         self.tamanho_bloco = int(tamanho_bloco)
@@ -161,8 +166,8 @@ class CarregadorMalhas:
         self._fase = None  # última fase informada pelo filho
         self._produtos = {}  # id_step -> (guid, classe, nome, família), de `inicio`
         self._conv = 0  # mensagens "convertendo" do filho atual (qual bloco está em curso)
-        self._maxfeito = -1  # maior id avisado em `feitos` pelo filho atual
-        self._atual = None  # peça em curso no filho isolado (aviso `atual`)
+        self._feitos = set()  # ids avisados em `feitos` pelo filho atual
+        self._atual = None  # peça em conversão no modo uma peça por vez
 
     # ---- interface pública ----
     @property
@@ -244,7 +249,7 @@ class CarregadorMalhas:
         t0 = time.perf_counter()
         est = {"estado": "erro", "erro": None, "produtos_total": 0, "ids": set(), "tri": 0, "vert": 0,
                "lotes": 0, "sem": [], "t": {"abrir_s": 0.0, "listar_s": 0.0, "geometria_s": 0.0}, "msgs": [],
-               "pico_filho": 0.0, "resolvidos": set(), "simp": [], "desl": None, "reinicios": 0}
+               "pico_filho": 0.0, "resolvidos": set(), "simp": [], "desl": None, "acusadas": 0, "espera": 0.0}
         try:
             self._ler(est)
             est["estado"] = "concluido"
@@ -266,21 +271,28 @@ class CarregadorMalhas:
         self._pronto.set()
 
     def _linhas_resumo(self, simp):
+        cortadas = sum(1 for s in simp if s[4] == MOTIVO_CORTE)
         por_limite = sum(1 for s in simp if "limite" in s[4])
         linhas = []
         if por_limite:
             lim = f"{self.limite_peca_s:g}" if self.limite_peca_s is not None else "o limite"
             linhas.append(f"{por_limite} peça(s) foram mostradas como caixa porque passaram de {lim} s")
-        if len(simp) - por_limite:
-            linhas.append(f"{len(simp) - por_limite} peça(s) foram mostradas como caixa porque o conversor caiu nelas")
+        if len(simp) - por_limite - cortadas:
+            linhas.append(f"{len(simp) - por_limite - cortadas} peça(s) foram mostradas como caixa porque o conversor caiu nelas")
+        if cortadas:
+            linhas.append(f"{cortadas} peça(s) foram mostradas como caixa de uma vez porque esta carga já tinha peças lentas demais")
         return linhas
 
     # ---- leitura e vigia dos filhos (D3 e D4) ----
     def _ler(self, est):
-        """Fase rápida (blocos, várias threads); peça lenta ou queda do filho: modo isolado (1 thread, um iterador por peça,
-        só os pendentes do bloco); a peça em curso (a acusada) vira caixa, e com ela toda peça do arquivo ainda não
-        resolvida com o mesmo item mapeado. Teto: 20 reinícios seguidos sem condenar nenhuma peça."""
-        iso, primeiro, seguidos = set(), True, 0
+        """Fase rápida (blocos, várias threads). Peça lenta ou queda do filho no bloco: se o orçamento da carga estourou, as
+        pendentes viram caixa de uma vez; senão vem o modo isolado (1 thread, UM iterador para as pendentes) e, se ele também
+        parar, o modo uma peça por vez (um iterador por peça; o filho avisa qual está em conversão). A peça em conversão quando
+        esse filho para ou cai é a acusada: ela já estava sozinha no iterador, é a confirmação. Nada supõe a ordem de entrega
+        do iterador. A acusada e toda peça ainda pendente do arquivo com o mesmo item mapeado viram caixa. Orçamento (acusadas
+        confirmadas ou segundos de espera): conferido em toda falha do modo normal e, nos outros modos, só depois da 1ª acusada.
+        Mais de 20 falhas seguidas sem peça nova resolvida: as pendentes viram caixa (erro só se não houver o que cortar)."""
+        iso, modo, primeiro, seguidos, antes = set(), "normal", True, 0, 0
         while True:
             if primeiro:
                 ids, isolado = None, False
@@ -289,26 +301,44 @@ class CarregadorMalhas:
                 if iso:
                     ids, isolado = sorted(iso), True
                 else:
+                    modo = "normal"
                     ids, isolado = [i for i in sorted(self._produtos) if i not in est["resolvidos"]], False
                     if not ids:
                         return
-            falha = self._rodar(est, ids, isolado)
+            falha = self._rodar(est, ids, isolado, isolado and modo == "peca")
             primeiro = False
+            progresso, antes = len(est["resolvidos"]) > antes, len(est["resolvidos"])
             if falha is None:
                 for i in (ids or []):  # rede de segurança da regra de ouro: o filho terminou e não entregou
                     if i not in est["resolvidos"]:
                         g, c, _n, _f = self._produtos[i]
                         est["sem"].append((i, g, c, "o conversor não devolveu a peça"))
                         est["resolvidos"].add(i)
+                seguidos, antes = 0, len(est["resolvidos"])
                 continue
-            seguidos += 1
-            if seguidos > 20:
-                raise RuntimeError("o conversor de geometria precisou reiniciar mais de 20 vezes sem resolver peça")
+            seguidos = 0 if progresso else seguidos + 1
+            est["espera"] += falha["seg"]
             pend = [i for i in falha["bloco"] if i not in est["resolvidos"]]
-            if not isolado:
-                iso = set(pend)  # várias threads: não dá para saber qual peça travou
+            if not pend:  # o filho caiu depois de entregar tudo (S03-T08-G): nada a isolar
                 continue
-            culpada = falha["atual"] if falha["atual"] in pend else min([i for i in pend if i > falha["maxfeito"]] or pend)
+            if seguidos > 20:  # sem progresso: corta o bloco em vez de terminar em erro
+                self._caixas(est, [(i, MOTIVO_CORTE, 0.0) for i in pend])
+                seguidos, antes = 0, len(est["resolvidos"])
+                continue
+            if (not isolado or est["acusadas"] >= 1) and self._estourou(est):  # antes de acusar esta peça
+                self._caixas(est, [(i, MOTIVO_CORTE, 0.0) for i in pend])
+                seguidos, antes = 0, len(est["resolvidos"])
+                continue
+            if not isolado:
+                iso, modo = set(pend), "iso"  # várias threads: não dá para saber qual peça travou
+                continue
+            if modo != "peca":
+                modo = "peca"  # um iterador para várias peças: também não dá para saber; agora uma peça por iterador
+                continue
+            culpada = falha["atual"]
+            if culpada not in pend:  # não dá para dizer qual peça travou (ou ela já foi resolvida): nova rodada
+                continue
+            est["acusadas"] += 1
             fam = self._produtos[culpada][3]
             irmas = [i for i in sorted(self._produtos) if i != culpada and i not in est["resolvidos"]
                      and fam is not None and self._produtos[i][3] == fam]  # o arquivo inteiro, não só o bloco
@@ -317,19 +347,23 @@ class CarregadorMalhas:
                 (i, "mesma peça-base de uma que passou do limite" if falha["motivo"] == "limite"
                  else "mesma peça-base de uma em que o conversor caiu", 0.0) for i in irmas]
             self._caixas(est, lote)
-            seguidos = 0
+            seguidos, antes = 0, len(est["resolvidos"])
 
-    def _rodar(self, est, ids, isolado):
+    def _estourou(self, est):
+        """Orçamento da carga (S04-T16): peças acusadas e confirmadas (cópias não contam) ou segundos de espera acima do máximo."""
+        return est["acusadas"] > self.max_pecas_condenadas or est["espera"] > self.max_espera_s
+
+    def _rodar(self, est, ids, isolado, por_peca=False):
         """Um filho de conversão. Devolve None se terminou (`fim`); senão dict com motivo ("limite" ou "queda"),
-        segundos de espera, produtos do bloco em curso e o maior id avisado."""
+        segundos de espera, produtos do bloco em curso e, no modo uma peça por vez, a peça em conversão ("atual")."""
         try:
             from . import processo_malhas
         except ImportError:  # pragma: no cover
             import processo_malhas
         params = {"caminho": self.caminho, "threads": 1 if isolado else self.threads, "tamanho_bloco": self.tamanho_bloco,
                   "excluir": self.excluir, "biblioteca": self.biblioteca, "max_bytes_lote": self.max_bytes_lote,
-                  "ids": ids, "isolado": isolado, "desl": est["desl"]}
-        self._conv, self._maxfeito, self._fase, self._atual = 0, -1, None, None
+                  "ids": ids, "isolado": isolado, "desl": est["desl"], "por_peca": por_peca}
+        self._conv, self._feitos, self._fase, self._atual = 0, set(), None, None
 
         def limite():
             return self.limite_peca_s if self._fase == "convertendo" else self.limite_abrir_s
@@ -342,7 +376,7 @@ class CarregadorMalhas:
         todos = ids if ids is not None else sorted(self._produtos)
         tb = self.tamanho_bloco if self.tamanho_bloco > 0 and not isolado else max(len(todos), 1)
         r["bloco"] = todos[max(self._conv - 1, 0) * tb:self._conv * tb]
-        r["maxfeito"], r["atual"] = self._maxfeito, self._atual
+        r["atual"] = self._atual
         return r
 
     def _executar(self, est, alvo, params, ao_receber, limite):
@@ -469,10 +503,10 @@ class CarregadorMalhas:
             dados = replace(dados, indice_lote=est["lotes"] - 1, produtos_feitos=len(est["resolvidos"]),
                             produtos_total=est["produtos_total"])
             self._colocar(dados)
-        elif tipo == "atual":
-            self._atual = dados
         elif tipo == "feitos":
-            self._maxfeito = max(self._maxfeito, dados)
+            self._feitos.add(dados)
+        elif tipo == "atual":  # modo uma peça por vez: a peça que o filho vai converter agora
+            self._atual = dados
         elif tipo == "sem_malha":
             est["sem"].extend(dados)
             est["resolvidos"].update(d[0] for d in dados)

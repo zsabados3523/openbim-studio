@@ -2,7 +2,7 @@
 // Ponte Python/C++ (S04-T03; LOTE_OPUS_9 §1.4). Regras de posse e de vida:
 //  1. O Python é o dono do arquivo; o C++ pega emprestado só durante a chamada (o objeto Python fica referenciado até o retorno).
 //  2. O C++ nunca guarda o endereço do arquivo nem ponteiros de entidades entre chamadas.
-//  3. Só a thread do comando chama; as funções curtas mantêm o bloqueio, `malhas` (malha.cpp) o solta na geometria.
+//  3. Só a thread do comando chama; as funções curtas mantêm o bloqueio, `malhas` (ponte_malha.cpp) o solta na geometria.
 // Único arquivo que inclui ifcparse/file.h (custo de compilação alto).
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
@@ -25,12 +25,12 @@
 namespace nb = nanobind;
 
 ifcopenshell::file* emprestar(nb::handle obj);  // definida abaixo
-void registrar_malhas(nb::module_& m);  // malha.cpp
-void registrar_viewport(nb::module_& m);  // viewport.cpp
+void registrar_malhas(nb::module_& m);  // ponte_malha.cpp (a geometria é nucleo/malha.cpp, C++ puro)
+void registrar_viewport(nb::module_& m);  // ponte_viewport.cpp (o motor é nucleo/motor.h, C++ puro)
 
 // Confere o tipo (ifcopenshell.file, e não uma entidade, que também tem file_pointer()), chama file_pointer() e
 // devolve o ponteiro emprestado. Zero ou tipo errado vira erro Python limpo.
-ifcopenshell::file* emprestar(nb::handle obj) {  // fora do namespace anônimo: malha.cpp também empresta
+ifcopenshell::file* emprestar(nb::handle obj) {  // fora do namespace anônimo: ponte_malha.cpp também empresta
     nb::object tipo = nb::module_::import_("ifcopenshell.ifcopenshell_wrapper").attr("file");
     int ok = PyObject_IsInstance(obj.ptr(), tipo.ptr());
     if (ok < 0) throw nb::python_error();

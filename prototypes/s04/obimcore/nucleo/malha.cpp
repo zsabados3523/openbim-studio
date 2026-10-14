@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// `obimcore.malhas(arquivo, guids)` (S04-T04; LOTE_OPUS_9 §1.4 regras 1 a 4 e §1.5 R1-h/R1-i).
-// Malha por elemento no mundo, com as opções da S03 (coordenadas do mundo, sem soldar vértices) e a biblioteca "híbrida".
-// Bloqueio do interpretador: solto durante toda a geometria; nesse trecho nada toca em objeto Python. O arquivo é emprestado
-// (regra 1) e nada dele é guardado depois do retorno (regra 2). Quem chama (a thread do comando) deixa o escritor parado.
-#include <nanobind/nanobind.h>
-#include <nanobind/ndarray.h>
-#include <nanobind/stl/string.h>
-#include <nanobind/stl/vector.h>
+// Malha por elemento no mundo (S04-T04; LOTE_OPUS_9 §1.4 regras 1 a 4 e §1.5 R1-h/R1-i), C++ PURO (T14b): sem Python; a ponte é ponte_malha.cpp.
+// Opções da S03 (coordenadas do mundo, sem soldar vértices) e a biblioteca "híbrida". O arquivo é emprestado (regra 1) e nada dele é guardado
+// depois do retorno (regra 2). Quem chama deixa o escritor parado (regra 3).
+#include "malha.h"
 #include <ifcparse/file.h>
 #include <ifcparse/express.h>
 #include <ifcgeom/iterator.h>
@@ -22,21 +18,12 @@
 #include <string>
 #include <vector>
 
-namespace nb = nanobind;
 using namespace ifcopenshell::geom;
 
-ifcopenshell::file* emprestar(nb::handle obj);  // ponte.cpp
-
+namespace obim {
 namespace {
 
 constexpr const char* BIBLIOTECA = "hybrid-cgal-simple-opencascade";  // a mesma da S03 (carregador.py)
-
-struct Malha {
-    std::vector<double> pos;   // x,y,z por vértice
-    std::vector<int32_t> idx;  // 3 por triângulo
-    std::array<double, 6> caixa{0, 0, 0, 0, 0, 0};
-    std::array<double, 4> cor{0.8, 0.8, 0.8, 1.0};  // sem estilo: cinza neutro
-};
 
 // Uma passada por vez no processo (sem o bloqueio do interpretador, que está solto): com 4 threads em arquivos diferentes a
 // biblioteca de geometria derrubou o processo em ~10% das rodadas (medido); serializada, 0 em 55. Travar só a construção não bastou.
@@ -93,41 +80,15 @@ std::map<std::string, Malha> calcular(ifcopenshell::file* f, const std::vector<s
     return saida;
 }
 
-template <typename T>
-nb::object matriz(std::vector<T>&& v, size_t colunas) {  // o numpy fica dono do vetor movido
-    auto* dono = new std::vector<T>(std::move(v));
-    nb::capsule limpa(dono, [](void* p) noexcept { delete static_cast<std::vector<T>*>(p); });
-    size_t forma[2] = {dono->size() / colunas, colunas};
-    return nb::cast(nb::ndarray<nb::numpy, T, nb::ndim<2>>(dono->data(), 2, forma, limpa));
-}
-
 }  // namespace
 
-void registrar_malhas(nb::module_& m) {
-    m.def("malhas", [](nb::object arquivo, const std::vector<std::string>& guids) {
-        ifcopenshell::file* f = emprestar(arquivo);  // com o bloqueio: toca em objeto Python
-        std::map<std::string, Malha> res;
-        std::string erro;
-        {
-            nb::gil_scoped_release solto;  // daqui até o fim do bloco: nenhum objeto Python
-            try {
-                res = calcular(f, guids);
-            } catch (const std::exception& e) {
-                erro = e.what();
-            } catch (...) {  // p.ex. Standard_Failure do OCCT, que não deriva de std::exception
-                erro = "erro desconhecido na geração da malha";
-            }
-        }
-        if (!erro.empty()) throw nb::value_error(erro.c_str());
-        nb::dict d;
-        for (auto& [g, ml] : res) {
-            nb::dict item;
-            item["posicoes"] = matriz(std::move(ml.pos), 3);
-            item["indices"] = matriz(std::move(ml.idx), 3);
-            item["caixa"] = matriz(std::vector<double>(ml.caixa.begin(), ml.caixa.end()), 6);
-            item["cor"] = matriz(std::vector<double>(ml.cor.begin(), ml.cor.end()), 4);
-            d[g.c_str()] = item;
-        }
-        return d;
-    }, nb::arg("arquivo"), nb::arg("guids"));
+std::map<std::string, Malha> malhas_do_arquivo(ifcopenshell::file* f, const std::vector<std::string>& guids) {
+    try {
+        return calcular(f, guids);
+    } catch (const std::exception& e) {
+        throw std::invalid_argument(e.what());
+    } catch (...) {  // p.ex. Standard_Failure do OCCT, que não deriva de std::exception
+        throw std::invalid_argument("erro desconhecido na geração da malha");
+    }
 }
+}  // namespace obim

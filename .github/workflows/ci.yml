@@ -141,7 +141,7 @@ jobs:
         run: |
           # O oráculo abre a tela virtual sozinho em subprocesso (xvfb-run no Linux; no Windows, WARP). Nada na tela real.
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
-          OBIM_S04_OBRIGATORIO=1 OBIM_S04_VIEWPORT_OBRIGATORIO=1 OBIM_S04_T07B_OBRIGATORIO=1 OBIM_S04_T08_OBRIGATORIO=1 OBIM_S04_T09_OBRIGATORIO=1 OBIM_S04_T10_OBRIGATORIO=1 OBIM_S04_T10B_OBRIGATORIO=1 OBIM_S04_T10C_OBRIGATORIO=1 OBIM_S04_T11_OBRIGATORIO=1 OBIM_S04_T11B_OBRIGATORIO=1 OBIM_S04_T12_OBRIGATORIO=1 OBIM_S04_T16_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_viewport.py tests/test_s04_viewport_b.py tests/test_s04_cena.py tests/test_s04_selecao.py tests/test_s04_selecao_c.py tests/test_s04_profundidade.py tests/test_s04_fluxo_a.py tests/test_s04_metas.py tests/test_s04_abertura.py
+          OBIM_S04_OBRIGATORIO=1 OBIM_S04_VIEWPORT_OBRIGATORIO=1 OBIM_S04_T07B_OBRIGATORIO=1 OBIM_S04_T08_OBRIGATORIO=1 OBIM_S04_T09_OBRIGATORIO=1 OBIM_S04_T10_OBRIGATORIO=1 OBIM_S04_T10B_OBRIGATORIO=1 OBIM_S04_T10C_OBRIGATORIO=1 OBIM_S04_T11_OBRIGATORIO=1 OBIM_S04_T11C_OBRIGATORIO=1 OBIM_S04_T11B_OBRIGATORIO=1 OBIM_S04_T12_OBRIGATORIO=1 OBIM_S04_T16_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_viewport.py tests/test_s04_viewport_b.py tests/test_s04_cena.py tests/test_s04_selecao.py tests/test_s04_selecao_c.py tests/test_s04_profundidade.py tests/test_s04_fluxo_a.py tests/test_s04_metas.py tests/test_s04_abertura.py
       - name: Fluxo B, paredes em C++ (S04-T13; bloqueia o merge)
         shell: bash -el {0}
         timeout-minutes: 20
@@ -149,7 +149,7 @@ jobs:
           # Sem janela: compara o IFC da biblioteca C++ com o do fluxo A (saída igual).
           bash prototypes/s04/fluxo_b/build.sh out/s04
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
-          OBIM_S04_T13_OBRIGATORIO=1 OBIM_S04_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_fluxo_b_paredes.py
+          OBIM_S04_T13_OBRIGATORIO=1 OBIM_S04_T11C_OBRIGATORIO=1 OBIM_S04_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_fluxo_b_paredes.py
       - name: Sonda da thread de desenho (S04-T05; informativo, não bloqueia)
         shell: bash -el {0}
         continue-on-error: true
@@ -198,6 +198,22 @@ jobs:
         shell: bash
         run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Detecta se o empacotamento mudou (decide se o instalador é montado e testado)
+        id: detecta
+        shell: bash
+        env:
+          EVENTO: ${{ github.event_name }}
+          BASE: ${{ github.base_ref }}
+        run: |
+          # push (main) e tag: sempre. Pull request: só se o diff contra a base toca o empacotamento. Na dúvida, true.
+          r=true; motivo="evento $EVENTO"
+          if [ "$EVENTO" = "pull_request" ]; then
+            if git fetch --no-tags --depth=1 origin "$BASE" 2>/dev/null && lista=$(git diff --name-only FETCH_HEAD HEAD); then
+              if echo "$lista" | grep -qE '^(packaging/|app/|environment[^/]*\.yml$|environment\.[^/]*\.lock$|pyproject[^/]*$|\.github/workflows/ci\.yml$|scripts/(prune_packages|license_inventory|collect_package_licenses)\.py$|LICENSES/)'; then motivo="o PR mexe no empacotamento"; else r=false; motivo="o PR não mexe no empacotamento"; fi
+            else motivo="não consegui comparar com a base"; fi
+          fi
+          echo "instalador=$r" >> "$GITHUB_OUTPUT"
+          echo "::notice title=instalador::instalador=$r ($motivo)"
       - name: Cache de pacotes do conda
         id: cache_conda
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -312,7 +328,7 @@ jobs:
           # O oráculo abre a tela virtual sozinho em subprocesso (xvfb-run no Linux; no Windows, WARP). Nada na tela real.
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_S04_TELA_VIRTUAL=1 QSG_RHI_BACKEND=d3d11 QSG_RHI_PREFER_SOFTWARE_RENDERER=1  # WARP, como no passo do cubo
-          OBIM_S04_OBRIGATORIO=1 OBIM_S04_VIEWPORT_OBRIGATORIO=1 OBIM_S04_T07B_OBRIGATORIO=1 OBIM_S04_T08_OBRIGATORIO=1 OBIM_S04_T09_OBRIGATORIO=1 OBIM_S04_T10_OBRIGATORIO=1 OBIM_S04_T10B_OBRIGATORIO=1 OBIM_S04_T10C_OBRIGATORIO=1 OBIM_S04_T11_OBRIGATORIO=1 OBIM_S04_T11B_OBRIGATORIO=1 OBIM_S04_T12_OBRIGATORIO=1 OBIM_S04_T16_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_viewport.py tests/test_s04_viewport_b.py tests/test_s04_cena.py tests/test_s04_selecao.py tests/test_s04_selecao_c.py tests/test_s04_profundidade.py tests/test_s04_fluxo_a.py tests/test_s04_metas.py tests/test_s04_abertura.py
+          OBIM_S04_OBRIGATORIO=1 OBIM_S04_VIEWPORT_OBRIGATORIO=1 OBIM_S04_T07B_OBRIGATORIO=1 OBIM_S04_T08_OBRIGATORIO=1 OBIM_S04_T09_OBRIGATORIO=1 OBIM_S04_T10_OBRIGATORIO=1 OBIM_S04_T10B_OBRIGATORIO=1 OBIM_S04_T10C_OBRIGATORIO=1 OBIM_S04_T11_OBRIGATORIO=1 OBIM_S04_T11C_OBRIGATORIO=1 OBIM_S04_T11B_OBRIGATORIO=1 OBIM_S04_T12_OBRIGATORIO=1 OBIM_S04_T16_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_viewport.py tests/test_s04_viewport_b.py tests/test_s04_cena.py tests/test_s04_selecao.py tests/test_s04_selecao_c.py tests/test_s04_profundidade.py tests/test_s04_fluxo_a.py tests/test_s04_metas.py tests/test_s04_abertura.py
       - name: Fluxo B, paredes em C++ (S04-T13; bloqueia o merge)
         shell: bash -el {0}
         timeout-minutes: 20
@@ -320,7 +336,7 @@ jobs:
           # Sem janela: compara o IFC da biblioteca C++ com o do fluxo A (saída igual).
           bash prototypes/s04/fluxo_b/build.sh out/s04
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
-          OBIM_S04_T13_OBRIGATORIO=1 OBIM_S04_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_fluxo_b_paredes.py
+          OBIM_S04_T13_OBRIGATORIO=1 OBIM_S04_T11C_OBRIGATORIO=1 OBIM_S04_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_fluxo_b_paredes.py
       - name: Sonda da thread de desenho (S04-T05; informativo, não bloqueia)
         shell: bash -el {0}
         continue-on-error: true
@@ -337,6 +353,7 @@ jobs:
           echo "::notice title=sonda da thread de desenho no ${RUNNER_OS}::$(python -c "import json; r=json.load(open('out/s04_sonda/sonda.json')); print('rc=$rc meta_atingida=%s' % r.get('meta_atingida'), {k:v.get('maior_intervalo_ms') for k,v in r['fases'].items() if isinstance(v,dict)})" || echo sem resultado)"
           true
       - name: Instalador Windows (ambiente de runtime e NSIS)
+        if: steps.detecta.outputs.instalador == 'true'
         shell: bash -el {0}
         run: |
           trap 'rc=$?; if [ $rc -ne 0 ]; then msg=$(tail -n 40 "$RUNNER_TEMP/passo.log" | sed ":a;N;\$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g"); echo "::error title=instalador falhou::$msg"; fi' EXIT
@@ -353,6 +370,7 @@ jobs:
           ls -l "$RUNNER_TEMP/inst-out/OpenBIM-Studio-Setup.exe" | tee -a "$GITHUB_STEP_SUMMARY"
           cp "$RUNNER_TEMP/inst-out/OpenBIM-Studio-Setup.exe" "$RUNNER_TEMP/inst-out/licencas-coletadas.txt" out/
       - name: Teste do instalador (instala, abre, desinstala)
+        if: steps.detecta.outputs.instalador == 'true'
         shell: bash
         timeout-minutes: 30
         run: |

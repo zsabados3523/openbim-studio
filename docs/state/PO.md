@@ -107,3 +107,14 @@ PO: "Abra como exceção usar o opus dessa vez porque o limite semanal reinicia 
 
 ## 2026-10-14: CI do Windows mais rápido (PO: "Você tem meu ok")
 O teste do instalador (~10 min por PR) passa a rodar só em push no `main`/tag ou quando o PR mexe em empacotamento/ambiente/CI. Recomendação do líder, aprovada pelo PO. Pendente de sugestão do agente (a decidir pelo PO depois): travar o ambiente do instalador (`packaging/runtime-environment.yml`) pela mesma trava `.lock`, para builds novos do conda-forge não quebrarem o instalador sem aviso (líder recomenda: sim).
+
+## 2026-10-14: respostas à proposta de revisão da F0 (`PROPOSTA_REVISAO_F0.md`)
+1. **D1:** pausar as T3 que faltam na S04 (T14c, T15 em diante) e terminar só o que já está aprovado (PR 83, T12). Vale até as revisões de S01, S02 e S03 e as respostas D1 a D8.
+2. **D2:** sim. Planos antigos movidos para `docs/arquivo/`. O `CLAUDE.md` ainda cita os caminhos da raiz: ajuste só por cartão aprovado pelo PO.
+3. **D3:** 1.0 mínima **incluindo detalhes 2D** (essenciais para o fluxo BIM). DXF e fachadas seguem como candidatos a adiar na sessão de escopo; confirma a decisão de 13/10.
+4. **D4:** sim, IFC real do PO antes de fechar a S04 (só nos testes da máquina do PO).
+5. **D5:** arquitetos de teste = colegas do estágio do PO (entendem de ferramenta). Nomes e momento: a combinar, sem prazo.
+6. **D6:** sim, o PO lê o resumo de 5 linhas da S01.
+7. **D7:** arquivo de entrega fica para o ADR-003 (S05).
+8. **D8:** sim. Toda exceção de portão registra a meta original e o motivo; o portão F0 (S10) é reavaliado com as metas originais.
+9. **D9:** abrir Opus só com semanal >25% restante e janela de 5 h **<70%** (mantido). A exceção de cota de 13/10 está encerrada.

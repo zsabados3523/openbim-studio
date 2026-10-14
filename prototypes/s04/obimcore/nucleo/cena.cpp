@@ -1,37 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Dados da cena (S04-T08). Ver cena.h.
 #include "cena.h"
-#include <nanobind/eval.h>
-#include <nanobind/ndarray.h>
-#include <nanobind/stl/string.h>
-#include <nanobind/stl/vector.h>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <set>
+#include <stdexcept>
 
 namespace obim {
 namespace {
 constexpr size_t BYTES_OBJETO = 66, O_PI = 26, O_NI = 30, O_PV = 34, O_NV = 38, O_MIN = 42, O_MAX = 54;  // DTYPE_OBJETO empacotado (sem alinhamento)
-struct Vista { const unsigned char* p = nullptr; size_t n = 0; };
-
-// Confere dtype exato, 1 dimensão e memória contígua; devolve ponteiro e quantidade de elementos. Só TypeError/ValueError.
-Vista vetor(nb::handle a, nb::handle ref, const char* nome) {
-  if (!nb::hasattr(a, "dtype") || !nb::hasattr(a, "flags") || !nb::hasattr(a, "ctypes"))
-    throw nb::type_error((std::string(nome) + ": esperado um array do numpy").c_str());
-  if (!a.attr("dtype").equal(ref)) throw nb::type_error((std::string(nome) + ": dtype diferente do formato do carregador").c_str());
-  if (nb::cast<int>(a.attr("ndim")) != 1) throw nb::value_error((std::string(nome) + ": esperado vetor de 1 dimensão").c_str());
-  if (!nb::cast<bool>(a.attr("flags").attr("c_contiguous"))) throw nb::value_error((std::string(nome) + ": memória não contígua").c_str());
-  return {reinterpret_cast<const unsigned char*>(nb::cast<uintptr_t>(a.attr("ctypes").attr("data"))), nb::cast<size_t>(a.attr("size"))};
-}
-
-template <class T> nb::object numpy_de(std::vector<T>&& v, size_t cols) {  // cols == 0: vetor de 1 dimensão; senão (n, cols); o numpy fica dono
-  auto* dono = new std::vector<T>(std::move(v));
-  nb::capsule limpa(dono, [](void* p) noexcept { delete static_cast<std::vector<T>*>(p); });
-  size_t forma[2] = {cols ? dono->size() / cols : dono->size(), cols};
-  return nb::cast(nb::ndarray<nb::numpy, T>(dono->data(), cols ? 2 : 1, forma, limpa));
-}
-
 void caixa_de(Dados& d) {  // caixa dos vértices (pura, sem Python)
   for (size_t k = 0; k < d.v.size() / BYTES_VERTICE; ++k) {
     float f[3]; std::memcpy(f, d.v.data() + k * BYTES_VERTICE, 12);
@@ -78,35 +55,12 @@ const Dados* referencia(const std::vector<std::shared_ptr<Dados>>& ls) {  // o p
 }
 }  // namespace
 
-std::shared_ptr<Dados> DadosCena::preparar(nb::object lote) {
-  for (const char* c : {"vertices", "indices"})
-    if (!nb::hasattr(lote, c)) throw nb::type_error("lote sem vertices/indices (esperado LoteMalha)");
-  struct Tipos { nb::object vert, ind, obj; };  // montados UMA vez (achado 10); vazam de propósito (nunca destruídos depois do Python)
-  static const Tipos* t = [] {
-    nb::object dt = nb::module_::import_("numpy").attr("dtype");
-    return new Tipos{dt(nb::eval("[('pos','<f4',(3,)),('normal','<f4',(3,)),('cor','u1',(4,))]")), dt("<u4"),
-                     dt(nb::eval("[('id_step','<i4'),('guid','S22'),('primeiro_indice','<u4'),('n_indices','<u4'),('primeiro_vertice','<u4'),('n_vertices','<u4'),('caixa_min','<f4',(3,)),('caixa_max','<f4',(3,))]"))};
-  }();
-  nb::object va = lote.attr("vertices"), ia = lote.attr("indices");  // referências próprias: os arrays não morrem sem o bloqueio
-  const Vista V = vetor(va, t->vert, "vertices");
-  const Vista I = vetor(ia, t->ind, "indices");
-  Vista O; nb::object oo = nb::hasattr(lote, "objetos") ? nb::object(lote.attr("objetos")) : nb::object();
-  if (oo.is_valid() && !oo.is_none()) O = vetor(oo, t->obj, "objetos");
-  auto d = std::make_shared<Dados>();
-  if (nb::hasattr(lote, "deslocamento")) {  // deslocamento do lote (achado 4); sem o atributo: zeros
-    nb::object de = lote.attr("deslocamento");
-    if (!de.is_none()) {
-      std::vector<double> x;
-      try { x = nb::cast<std::vector<double>>(nb::module_::import_("numpy").attr("asarray")(de, "float64").attr("ravel")().attr("tolist")()); }
-      catch (const nb::python_error&) { throw nb::type_error("deslocamento: esperados 3 números"); }
-      if (x.size() != 3) throw nb::value_error("deslocamento: esperados 3 números");
-      std::copy(x.begin(), x.end(), d->desl);
-    }
-  }
-  if (I.n % 3) throw nb::value_error("indices: o número de índices não é múltiplo de 3");
+std::shared_ptr<Dados> DadosCena::preparar(const LoteBruto& L) {
+  const Vista &V = L.v, &I = L.i, &O = L.o;
+  auto d = std::make_shared<Dados>(); std::copy(L.desl, L.desl + 3, d->desl);
+  if (I.n % 3) throw std::invalid_argument("indices: o número de índices não é múltiplo de 3");
   const char* erro = nullptr;
-  {  // a única cópia; nenhum objeto Python aqui dentro (os arrays estão presos por `va`/`ia`)
-    nb::gil_scoped_release livre;
+  {  // a única cópia (a ponte prende os arrays do numpy até o retorno e chama sem o bloqueio do interpretador)
     d->v.assign(V.p, V.p + V.n * BYTES_VERTICE); d->i.resize(I.n); std::memcpy(d->i.data(), I.p, I.n * 4);
     caixa_de(*d);
     for (uint32_t x : d->i) if (x >= V.n) { erro = "indices: índice maior ou igual ao número de vértices"; break; }
@@ -120,7 +74,7 @@ std::shared_ptr<Dados> DadosCena::preparar(nb::object lote) {
       d->objs.push_back(std::move(o));
     }
   }
-  if (erro) throw nb::value_error(erro);
+  if (erro) throw std::invalid_argument(erro);
   return d;
 }
 
@@ -129,24 +83,20 @@ void DadosCena::recalcular_caixa() {
   for (auto& d : lotes_) for (int a = 0; a < 3; ++a) { cmin_[a] = (std::min)(cmin_[a], d->cmin[a]); cmax_[a] = (std::max)(cmax_[a], d->cmax[a]); }
 }
 
-int64_t DadosCena::adicionar_lote(nb::object lote) {
+int64_t DadosCena::adicionar_lote(const LoteBruto& lote) {
   auto d = preparar(lote);
   std::lock_guard<std::mutex> l(m_);  // só o essencial sob o mutex
-  if (auto* r = referencia(lotes_); r && !d->v.empty() && !std::equal(d->desl, d->desl + 3, r->desl)) throw nb::value_error("deslocamento diferente do primeiro lote da cena");
+  if (auto* r = referencia(lotes_); r && !d->v.empty() && !std::equal(d->desl, d->desl + 3, r->desl)) throw std::invalid_argument("deslocamento diferente do primeiro lote da cena");
   d->seq = ++seq_; lotes_.push_back(d); ++ver_;
   for (int a = 0; a < 3; ++a) { cmin_[a] = (std::min)(cmin_[a], d->cmin[a]); cmax_[a] = (std::max)(cmax_[a], d->cmax[a]); }
   return d->seq;
 }
 
-int64_t DadosCena::atualizar(nb::object lote_novo, nb::object guids) {
-  std::set<std::string> rem;  // tudo é validado ANTES de mudar a cena
-  if (!nb::isinstance<nb::list>(guids) && !nb::isinstance<nb::tuple>(guids)) throw nb::type_error("guids_remover: esperada uma lista de textos");
-  for (nb::handle g : guids) { if (!nb::isinstance<nb::str>(g)) throw nb::type_error("guids_remover: esperados textos"); rem.insert(nb::cast<std::string>(g)); }
+int64_t DadosCena::atualizar(const LoteBruto* lote_novo, std::set<std::string> rem) {  // `rem` já validado pela ponte: tudo é checado ANTES de mudar a cena
   std::shared_ptr<Dados> novo;
-  if (!lote_novo.is_none()) { novo = preparar(lote_novo); for (auto& o : novo->objs) rem.insert(o.guid); }
+  if (lote_novo) { novo = preparar(*lote_novo); for (auto& o : novo->objs) rem.insert(o.guid); }
   int64_t seq = 0; bool desl_ruim = false;
-  {
-    nb::gil_scoped_release livre;  // refazer os lotes tocados é cópia pura: sem Python
+  {  // refazer os lotes tocados é cópia pura: sem Python
     for (;;) {
       std::vector<std::shared_ptr<Dados>> ls; int64_t ver;
       { std::lock_guard<std::mutex> l(m_); ls = lotes_; ver = ver_; }
@@ -162,7 +112,7 @@ int64_t DadosCena::atualizar(nb::object lote_novo, nb::object guids) {
       break;
     }
   }
-  if (desl_ruim) throw nb::value_error("deslocamento diferente do primeiro lote da cena");
+  if (desl_ruim) throw std::invalid_argument("deslocamento diferente do primeiro lote da cena");
   return seq;
 }
 
@@ -191,20 +141,9 @@ Totais DadosCena::totais() {
   return t;
 }
 
-nb::dict DadosCena::objetos(int64_t seq) {
-  std::shared_ptr<Dados> d;
-  { std::lock_guard<std::mutex> l(m_); for (auto& x : lotes_) if (x->seq == seq) d = x; }
-  if (!d) throw nb::value_error("sequência de lote desconhecida (ou já limpa)");
-  std::vector<int32_t> id; std::vector<uint32_t> pi, ni, pv, nv; std::vector<float> cx; std::vector<std::string> guid;
-  for (auto& o : d->objs) {
-    id.push_back(o.id_step); pi.push_back(o.pi); ni.push_back(o.ni); pv.push_back(o.pv); nv.push_back(o.nv); guid.push_back(o.guid);
-    cx.insert(cx.end(), o.cmin, o.cmin + 3); cx.insert(cx.end(), o.cmax, o.cmax + 3);
-  }
-  nb::dict r;
-  r["guid"] = guid; r["id_step"] = numpy_de(std::move(id), 0); r["primeiro_indice"] = numpy_de(std::move(pi), 0);
-  r["n_indices"] = numpy_de(std::move(ni), 0); r["primeiro_vertice"] = numpy_de(std::move(pv), 0);
-  r["n_vertices"] = numpy_de(std::move(nv), 0); r["caixa"] = numpy_de(std::move(cx), 6);
-  r["deslocamento"] = numpy_de(std::vector<double>(d->desl, d->desl + 3), 0);  // do lote (T09)
-  return r;
+std::shared_ptr<Dados> DadosCena::lote(int64_t seq) {
+  std::lock_guard<std::mutex> l(m_);
+  for (auto& x : lotes_) if (x->seq == seq) return x;
+  throw std::invalid_argument("sequência de lote desconhecida (ou já limpa)");
 }
 }  // namespace obim

@@ -43,6 +43,24 @@ def erros_ifc(g):  # erros do validador (esquema + regras EXPRESS). O nível vem
     V.validate(g, lg, express_rules=True)
     return [s for s in lg.statements if str(s.get("level", "")).lower() == "error"]
 
+def materiais(f):  # T11c: usos de camadas e relações de material, vistos de fora pelo ifcopenshell
+    return {c: len(f.by_type(c, include_subtypes=False)) for c in ("IfcMaterialLayerSetUsage", "IfcRelAssociatesMaterial", "IfcMaterialLayerSet", "IfcMaterialLayer", "IfcMaterial")}
+
+def confere_uma_camada_por_parede(f, n, tipos=1):  # n paredes -> n usos e n relações de material (+1 relação por tipo); cada uso/relação é só da sua parede
+    import ifcopenshell.util.element as E
+    ws = f.by_type("IfcWall")
+    assert len(ws) == n, f"{len(ws)} paredes, esperado {n}"
+    m = materiais(f)
+    assert m["IfcMaterialLayerSetUsage"] == n, f"{m['IfcMaterialLayerSetUsage']} IfcMaterialLayerSetUsage para {n} paredes (cada parede precisa do seu): {m}"
+    assert m["IfcRelAssociatesMaterial"] == n + tipos, f"{m['IfcRelAssociatesMaterial']} IfcRelAssociatesMaterial para {n} paredes e {tipos} tipo(s), esperado {n + tipos}: {m}"
+    assert m["IfcMaterialLayerSet"] == tipos, "o conjunto de camadas continua sendo o do tipo (1 por tipo)"
+    usos = [E.get_material(w, should_inherit=False) for w in ws]
+    assert all(u is not None and u.is_a("IfcMaterialLayerSetUsage") for u in usos) and len({u.id() for u in usos}) == n, "dois usos iguais numa mesma entidade (compartilhado)"
+    for w, u in zip(ws, usos):
+        rels = [r for r in f.by_type("IfcRelAssociatesMaterial") if w in r.RelatedObjects]
+        assert len(rels) == 1 and list(rels[0].RelatedObjects) == [w] and rels[0].RelatingMaterial == u, "a relação de material de cada parede tem só ela e o seu uso"
+        assert u.ForLayerSet == E.get_type(w).HasAssociations[0].RelatingMaterial, "o uso aponta para o conjunto de camadas do tipo"
+
 def estado(f):  # assinatura do modelo: contagem por classe e, por parede, nome, resistência ao fogo e forma
     return Counter(e.is_a() for e in f), {w.GlobalId: (w.Name, fire(w), forma(w) if w.Representation else None) for w in f.by_type("IfcWall")}
 

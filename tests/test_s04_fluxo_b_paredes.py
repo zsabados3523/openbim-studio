@@ -22,6 +22,7 @@ from collections import Counter
 from pathlib import Path
 
 import ifcopenshell
+import ifcopenshell.api
 import ifcopenshell.util.element as E
 import ifcopenshell.util.placement as P
 import pytest
@@ -335,15 +336,34 @@ def assinar(caminho):  # classes + multiconjunto de paredes (forma por create_sh
                 tri, *lo, *hi, vol, *P.get_local_placement(w.ObjectPlacement)[:3, 3].tolist(), rs["Body"].Items[0].Depth, *(aux.pontos_eixo(rs["Axis"])[1] if "Axis" in rs else [])]
     ps = sorted((parede(w) for w in f.by_type("IfcWall")), key=lambda p: (*p[:4], tuple(round(x, 3) for x in p[6:12])))
     return {"classes": dict(Counter(e.is_a() for e in f if e.is_a() not in aux.LIVRES | aux.MATERIAL)), "paredes": ps,
-            "orfas": sorted(e.is_a() for e in f if not e.is_a("IfcRoot") and not e.is_a("IfcRepresentationContext") and not f.get_inverse(e)),
+            "orfas": sorted(e.is_a() for e in f if not e.is_a("IfcRoot") and not f.get_inverse(e)),  # inclui contexto de representação sem uso (nem projeto, nem subcontexto, nem representação)
+            "contextos_do_projeto": sorted(str(c.ContextType) for p in f.by_type("IfcProject") for c in p.RepresentationContexts or ()),  # IfcProject.RepresentationContexts: o que o desfazer tem de devolver
+            "contextos_fora_do_projeto": sorted(str(c.ContextType) for c in f.by_type("IfcGeometricRepresentationContext", include_subtypes=False) if not any(c in (p.RepresentationContexts or ()) for p in f.by_type("IfcProject"))),
             "unidades": sorted(str((u.UnitType, u.Prefix, u.Name)) for u in f.by_type("IfcSIUnit")),
             "contextos": sorted(str((c.ContextType, c.ContextIdentifier, getattr(c, "TargetView", None), (getattr(c, "ParentContext", None) or c).ContextType, getattr(c, "CoordinateSpaceDimension", None),
                                      getattr(c, "Precision", None))) for c in f.by_type("IfcGeometricRepresentationContext"))}
 
-def fazer_base(pasta, prefixo="MILLI", nomes=("Zeta", "Alfa", "Meio")):  # IFC sintético (scripts/gerar_modelo_grande.py: 5 paredes, 3 pavimentos), com a unidade e os nomes de pavimento pedidos
+def base_sem_corpo(caminho, contextos):  # IFC4 sem paredes e SEM subcontexto Body: contextos = () nenhum contexto; ("Plan",) só Plan (sem 'Model'); ("Model",) só Model (sem 'Plan')
+    api = ifcopenshell.api.run
+    f = api("project.create_file", version="IFC4")
+    projeto = api("root.create_entity", f, ifc_class="IfcProject", name="Sem corpo")
+    api("unit.assign_unit", f)
+    for t in contextos:
+        api("context.add_context", f, context_type=t)
+    terreno, predio = (api("root.create_entity", f, ifc_class=c, name=n) for c, n in (("IfcSite", "Terreno"), ("IfcBuilding", "Predio")))
+    api("aggregate.assign_object", f, products=[terreno], relating_object=projeto)
+    api("aggregate.assign_object", f, products=[predio], relating_object=terreno)
+    for n in ("Zeta", "Alfa", "Meio"):
+        api("aggregate.assign_object", f, products=[api("root.create_entity", f, ifc_class="IfcBuildingStorey", name=n)], relating_object=predio)
+    f.write(str(caminho))
+
+def fazer_base(pasta, prefixo="MILLI", nomes=("Zeta", "Alfa", "Meio"), contextos=None):  # IFC sintético (scripts/gerar_modelo_grande.py: 5 paredes, 3 pavimentos, SÓ contexto 'Model' e Body: sem 'Plan'), com a unidade e os nomes de pavimento pedidos; `contextos` = base_sem_corpo
     import gerar_modelo_grande
-    p = Path(pasta) / f"base_{prefixo}.ifc"
-    gerar_modelo_grande.gerar(str(p), paredes=5, por_andar=2)
+    p = Path(pasta) / f"base_{prefixo}{'' if contextos is None else '_' + '_'.join(contextos or ('nenhum',))}.ifc"
+    if contextos is None:
+        gerar_modelo_grande.gerar(str(p), paredes=5, por_andar=2)
+    else:
+        base_sem_corpo(p, contextos)
     f = ifcopenshell.open(str(p))
     for u in f.by_type("IfcSIUnit"):
         if u.UnitType == "LENGTHUNIT":
@@ -351,7 +371,7 @@ def fazer_base(pasta, prefixo="MILLI", nomes=("Zeta", "Alfa", "Meio")):  # IFC s
     for s, n in zip(f.by_type("IfcBuildingStorey"), nomes):  # a ordem dos nomes difere da ordem no arquivo: o pavimento certo é o de menor Name, não o primeiro do arquivo
         s.Name = n
     f.write(str(p))
-    return p, dict(esc={None: 1.0, "CENTI": 0.01, "MILLI": 0.001}[prefixo], pav=min(nomes), guids=set(aux.guids(f)), erros=validar(p), sig=assinar(str(p)),
+    return p, dict(esc={None: 1.0, "CENTI": 0.01, "MILLI": 0.001}[prefixo], pav=min(nomes), guids=set(aux.guids(f)), erros=validar(p), sig=assinar(str(p)), corpo0=int(contextos is None),
                    produtos=sum(1 for e in f.by_type("IfcProduct") if e.Representation),
                    paredes={w.GlobalId: (w.Name, E.get_container(w).Name, tuple(P.get_local_placement(w.ObjectPlacement)[:3, 3].round(6).tolist())) for w in f.by_type("IfcWall")})
 def roda(f, n=60):  # mini roteiro (tipo, 1 parede, lote de n, edições, desfazer/refazer, desfazer tudo); grava em cada marco
@@ -379,7 +399,11 @@ def conferir(m, info, n=60):  # o que o contrato exige da base aberta, escrito s
     ctx = lambda k, c: sum(f"'{c}'" in x for x in S[k]["contextos"])  # noqa: E731
     d += igual(S["inicio"], info["sig"], "inicio (a base reaberta e regravada)")
     d += [f"{k}: {ctx(k, 'Axis')} contextos Axis (esperado {e}: criado dentro do 1o comando que o usa, removido pelo desfazer)" for k, e in (("inicio", 0), ("tipo", 0), ("parede", 1), ("lote", 1), ("fim", 0)) if ctx(k, "Axis") != e]
-    d += [f"{k}: {ctx(k, 'Body')} contextos Body (esperado 1: reaproveita o da base)" for k in S if ctx(k, "Body") != 1]
+    corpo = lambda k: info["corpo0"] if k in ("inicio", "tipo", "fim") else 1  # noqa: E731  (base sem Body: criado junto do Axis, no 1o comando que o usa)
+    d += [f"{k}: {ctx(k, 'Body')} contextos Body (esperado {corpo(k)}: reaproveita o da base ou cria no 1o uso)" for k in S if ctx(k, "Body") != corpo(k)]
+    d += [f"{k}: contextos de topo fora de IfcProject.RepresentationContexts: {S[k]['contextos_fora_do_projeto']} (todo contexto criado tem de entrar na lista do projeto, na transação)" for k in S if S[k]["contextos_fora_do_projeto"]]
+    d += [f"{k}: IfcProject.RepresentationContexts = {S[k]['contextos_do_projeto']} (esperado Model e Plan, 1 de cada, depois do 1o comando que cria Axis)" for k in ("parede", "lote", "edicoes", "desfeito", "refeito") if S[k]["contextos_do_projeto"] != ["Model", "Plan"]]
+    d += [f"{k}: IfcProject.RepresentationContexts = {S[k]['contextos_do_projeto']} (esperado {info['sig']['contextos_do_projeto']}, o da base: o desfazer tem de devolver a lista)" for k in ("tipo", "fim") if S[k]["contextos_do_projeto"] != info["sig"]["contextos_do_projeto"]]
     d += igual(S["fim"], S["inicio"], "fim (desfazer tudo)") + igual(S["desfeito"], S["lote"], "desfeito") + igual(S["refeito"], S["edicoes"], "refeito")
     d += [f"{k}: entidades soltas {S[k]['orfas']}" for k in S if S[k]["orfas"] != info["sig"]["orfas"]]
     f = ifcopenshell.open(m["lote"])
@@ -470,6 +494,28 @@ def test_abrir_unidade_qualquer_profundidade_exata_e_grade_na_unidade_do_projeto
     assert conferir(mb, info, 4) == []
     ma = rodar_a(tmp_path / "a", p, 4)
     assert all(igual(assinar(ma[k]), assinar(mb[k]), k) == [] for k in ma)
+
+@pytest.mark.parametrize("contextos", [None, ("Plan",), ("Model",), ()], ids=["base com Model+Body e sem Plan", "so Plan (sem Model)", "so Model (sem Plan nem Body)", "sem nenhum contexto"])
+def test_contexto_criado_pelo_b_entra_em_ifcproject_representationcontexts_e_o_desfazer_devolve_a_lista(mod14, tmp_path, contextos):  # LOTE_OPUS_25 (A) item 1: B gravava [Model] onde A gravava [Model, Plan]
+    p, info = fazer_base(tmp_path, contextos=contextos)
+    assert info["sig"]["contextos_do_projeto"] == (["Model"] if contextos is None else sorted(contextos)), "a base do caso não tem os contextos pedidos"
+    mb = rodar_b(tmp_path / "b", mod14, p, 4)
+    assert conferir(mb, info, 4) == []
+    ma = rodar_a(tmp_path / "a", p, 4)
+    assert conferir(ma, info, 4) == [], "sentinela: o fluxo A tem de cumprir o mesmo esperado"
+    assert all(igual(assinar(ma[k]), assinar(mb[k]), k) == [] for k in ma)
+
+def test_contexto_orfao_e_contexto_fora_do_projeto_sao_detectados_pela_assinatura(tmp_path):  # sentinela de `orfas` e de `assinar`: sem isto o oráculo poderia ficar cego a contexto sem uso
+    f = ifcopenshell.file(schema="IFC4")
+    prj = f.create_entity("IfcProject", GlobalId=ifcopenshell.guid.new(), Name="P")
+    modelo = f.create_entity("IfcGeometricRepresentationContext", ContextType="Model", CoordinateSpaceDimension=3, Precision=1e-5)
+    prj.RepresentationContexts = [modelo]
+    f.write(str(tmp_path / "ok.ifc"))
+    assert assinar(str(tmp_path / "ok.ifc"))["orfas"] == [] and assinar(str(tmp_path / "ok.ifc"))["contextos_fora_do_projeto"] == []
+    f.create_entity("IfcGeometricRepresentationContext", ContextType="Plan", CoordinateSpaceDimension=2, Precision=1e-5)  # contexto solto: fora do projeto E sem uso
+    f.write(str(tmp_path / "solto.ifc"))
+    s = assinar(str(tmp_path / "solto.ifc"))
+    assert s["orfas"] == ["IfcGeometricRepresentationContext"] and s["contextos_fora_do_projeto"] == ["Plan"] and s["contextos_do_projeto"] == ["Model"]
 
 def test_abrir_invalido_levanta_valueerror_e_nao_toca_no_modelo(mod14, tmp_path):
     ifcopenshell.file(schema="IFC2X3").write(str(tmp_path / "x23.ifc"))

@@ -4,45 +4,94 @@
 #include "paredes.h"
 #include <ifcparse/express.h>
 #include <ifcparse/global_id.h>
+#include <ifcparse/schemas/Ifc4.h>
 #include <algorithm>
-#include <clocale>
+#include <climits>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
-#include <stdexcept>
+#include <map>
+#include <locale.h>
 namespace fluxo_b {
 using ifcopenshell::file;
 using express::base;
 using Bases = std::vector<base>;
 namespace {
-const ifcopenshell::schema_definition& S() { return *ifcopenshell::schema_by_name("IFC4"); }
-std::string gid() { return std::string(ifcopenshell::global_id()); }
+const ifcopenshell::schema_definition& S() { return Ifc4::get_schema(); }  // referência explícita: o ligador não descarta a biblioteca do esquema
+std::string gid() { static std::mutex m; std::lock_guard l(m); return std::string(ifcopenshell::global_id()); }
 Valor enu(const char* tipo, const char* v) { auto* e = S().declaration_by_name(tipo)->as_enumeration_type(); return ifcopenshell::enumeration_reference(e, e->lookup_enum_offset(v)); }
 bool pos(double x) { return std::isfinite(x) && x > 0; }
 [[noreturn]] void erro(const std::string& m) { throw std::invalid_argument(m); }
 std::string texto(const base& e, int i) { std::string s = e.get_attribute_value(i); return s; }
+std::string texto_ou(const base& e, int i) { auto a = e.get_attribute_value(size_t(i)); return a.type() == ifcopenshell::Argument_STRING ? texto(e, i) : ""; }  // nulo ou de outro tipo: vazio
+std::string enumerado(const base& e, int i) { ifcopenshell::enumeration_reference r = e.get_attribute_value(size_t(i)); return r.value(); }
 Bases lista(const base& e, int i) { Bases b = e.get_attribute_value(i); return b; }
 base ref(const base& e, int i) { base b = e.get_attribute_value(i); return b; }
-struct LocalC {  // número com ponto decimal mesmo com a localidade do processo em pt_BR; devolve a localidade como estava
-    std::string velha;
-    LocalC() { const char* l = std::setlocale(LC_NUMERIC, nullptr); velha = l ? l : "C"; std::setlocale(LC_NUMERIC, "C"); }
-    ~LocalC() { std::setlocale(LC_NUMERIC, velha.c_str()); }
+struct LocalC {  // número com ponto decimal só NESTA thread (a localidade do processo e das outras threads nunca muda)
+#ifdef _WIN32
+    int modo; std::wstring velha;
+    LocalC() : modo(_configthreadlocale(_ENABLE_PER_THREAD_LOCALE)) { if (modo == -1) throw std::runtime_error("sem localidade por thread"); const wchar_t* l = _wsetlocale(LC_NUMERIC, nullptr); velha = l ? l : L"C"; _wsetlocale(LC_NUMERIC, L"C"); }
+    ~LocalC() { _wsetlocale(LC_NUMERIC, velha.c_str()); if (modo != _ENABLE_PER_THREAD_LOCALE) _configthreadlocale(_DISABLE_PER_THREAD_LOCALE); }
+#else
+    locale_t base_ = duplocale(uselocale(locale_t(0))),  // preserva as outras categorias da thread; só LC_NUMERIC vira "C"
+             c = base_ ? newlocale(LC_NUMERIC_MASK, "C", base_) : locale_t(0), velha = c ? uselocale(c) : locale_t(0);
+    LocalC() { if (!c) { if (base_) freelocale(base_); throw std::runtime_error("sem a localidade C"); } }
+    ~LocalC() { uselocale(velha); freelocale(c); }
+#endif
 };
+double escala(const base& u) {  // tamanho da unidade em metros: SI com prefixo ou baseada em conversão (fator x unidade de base)
+    if (u.declaration().is("IfcSIUnit")) {
+        static const std::map<std::string, double> p{{"EXA", 1e18}, {"PETA", 1e15}, {"TERA", 1e12}, {"GIGA", 1e9}, {"MEGA", 1e6}, {"KILO", 1e3}, {"HECTO", 1e2}, {"DECA", 10.0}, {"DECI", 0.1}, {"CENTI", 1e-2},
+                                                    {"MILLI", 1e-3}, {"MICRO", 1e-6}, {"NANO", 1e-9}, {"PICO", 1e-12}, {"FEMTO", 1e-15}, {"ATTO", 1e-18}};
+        return u.get_attribute_value(2).isNull() ? 1.0 : p.at(enumerado(u, 2));
+    }
+    if (!u.declaration().is("IfcConversionBasedUnit")) return 1.0;
+    base m = ref(u, 3);
+    double fator = ref(m, 0).get_attribute_value(0);
+    return fator * escala(ref(m, 1));
+}
 }  // namespace
 base Paredes::cru(const char* classe, Atributos a) { base e = f_->create(S().declaration_by_name(classe)); for (auto& [i, v] : a) aplicar(e, i, v); return e; }
-Paredes::Paredes() : f_(std::make_unique<file>(ifcopenshell::schema_by_name("IFC4"))) {
-    base origem = cru("IfcCartesianPoint", {{0, Reais{0, 0, 0}}}), dz = cru("IfcDirection", {{0, Reais{0, 0, 1}}}), dx = cru("IfcDirection", {{0, Reais{1, 0, 0}}});
-    base wcs = cru("IfcAxis2Placement3D", {{0, origem}, {1, dz}, {2, dx}});
-    base wcs2 = cru("IfcAxis2Placement2D", {{0, cru("IfcCartesianPoint", {{0, Reais{0, 0}}})}, {1, cru("IfcDirection", {{0, Reais{1, 0}}})}});
-    base modelo = cru("IfcGeometricRepresentationContext", {{1, "Model"}, {2, int64_t{3}}, {3, 1e-5}, {4, wcs}}), plano = cru("IfcGeometricRepresentationContext", {{1, "Plan"}, {2, int64_t{2}}, {3, 1e-5}, {4, wcs2}});
-    base corpo = cru("IfcGeometricRepresentationSubContext", {{0, "Body"}, {1, "Model"}, {6, modelo}, {8, enu("IfcGeometricProjectionEnum", "MODEL_VIEW")}});
-    base eixo = cru("IfcGeometricRepresentationSubContext", {{0, "Axis"}, {1, "Plan"}, {6, plano}, {8, enu("IfcGeometricProjectionEnum", "GRAPH_VIEW")}});
+base Paredes::contexto(const char* tipo, const char* ident, const char* vista, bool diario) {
+    auto cria = [&](const char* classe, Atributos a) { return diario ? criar(classe, std::move(a)) : cru(classe, std::move(a)); };
+    for (auto& x : f_->instances_by_type(S().declaration_by_name("IfcGeometricRepresentationSubContext")))  // o subcontexto da base vale sem criar o pai
+        if (texto_ou(x, 0) == ident && texto_ou(x, 1) == tipo && !x.get_attribute_value(8).isNull() && enumerado(x, 8) == vista) return x;
+    base pai;
+    for (auto& x : f_->instances_by_type_excl_subtypes(S().declaration_by_name("IfcGeometricRepresentationContext"))) if (texto_ou(x, 1) == tipo) { pai = x; break; }
+    if (!pai) {  // contexto de topo do tipo (Model 3D ou Plan 2D), com o sistema de coordenadas na origem
+        bool d3 = std::string(tipo) == "Model";
+        base wcs = d3 ? cria("IfcAxis2Placement3D", {{0, cria("IfcCartesianPoint", {{0, Reais{0, 0, 0}}})}, {1, cria("IfcDirection", {{0, Reais{0, 0, 1}}})}, {2, cria("IfcDirection", {{0, Reais{1, 0, 0}}})}})
+                      : cria("IfcAxis2Placement2D", {{0, cria("IfcCartesianPoint", {{0, Reais{0, 0}}})}, {1, cria("IfcDirection", {{0, Reais{1, 0}}})}});
+        pai = cria("IfcGeometricRepresentationContext", {{1, tipo}, {2, int64_t{d3 ? 3 : 2}}, {3, 1e-5}, {4, wcs}});
+        if (diario) {  // o contexto novo entra na lista do projeto (na transação: desfazer, refazer e rollback valem)
+            auto projetos = f_->instances_by_type(S().declaration_by_name("IfcProject"));
+            if (!projetos.empty()) {
+                Bases atuais;
+                if (!projetos[0].get_attribute_value(7).isNull()) atuais = lista(projetos[0], 7);
+                atuais.push_back(pai);
+                alterar(projetos[0], 7, atuais);
+            }
+        }
+    }
+    return cria("IfcGeometricRepresentationSubContext", {{0, ident}, {1, tipo}, {6, pai}, {8, enu("IfcGeometricProjectionEnum", vista)}});
+}
+Paredes::Paredes() {
+    // Construção concorrente (achado da T14c): a 1a construção inicializa estáticos preguiçosos do IfcOpenShell que não aguentam duas threads. A trava vale só na CONSTRUÇÃO
+    // (esquema, arquivo, contextos, unidades, esqueleto): outras threads criando `Paredes` esperam aqui; nenhum aquecimento é exigido do chamador.
+    static std::mutex construcao;
+    std::lock_guard<std::mutex> guarda(construcao);
+    f_ = std::make_unique<file>(&S());
+    base corpo = contexto("Model", "Body", "MODEL_VIEW", false), eixo = contexto("Plan", "Axis", "GRAPH_VIEW", false);
     Bases un;
     for (auto [u, n] : {std::pair{"AREAUNIT", "SQUARE_METRE"}, {"VOLUMEUNIT", "CUBIC_METRE"}, {"LENGTHUNIT", "METRE"}}) un.push_back(cru("IfcSIUnit", {{1, enu("IfcUnitEnum", u)}, {3, enu("IfcSIUnitName", n)}}));
-    Bases cadeia{cru("IfcProject", {{0, gid()}, {2, "Projeto"}, {7, Bases{modelo, plano}}, {8, cru("IfcUnitAssignment", {{0, un}})}})};
+    Bases cadeia{cru("IfcProject", {{0, gid()}, {2, "Projeto"}, {7, Bases{ref(corpo, 6), ref(eixo, 6)}}, {8, cru("IfcUnitAssignment", {{0, un}})}})};
     for (auto [c, n] : {std::pair{"IfcSite", "Terreno"}, {"IfcBuilding", "Edificio"}, {"IfcBuildingStorey", "Pavimento 1"}}) cadeia.push_back(cru(c, {{0, gid()}, {2, n}}));
     for (size_t i = 1; i < cadeia.size(); ++i) cru("IfcRelAggregates", {{0, gid()}, {4, cadeia[i - 1]}, {5, Bases{cadeia[i]}}});
-    corpo_ = corpo.id(), eixo_ = eixo.id(), pav_ = cadeia.back().id(), origem_ = origem.id(), dirz_ = dz.id(), dirx_ = dx.id();
+}
+base Paredes::apoio(unsigned& id, const char* classe, const Reais& v) {
+    base e = achar_id(id);
+    if (e && e.declaration().is(classe)) { Reais atual = e.get_attribute_value(0); if (atual == v) return e; }
+    return por_id(id = criar(classe, {{0, v}}).id());
 }
 void Paredes::aplicar(const base& e0, int idx, const Valor& v) {
     base e = e0;
@@ -56,15 +105,35 @@ void Paredes::aplicar(const base& e0, int idx, const Valor& v) {
         else e.set_attribute_value(i, x);
     }, v);
 }
-Valor Paredes::ler(const base& e, int idx) const {
+Valor Paredes::ler(const base& e, int idx) const {  // o que não cabe em `Valor` NUNCA vira nulo em silêncio: std::logic_error
+    using namespace ifcopenshell;
     auto a = e.get_attribute_value(size_t(idx));
     switch (a.type()) {
-        case ifcopenshell::Argument_STRING: { std::string s = a; return s; }
-        case ifcopenshell::Argument_DOUBLE: { double d = a; return d; }
-        case ifcopenshell::Argument_ENTITY_INSTANCE: { base b = a; return b.id() ? Valor(Ref(b)) : Valor(Rotulo{&b.declaration(), texto(b, 0)}); }
-        case ifcopenshell::Argument_AGGREGATE_OF_ENTITY_INSTANCE: return Valor(lista(e, idx));
-        case ifcopenshell::Argument_AGGREGATE_OF_AGGREGATE_OF_DOUBLE: { Reais2 r = a; return r; }
-        default: return {};
+        case Argument_NULL: return {};
+        case Argument_INT: { int64_t v = a; return v; }
+        case Argument_BOOL: { bool v = a; return Valor(std::in_place_type<bool>, v); }
+        case Argument_LOGICAL: { boost::logic::tribool v = a; return Valor(std::in_place_type<boost::logic::tribool>, v); }
+        case Argument_DOUBLE: { double d = a; return d; }
+        case Argument_STRING: { std::string s = a; return s; }
+        case Argument_ENUMERATION: { enumeration_reference v = a; return v; }
+        case Argument_ENTITY_INSTANCE: {
+            base b = a;
+            if (b.id()) return Valor(Ref(b));
+            if (b.get_attribute_value(0).type() != Argument_STRING) throw std::logic_error("valor tipado em linha que não é texto: não suportado");
+            return Valor(Rotulo{&b.declaration(), texto(b, 0)});
+        }
+        case Argument_EMPTY_AGGREGATE: return Valor(Reais{});  // lista vazia: o conteúdo é igual em qualquer tipo de elemento
+        case Argument_AGGREGATE_OF_INT: { Inteiros v = a; return v; }
+        case Argument_AGGREGATE_OF_DOUBLE: { Reais v = a; return v; }
+        case Argument_AGGREGATE_OF_STRING: { Textos v = a; return v; }
+        case Argument_AGGREGATE_OF_ENTITY_INSTANCE: {
+            Bases v = a;
+            if (!std::all_of(v.begin(), v.end(), [](const base& x) { return x.id(); })) throw std::logic_error("lista com valor tipado em linha: não suportado");
+            return Valor(v);
+        }
+        case Argument_AGGREGATE_OF_AGGREGATE_OF_DOUBLE: { Reais2 v = a; return v; }
+        case Argument_DERIVED: throw std::logic_error("atributo derivado (*): não suportado");
+        default: throw std::logic_error("tipo de atributo não suportado");
     }
 }
 void Paredes::mutar() {  // o gancho de teste: a k-ésima mutação do próximo comando de edição falha ANTES de mexer
@@ -89,7 +158,8 @@ void Paredes::refazer_passos(const Registro& r) {  // 1o cria todas (mesmos núm
 template <class F> Lista Paredes::transacao(F&& corpo) {  // uma transação = um registro; erro (de entrada ou injetado) = volta tudo
     falha_ativa_ = std::exchange(falha_, 0), mutacoes_ = 0, reg_ = {}, em_curso_ = {};
     int g0 = g_;
-    try { corpo(); } catch (...) { falha_ativa_ = 0, g_ = g0; desfazer_passos(reg_); reg_ = {}; throw; }
+    unsigned o0 = origem_, z0 = dirz_, x0 = dirx_;
+    try { corpo(); } catch (...) { falha_ativa_ = 0, g_ = g0, origem_ = o0, dirz_ = z0, dirx_ = x0; desfazer_passos(reg_); reg_ = {}; throw; }
     falha_ativa_ = 0;
     for (const Lista* l : {&em_curso_.criados, &em_curso_.alterados, &em_curso_.apagados})
         for (auto& g : *l) if (std::find(reg_.guids.begin(), reg_.guids.end(), g) == reg_.guids.end()) reg_.guids.push_back(g);
@@ -97,13 +167,19 @@ template <class F> Lista Paredes::transacao(F&& corpo) {  // uma transação = u
     historico_.push_back(std::move(reg_)), refazer_.clear();
     return historico_.back().guids;
 }
+base Paredes::achar_id(unsigned id) const { try { return f_->instance_by_id(int(id)); } catch (...) { return {}; } }
+base Paredes::pavimento() const {
+    base p;
+    for (auto& s : f_->instances_by_type(S().declaration_by_name("IfcBuildingStorey"))) if (!p || texto_ou(s, 2) < texto_ou(p, 2)) p = s;  // o de menor Name; empate: o 1o
+    return p;
+}
 base Paredes::achar(const std::string& g) const { try { return f_->instance_by_guid(g); } catch (...) { return {}; } }
 base Paredes::achar_wall(const std::string& g) const {
     base e = achar(g);
     if (!e || !e.declaration().is("IfcWall")) erro("alvo inexistente ou que não é uma parede: " + g);
     return e;
 }
-base Paredes::achar_tipo(const std::string& nome) const { for (auto& t : f_->instances_by_type("IfcWallType")) if (texto(t, 2) == nome) return t; return {}; }
+base Paredes::achar_tipo(const std::string& nome) const { for (auto& t : f_->instances_by_type("IfcWallType")) if (texto_ou(t, 2) == nome) return t; return {}; }
 void Paredes::relacionar(const char* classe, const base& alvo, const Bases& novos) {
     for (auto& r : f_->instances_by_type(classe)) {
         if (ref(r, 5) != alvo) continue;
@@ -118,7 +194,7 @@ Lista Paredes::criar_tipo(const std::string& nome, const std::vector<double>& ca
         if (achar_tipo(nome)) erro("já existe um tipo com o nome " + nome);
         Bases cams;
         for (size_t i = 0; i < camadas.size(); ++i)
-            cams.push_back(criar("IfcMaterialLayer", {{0, criar("IfcMaterial", {{0, nome + " camada " + std::to_string(i + 1)}})}, {1, camadas[i]}}));
+            cams.push_back(criar("IfcMaterialLayer", {{0, criar("IfcMaterial", {{0, nome + " camada " + std::to_string(i + 1)}})}, {1, un(camadas[i])}}));
         base conj = criar("IfcMaterialLayerSet", {{0, cams}, {1, nome}});
         base t = criar("IfcWallType", {{0, gid()}, {2, nome}, {9, enu("IfcWallTypeEnum", "NOTDEFINED")}});
         criar("IfcRelAssociatesMaterial", {{0, gid()}, {4, Bases{t}}, {5, conj}});
@@ -127,19 +203,21 @@ Lista Paredes::criar_tipo(const std::string& nome, const std::vector<double>& ca
 }
 Lista Paredes::criar_paredes_lote(const std::string& tipo, double c, double h, double e, int n) {
     return transacao([&] {
-        base t = achar_tipo(tipo), conj;
-        if (!t || !pos(c) || !pos(h) || !pos(e) || n < 1) erro("parede inválida: tipo inexistente, medida não positiva ou quantidade menor que 1");
-        for (auto& s : f_->instances_by_type("IfcMaterialLayerSet")) if (texto(s, 1) == tipo) conj = s;
-        base corpo = por_id(corpo_), eixo = por_id(eixo_), dz = por_id(dirz_), dx = por_id(dirx_), origem = por_id(origem_);
+        base t = achar_tipo(tipo), conj, pav = pavimento();
+        if (!t || !pav || !pos(c) || !pos(h) || !pos(e) || n < 1) erro("parede inválida: tipo inexistente, modelo sem pavimento, medida não positiva ou quantidade menor que 1");
+        for (auto& s : f_->instances_by_type("IfcMaterialLayerSet")) if (texto_ou(s, 1) == tipo) conj = s;
+        if (!conj) erro("o tipo " + tipo + " não tem conjunto de camadas");
+        base corpo = contexto("Model", "Body", "MODEL_VIEW", true), eixo = contexto("Plan", "Axis", "GRAPH_VIEW", true);  // o que faltar na base nasce AQUI, dentro da transação
+        base dz = apoio(dirz_, "IfcDirection", {0, 0, 1}), dx = apoio(dirx_, "IfcDirection", {1, 0, 0}), origem = apoio(origem_, "IfcCartesianPoint", {0, 0, 0});
         Bases ws;
         for (int k = 0; k < n; ++k) {
             int g = g_ + k;
-            base pl = criar("IfcLocalPlacement", {{1, criar("IfcAxis2Placement3D", {{0, criar("IfcCartesianPoint", {{0, Reais{(g % 50) * 5.0, (g / 50) * 4.0, 0.0}}})}, {1, dz}, {2, dx}})}});
-            base curva = criar("IfcIndexedPolyCurve", {{0, criar("IfcCartesianPointList2D", {{0, Reais2{{0, 0}, {0, e}, {c, e}, {c, 0}, {0, 0}}}})}});
+            base pl = criar("IfcLocalPlacement", {{1, criar("IfcAxis2Placement3D", {{0, criar("IfcCartesianPoint", {{0, Reais{un((g % 50) * 5.0), un((g / 50) * 4.0), 0.0}}})}, {1, dz}, {2, dx}})}});
+            base curva = criar("IfcIndexedPolyCurve", {{0, criar("IfcCartesianPointList2D", {{0, Reais2{{0, 0}, {0, un(e)}, {un(c), un(e)}, {un(c), 0}, {0, 0}}}})}});
             base perfil = criar("IfcArbitraryClosedProfileDef", {{0, enu("IfcProfileTypeEnum", "AREA")}, {2, curva}});
-            base sol = criar("IfcExtrudedAreaSolid", {{0, perfil}, {1, criar("IfcAxis2Placement3D", {{0, origem}, {1, dz}, {2, dx}})}, {2, dz}, {3, h}});
+            base sol = criar("IfcExtrudedAreaSolid", {{0, perfil}, {1, criar("IfcAxis2Placement3D", {{0, origem}, {1, dz}, {2, dx}})}, {2, dz}, {3, un(h)}});
             base rb = criar("IfcShapeRepresentation", {{0, corpo}, {1, "Body"}, {2, "SweptSolid"}, {3, Bases{sol}}});
-            base ca = criar("IfcIndexedPolyCurve", {{0, criar("IfcCartesianPointList2D", {{0, Reais2{{0, 0}, {c, 0}}}})}});
+            base ca = criar("IfcIndexedPolyCurve", {{0, criar("IfcCartesianPointList2D", {{0, Reais2{{0, 0}, {un(c), 0}}}})}});
             base ra = criar("IfcShapeRepresentation", {{0, eixo}, {1, "Axis"}, {2, "Curve2D"}, {3, Bases{ca}}});
             base w = criar("IfcWall", {{0, gid()}, {2, "Parede"}, {5, pl}, {6, criar("IfcProductDefinitionShape", {{2, Bases{rb, ra}}})}});
             base uso = criar("IfcMaterialLayerSetUsage", {{0, conj}, {1, enu("IfcLayerSetDirectionEnum", "AXIS2")}, {2, enu("IfcDirectionSenseEnum", "POSITIVE")}, {3, 0.0}});
@@ -148,7 +226,7 @@ Lista Paredes::criar_paredes_lote(const std::string& tipo, double c, double h, d
         }
         g_ += n;
         relacionar("IfcRelDefinesByType", t, ws);
-        relacionar("IfcRelContainedInSpatialStructure", por_id(pav_), ws);
+        relacionar("IfcRelContainedInSpatialStructure", pav, ws);
         for (auto& w : ws) em_curso_.criados.push_back(texto(w, 0));
         em_curso_.geometria = em_curso_.criados;
     });
@@ -165,8 +243,8 @@ Lista Paredes::editar_propriedades(const std::string& alvo, const std::string* n
             Valor valor = Rotulo{rotulo, v};
             base ps, pr;
             for (auto& r : f_->instances_by_reference(int(w.id())))
-                if (r.declaration().is("IfcRelDefinesByProperties") && texto(ref(r, 5), 2) == pset) ps = ref(r, 5);
-            if (ps) for (auto& p : lista(ps, 4)) if (texto(p, 0) == prop) pr = p;
+                if (r.declaration().is("IfcRelDefinesByProperties") && texto_ou(ref(r, 5), 2) == pset) ps = ref(r, 5);
+            if (ps) for (auto& p : lista(ps, 4)) if (texto_ou(p, 0) == prop) pr = p;
             if (pr) { alterar(pr, 2, valor); continue; }
             base nova = criar("IfcPropertySingleValue", {{0, prop}, {2, valor}});
             if (ps) { Bases todas = lista(ps, 4); todas.push_back(nova); alterar(ps, 4, todas); continue; }
@@ -195,7 +273,7 @@ Lista Paredes::mudar_comprimento(const std::string& alvo, double c) {
             if (!cv.declaration().is("IfcIndexedPolyCurve")) erro("curva da parede não reconhecida");
             l = ref(cv, 0);
             Reais2 pts = l.get_attribute_value(0);
-            for (auto& p : pts) if (p[0] > 0) p[0] = c;
+            for (auto& p : pts) if (p[0] > 0) p[0] = un(c);
             listas.emplace_back(l, pts);
         }
         if (!corpo) erro("a parede não tem representação Body extrudada");
@@ -207,8 +285,7 @@ Lista Paredes::voltar(bool desfazer) {
     auto &de = desfazer ? historico_ : refazer_, &para = desfazer ? refazer_ : historico_;
     ultimo_ = {};
     if (de.empty()) return {};
-    Registro reg = std::move(de.back());
-    de.pop_back();
+    Registro& reg = de.back();  // só sai da pilha depois de aplicado (item 5 do lote 22)
     std::vector<bool> antes;
     for (auto& g : reg.guids) antes.push_back(bool(achar(g)));
     desfazer ? desfazer_passos(reg) : refazer_passos(reg);
@@ -220,7 +297,8 @@ Lista Paredes::voltar(bool desfazer) {
     }
     ultimo_.alterados = reg.alterados;
     Lista guids = reg.guids;
-    return para.push_back(std::move(reg)), guids;
+    para.push_back(std::move(reg)), de.pop_back();
+    return guids;
 }
 int Paredes::contar(const std::string* classe) const {
     if (!classe) { int n = 0; for (auto it = f_->begin(); it != f_->end(); ++it) ++n; return n; }
@@ -237,5 +315,47 @@ void Paredes::gravar(const std::string& arquivo) const {
     std::ofstream o(p, std::ios::binary);
     if (!o) throw std::runtime_error("não consegui gravar " + arquivo);
     o << *f_;
+    o.flush();
+    if (!o) throw std::runtime_error("falha ao gravar " + arquivo + " (disco cheio?)");
+}
+std::unique_lock<std::mutex> Paredes::pegar(bool esperar) {
+    std::unique_lock<std::mutex> l(trava_, std::defer_lock);
+    if (esperar) l.lock();
+    else if (!l.try_lock()) throw ModeloOcupado("modelo ocupado: outro comando está em andamento");
+    return l;
+}
+Lista Paredes::copiar_atributo(unsigned destino, unsigned origem, const std::string& atributo) {
+    return transacao([&] {
+        base d = achar_id(destino), o = achar_id(origem);
+        if (!d || !o || &d.declaration() != &o.declaration()) erro("número de linha inexistente ou de classes diferentes");
+        ptrdiff_t i = d.declaration().as_entity()->attribute_index(atributo);
+        if (i < 0) erro("atributo inexistente: " + atributo);
+        alterar(d, int(i), ler(o, int(i)));
+    });
+}
+void Paredes::abrir(const std::string& arquivo) {
+    namespace fs = std::filesystem;
+    LocalC local;  // a leitura dos números também não pode depender da localidade
+    const char* so_ifc4 = "o arquivo precisa ser um IFC4 legível: ";
+    if (arquivo.empty()) erro(std::string(so_ifc4) + "caminho vazio");
+    fs::path p(std::u8string(arquivo.begin(), arquivo.end()));
+    std::error_code ec;
+    auto n = fs::is_regular_file(p, ec) ? fs::file_size(p, ec) : 0;
+    if (ec || n == 0 || n > INT_MAX) erro(std::string(so_ifc4) + "arquivo inexistente, vazio, pasta ou grande demais: " + arquivo);
+    std::ifstream in(p, std::ios::binary);
+    std::unique_ptr<file> novo;
+    try { if (in) novo = std::make_unique<file>(in, int(n)); } catch (const std::exception& e) { erro(std::string(so_ifc4) + e.what()); }
+    if (!novo || !novo->good() || !novo->schema() || novo->schema()->name() != "IFC4") erro(std::string(so_ifc4) + arquivo);
+    double esc = 1.0;
+    try {
+        auto projetos = novo->instances_by_type(S().declaration_by_name("IfcProject"));
+        if (!projetos.empty() && !projetos[0].get_attribute_value(8).isNull())
+            for (auto& u : lista(ref(projetos[0], 8), 0)) if (u.declaration().is("IfcNamedUnit") && enumerado(u, 1) == "LENGTHUNIT") { esc = escala(u); break; }
+    } catch (const std::exception& e) { erro(std::string("unidade de comprimento do projeto não reconhecida: ") + e.what()); }
+    if (!(esc > 0) || !std::isfinite(esc)) erro("unidade de comprimento do projeto inválida");
+    f_ = std::move(novo);  // daqui em diante nada falha: o modelo anterior só some com a base já aceita
+    historico_.clear(), refazer_.clear(), reg_ = {}, ultimo_ = {}, em_curso_ = {};
+    esc_ = esc, g_ = falha_ = falha_ativa_ = mutacoes_ = 0, origem_ = dirz_ = dirx_ = 0, produtos_base_ = 0;
+    for (auto& e : f_->instances_by_type(S().declaration_by_name("IfcProduct"))) produtos_base_ += !e.get_attribute_value(6).isNull();
 }
 }  // namespace fluxo_b

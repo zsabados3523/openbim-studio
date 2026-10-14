@@ -1,11 +1,14 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Oráculo do fluxo A (S04-T11; LOTE_OPUS_9 §1.1, §1.4 regras 1-8, §2, §4 etapa 3; contrato em prototypes/s04/fluxo_a/CONTRATO.md).
-GUARDA: pula enquanto `prototypes/s04/fluxo_a/fluxo_a.py` não existir; FALHA com OBIM_S04_T11_OBRIGATORIO=1 ou OBIM_S04_T11B_OBRIGATORIO=1 (todo skip vira falha; só o caso da localidade no Windows segue sendo pulado, não se aplica lá). Casos sem janela rodam no processo;
+GUARDA: pula enquanto `prototypes/s04/fluxo_a/fluxo_a.py` não existir; FALHA com OBIM_S04_T11_OBRIGATORIO=1, OBIM_S04_T11B_OBRIGATORIO=1 ou OBIM_S04_T11C_OBRIGATORIO=1 (todo skip vira falha; só o caso da localidade no Windows segue sendo pulado, não se aplica lá). Casos sem janela rodam no processo;
 os gráficos rodam em SUBPROCESSO sob `xvfb-run` (nunca na tela real; Windows só no CI ou com OBIM_S04_TELA_VIRTUAL=1) e o roteiro R inteiro roda UMA vez.
 Suposições do oráculo (o Opus confere): parede = prisma retangular = 12 triângulos; a base é `scripts/gerar_modelo_grande.py` com OBIM_S04_BASE paredes
 (padrão 300; oficial 3000); régua do CI virtual = mediana < limite e nenhum valor acima de TETO x limite (M2, M2b, M3), M4 < 20 s, M5 pela régua do lote 11
 (maior intervalo < 100 ms, >= 20 quadros por janela de 1 s, <= 3x o parado); OBIM_S04_ESTRITO=1 (máquina do PO) troca por p95 < limite.
 Fora do escopo (T12): M1, M6, M7 e a comparação A x B. Sentinelas sem fluxo_a: roteiro, ifcopenshell sozinho e a conta das metas.
+
+T11c (lote 22 item 5): `criar_paredes_lote` de N paredes cria N IfcMaterialLayerSetUsage e N IfcRelAssociatesMaterial (cada relação só da sua parede, +1 relação por tipo), como N `criar_parede`;
+ o IFC segue válido (esquema + regras EXPRESS) e rollback, desfazer e refazer do lote seguem intactos (casos "t11c" abaixo; o fluxo B é conferido em test_s04_fluxo_b_paredes.py, sem exceção).
 
 T11b (lote 18; o implementador precisa saber, ver também CONTRATO.md):
  - NOVO retorno de comando: `FluxoA.executar_detalhado(cmd, espera=None) -> (guids, detalhe)`; `detalhe` é um dict NOVO a cada chamada (criados, alterados, apagados,
@@ -36,14 +39,14 @@ from s04_fluxo_aux import FIRE, PAREDE, PASTA, ROTEIRO, TIPO, calcular, estado, 
 from test_s04_viewport import caso as _caso  # xvfb-run, LC_ALL=C, resultado em JSON
 
 caso = lambda nome, *a, **k: _caso(nome, *a, alvo=aux.AQUI, **k)  # noqa: E731
-OBRIGATORIO = "1" in (os.environ.get("OBIM_S04_T11_OBRIGATORIO"), os.environ.get("OBIM_S04_T11B_OBRIGATORIO"))
+OBRIGATORIO = "1" in (os.environ.get("OBIM_S04_T11_OBRIGATORIO"), os.environ.get("OBIM_S04_T11B_OBRIGATORIO"), os.environ.get("OBIM_S04_T11C_OBRIGATORIO"))
 BASE = os.environ.get("OBIM_S04_BASE", "300")
 MUTA = {"criar_tipo", "criar_parede", "criar_paredes_lote", "editar_propriedades", "mudar_comprimento", "mover", "apagar", "desfazer", "refazer"}
 GEO = {"criar_parede", "criar_paredes_lote", "mudar_comprimento", "mover"}  # comandos cuja `geometria` é tudo o que mudou
 CMDS = MUTA | {"abrir", "selecionar", "orbitar", "camera_mover", "aproximar", "enquadrar", "camera", "animar_orbita", "parar_animacao", "esperar", "gravar"}
 
 def pular(msg):
-    (pytest.fail if OBRIGATORIO else pytest.skip)(f"\n!!! S04-T11/T11b: {msg} (oráculo do fluxo A NÃO FOI EXECUTADO) !!!\n")
+    (pytest.fail if OBRIGATORIO else pytest.skip)(f"\n!!! S04-T11/T11b/T11c: {msg} (oráculo do fluxo A NÃO FOI EXECUTADO) !!!\n")
 
 @pytest.fixture(scope="module")
 def fa():
@@ -193,6 +196,154 @@ def test_lote_de_paredes_e_uma_transacao_so(novo):
     assert len(set(r)) == 120 and len(f.historico) == h0 + 1 and len(f.ifc.by_type("IfcWall")) == 120
     assert sorted(f.executar({"cmd": "desfazer"})) == sorted(r) and estado(f.ifc) == e0 and not f.ifc.by_type("IfcWall")
     assert sorted(f.executar({"cmd": "refazer"})) == sorted(r) and estado(f.ifc) == e1
+
+# ---------- T11c: uma camada de material por parede, também no lote ----------
+LOTE = dict(PAREDE, cmd="criar_paredes_lote")
+
+def test_t11c_lote_de_n_paredes_tem_n_usos_e_n_relacoes_de_material(novo):
+    f = novo()
+    f.executar(TIPO)
+    for n in (1, 2, 7, 120):
+        f.executar(dict(LOTE, quantidade=n))
+    aux.confere_uma_camada_por_parede(f.ifc, 1 + 2 + 7 + 120)
+    assert aux.materiais(f.ifc)["IfcMaterialLayerSetUsage"] == 130 and len(f.historico) == 5  # criar_tipo + 4 lotes: cada lote continua 1 transação
+
+def test_t11c_lote_e_n_criar_parede_dao_o_mesmo_modelo_em_classes_e_material(novo):
+    a, b = novo(), novo()
+    for f in (a, b):
+        f.executar(TIPO)
+    a.executar(dict(LOTE, quantidade=9))
+    for _ in range(9):
+        b.executar(PAREDE)
+    assert estado(a.ifc)[0] == estado(b.ifc)[0] and aux.materiais(a.ifc) == aux.materiais(b.ifc)  # (os GlobalIds diferem; a contagem por classe e a forma de cada parede, não)
+    assert sorted(map(str, estado(a.ifc)[1].values())) == sorted(map(str, estado(b.ifc)[1].values()))
+    aux.confere_uma_camada_por_parede(a.ifc, 9)
+    aux.confere_uma_camada_por_parede(b.ifc, 9)
+
+def test_t11c_dois_tipos_cada_parede_com_o_uso_do_seu_tipo(novo):
+    f = novo()
+    f.executar(TIPO)
+    f.executar(dict(TIPO, nome="PAR20", camadas_m=[0.02, 0.16, 0.02]))
+    f.executar(dict(LOTE, quantidade=4))
+    f.executar(dict(LOTE, quantidade=3, tipo="PAR20", espessura=0.20))
+    aux.confere_uma_camada_por_parede(f.ifc, 7, tipos=2)
+    import ifcopenshell.util.element as E
+    assert sorted(E.get_material(w, should_inherit=False).ForLayerSet.LayerSetName for w in f.ifc.by_type("IfcWall")) == ["PAR15"] * 4 + ["PAR20"] * 3
+
+def test_t11c_ifc_do_lote_e_valido_grava_e_reabre_com_um_uso_por_parede(novo, tmp_path):
+    import ifcopenshell
+    f = novo()
+    f.executar(TIPO)
+    f.executar(dict(LOTE, quantidade=30))
+    f.executar({"cmd": "gravar", "arquivo": "lote.ifc"})
+    g = ifcopenshell.open(str(tmp_path / "saida" / "lote.ifc"))
+    assert aux.erros_ifc(f.ifc) == [] and aux.erros_ifc(g) == []
+    aux.confere_uma_camada_por_parede(g, 30)
+    assert not [e for e in g if not e.is_a("IfcRoot") and not e.is_a("IfcRepresentationContext") and not g.get_inverse(e)], "sobra de entidade solta"
+
+def test_t11c_desfazer_e_refazer_do_lote_levam_e_trazem_os_n_usos_e_as_n_relacoes(novo):
+    f = novo()
+    f.executar(TIPO)
+    f.executar(PAREDE)  # uma parede antes do lote: o desfazer do lote não pode mexer no uso dela
+    e0, m0 = estado(f.ifc), aux.materiais(f.ifc)
+    lote = f.executar(dict(LOTE, quantidade=25))
+    e1 = estado(f.ifc)
+    aux.confere_uma_camada_por_parede(f.ifc, 26)
+    assert sorted(f.executar({"cmd": "desfazer"})) == sorted(lote) and estado(f.ifc) == e0 and aux.materiais(f.ifc) == m0
+    aux.confere_uma_camada_por_parede(f.ifc, 1)
+    assert sorted(f.executar({"cmd": "refazer"})) == sorted(lote) and estado(f.ifc) == e1
+    aux.confere_uma_camada_por_parede(f.ifc, 26)
+    f.executar({"cmd": "desfazer"})
+    f.executar({"cmd": "desfazer"})  # agora desfaz a parede avulsa: o tipo fica sozinho (0 usos, só a relação do tipo)
+    assert aux.materiais(f.ifc)["IfcMaterialLayerSetUsage"] == 0 and aux.materiais(f.ifc)["IfcRelAssociatesMaterial"] == 1
+    f.executar({"cmd": "refazer"})
+    f.executar({"cmd": "refazer"})
+    assert estado(f.ifc) == e1
+    aux.confere_uma_camada_por_parede(f.ifc, 26)
+
+def test_t11c_apagar_uma_parede_do_lote_leva_so_o_uso_e_a_relacao_dela_e_o_desfazer_traz_de_volta(novo):
+    f = novo()
+    f.executar(TIPO)
+    lote = f.executar(dict(LOTE, quantidade=6))
+    e1 = estado(f.ifc)
+    f.executar({"cmd": "apagar", "alvo": lote[2]})
+    aux.confere_uma_camada_por_parede(f.ifc, 5)  # o resto do lote mantém o seu uso e a sua relação
+    f.executar({"cmd": "desfazer"})
+    assert estado(f.ifc) == e1
+    aux.confere_uma_camada_por_parede(f.ifc, 6)
+
+def test_t11c_lote_que_falha_no_meio_deixa_zero_usos_novos_e_o_desfazer_seguinte_e_o_do_comando_anterior(novo, fa, monkeypatch):
+    import ifcopenshell.api as A
+    real = A.run
+
+    def com_falha(prefixos, n):  # falha na n-ésima chamada de qualquer função da API que comece com um dos prefixos (cobre uma implementação com 1 chamada ou 1 por parede)
+        cont = {"n": 0}
+
+        def api(nome, *a, **k):
+            cont["n"] += nome.startswith(prefixos)
+            if nome.startswith(prefixos) and cont["n"] == n:
+                raise RuntimeError(f"falha injetada em {nome}")
+            return real(nome, *a, **k)
+        return api
+    for prefixos, n in ((("type.", "material."), 1), (("spatial.",), 1), (("geometry.edit_object_placement",), 4), (("geometry.add_wall_representation",), 5)):
+        f = novo()
+        f.executar(TIPO)
+        f.executar(PAREDE)
+        anterior = f.executar(PAREDE)
+        e0, m0, ids0, h0 = estado(f.ifc), aux.materiais(f.ifc), ids_modelo(f.ifc), len(f.historico)
+        with monkeypatch.context() as m:
+            m.setattr(A, "run", com_falha(prefixos, n))
+            m.setattr(fa, "api", com_falha(prefixos, n))
+            with pytest.raises(RuntimeError, match="falha injetada"):
+                f.executar(dict(LOTE, quantidade=8))
+        assert estado(f.ifc) == e0 and aux.materiais(f.ifc) == m0 and ids_modelo(f.ifc) == ids0 and len(f.historico) == h0 and not f.trava.locked(), prefixos
+        aux.confere_uma_camada_por_parede(f.ifc, 2)
+        assert f.executar({"cmd": "desfazer"}) == anterior, f"{prefixos}: o desfazer depois da falha tem de desfazer o comando anterior, não o lote"
+        f.executar({"cmd": "refazer"})
+        lote = f.executar(dict(LOTE, quantidade=8))  # e o lote refeito depois da falha sai certo (grade: a falha não andou)
+        aux.confere_uma_camada_por_parede(f.ifc, 10)
+        assert forma(f.ifc.by_guid(lote[0]))[2] == [2 * 5.0, 0.0, 0.0], prefixos
+
+def test_t11c_tipo_sem_conjunto_de_camadas(novo):  # lote Opus 24 A1: tipo sem material, ou com IfcMaterial simples, não tem conjunto de camadas a usar; no main funciona (a parede só não ganha uso), então o lote também tem de funcionar
+    import ifcopenshell.api as A
+    for nome, simples in (("SEM", False), ("SIMPLES", True)):
+        f = novo()
+        t = A.run("root.create_entity", f.ifc, ifc_class="IfcWallType", name=nome)  # tipo montado direto no IFC, antes de qualquer comando
+        if simples:
+            A.run("material.assign_material", f.ifc, products=[t], material=A.run("material.add_material", f.ifc, name=nome))  # IfcMaterial simples, de nome igual ao do tipo
+        antes = aux.materiais(f.ifc)
+        assert antes["IfcMaterialLayerSet"] == 0 and antes["IfcMaterialLayerSetUsage"] == 0 and antes["IfcMaterial"] == int(simples)
+        criados = f.executar(dict(LOTE, tipo=nome, quantidade=6))
+        criados += f.executar(dict(PAREDE, tipo=nome))  # criar_parede usa o mesmo caminho
+        assert len(set(criados)) == 7 and len(f.ifc.by_type("IfcWall")) == 7, nome
+        assert aux.materiais(f.ifc) == antes, f"{nome}: o lote não pode criar conjunto, uso, camada, material ou relação de material novos: {antes} -> {aux.materiais(f.ifc)}"
+        assert aux.erros_ifc(f.ifc) == [], nome
+        assert all(w.IsTypedBy and w.IsTypedBy[0].RelatingType == t for w in f.ifc.by_type("IfcWall")), f"{nome}: cada parede continua ligada ao tipo"
+
+def test_t11c_custo_do_lote_nao_cresce_com_as_paredes_que_o_tipo_ja_tem(novo):  # sentinela de escala (lote 23 A3): vale com OBIM_S04_T11C_OBRIGATORIO=1 (o `fa` falha em vez de pular)
+    # O mesmo lote de 300 paredes, com 0 e com ~2000 paredes do tipo já no modelo: o tempo não pode mais que dobrar.
+    # Não prescreve número nem forma de chamada da API (o lote 23 mediu 5,7x num código quadrático e 1,1x na alternativa linear).
+    # Pesado (~21 s aqui, ~60 s no CI): só roda com OBIM_S04_T11C_OBRIGATORIO=1 (o passo Viewport do ci.yml liga). Na suíte inteira (`pytest -q tests`) ele roda antes de test_viewport_responsivo.py e a memória/GC que deixa leva 3 testes de resposta da janela de ~75 ms para 220-295 ms (medido: sem ele 71/77 ms, com ele 241/228 ms).
+    if os.environ.get("OBIM_S04_T11C_OBRIGATORIO") != "1":
+        pytest.skip("sentinela de escala pesada: só com OBIM_S04_T11C_OBRIGATORIO=1 (não pesa sobre os testes de resposta da janela na suíte inteira)")
+    def tempo_do_lote(f):
+        t0 = time.perf_counter()
+        f.executar(dict(LOTE, quantidade=300))
+        return time.perf_counter() - t0
+
+    vazio = []
+    for _ in range(3):  # 3 modelos novos, o melhor tempo (o mínimo tira o ruído da máquina)
+        f = novo()
+        f.executar(TIPO)
+        vazio.append(tempo_do_lote(f))
+    f = novo()
+    f.executar(TIPO)
+    for _ in range(8):  # 8 x 250 = 2000 paredes do tipo, em lotes menores para a preparação não pesar
+        f.executar(dict(LOTE, quantidade=250))
+    assert len(f.ifc.by_type("IfcWall")) == 2000
+    cheio = [tempo_do_lote(f) for _ in range(2)]  # o modelo vai de 2000 a 2600 paredes: o mínimo é o lote que ainda vê ~2000
+    razao = min(cheio) / min(vazio)
+    assert razao < 2.0, f"lote de 300 paredes: {min(vazio):.2f} s com 0 paredes do tipo, {min(cheio):.2f} s com ~2000 ({razao:.1f}x; o limite é 2x): o custo por parede cresce com as paredes que o tipo já tem"
 
 def test_trava_do_modelo_um_escritor_por_vez(novo, fa):
     f = novo()

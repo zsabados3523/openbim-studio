@@ -9,6 +9,7 @@ import json
 import math
 import os
 import sys
+import traceback
 from pathlib import Path
 
 import numpy as np
@@ -21,6 +22,7 @@ SUFIXOS = {".py", ".cpp", ".h", ".hpp", ".cc"}
 # Geometria de apoio (montagem livre no contrato) e relações de material (A compartilha, B não): ficam fora da contagem por classe.
 LIVRES = {"IfcCartesianPoint", "IfcDirection", "IfcAxis2Placement2D", "IfcAxis2Placement3D", "IfcCartesianPointList2D", "IfcCartesianPointList3D", "IfcIndexedPolyCurve",
           "IfcPolyline", "IfcArbitraryClosedProfileDef", "IfcRectangleProfileDef"}
+# TODO: sai depois que a T11c for mesclada (a exceção de material some: A e B passam a gravar as mesmas relações; ver LOTE_OPUS_24 B6).
 MATERIAL = {"IfcMaterialLayerSetUsage", "IfcRelAssociatesMaterial"}
 FIRE = ("Pset_WallCommon", "FireRating")
 MAX_DIFERENCAS = 20
@@ -160,7 +162,10 @@ MEDIDOS = ("3", "4a", "4b", "4c", "5b")
 
 
 def _num(x):
-    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+    try:
+        return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+    except OverflowError:  # inteiro gigante no JSON (10**400) não cabe em float
+        return False
 
 
 def _roteiro():  # {"n": {passo: repetições}, "lote": tamanho do lote do 5b}: os números do roteiro R, nunca fixos aqui
@@ -190,7 +195,10 @@ def _relogio(pid, r):  # [[t_ms, seq], ...] ordenado por tempo (a ferramenta nun
     for k, x in enumerate(rel):
         if not (isinstance(x, (list, tuple)) and len(x) == 2 and _num(x[0]) and _num(x[1])):
             raise ValueError(f"passo {pid}: entrada {k} do relógio inválida ({x!r})")
-    return sorted(([float(x[0]), x[1]] for x in rel), key=lambda x: x[0])
+    r = sorted(([float(x[0]), x[1]] for x in rel), key=lambda x: x[0])
+    if len({x[0] for x in r}) != len(r):
+        raise ValueError(f"passo {pid}: relógio com tempo repetido")
+    return r
 
 
 def _validar_medicao(m, rotulo):
@@ -210,8 +218,8 @@ def _validar_medicao(m, rotulo):
         if pid not in por_id:
             raise ValueError(f"{rotulo}: passo {pid} ausente")
         reps = por_id[pid]["reps"]
-        if len(reps) < ro["n"].get(pid, 1):
-            raise ValueError(f"{rotulo}: passo {pid} com {len(reps)} repetições (o roteiro pede {ro['n'].get(pid, 1)})")
+        if pid in ro["n"] and len(reps) != ro["n"][pid] or pid not in ro["n"] and not reps:  # o roteiro fixa N: nem a menos nem a mais
+            raise ValueError(f"{rotulo}: passo {pid} com {len(reps)} repetições (o roteiro pede {ro['n'].get(pid, 'ao menos 1')})")
         for k, r in enumerate(reps):
             _tempos(pid, k, r, pid == "4a")
             if pid in ("4c", "5b"):
@@ -220,7 +228,9 @@ def _validar_medicao(m, rotulo):
         n = len(r["criados"]) if isinstance(r.get("criados"), list) else None
         if n != ro["lote"]:
             raise ValueError(f"{rotulo}: passo 5b, repetição {k}: `criados` {'ausente' if n is None else f'com {n} paredes'} (o roteiro pede {ro['lote']})")
-        if not _num(r.get("sequencia")):
+        if len(set(r["criados"])) != n:
+            raise ValueError(f"{rotulo}: passo 5b, repetição {k}: `criados` com GlobalId repetido")
+        if not (isinstance(r.get("sequencia"), int) and not isinstance(r.get("sequencia"), bool) and r["sequencia"] >= 1):
             raise ValueError(f"{rotulo}: passo 5b, repetição {k}: `sequencia` ausente ou inválida ({r.get('sequencia')!r})")
         t = primeiro_quadro(_relogio("5b", r), r["sequencia"])
         if t is None or t > r["t_quadro_ms"]:
@@ -498,8 +508,9 @@ def main(argv=None):
     except (ValueError, OSError) as e:
         print(f"ENTRADA INVÁLIDA: {e}", file=sys.stderr)
         return 2
-    except (KeyError, TypeError, IndexError, AttributeError) as e:  # rede de segurança: dado fora do formato nunca vira traceback nem aprovação
+    except (KeyError, TypeError, IndexError, AttributeError, OverflowError) as e:  # rede de segurança: dado fora do formato nunca vira aprovação
         print(f"ENTRADA INVÁLIDA: formato inesperado em medicao.json ({e!r})", file=sys.stderr)
+        print(traceback.format_exc(), file=sys.stderr)  # depois da mensagem: o traceback ajuda quem depura
         return 2
     if args.json:
         Path(args.json).write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")

@@ -304,6 +304,28 @@ def test_t11c_lote_que_falha_no_meio_deixa_zero_usos_novos_e_o_desfazer_seguinte
         aux.confere_uma_camada_por_parede(f.ifc, 10)
         assert forma(f.ifc.by_guid(lote[0]))[2] == [2 * 5.0, 0.0, 0.0], prefixos
 
+def test_t11c_custo_do_lote_nao_cresce_com_as_paredes_que_o_tipo_ja_tem(novo):  # sentinela de escala (lote 23 A3): vale com OBIM_S04_T11C_OBRIGATORIO=1 (o `fa` falha em vez de pular)
+    # O mesmo lote de 300 paredes, com 0 e com ~2000 paredes do tipo já no modelo: o tempo não pode mais que dobrar.
+    # Não prescreve número nem forma de chamada da API (o lote 23 mediu 5,7x num código quadrático e 1,1x na alternativa linear).
+    def tempo_do_lote(f):
+        t0 = time.perf_counter()
+        f.executar(dict(LOTE, quantidade=300))
+        return time.perf_counter() - t0
+
+    vazio = []
+    for _ in range(3):  # 3 modelos novos, o melhor tempo (o mínimo tira o ruído da máquina)
+        f = novo()
+        f.executar(TIPO)
+        vazio.append(tempo_do_lote(f))
+    f = novo()
+    f.executar(TIPO)
+    for _ in range(8):  # 8 x 250 = 2000 paredes do tipo, em lotes menores para a preparação não pesar
+        f.executar(dict(LOTE, quantidade=250))
+    assert len(f.ifc.by_type("IfcWall")) == 2000
+    cheio = [tempo_do_lote(f) for _ in range(2)]  # o modelo vai de 2000 a 2600 paredes: o mínimo é o lote que ainda vê ~2000
+    razao = min(cheio) / min(vazio)
+    assert razao < 2.0, f"lote de 300 paredes: {min(vazio):.2f} s com 0 paredes do tipo, {min(cheio):.2f} s com ~2000 ({razao:.1f}x; o limite é 2x): o custo por parede cresce com as paredes que o tipo já tem"
+
 def test_trava_do_modelo_um_escritor_por_vez(novo, fa):
     f = novo()
     f.executar(TIPO)

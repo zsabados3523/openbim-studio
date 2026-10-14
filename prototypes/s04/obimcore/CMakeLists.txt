@@ -44,26 +44,32 @@ foreach(sh malha_vert malha_frag)
   string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," hex "${hex}")
   file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/${sh}.inc" "${hex}")
 endforeach()
-nanobind_add_module(_obimcore ponte.cpp malha.cpp viewport.cpp cena.cpp camera.cpp selecao.cpp)
-target_include_directories(_obimcore PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+# Camada C++ PURA (T14b): sem nanobind e sem Python; um executável Qt (T14c) liga esta biblioteca. Posição independente (entra no módulo, que é .so/.pyd).
+add_library(obimcore_nucleo STATIC nucleo/malha.cpp nucleo/cena.cpp nucleo/camera.cpp nucleo/selecao.cpp nucleo/motor.cpp)
+set_target_properties(obimcore_nucleo PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_include_directories(obimcore_nucleo PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/nucleo" PRIVATE "${CMAKE_CURRENT_BINARY_DIR}" ${OpenCASCADE_INCLUDE_DIR})
+target_compile_definitions(obimcore_nucleo PUBLIC OBIM_IFC_VERSAO="${IFC_VERSAO}" OBIM_IFC_BUILD="${IFC_BUILD}")
+target_link_libraries(obimcore_nucleo PUBLIC
+  IfcOpenShell::IfcParse IfcOpenShell::IfcGeom IfcOpenShell::parse_schema_ifc2x3 IfcOpenShell::parse_schema_ifc4
+  IfcOpenShell::parse_schema_ifc4x1 IfcOpenShell::parse_schema_ifc4x3_add2
+  TKernel Qt6::Core Qt6::Gui Qt6::Widgets Qt6::GuiPrivate)
+# Módulo Python: só a ponte (adapta tipos do Python para o núcleo). Mutex: `Motor::m_` antes de `DadosCena::m_`; o Python é dono, o C++ não guarda endereço.
+nanobind_add_module(_obimcore ponte.cpp ponte_malha.cpp ponte_viewport.cpp)
+target_link_libraries(_obimcore PRIVATE obimcore_nucleo)
 set_target_properties(_obimcore PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${OBIM_SAIDA}/obimcore")
 foreach(cfg DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
   set_target_properties(_obimcore PROPERTIES LIBRARY_OUTPUT_DIRECTORY_${cfg} "${OBIM_SAIDA}/obimcore")
 endforeach()
-target_compile_definitions(_obimcore PRIVATE OBIM_IFC_VERSAO="${IFC_VERSAO}" OBIM_IFC_BUILD="${IFC_BUILD}")
 target_include_directories(_obimcore PRIVATE ${OpenCASCADE_INCLUDE_DIR})
-target_link_libraries(_obimcore PRIVATE
-  IfcOpenShell::IfcParse IfcOpenShell::IfcGeom IfcOpenShell::parse_schema_ifc2x3 IfcOpenShell::parse_schema_ifc4
-  IfcOpenShell::parse_schema_ifc4x1 IfcOpenShell::parse_schema_ifc4x3_add2
-  TKernel Qt6::Core Qt6::Gui Qt6::Widgets Qt6::GuiPrivate)
 if(MSVC)
-  target_compile_options(_obimcore PRIVATE /utf-8)
+  target_compile_options(obimcore_nucleo PUBLIC /utf-8)
 endif()
 if(WIN32)
   # O Boost aparece nas dependências só pelo nome (boost_*.lib): o MSVC precisa saber onde o conda guarda as bibliotecas.
-  target_link_directories(_obimcore PRIVATE "${CONDA}/Library/lib")
-  target_link_libraries(_obimcore PRIVATE psapi winmm)  # winmm: timeBeginPeriod (relógio de 1 ms para a thread de desenho)
+  target_link_directories(obimcore_nucleo PUBLIC "${CONDA}/Library/lib")
+  target_link_libraries(obimcore_nucleo PUBLIC winmm)  # winmm: timeBeginPeriod (relógio de 1 ms para a thread de desenho)
+  target_link_libraries(_obimcore PRIVATE psapi)
 elseif(UNIX AND NOT APPLE)
   # As bibliotecas dos esquemas se registram ao carregar; sem isto o ligador as descarta.
-  target_link_options(_obimcore PRIVATE -Wl,--no-as-needed)
+  target_link_options(obimcore_nucleo INTERFACE -Wl,--no-as-needed)
 endif()

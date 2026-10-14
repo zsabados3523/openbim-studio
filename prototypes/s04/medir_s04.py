@@ -19,11 +19,9 @@ TETO, M4_MS, M5_VIRTUAL_MS, M5_ESTRITO_MS = 3.0, 20000.0, 100.0, 200.0
 OFICIAL = 3000  # paredes do modelo oficial (régua estrita)
 TOL = 1e-6
 SUFIXOS = {".py", ".cpp", ".h", ".hpp", ".cc"}
-# Geometria de apoio (montagem livre no contrato) e relações de material (A compartilha, B não): ficam fora da contagem por classe.
+# Geometria de apoio (montagem livre no contrato): fica fora da contagem por classe.
 LIVRES = {"IfcCartesianPoint", "IfcDirection", "IfcAxis2Placement2D", "IfcAxis2Placement3D", "IfcCartesianPointList2D", "IfcCartesianPointList3D", "IfcIndexedPolyCurve",
           "IfcPolyline", "IfcArbitraryClosedProfileDef", "IfcRectangleProfileDef"}
-# TODO: sai depois que a T11c for mesclada (a exceção de material some: A e B passam a gravar as mesmas relações; ver LOTE_OPUS_24 B6).
-MATERIAL = {"IfcMaterialLayerSetUsage", "IfcRelAssociatesMaterial"}
 FIRE = ("Pset_WallCommon", "FireRating")
 MAX_DIFERENCAS = 20
 
@@ -386,7 +384,7 @@ def _ler_modelo(caminho):
     fm, nome = _formas(f), lambda x: x.Name if x is not None else ""  # noqa: E731
     classes, grupos = {}, {}
     for e in f:
-        if e.is_a() not in LIVRES | MATERIAL:
+        if e.is_a() not in LIVRES:
             classes[e.is_a()] = classes.get(e.is_a(), 0) + 1
     for w in f.by_type("IfcWall"):
         tipo = E.get_type(w)

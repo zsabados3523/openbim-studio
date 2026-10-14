@@ -29,3 +29,4 @@ Regras: sem sessão opus com menos de 25% da semana restante; sem subagente para
 | Semana | Dias parados por limite | Custo médio por fatia (P/M/G) em % semanal | Fila opus mais antiga (dias) |
 |---|---|---|---|
 | 1 | | | |
+- 2026-10-13 (fim da tarde): janela 67%, semanal 75% (25% restante, no limite). Opus pausado até a renovação; sem novos subagentes em paralelo (janela >60%).

@@ -75,7 +75,12 @@ base Paredes::contexto(const char* tipo, const char* ident, const char* vista, b
     }
     return cria("IfcGeometricRepresentationSubContext", {{0, ident}, {1, tipo}, {6, pai}, {8, enu("IfcGeometricProjectionEnum", vista)}});
 }
-Paredes::Paredes() : f_(std::make_unique<file>(&S())) {
+Paredes::Paredes() {
+    // Construção concorrente (achado da T14c): a 1a construção inicializa estáticos preguiçosos do IfcOpenShell que não aguentam duas threads. A trava vale só na CONSTRUÇÃO
+    // (esquema, arquivo, contextos, unidades, esqueleto): outras threads criando `Paredes` esperam aqui; nenhum aquecimento é exigido do chamador.
+    static std::mutex construcao;
+    std::lock_guard<std::mutex> guarda(construcao);
+    f_ = std::make_unique<file>(&S());
     base corpo = contexto("Model", "Body", "MODEL_VIEW", false), eixo = contexto("Plan", "Axis", "GRAPH_VIEW", false);
     Bases un;
     for (auto [u, n] : {std::pair{"AREAUNIT", "SQUARE_METRE"}, {"VOLUMEUNIT", "CUBIC_METRE"}, {"LENGTHUNIT", "METRE"}}) un.push_back(cru("IfcSIUnit", {{1, enu("IfcUnitEnum", u)}, {3, enu("IfcSIUnitName", n)}}));

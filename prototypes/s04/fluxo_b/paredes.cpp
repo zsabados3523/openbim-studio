@@ -30,11 +30,12 @@ base ref(const base& e, int i) { base b = e.get_attribute_value(i); return b; }
 struct LocalC {  // número com ponto decimal só NESTA thread (a localidade do processo e das outras threads nunca muda)
 #ifdef _WIN32
     int modo; std::wstring velha;
-    LocalC() : modo(_configthreadlocale(_ENABLE_PER_THREAD_LOCALE)) { const wchar_t* l = _wsetlocale(LC_NUMERIC, nullptr); velha = l ? l : L"C"; _wsetlocale(LC_NUMERIC, L"C"); }
+    LocalC() : modo(_configthreadlocale(_ENABLE_PER_THREAD_LOCALE)) { if (modo == -1) throw std::runtime_error("sem localidade por thread"); const wchar_t* l = _wsetlocale(LC_NUMERIC, nullptr); velha = l ? l : L"C"; _wsetlocale(LC_NUMERIC, L"C"); }
     ~LocalC() { _wsetlocale(LC_NUMERIC, velha.c_str()); if (modo != _ENABLE_PER_THREAD_LOCALE) _configthreadlocale(_DISABLE_PER_THREAD_LOCALE); }
 #else
-    locale_t c = newlocale(LC_NUMERIC_MASK, "C", locale_t(0)), velha = c ? uselocale(c) : locale_t(0);
-    LocalC() { if (!c) throw std::runtime_error("sem a localidade C"); }
+    locale_t base_ = duplocale(uselocale(locale_t(0))),  // preserva as outras categorias da thread; só LC_NUMERIC vira "C"
+             c = base_ ? newlocale(LC_NUMERIC_MASK, "C", base_) : locale_t(0), velha = c ? uselocale(c) : locale_t(0);
+    LocalC() { if (!c) { if (base_) freelocale(base_); throw std::runtime_error("sem a localidade C"); } }
     ~LocalC() { uselocale(velha); freelocale(c); }
 #endif
 };
@@ -53,6 +54,8 @@ double escala(const base& u) {  // tamanho da unidade em metros: SI com prefixo 
 base Paredes::cru(const char* classe, Atributos a) { base e = f_->create(S().declaration_by_name(classe)); for (auto& [i, v] : a) aplicar(e, i, v); return e; }
 base Paredes::contexto(const char* tipo, const char* ident, const char* vista, bool diario) {
     auto cria = [&](const char* classe, Atributos a) { return diario ? criar(classe, std::move(a)) : cru(classe, std::move(a)); };
+    for (auto& x : f_->instances_by_type(S().declaration_by_name("IfcGeometricRepresentationSubContext")))  // o subcontexto da base vale sem criar o pai
+        if (texto_ou(x, 0) == ident && texto_ou(x, 1) == tipo && !x.get_attribute_value(8).isNull() && enumerado(x, 8) == vista) return x;
     base pai;
     for (auto& x : f_->instances_by_type_excl_subtypes(S().declaration_by_name("IfcGeometricRepresentationContext"))) if (texto_ou(x, 1) == tipo) { pai = x; break; }
     if (!pai) {  // contexto de topo do tipo (Model 3D ou Plan 2D), com o sistema de coordenadas na origem
@@ -60,9 +63,16 @@ base Paredes::contexto(const char* tipo, const char* ident, const char* vista, b
         base wcs = d3 ? cria("IfcAxis2Placement3D", {{0, cria("IfcCartesianPoint", {{0, Reais{0, 0, 0}}})}, {1, cria("IfcDirection", {{0, Reais{0, 0, 1}}})}, {2, cria("IfcDirection", {{0, Reais{1, 0, 0}}})}})
                       : cria("IfcAxis2Placement2D", {{0, cria("IfcCartesianPoint", {{0, Reais{0, 0}}})}, {1, cria("IfcDirection", {{0, Reais{1, 0}}})}});
         pai = cria("IfcGeometricRepresentationContext", {{1, tipo}, {2, int64_t{d3 ? 3 : 2}}, {3, 1e-5}, {4, wcs}});
+        if (diario) {  // o contexto novo entra na lista do projeto (na transação: desfazer, refazer e rollback valem)
+            auto projetos = f_->instances_by_type(S().declaration_by_name("IfcProject"));
+            if (!projetos.empty()) {
+                Bases atuais;
+                if (!projetos[0].get_attribute_value(7).isNull()) atuais = lista(projetos[0], 7);
+                atuais.push_back(pai);
+                alterar(projetos[0], 7, atuais);
+            }
+        }
     }
-    for (auto& x : f_->instances_by_type(S().declaration_by_name("IfcGeometricRepresentationSubContext")))
-        if (texto_ou(x, 0) == ident && texto_ou(x, 1) == tipo && !x.get_attribute_value(8).isNull() && enumerado(x, 8) == vista) return x;
     return cria("IfcGeometricRepresentationSubContext", {{0, ident}, {1, tipo}, {6, pai}, {8, enu("IfcGeometricProjectionEnum", vista)}});
 }
 Paredes::Paredes() : f_(std::make_unique<file>(&S())) {

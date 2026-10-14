@@ -13,7 +13,7 @@ namespace {
 // Toda chamada converte os argumentos COM o GIL, solta o GIL e só então pega a trava do modelo (nunca ao contrário: impasse). `espera`: None espera a vez; 0 falha na hora com ModeloOcupado (antes de validar).
 bool esperar(const nb::object& espera) {
     if (espera.is_none()) return true;
-    if (!nb::isinstance<nb::int_>(espera) && !nb::isinstance<nb::float_>(espera)) throw std::invalid_argument("espera: só None (esperar a vez) ou 0 (não esperar)");
+    if (nb::isinstance<nb::bool_>(espera) || (!nb::isinstance<nb::int_>(espera) && !nb::isinstance<nb::float_>(espera))) throw std::invalid_argument("espera: só None (esperar a vez) ou 0 (não esperar)");
     if (nb::cast<double>(espera) != 0.0) throw std::invalid_argument("espera: só None (esperar a vez) ou 0 (não esperar)");
     return false;
 }

@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Teste do AdaptadorCarga (S03-T05-C1, B-8): viewport falso, sem tela."""
-import os
 import sys
 import time
 from pathlib import Path
@@ -54,10 +53,7 @@ def test_adaptador_m600(tmp_path):
 
 # ---------- P17 (cartão T08-0b, LOTE_OPUS_7.md §1.6 e §4 item 5): troca de janela com a liberação ligada ----------
 # Esperado da T08-E: ao perder lotes, o viewport emite o sinal `contexto_perdido` (sem argumentos) e zera a caixa da cena;
-# o `AdaptadorCarga` reabre o arquivo sozinho (mesmo caminho e opções). Hoje a cena fica vazia em silêncio.
-requer_reabertura = pytest.mark.skipif(
-    os.environ.get("OBIM_FORCAR_GUARDAS") != "1" and not hasattr(CuboViewport, "contexto_perdido"),
-    reason="aguarda S03-T08-E (sinal contexto_perdido no viewport)")
+# o `AdaptadorCarga` reabre o arquivo sozinho (mesmo caminho e opções). (Antes da T08-E a cena ficava vazia em silêncio.)
 
 
 def _esperar(app, cond, limite_s):
@@ -112,7 +108,6 @@ def test_p17_troca_de_janela_recarrega_sozinha(tmp_path):
     assert fins >= 2, "o adaptador não reabriu o arquivo"
 
 
-@requer_reabertura
 def test_p17_sinal_contexto_perdido_emitido(tmp_path):
     antes, depois, _perdidos, sinais, _fins = _trocar_de_janela(tmp_path)
     assert len(sinais) >= 1, "o viewport não emitiu contexto_perdido"

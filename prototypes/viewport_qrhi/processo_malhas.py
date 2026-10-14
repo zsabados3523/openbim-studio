@@ -2,11 +2,15 @@
 """Processo filho que converte o IFC em malhas (S03-T08-B1; LOTE_OPUS_6.md §2.2 D3). Python puro, sem Qt.
 
 O filho abre o arquivo, lista os produtos, converte com `ifcopenshell.geom.iterator` e manda mensagens
-`(tipo, dados)` por um `Pipe` de mão única: `fase`, `inicio`, `lote`, `feitos`, `sem_malha`, `erro`, `fim`.
+`(tipo, dados)` por um `Pipe` de mão única: `fase`, `inicio`, `lote`, `feitos`, `atual`, `sem_malha`, `erro`, `fim`.
 Quem lê e vigia é a thread do `CarregadorMalhas`. O filho nunca importa Qt.
 Ganchos de teste (só valem se a variável existir): OBIM_TESTE_PECA_LENTA="<guid>=<s>[,<guid>=<s>]" e
 OBIM_TESTE_MATAR_FILHO="<guid>" (o filho sai com código 3 nessa peça) e OBIM_TESTE_FALHAR_CAIXA="<guid>" (o filho da
-caixa falha só nessa peça).
+caixa falha só nessa peça) e OBIM_TESTE_MATAR_NO_FIM=1 (o filho em modo isolado sai com código 3 depois do último
+`lote` e antes do `fim`).
+Modos: normal (blocos, várias threads), isolado (`isolado`: 1 thread, UM iterador para os ids pedidos) e uma peça por vez
+(`isolado` e `por_peca`: um iterador por peça; antes de cada peça o filho manda `atual` com o id dela, e a peça em conversão
+quando o filho para ou cai é a acusada).
 """
 from __future__ import annotations
 
@@ -17,9 +21,9 @@ import time
 import numpy as np
 
 try:
-    from .carregador import DTYPE_VERTICE, _montar_lote, _paleta, _produto_para_numpy
+    from .carregador import DTYPE_VERTICE, MOTIVO_SEM_GEOMETRIA, _montar_lote, _paleta, _produto_para_numpy
 except ImportError:  # pragma: no cover  (módulo importado fora do pacote)
-    from carregador import DTYPE_VERTICE, _montar_lote, _paleta, _produto_para_numpy
+    from carregador import DTYPE_VERTICE, MOTIVO_SEM_GEOMETRIA, _montar_lote, _paleta, _produto_para_numpy
 
 
 def pico_memoria_mb(ident=None) -> float:
@@ -177,7 +181,7 @@ def _converter(enviar, params):
 
     feitos = 0
     t = time.perf_counter()
-    if isolado:  # um iterador por peça: a peça em curso é sempre a acusada ("atual"), e peça sem geometria não é confundida
+    if isolado:  # UM iterador para todas as peças pedidas (S04-T16), ou um por peça (`por_peca`); cada peça sai assim que fica pronta
         enviar("fase", "convertendo")
         buffer, t_buf = [], 0.0
 
@@ -195,13 +199,18 @@ def _converter(enviar, params):
             if time.perf_counter() - t_buf >= 0.2:
                 soltar()
 
-        for p in produtos:
-            enviar("atual", p.id())
-            _, sem = _bloco(ifcopenshell, cfg, arq, [p], params, enviar, lentas, matar, juntar)
-            feitos += 1
-            if sem:
-                enviar("sem_malha", sem)
+        if params.get("por_peca"):
+            sem = []
+            for p in produtos:
+                enviar("atual", p.id())  # antes de criar o iterador: a conversão da peça começa em initialize()
+                sem.extend(_bloco(ifcopenshell, cfg, arq, [p], params, enviar, lentas, matar, juntar)[1])
+        else:
+            _, sem = _bloco(ifcopenshell, cfg, arq, produtos, params, enviar, lentas, matar, juntar)
         soltar()
+        if sem:
+            enviar("sem_malha", sem)
+        if os.environ.get("OBIM_TESTE_MATAR_NO_FIM"):  # gancho de teste (S03-T08-G): cai depois do último lote
+            os._exit(3)
     else:
         for ini in range(0, total, tb):
             bloco = produtos[ini:ini + tb]
@@ -220,7 +229,7 @@ def _converter(enviar, params):
 
 
 def _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar, entregar=None):
-    """Converte os produtos de um bloco. Devolve (lista ordenada por id, lista de sem malha).
+    """Converte os produtos de um bloco com UM iterador. Devolve (lista ordenada por id, lista de sem malha).
     Com `entregar` (modo isolado) cada peça sai logo depois do aviso `feitos` e a lista devolvida fica vazia."""
     porid = {p.id(): p for p in bloco}
     achados, sem = {}, []
@@ -233,7 +242,7 @@ def _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar, entrega
         try:
             if not it.initialize():
                 log = " | ".join(str(ifcopenshell.get_log()).splitlines()[-3:])
-                falhou(list(porid), "o conversor não achou geometria nesta peça" if entregar else
+                falhou(list(porid), MOTIVO_SEM_GEOMETRIA if entregar else
                        "initialize() falhou" + (f": {log}" if log else ""))
                 return [], sem
             while True:
@@ -255,9 +264,11 @@ def _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar, entrega
         finally:
             del it
     except Exception as e:
-        falhou([i for i in porid if i not in achados], f"erro no iterador: {type(e).__name__}: {e}")
+        if entregar and len(porid) > 1:  # não dá para dizer qual peça deu erro: cai, e o pai confirma uma a uma
+            os._exit(3)
+        falhou([i for i in porid if i not in achados], f"o conversor falhou nesta peça: {type(e).__name__}: {e}")
     else:
-        falhou([i for i in porid if i not in achados], "o iterador não devolveu geometria")
+        falhou([i for i in porid if i not in achados], "o conversor não devolveu geometria para esta peça")
     return [] if entregar else [(i, porid[i].GlobalId, *achados[i]) for i in sorted(achados)], sem
 
 
@@ -305,11 +316,9 @@ def _pontos_item(util_p, item, m, saida, t_fim):
 
 
 def _caixa_produto(util_p, prod, escala):
-    """(mínimo, máximo) em metros, no mundo. Pontos da representação; qualquer falha ou estouro: cubo de 0,5 m."""
-    try:
-        m = util_p.get_local_placement(prod.ObjectPlacement) if prod.ObjectPlacement is not None else np.eye(4)
-    except Exception:
-        m = np.eye(4)
+    """(mínimo, máximo) em metros, no mundo. Pontos da representação; falha ou estouro ao ler os pontos: cubo de 0,5 m na posição da peça; posição ilegível: a peça falha (vai para `sem_malha`)."""
+    # S03-T08-G: posição ilegível = a peça falha (vai para `sem_malha`); nunca uma caixa em posição zero
+    m = util_p.get_local_placement(prod.ObjectPlacement) if prod.ObjectPlacement is not None else np.eye(4)
     try:
         t_fim = time.perf_counter() + LIMITE_CAIXA_S
         pts = []

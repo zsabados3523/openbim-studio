@@ -1,8 +1,39 @@
-# Perguntas ao PO
+# Perguntas e decisões do PO
 
-> Cada pergunta traz a recomendação do líder. Sem resposta, vale a recomendação como decisão assumida, registrada aqui. Atualizado: 2026-10-10.
+> Três partes: **Regras em vigor** (curta; o que vale hoje), **Abertas** (o que espera o PO) e **Histórico de respostas** (ordem cronológica; só consulta). Cada pergunta traz a recomendação do líder. Sem resposta, vale a recomendação como decisão assumida, registrada aqui. Atualizado: 2026-10-14.
 
-## Abertas
+## Regras em vigor (2026-10-14)
+- **Opus:** abrir sessão só com semanal acima de 25% restante e janela de 5 h abaixo de 70% (D9). A exceção de cota de 13/10 **encerrou** em 14/10 09:00Z. Quem abre: o líder, como subagente, conforme o `CLAUDE.md` item 6.
+- **S04 pausada (D1):** nenhuma T3 nova na S04 (T14c, T15 em diante) até as revisões de S01, S02 e S03 e as respostas D1 a D8. Só terminam PR 83 (T12).
+- **Escopo da 1.0 (D3):** versão mínima **inclui detalhes 2D**. DXF e fachadas são candidatos a adiar na sessão de escopo. Prazo de 21 a 42 meses não é recalculado antes da medição da F0.
+- **Planos antigos (D2):** estão em `docs/arquivo/`. O `CLAUDE.md` ainda os cita pela raiz; mudar isso exige cartão aprovado pelo PO.
+- **Exceção de portão (D8):** toda exceção registra a meta original e o motivo; o portão F0 (S10) é reavaliado com as metas originais.
+- **macOS:** melhor esforço, sem garantia, nunca prometido em texto ao usuário (2026-10-13).
+- **Nada em fórum ou convite externo em nome do PO** sem ordem dele (2026-10-13).
+- **Só o PO decide:** ADR, meta do portão, escopo, licença, regras do processo e `CLAUDE.md`, instalar ferramenta nova, baixar arquivo, cota extra, apagar dados, credenciais, `main` direto, execução na tela real, meta da F0 não atingida.
+- **Exceções de ausência do PO (12, 13 e 13/10 noite):** válidas só enquanto o PO estava fora. Ele voltou e respondeu D1 a D9 em 14/10; tratadas como encerradas (confirmar, item A9).
+
+## Abertas (esperam o PO)
+| # | Pergunta | Recomendação do líder |
+|---|---|---|
+| A1 | Rodada única na tela real do Linux para os números oficiais da S04 (M1 a M6), quando PR 83 e T14c entrarem | Sim, depois que a D1 acabar |
+| A2 | ADR-001 e ADR-004 com números (cartão T19) e a nota sobre a interface `atualizar(lote_novo, guids_remover)` | Decidir ao fim da S04, com a medição do critério de custo de manutenção (P6) |
+| A3 | Travar o ambiente do instalador (`packaging/runtime-environment.yml`) pela mesma trava `.lock` | Sim |
+| A4 | Aplicar ao AppImage o mesmo critério do instalador (roda só quando o empacotamento muda) | Sim, depois de ver o PR 91 funcionando |
+| A5 | Se os testes de tempo do Windows continuarem a oscilar: dar folga aos limites (muda metas) | Preferir medir pela mediana de várias rodadas; folga só com a meta original registrada (D8) |
+| A6 | Quando e a quem enviar o convite de revisão externa; wireframes da S09; 8 testes no Revit | Decidir depois das revisões S01 a S03 |
+| A7 | Atualizar o ambiente local (`zlib`, `libxml2`) para compilar o fluxo B na máquina do PO (instalar pede ok) | Sim, quando a D1 acabar |
+| A8 | Ajustar `CLAUDE.md` para os planos em `docs/arquivo/` (cartão de mudança, aprovação do PO) | Cartão T0 pequeno, só trocar os caminhos |
+| A9 | Confirmar que as exceções de ausência acabaram | Sim |
+| A10 | Passar os números do `/usage` de 13 e 14/10 para `QUOTA.md` | Informar janela e semana, antes e depois |
+| A11 | D5: nomes dos colegas de estágio para testar e momento | Sem prazo; combinar antes da F1 |
+| A12 | D6: ler o resumo de 5 linhas da S01 (aceite da tabela de licenças como aceite seu) e dar o parecer sobre S01-a | Sim, cerca de 10 minutos, quando a revisão S01 terminar |
+| A13 | Aceite do resumo da entrevista S09 (`docs/research/2026-10-13-entrevista-s09-resumo.md`) | Ler e aceitar antes dos wireframes |
+
+## Histórico de respostas
+
+### Perguntas iniciais P1 a P7 (todas respondidas em 2026-10-10)
+
 | # | Pergunta | Recomendação do líder | Resposta do PO |
 |---|---|---|---|
 | P1 | Quais os percentuais de `/usage` (janela de 5 h e semana), antes e depois desta sessão, para a primeira linha de QUOTA.md? | Informar os quatro números; se não anotou o "antes", informar só o "depois" | 2026-10-10: janela 22%→29%; semana 2%→3% (registrado em QUOTA.md) |

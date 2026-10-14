@@ -140,3 +140,4 @@ Uma linha por tarefa concluída ou escalada, e por mudança de classe de tarefa.
 2026-10-14 | S04-T12 | T3 | Opus lote 28 APROVADO; mescla auto após CI verde (PR 83). Anotado: se test_s04_selecao_c.py:352 falhar de novo, abrir cartão da T08 | 
 
 2026-10-14 | REVISAO-F0 | correções do inventário e cartões S01 | BOARD (data, tabelas de cartões S03 e S04, linha da S03), QUEUE_OPUS reduzida à fila real, QUOTA com 13 e 14/10 (números `?` pendentes), LOG em formato único (7 linhas longas em `reports/LOG_DETALHES_2026-10-14.md`), PO.md com regras em vigor e abertas A1 a A13; cartões F0-S01-R1 a R3 escritos; `PROPOSTA_REVISAO_F0.md` entrou no git. Nenhuma sessão Opus aberta, nenhuma T3 na S04.
+2026-10-14 | F0-S01-R1 | FEITA | Aceite contra o plano (9 critérios: 7 sim, SINAPI parcial, Codeberg adiado), cobertura dos 12 itens de v2/03 (lacuna: Qt Shader Tools), resumo de 5 linhas para o PO em reports/F0-S01-revisao.md. Sem Opus.

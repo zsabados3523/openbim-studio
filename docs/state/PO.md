@@ -27,7 +27,7 @@
 | A9 | Confirmar que as exceções de ausência acabaram | Sim |
 | A10 | Passar os números do `/usage` de 13 e 14/10 para `QUOTA.md` | Informar janela e semana, antes e depois |
 | A11 | D5: nomes dos colegas de estágio para testar e momento | Sem prazo; combinar antes da F1 |
-| A12 | D6: ler o resumo de 5 linhas da S01 (aceite da tabela de licenças como aceite seu) e dar o parecer sobre S01-a | Sim, cerca de 10 minutos, quando a revisão S01 terminar |
+| A12 | D6: ler o resumo de 5 linhas da S01 (aceite da tabela de licenças como aceite seu) e dar o parecer sobre S01-a | Sim. **Resumo pronto** em `reports/F0-S01-revisao.md` (topo); leva cerca de 10 minutos |
 | A13 | Aceite do resumo da entrevista S09 (`docs/research/2026-10-13-entrevista-s09-resumo.md`) | Ler e aceitar antes dos wireframes |
 
 ## Histórico de respostas

@@ -126,3 +126,5 @@ Uma linha por tarefa concluída ou escalada, e por mudança de classe de tarefa.
 2026-10-13 | S04-T13 | T3 | Opus lote 22 APROVADO (itens 1-4 vão à T14); diff 434 linhas fora dos testes, exceção aceita | merge PR 79
 2026-10-13 | S04-T16b | T3 | Opus lote 21 APROVADO; diff 552+/65- (458 de oráculo), exceção aceita | merge PR 78 após Windows verde
 2026-10-13 | S04-T14 | T3 | dividida em T14a/T14b/T14c (não cabe em 400 linhas; ampliados arquivos permitidos: paredes.*, ponte.cpp, obimcore) | oráculo achou
+2026-10-13 | S04-T11c e T12 | T3 | Opus lote 23 REPROVOU os dois (T11c custo quadrático; T12 aprova NaN/n=1). Correções em curso; 1ª reprovação | 
+2026-10-13 | CI | T0 | ERRO do líder: ao resolver conflito do PR 78 mantive só a versão do ramo e descartei o passo 'Fluxo B, paredes em C++ (T13)' do ci.yml no main; restaurado no PR 82 (merge de main). Até o 82 entrar, o main não roda o oráculo da T13 no CI | corrigido no PR 82

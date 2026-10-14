@@ -33,3 +33,13 @@ set_target_properties(fluxo_b_paredes PROPERTIES LIBRARY_OUTPUT_DIRECTORY "$<1:$
 if(WIN32)
   target_link_directories(paredes PUBLIC "${CONDA}/Library/lib")  # o Boost aparece nas dependências só pelo nome (boost_*.lib)
 endif()
+# Executável com janela (S04-T14c): camada C++ pura do núcleo (`obimcore_nucleo`, sem Python; o módulo `_obimcore` não entra: EXCLUDE_FROM_ALL) + `paredes`.
+find_package(Qt6 COMPONENTS Core Gui Widgets GuiPrivate REQUIRED)  # antes do add_subdirectory: os alvos importados têm de valer também aqui
+find_package(OpenCASCADE CONFIG REQUIRED)
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../obimcore" obimcore_nucleo EXCLUDE_FROM_ALL)
+add_executable(fluxo_b_janela main.cpp)
+target_link_libraries(fluxo_b_janela PRIVATE paredes obimcore_nucleo)
+set_target_properties(fluxo_b_janela PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<1:${OBIM_SAIDA}>")  # saída plana, ao lado do módulo
+if(WIN32)
+  target_link_libraries(fluxo_b_janela PRIVATE psapi)
+endif()

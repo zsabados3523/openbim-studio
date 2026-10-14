@@ -83,6 +83,23 @@ def corrida(k, n):  # lote de n paredes numa thread; a principal tenta um 2o esc
         it.append({"ocupado": ocupado, "livre": livre, "maior_tentativa_ms": maior, "lido_durante": lido, "esperado": antes + n, "retorno": len(saida.get("r", [])), "pode_desfazer": b.pode_desfazer(),
                    "total": b.contar(None), "total_ref": ref.contar(None), "paredes_final": b.contar("IfcWall")})
     return {"iteracoes": it}
+def a_frio(t):  # t threads criam o PRIMEIRO `Paredes()` do processo ao mesmo tempo (largada por barreira) e já usam o modelo; nada foi construído antes na thread principal
+    largada, erros, saidas = threading.Barrier(t), [], {}
+
+    def uma(k):
+        try:
+            largada.wait()
+            b = M.Paredes()
+            b.criar_tipo("PAR", [0.02, 0.11, 0.02])  # os comandos soltam o GIL: só o construtor poderia segurá-lo
+            ws = b.criar_paredes_lote("PAR", 4.25, 2.8, 0.15, 20)
+            saidas[k] = (len(ws), b.contar("IfcWall"), b.pode_desfazer())
+        except BaseException as e:  # noqa: BLE001
+            erros.append(repr(e))
+
+    ths = [threading.Thread(target=uma, args=(k,)) for k in range(t)]
+    [x.start() for x in ths]
+    [x.join(120) for x in ths]
+    return {"erros": erros, "vivas": sum(x.is_alive() for x in ths), "saidas": sorted(saidas.items())}
 if __name__ == "__main__":
     a = sys.argv[1:]
-    print("RESULTADO " + json.dumps(localidade(int(a[1]), int(a[2]), a[3]) if a[0] == "localidade" else corrida(int(a[1]), int(a[2]))))
+    print("RESULTADO " + json.dumps(a_frio(int(a[1])) if a[0] == "frio" else localidade(int(a[1]), int(a[2]), a[3]) if a[0] == "localidade" else corrida(int(a[1]), int(a[2]))))

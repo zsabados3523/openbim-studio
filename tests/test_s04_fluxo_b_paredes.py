@@ -638,3 +638,34 @@ def test_item4_segundo_escritor_com_espera_zero_falha_ocupado_e_a_leitura_espera
         assert x["maior_tentativa_ms"] < 200, f"{i}: com espera=0 o 2o escritor tem de falhar NA HORA, não esperar o lote ({x})"
         assert x["lido_durante"] == x["esperado"] == x["paredes_final"], f"{i}: a leitura viu o lote pela metade ({x})"
         assert x["retorno"] == 15000 and x["pode_desfazer"] == 3 and x["total"] == x["total_ref"], f"{i}: o escritor barrado tocou no modelo ou o lote saiu diferente do lote sozinho ({x})"
+
+# Construção concorrente (achado da T14c): várias threads criando o PRIMEIRO `Paredes` do processo ao mesmo tempo derrubam-no (SIGSEGV; 'malloc(): unaligned tcache chunk'); o aquecimento
+# (um modelo criado antes, na thread principal) cura. A causa está na 1a construção (estáticos preguiçosos do IfcOpenShell). Um filho NOVO por rodada: cada processo só tem UMA 1a construção.
+RODADAS_FRIO = 15
+def test_item_frio_a_ponte_aguenta_threads_criando_o_primeiro_paredes_ao_mesmo_tempo(mod14):  # pela ponte: HOJE passa, porque o construtor nanobind segura o GIL e serializa as construções
+    for i in range(RODADAS_FRIO):  # (guarda de regressão: vira falha se a ponte passar a soltar o GIL no construtor sem a biblioteca ser segura)
+        r = filho("frio", 4)
+        assert not r["erros"] and r["vivas"] == 0 and len(r["saidas"]) == 4, f"rodada {i}: {r}"
+        assert all(s[1] == [20, 20, 2] for s in r["saidas"]), f"rodada {i}: {r}"
+
+def _exe_frio():
+    pastas = [Path(os.environ["OBIM_S04_FLUXO_B_DIR"])] if os.environ.get("OBIM_S04_FLUXO_B_DIR") else []
+    pastas += [Path(x) for x in os.environ.get("PYTHONPATH", "").split(os.pathsep) if x] + [Path(sys.modules["fluxo_b_paredes"].__file__).parent]
+    for d in pastas:
+        for nome in ("fluxo_b_frio", "fluxo_b_frio.exe", "Release/fluxo_b_frio.exe"):
+            if (d / nome).is_file():
+                return d / nome
+    return None
+
+@pytest.mark.parametrize("t", [2, 4, 8])
+def test_item_frio_construcao_concorrente_de_paredes_e_segura(mod14, t):  # C++ puro (frio_teste.cpp, alvo `fluxo_b_frio` do CMakeLists): é onde o defeito aparece; a ponte segura o GIL
+    exe = _exe_frio()
+    if exe is None:
+        pular14("executável fluxo_b_frio ausente (alvo do CMakeLists.txt de prototypes/s04/fluxo_b/; build.sh o gera ao lado do módulo)")
+    for i in range(RODADAS_FRIO):  # cada rodada = processo novo = construção a frio
+        try:
+            p = subprocess.run([str(exe), str(t), "20"], capture_output=True, text=True, timeout=120)
+        except subprocess.TimeoutExpired:
+            pytest.fail(f"rodada {i} ({t} threads): o processo TRAVOU na construção concorrente")
+        assert p.returncode == 0 and f"FRIO ok {t}" in p.stdout, f"rodada {i} ({t} threads): o processo CAIU (código {p.returncode}; negativo = sinal, ex.: -11 = SIGSEGV):\n{p.stdout[-300:]}\n{p.stderr[-600:]}"
+

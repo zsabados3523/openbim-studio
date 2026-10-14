@@ -33,3 +33,7 @@ set_target_properties(fluxo_b_paredes PROPERTIES LIBRARY_OUTPUT_DIRECTORY "$<1:$
 if(WIN32)
   target_link_directories(paredes PUBLIC "${CONDA}/Library/lib")  # o Boost aparece nas dependências só pelo nome (boost_*.lib)
 endif()
+# Oráculo da S04-T14a: T threads C++ criam o 1o `Paredes` do processo juntas (frio_teste.cpp; o implementador não o edita). Sai ao lado do módulo.
+add_executable(fluxo_b_frio frio_teste.cpp)
+target_link_libraries(fluxo_b_frio PRIVATE paredes)
+set_target_properties(fluxo_b_frio PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<1:${OBIM_SAIDA}>")

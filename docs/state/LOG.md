@@ -132,4 +132,4 @@ Uma linha por tarefa concluída ou escalada, e por mudança de classe de tarefa.
 2026-10-14 | S04-T11c | T3 | Opus lote 25: conteúdo APROVADO (aguarda CI verde) | 
 2026-10-14 | S04-T14a | T3 | Opus lote 25 REPROVOU (contexto Plan fora do projeto; CI sem o passo do fluxo B). Também registrado: tests/s04_fluxo_b_t14a_aux.py e CONTRATO.md fora dos arquivos permitidos, aceitos pelo Opus | correção em curso
 2026-10-14 | S04-T14b | T3 | diff 529 linhas (304 inseridas, resto movido): exceção aceita pelo líder (precedentes 434/520/650) | PR aberto, aguarda Opus
-2026-10-14 | S04-T11c | T3 | MESCLADA (PR 82): Opus lote 25 aprovou o conteúdo; depois entrou só o ajuste de 3 linhas no oráculo (sentinela de escala só com OBIM_S04_T11C_OBRIGATORIO), medido pelo agente | CI verde linux/windows
+2026-10-14 | S04-T11c | T3 | PR 82 pronto para mesclar (aguarda CI após merge de main): Opus lote 25 aprovou o conteúdo; depois entrou só o ajuste de 3 linhas no oráculo (sentinela de escala só com OBIM_S04_T11C_OBRIGATORIO), medido pelo agente | CI verde linux/windows

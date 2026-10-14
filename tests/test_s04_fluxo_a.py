@@ -304,6 +304,22 @@ def test_t11c_lote_que_falha_no_meio_deixa_zero_usos_novos_e_o_desfazer_seguinte
         aux.confere_uma_camada_por_parede(f.ifc, 10)
         assert forma(f.ifc.by_guid(lote[0]))[2] == [2 * 5.0, 0.0, 0.0], prefixos
 
+def test_t11c_tipo_sem_conjunto_de_camadas(novo):  # lote Opus 24 A1: tipo sem material, ou com IfcMaterial simples, não tem conjunto de camadas a usar; no main funciona (a parede só não ganha uso), então o lote também tem de funcionar
+    import ifcopenshell.api as A
+    for nome, simples in (("SEM", False), ("SIMPLES", True)):
+        f = novo()
+        t = A.run("root.create_entity", f.ifc, ifc_class="IfcWallType", name=nome)  # tipo montado direto no IFC, antes de qualquer comando
+        if simples:
+            A.run("material.assign_material", f.ifc, products=[t], material=A.run("material.add_material", f.ifc, name=nome))  # IfcMaterial simples, de nome igual ao do tipo
+        antes = aux.materiais(f.ifc)
+        assert antes["IfcMaterialLayerSet"] == 0 and antes["IfcMaterialLayerSetUsage"] == 0 and antes["IfcMaterial"] == int(simples)
+        criados = f.executar(dict(LOTE, tipo=nome, quantidade=6))
+        criados += f.executar(dict(PAREDE, tipo=nome))  # criar_parede usa o mesmo caminho
+        assert len(set(criados)) == 7 and len(f.ifc.by_type("IfcWall")) == 7, nome
+        assert aux.materiais(f.ifc) == antes, f"{nome}: o lote não pode criar conjunto, uso, camada, material ou relação de material novos: {antes} -> {aux.materiais(f.ifc)}"
+        assert aux.erros_ifc(f.ifc) == [], nome
+        assert all(w.IsTypedBy and w.IsTypedBy[0].RelatingType == t for w in f.ifc.by_type("IfcWall")), f"{nome}: cada parede continua ligada ao tipo"
+
 def test_t11c_custo_do_lote_nao_cresce_com_as_paredes_que_o_tipo_ja_tem(novo):  # sentinela de escala (lote 23 A3): vale com OBIM_S04_T11C_OBRIGATORIO=1 (o `fa` falha em vez de pular)
     # O mesmo lote de 300 paredes, com 0 e com ~2000 paredes do tipo já no modelo: o tempo não pode mais que dobrar.
     # Não prescreve número nem forma de chamada da API (o lote 23 mediu 5,7x num código quadrático e 1,1x na alternativa linear).

@@ -20,13 +20,13 @@ CONTRATO DA FERRAMENTA (`python prototypes/s04/medir_s04.py`; o oráculo troca o
  Também código 2: arquivo ausente, passos de B diferentes dos de A (ids ou número de repetições), `base.produtos` diferente (os dois têm de ter medido o mesmo modelo).
  Rede de segurança de `main` (erro de programação: KeyError, TypeError, IndexError, AttributeError fora do formato): código 2, primeira linha de stderr "ENTRADA INVÁLIDA: ..." e, DEPOIS dela, o `traceback.format_exc()` (o implementador precisa ver onde quebrou). `main(argv)` chama `avaliar(pasta_a, pasta_b, estrito)`.
  LIMITE CONHECIDO (LOTE_OPUS_24 B5): duração zero (`t_quadro_ms == t0_ms`) é aceita e passa nas metas; não há caso de oráculo para isso (exigir `t_quadro_ms > t0_ms` é opcional).
- Saída igual (§2.2): IFC inteiro, como gravado (comprimentos na unidade do próprio IFC, convertidos para metros: um IFC em mm e outro em m com as mesmas medidas são iguais) (GlobalIds e ids de linha podem diferir): mesmas contagens por classe (fora geometria de apoio e relações de material, que A compartilha e B não); para cada parede mesmo tipo, pavimento,
+ Saída igual (§2.2): IFC inteiro, como gravado (comprimentos na unidade do próprio IFC, convertidos para metros: um IFC em mm e outro em m com as mesmas medidas são iguais) (GlobalIds e ids de linha podem diferir): mesmas contagens por classe (fora só a geometria de apoio; IfcMaterialLayerSetUsage e IfcRelAssociatesMaterial CONTAM: sem exceção desde a T11c, LOTE_OPUS_24 B item 6); para cada parede mesmo tipo, pavimento,
  espessuras de camada, nome, FireRating, triângulos, caixa e volume a 1e-6 (ifcopenshell.geom, em metros); os dois passam em `ifcopenshell.validate(express_rules=True)` (nível "error" em minúsculas). Parede de A sem par em B = diferença.
  `primeiro_quadro(relogio, seq)`: tempo do primeiro quadro com sequência >= seq, ou None (LOTE_OPUS_15: a sequência cai a 0 no reenvio da cena).
  `contar_linhas`: arquivos .py .cpp .h .hpp .cc, fora de pastas `build`, `__pycache__` e as que começam com ".". Python: sem docstrings, `ast.unparse` (some comentário e linha vazia; uma instrução por linha) e cada linha vale ceil(largura/100).
  C/C++: sem comentário (// e /* */, respeitando textos entre aspas), sem linha vazia, cada linha vale ceil(largura/100).
 M2b informativo (LOTE_OPUS_15 achado 1): roteiro R com `corpus/modelo-grande-1m.ifc`; só imprime; pula se o arquivo não existir (também com OBRIGATORIO: ele é gerado à mão, ~60 s, e fica fora do git).
-TODO(T12, depois da T11c): a exceção de material (`MATERIAL` aqui e em medir_s04.py) sai quando a T11c for mesclada (LOTE_OPUS_23 §B item 3); este oráculo passa a exigir as mesmas contagens de IfcMaterialLayerSetUsage e IfcRelAssociatesMaterial em A e B.
+(A exceção de material saiu na T12, depois da T11c: A e B têm as mesmas contagens de IfcMaterialLayerSetUsage e IfcRelAssociatesMaterial; relação a menos ou uso compartilhado em B = saída diferente.)
 Fora do escopo do oráculo: M1 (T02/T04), nota do ADR-001 e compactar `lotes_` (núcleo)."""
 import importlib.util
 import json
@@ -156,6 +156,15 @@ def para_mm(g):  # o mesmo modelo, gravado em milímetros: pontos, listas de pon
         if u.UnitType in ("LENGTHUNIT", "AREAUNIT", "VOLUMEUNIT"):
             u.Prefix = "MILLI"
 
+def uso_compartilhado(g):  # B que compartilha UM IfcMaterialLayerSetUsage entre duas paredes (o que a T11c eliminou): a 2ª parede passa a apontar para o uso da 1ª; o uso e a relação antigos da 2ª somem
+    ws = g.by_type("IfcWall")
+    rels = [r for w in ws[:2] for r in w.HasAssociations if r.is_a("IfcRelAssociatesMaterial") and r.RelatingMaterial.is_a("IfcMaterialLayerSetUsage")]
+    assert len(rels) == 2 and rels[0].RelatingMaterial != rels[1].RelatingMaterial, "a base do oráculo tem de ter 1 uso por parede"
+    antigo = rels[1].RelatingMaterial
+    rels[0].RelatedObjects = tuple(rels[0].RelatedObjects) + tuple(rels[1].RelatedObjects)
+    g.remove(rels[1])
+    g.remove(antigo)
+
 @pytest.fixture(scope="module")
 def ifcs(tmp_path_factory):
     if not (aux.PASTA / "fluxo_a.py").is_file():
@@ -178,6 +187,8 @@ def ifcs(tmp_path_factory):
           "fogo": lambda g: setattr(next(p for p in g.by_type("IfcPropertySingleValue") if p.Name == "FireRating"), "NominalValue", g.createIfcLabel("R90")),
           "nome": lambda g: setattr(g.by_type("IfcWall")[0], "Name", "Outro nome"), "tipo": lambda g: setattr(g.by_type("IfcWallType")[0], "Name", "PAR20"),
           "pavimento": lambda g: setattr(g.by_type("IfcBuildingStorey")[0], "Name", "Pavimento 2"),
+          "sem_rel_material": lambda g: ifcopenshell.api.run("material.unassign_material", g, products=[g.by_type("IfcWall")[-1]]),  # uma relação (e o uso dela) a menos
+          "uso_compartilhado": uso_compartilhado,  # 1 uso e 1 relação a menos
           "invalido": lambda g: setattr(g.by_type("IfcMaterialLayer")[0], "LayerThickness", -0.02)}  # só o validate acusa (a geometria segue calculável)
     out = {"base": pasta / "base.ifc"}
     for nome, fn in ed.items():
@@ -192,16 +203,26 @@ def ifcs(tmp_path_factory):
     return out
 
 def test_ifcs_sinteticos_da_sentinela_sao_validos_ou_nao_como_o_oraculo_supoe(ifcs):
-    assert all(not bx.validar(ifcs[k]) for k in ("base", "guids", "sem_parede", "camada", "altura", "mm", "mm_camada", "fogo", "nome", "tipo", "pavimento")), "os IFCs de controle têm de passar no validate"
+    assert all(not bx.validar(ifcs[k]) for k in ("base", "guids", "sem_parede", "camada", "altura", "mm", "mm_camada", "fogo", "nome", "tipo", "pavimento", "sem_rel_material", "uso_compartilhado")), "os IFCs de controle têm de passar no validate"
     f, g = (bx.formas(__import__("ifcopenshell").open(str(ifcs[k]))) for k in ("base", "mm"))  # o IFC em mm tem a mesma geometria, em metros, que o IFC em m
     assert len(f) == len(g) == 4 and bx.igual([f[k] for k in sorted(f)], [g[k] for k in sorted(g)]) == [], "para_mm tem de preservar a geometria"
     assert bx.validar(ifcs["invalido"]) and bx.validar(ifcs["invalido_guids"]), "o IFC de controle inválido tem de reprovar no validate"
 
+def test_uso_compartilhado_difere_so_nas_contagens_de_material_a_parede_e_igual(ifcs):  # isola a causa: sem este caso, a exceção de material (T11c) voltaria sem ninguém notar
+    import ifcopenshell
+    ca, cb = (assin(ifcs[k]) for k in ("base", "uso_compartilhado"))
+    assert bx.igual(ca["paredes"], cb["paredes"]) == [], "cada parede tem de manter tipo, camadas, geometria e propriedades"
+    dif = {c for c in ca["classes"].keys() | cb["classes"].keys() if ca["classes"].get(c) != cb["classes"].get(c)}
+    assert dif == {"IfcMaterialLayerSetUsage", "IfcRelAssociatesMaterial"}, dif
+    f = ifcopenshell.open(str(ifcs["uso_compartilhado"]))
+    assert len(f.by_type("IfcMaterialLayerSetUsage")) == 3 and len(f.by_type("IfcRelAssociatesMaterial")) == 4  # 4 paredes: 3 usos, 3 relações de parede + 1 do tipo
+
 @pytest.mark.parametrize("a,b,ok", [("base", "guids", True), ("base", "sem_parede", False), ("base", "camada", False), ("base", "altura", False), ("invalido", "invalido_guids", False),
                                     ("base", "mm", True), ("mm", "base", True), ("camada", "mm_camada", True), ("base", "mm_camada", False), ("base", "fogo", False), ("base", "nome", False), ("base", "tipo", False),
-                                    ("base", "pavimento", False)],
+                                    ("base", "pavimento", False), ("base", "sem_rel_material", False), ("sem_rel_material", "base", False), ("base", "uso_compartilhado", False), ("uso_compartilhado", "base", False)],
                          ids=["globalids diferentes", "uma parede a menos", "espessura de camada", "altura da parede", "iguais mas inválidos", "A em m, B em mm", "A em mm, B em m", "0,12 m x 120 mm",
-                              "camada 0,11 m x 120 mm", "FireRating diferente", "nome da parede diferente", "tipo com outro nome", "pavimento com outro nome"])
+                              "camada 0,11 m x 120 mm", "FireRating diferente", "nome da parede diferente", "tipo com outro nome", "pavimento com outro nome",
+                              "uma relação de material a menos em B", "uma relação de material a menos em A", "um uso compartilhado em B (so as contagens de material)", "um uso compartilhado em A"])
 def test_saida_igual_aceita_globalids_diferentes_e_acusa_cada_diferenca(ferramenta, tmp_path, ifcs, a, b, ok):
     rc, js, p = avaliar(tmp_path, med(), med("B"), ifc_a=ifcs[a], ifc_b=ifcs[b])
     assert js is not None and js["saida_igual"]["ok"] is ok and (not ok) == bool(js["saida_igual"]["diferencas"]), (js, p.stderr[-800:])
@@ -422,7 +443,7 @@ def assin(caminho):  # assinatura do oráculo, sem GlobalId e sem achar parede p
         us, tri, lo, hi, vol = E.get_material(w, should_inherit=False), *fm[w.id()]
         return [w.Name or "", nome(E.get_type(w)), nome(E.get_container(w)), aux.fire(w) or "", [c.LayerThickness for c in us.ForLayerSet.MaterialLayers] if us else [], tri, *lo, *hi, vol]
     ps = sorted((parede(w) for w in f.by_type("IfcWall")), key=lambda p: (*p[:4], tuple(round(x, 3) for x in p[6:])))
-    return {"classes": dict(Counter(e.is_a() for e in f if e.is_a() not in bx.LIVRES | bx.MATERIAL)), "paredes": ps}
+    return {"classes": dict(Counter(e.is_a() for e in f if e.is_a() not in bx.LIVRES)), "paredes": ps}
 
 def test_a_real_sentinela_a_contra_ele_mesmo_com_globalids_novos_tem_saida_igual(saida_a, tmp_path, ferramenta):
     import ifcopenshell

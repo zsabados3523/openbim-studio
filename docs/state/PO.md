@@ -101,3 +101,6 @@ C hospedagem GitHub + espelho Codeberg · D interface híbrida (confirmar na S09
 
 ## 2026-10-13 (noite): exceção de ausência até o PO voltar
 PO: "vou ficar fora do computador até amanhã, pode continuar sem mim. Você tem minha autorização até eu voltar." Vale o mesmo regime das exceções de 12 e 13/10: o líder segue as próprias recomendações dentro da autorização permanente; continuam com o PO (a frente para e o líder passa a outra): ADR, meta do portão, escopo, licença, regras do processo e CLAUDE.md, instalar ferramenta nova, baixar arquivo, cota extra, apagar dados, credenciais, `main` direto, execução na tela real, meta da F0 não atingida. Opus só com semanal >25% restante e janela <70%.
+
+## 2026-10-13 (noite): exceção de cota do Opus (PO)
+PO: "Abra como exceção usar o opus dessa vez porque o limite semanal reinicia amanhã e quero aproveitar o máximo possível do limite. Após reiniciar esse limite semanal mantemos essa regra." Vale só até a renovação semanal (2026-10-14 09:00Z): o líder pode abrir lotes Opus mesmo com semanal ≤25% restante. Depois da renovação volta a regra de mais de 25% restante. A regra da janela de 5 h (<70%) segue valendo, salvo nova ordem do PO.

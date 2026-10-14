@@ -17,6 +17,9 @@ execute_process(COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir OUTPUT_VA
 list(APPEND CMAKE_PREFIX_PATH "${NB_DIR}")
 find_package(nanobind CONFIG REQUIRED)
 find_package(IfcOpenShell CONFIG REQUIRED)
+if(NOT OBIM_SAIDA)
+  message(FATAL_ERROR "OBIM_SAIDA não definido: passe -DOBIM_SAIDA=<pasta de saída> (o build.sh faz isso)")
+endif()
 file(TO_CMAKE_PATH "${OBIM_SAIDA}" OBIM_SAIDA)
 if(MSVC)
   add_compile_options(/utf-8)
@@ -29,6 +32,4 @@ target_link_libraries(fluxo_b_paredes PRIVATE paredes)
 set_target_properties(fluxo_b_paredes PROPERTIES LIBRARY_OUTPUT_DIRECTORY "$<1:${OBIM_SAIDA}>")  # saída plana, sem subpasta Release
 if(WIN32)
   target_link_directories(paredes PUBLIC "${CONDA}/Library/lib")  # o Boost aparece nas dependências só pelo nome (boost_*.lib)
-elseif(UNIX AND NOT APPLE)
-  target_link_options(fluxo_b_paredes PRIVATE -Wl,--no-as-needed)  # a biblioteca do esquema se registra ao carregar; sem isto o ligador a descarta
 endif()

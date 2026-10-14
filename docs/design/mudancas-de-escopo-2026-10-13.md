@@ -3,7 +3,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 # Mudanças de escopo pedidas em 13/10/2026
 
-- Para: Rafael (PO). Aqui estão **todas** as mudanças de escopo pedidas hoje (decisões e entrevista S09) e o que cada uma pede para mudar no plano `v2/02`. **O plano ainda não foi alterado**: escopo é decisão sua.
+- Para: Rafael (PO). Aqui estão **todas** as mudanças de escopo pedidas hoje (decisões e entrevista S09) e o que cada uma pede para mudar no plano `v2/02`. **Estado (13/10): o PO aprovou as 14 mudanças e o plano `v2/02` foi atualizado numa única revisão (Revisão 3). Os prazos não foram recalculados; a faixa de 21 a 42 meses será refeita depois da medição da F0 (S10).** Texto original abaixo, mantido como registro.
 - "1.0" = o marco F6 do plano (faixa publicada de 21 a 42 meses). Impacto no prazo é só uma **estimativa qualitativa**; números novos só depois que a Fase 0 medir a velocidade real.
 - Siglas de fatia: F1-S02 = fatia 2 da Fase 1, e assim por diante.
 

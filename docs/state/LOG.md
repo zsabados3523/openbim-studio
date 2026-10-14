@@ -125,3 +125,4 @@ Uma linha por tarefa concluída ou escalada, e por mudança de classe de tarefa.
 - 2026-10-13 | F0-S04-T16 | T3 | opus REPROVOU (lote 20, 1ª reprovação): ordem do iterador ≠ ordem de id causa laço de confirmações. Correção: cartão T16b (oráculo novo com layout estilo s25.ifc; implementação por divisão ao meio e orçamento nas confirmações; contar só acusadas confirmadas). Relatório: reports/LOTE_OPUS_20.md
 2026-10-13 | S04-T13 | T3 | Opus lote 22 APROVADO (itens 1-4 vão à T14); diff 434 linhas fora dos testes, exceção aceita | merge PR 79
 2026-10-13 | S04-T16b | T3 | Opus lote 21 APROVADO; diff 552+/65- (458 de oráculo), exceção aceita | merge PR 78 após Windows verde
+2026-10-13 | S04-T14 | T3 | dividida em T14a/T14b/T14c (não cabe em 400 linhas; ampliados arquivos permitidos: paredes.*, ponte.cpp, obimcore) | oráculo achou

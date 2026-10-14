@@ -323,6 +323,9 @@ def test_t11c_tipo_sem_conjunto_de_camadas(novo):  # lote Opus 24 A1: tipo sem m
 def test_t11c_custo_do_lote_nao_cresce_com_as_paredes_que_o_tipo_ja_tem(novo):  # sentinela de escala (lote 23 A3): vale com OBIM_S04_T11C_OBRIGATORIO=1 (o `fa` falha em vez de pular)
     # O mesmo lote de 300 paredes, com 0 e com ~2000 paredes do tipo já no modelo: o tempo não pode mais que dobrar.
     # Não prescreve número nem forma de chamada da API (o lote 23 mediu 5,7x num código quadrático e 1,1x na alternativa linear).
+    # Pesado (~21 s aqui, ~60 s no CI): só roda com OBIM_S04_T11C_OBRIGATORIO=1 (o passo Viewport do ci.yml liga). Na suíte inteira (`pytest -q tests`) ele roda antes de test_viewport_responsivo.py e a memória/GC que deixa leva 3 testes de resposta da janela de ~75 ms para 220-295 ms (medido: sem ele 71/77 ms, com ele 241/228 ms).
+    if os.environ.get("OBIM_S04_T11C_OBRIGATORIO") != "1":
+        pytest.skip("sentinela de escala pesada: só com OBIM_S04_T11C_OBRIGATORIO=1 (não pesa sobre os testes de resposta da janela na suíte inteira)")
     def tempo_do_lote(f):
         t0 = time.perf_counter()
         f.executar(dict(LOTE, quantidade=300))

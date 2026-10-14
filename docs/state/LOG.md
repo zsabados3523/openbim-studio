@@ -132,3 +132,9 @@ Uma linha por tarefa concluída ou escalada, e por mudança de classe de tarefa.
 2026-10-14 | S04-T11c | T3 | Opus lote 25: conteúdo APROVADO (aguarda CI verde) | 
 2026-10-14 | S04-T14a | T3 | Opus lote 25 REPROVOU (contexto Plan fora do projeto; CI sem o passo do fluxo B). Também registrado: tests/s04_fluxo_b_t14a_aux.py e CONTRATO.md fora dos arquivos permitidos, aceitos pelo Opus | correção em curso
 2026-10-14 | S04-T14b | T3 | diff 529 linhas (304 inseridas, resto movido): exceção aceita pelo líder (precedentes 434/520/650) | PR aberto, aguarda Opus
+2026-10-14 | S04-T11c | T3 | PR 82 pronto para mesclar (aguarda CI após merge de main): Opus lote 25 aprovou o conteúdo; depois entrou só o ajuste de 3 linhas no oráculo (sentinela de escala só com OBIM_S04_T11C_OBRIGATORIO), medido pelo agente | CI verde linux/windows
+2026-10-14 | S04-T14b | T3 | Opus lote 26 APROVADO; mescla auto (CI verde) | PR 90
+2026-10-14 | S04-T14a | T3 | Opus lote 26: conteúdo aprovado; merge só com CI rodando o oráculo (depende do PR 82) | PR 87
+2026-10-14 | S04-T14a | T3 | Opus lote 27 APROVADO (CI linux/windows 61 passed rodando o oráculo) | mescla auto PR 87
+2026-10-14 | S04-T12 | T3 | Opus lote 27: 3ª reprovação (4c/5b aceitam >1 repetição; relógio fora da janela). Correção especificada em LOTE_OPUS_27.md; sem novo escalonamento: falhas novas a cada leitura, não repetidas | oráculo+implementador
+2026-10-14 | S04-T12 | T3 | Opus lote 28 APROVADO; mescla auto após CI verde (PR 83). Anotado: se test_s04_selecao_c.py:352 falhar de novo, abrir cartão da T08 | 

@@ -137,3 +137,4 @@ Uma linha por tarefa concluída ou escalada, e por mudança de classe de tarefa.
 2026-10-14 | S04-T14a | T3 | Opus lote 26: conteúdo aprovado; merge só com CI rodando o oráculo (depende do PR 82) | PR 87
 2026-10-14 | S04-T14a | T3 | Opus lote 27 APROVADO (CI linux/windows 61 passed rodando o oráculo) | mescla auto PR 87
 2026-10-14 | S04-T12 | T3 | Opus lote 27: 3ª reprovação (4c/5b aceitam >1 repetição; relógio fora da janela). Correção especificada em LOTE_OPUS_27.md; sem novo escalonamento: falhas novas a cada leitura, não repetidas | oráculo+implementador
+2026-10-14 | S04-T12 | T3 | Opus lote 28 APROVADO; mescla auto após CI verde (PR 83). Anotado: se test_s04_selecao_c.py:352 falhar de novo, abrir cartão da T08 | 

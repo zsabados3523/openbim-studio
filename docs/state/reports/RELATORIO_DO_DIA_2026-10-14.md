@@ -11,7 +11,7 @@ Fase 0, fatia S04 (ponte Python↔C++). Faltam: T12 (juiz das metas, em revisão
 - Relatórios Opus 21 a 27 em docs/state/reports/. LOG e PO.md atualizados.
 
 ## Em andamento
-- Pedido 83 (T12): ferramenta e juiz das metas; 3 reprovações do Opus já corrigidas; lote 28 (releitura curta) rodando.
+- Pedido 83 (T12): Opus lote 28 APROVOU; mescla automática quando linux e windows ficarem verdes (windows rodando de novo; 2 falhas de tempo/seleção fora do diff).
 - T14c: branch s04-t14c pronta (501 linhas, exceção aceita), vira pedido depois do 83.
 
 ## Pulado ou adiado
@@ -36,3 +36,6 @@ Fase 0, fatia S04 (ponte Python↔C++). Faltam: T12 (juiz das metas, em revisão
 
 ## Cota
 Janela 5 h em 90% (renova às 20:50 UTC), semanal 13%. Opus gasto hoje: lotes 23 a 28 (~6).
+
+## Fechamento do dia
+Pausa combinada com o PO após o lote Opus 28. Nenhum agente aberto. Ao retomar: conferir o PR 83, depois abrir o pedido da T14c (branch s04-t14c), depois T15/T17/T18/T19 e a rodada oficial na tela real.

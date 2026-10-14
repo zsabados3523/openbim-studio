@@ -149,6 +149,7 @@ jobs:
           # Sem janela: compara o IFC da biblioteca C++ com o do fluxo A (saída igual).
           bash prototypes/s04/fluxo_b/build.sh out/s04
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          export OBIM_S04_T14A_OBRIGATORIO=1
           OBIM_S04_T13_OBRIGATORIO=1 OBIM_S04_T11C_OBRIGATORIO=1 OBIM_S04_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_fluxo_b_paredes.py
       - name: Sonda da thread de desenho (S04-T05; informativo, não bloqueia)
         shell: bash -el {0}
@@ -336,6 +337,7 @@ jobs:
           # Sem janela: compara o IFC da biblioteca C++ com o do fluxo A (saída igual).
           bash prototypes/s04/fluxo_b/build.sh out/s04
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          export OBIM_S04_T14A_OBRIGATORIO=1
           OBIM_S04_T13_OBRIGATORIO=1 OBIM_S04_T11C_OBRIGATORIO=1 OBIM_S04_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_fluxo_b_paredes.py
       - name: Sonda da thread de desenho (S04-T05; informativo, não bloqueia)
         shell: bash -el {0}

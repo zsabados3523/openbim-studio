@@ -266,7 +266,8 @@ class FluxoA:
             m = np.eye(4)
             m[:2, 3] = (g % 50) * 5.0, (g // 50) * 4.0
             api("geometry.edit_object_placement", self.ifc, product=w, matrix=m)
-            api("material.assign_material", self.ifc, products=[w], type="IfcMaterialLayerSetUsage", material=conj)
+            if conj is not None and conj.is_a("IfcMaterialLayerSet"):  # tipo sem conjunto de camadas: parede sem material (nada a atribuir)
+                api("material.assign_material", self.ifc, products=[w], type="IfcMaterialLayerSetUsage", material=conj)
             ws.append(w)
         api("type.assign_type", self.ifc, related_objects=ws, relating_type=tipo, should_map_representations=False)  # uma chamada só para o lote: evita custo quadrático (lote Opus 23 A1)
         api("spatial.assign_container", self.ifc, products=ws, relating_structure=min(pavs, key=lambda s: s.Name or ""))

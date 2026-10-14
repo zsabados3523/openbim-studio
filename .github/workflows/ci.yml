@@ -389,6 +389,27 @@ jobs:
           fi
           echo "instalador=$r" >> "$GITHUB_OUTPUT"
           echo "::notice title=instalador::instalador=$r ($motivo)"
+      - name: Cache de pacotes do conda
+        if: steps.detecta.outputs.instalador == 'true'
+        id: cache_conda
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/conda_pkgs
+          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'environment.*.lock', 'packaging/runtime-environment.yml') }}
+      - name: Pasta de pacotes do conda
+        if: steps.detecta.outputs.instalador == 'true'
+        shell: bash
+        run: |
+          echo "CONDA_PKGS_DIRS=$RUNNER_TEMP/conda_pkgs" >> "$GITHUB_ENV"
+          echo "::notice title=cache de pacotes::cache-hit=${{ steps.cache_conda.outputs.cache-hit }}"
+      - uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
+        if: steps.detecta.outputs.instalador == 'true'
+        with:
+          activate-environment: openbim
+          channels: conda-forge
+          conda-remove-defaults: "true"
+          channel-priority: strict
+          miniforge-version: latest
       - name: Instalador Windows (ambiente de runtime e NSIS)
         if: steps.detecta.outputs.instalador == 'true'
         shell: bash -el {0}

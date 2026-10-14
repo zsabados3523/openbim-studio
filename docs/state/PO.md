@@ -104,3 +104,6 @@ PO: "vou ficar fora do computador até amanhã, pode continuar sem mim. Você te
 
 ## 2026-10-13 (noite): exceção de cota do Opus (PO)
 PO: "Abra como exceção usar o opus dessa vez porque o limite semanal reinicia amanhã e quero aproveitar o máximo possível do limite. Após reiniciar esse limite semanal mantemos essa regra." Vale só até a renovação semanal (2026-10-14 09:00Z): o líder pode abrir lotes Opus mesmo com semanal ≤25% restante. Depois da renovação volta a regra de mais de 25% restante. A regra da janela de 5 h (<70%) segue valendo, salvo nova ordem do PO.
+
+## 2026-10-14: CI do Windows mais rápido (PO: "Você tem meu ok")
+O teste do instalador (~10 min por PR) passa a rodar só em push no `main`/tag ou quando o PR mexe em empacotamento/ambiente/CI. Recomendação do líder, aprovada pelo PO. Pendente de sugestão do agente (a decidir pelo PO depois): travar o ambiente do instalador (`packaging/runtime-environment.yml`) pela mesma trava `.lock`, para builds novos do conda-forge não quebrarem o instalador sem aviso (líder recomenda: sim).

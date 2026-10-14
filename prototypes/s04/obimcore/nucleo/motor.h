@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Viewport C++ (S04-T07; LOTE_OPUS_9 §1.4 regra 5, LOTE_OPUS_11 achados 3, 5 e 9). Janela Qt nativa (QWindow) desenhada com QRhi por
-// thread própria do C++, embutida numa janela PySide6 por contêiner de janela. Contratos:
+// thread própria do C++, embutida numa janela PySide6 por contêiner de janela. C++ PURO (T14b): só Qt e std, nenhum include de Python;
+// um executável Qt sem Python liga este arquivo. A ponte é ponte_viewport.cpp. Posse: o Python é o dono do `Viewport` e dos arrays que
+// entrega (só emprestados durante a chamada); o C++ nunca guarda endereço do Python. Mutexes: `Motor::m_` ANTES de `DadosCena::m_` (cena.h). Contratos:
 //  - A thread nunca chama Python, nunca espera a thread da janela e nunca lê QPointer: ela só usa o `Motor` (estado compartilhado,
 //    com mutex) e o QWindow/QOffscreenSurface crus que a `Janela` entrega em `ligar`. A vida da thread está presa à da janela:
 //    ~Janela, SurfaceAboutToBeDestroyed e aboutToQuit param a thread (e esperam). A janela é a dona da QOffscreenSurface.
@@ -12,12 +14,9 @@
 //  - Perda de dispositivo (FrameOpDeviceLost ou `perder_contexto`): a QRhi é recriada na thread e a cópia compacta é reenviada.
 //  - Cena (T08): fila de lotes, cópia compacta, sequência e caixa vivem em `cena.*` (mutex próprio). Aqui só o envio à placa: orçamento por quadro
 //    (`ORCAMENTO_BYTES`, ~4 ms), lotes grandes partidos em fatias; a sequência de um quadro = maior prefixo contínuo de lotes já NA placa.
+#pragma once
 #include "camera.h"
 #include "cena.h"
-#include <nanobind/nanobind.h>
-#include <nanobind/stl/string.h>
-#include <nanobind/stl/vector.h>
-#include <nanobind/stl/tuple.h>
 #include <QGuiApplication>
 #include <QMatrix4x4>
 #include <QOffscreenSurface>
@@ -39,6 +38,7 @@
 #include <cstring>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include "selecao.h"
 #include <stdexcept>
 #include <thread>
@@ -49,18 +49,11 @@
 #  include <windows.h>
 #  include <timeapi.h>
 #endif
-namespace nb = nanobind;
+namespace obim {
 using Rel = std::chrono::steady_clock;
-static double agora_ms() { return std::chrono::duration<double, std::milli>(Rel::now().time_since_epoch()).count(); }
-
-namespace {
-const unsigned char QSB_VERT[] = {
-#include "malha_vert.inc"
-};
-const unsigned char QSB_FRAG[] = {
-#include "malha_frag.inc"
-};
-using namespace obim;
+double agora_ms();  // motor.cpp
+extern const unsigned char QSB_VERT[], QSB_FRAG[]; extern const size_t QSB_VERT_N, QSB_FRAG_N;  // motor.cpp (QSB da S03, embutidos pelo CMake)
+struct Estatisticas { size_t bytes_copia, lotes, triangulos, vertices; int64_t fatias_enviadas; int triangulos_na_placa, contextos, superficies_soltas, solturas_atrasadas; };
 constexpr size_t ORCAMENTO_BYTES = 2u << 20;  // por quadro (cabe em ~1 ms no software); lote maior é partido em fatias
 constexpr auto ORCAMENTO_TEMPO = std::chrono::milliseconds(4);
 
@@ -105,14 +98,10 @@ class Motor {
   }
   // --- cena (thread da janela / Python) ---
   ControleCamera cam_;  // entradas da thread da janela só enfileiram; a thread de desenho aplica (camera.h)
-  nb::dict estatisticas() {
-    std::lock_guard<std::mutex> l(m_);
+  Estatisticas estatisticas() {
+    std::lock_guard<std::mutex> l(m_);  // Motor::m_ e, dentro de totais(), DadosCena::m_: sempre nesta ordem
     const Totais t = cena_.totais();
-    nb::dict r;
-    r["bytes_copia"] = t.bytes; r["lotes"] = t.lotes; r["triangulos"] = t.triangulos; r["vertices"] = t.vertices; r["fatias_enviadas"] = fatias_.load();
-    r["triangulos_na_placa"] = tri_placa.load(); r["contextos"] = contextos.load();
-    r["superficies_soltas"] = superficies_soltas.load(); r["solturas_atrasadas"] = solturas_atrasadas.load();
-    return r;
+    return {t.bytes, t.lotes, t.triangulos, t.vertices, fatias_.load(), tri_placa.load(), contextos.load(), superficies_soltas.load(), solturas_atrasadas.load()};
   }
   std::vector<std::tuple<double, int64_t>> relogio() {
     std::vector<std::tuple<double, int64_t>> r; size_t n;
@@ -180,7 +169,7 @@ class Motor {
     if (!g.srb->create()) return false;
     auto sh = [](const unsigned char* b, size_t n) { return QShader::fromSerialized(QByteArray(reinterpret_cast<const char*>(b), qsizetype(n))); };
     g.pipe.reset(g.rhi->newGraphicsPipeline());
-    g.pipe->setShaderStages({{QRhiShaderStage::Vertex, sh(QSB_VERT, sizeof QSB_VERT)}, {QRhiShaderStage::Fragment, sh(QSB_FRAG, sizeof QSB_FRAG)}});
+    g.pipe->setShaderStages({{QRhiShaderStage::Vertex, sh(QSB_VERT, QSB_VERT_N)}, {QRhiShaderStage::Fragment, sh(QSB_FRAG, QSB_FRAG_N)}});
     QRhiVertexInputLayout lay;
     lay.setBindings({QRhiVertexInputBinding(BYTES_VERTICE)});
     lay.setAttributes({{0, 0, QRhiVertexInputAttribute::Float3, 0}, {0, 1, QRhiVertexInputAttribute::Float3, 12},
@@ -375,66 +364,57 @@ class Janela : public QWindow {
   std::shared_ptr<Motor> m_; QOffscreenSurface* fb_;
 };
 
-class Cena {  // objeto Python: só guarda o Motor e ponteiros fracos; o Qt é dono do contêiner (depois de posto num layout)
+class Viewport {  // o Qt é dono do contêiner (depois de posto num layout); esta classe só guarda o Motor e um ponteiro fraco. Erros: std::invalid_argument / std::runtime_error
  public:
-  explicit Cena(bool gl) : m_(std::make_shared<Motor>(gl)) {
+  explicit Viewport(bool gl) : m_(std::make_shared<Motor>(gl)) {
     if (!QGuiApplication::instance()) throw std::runtime_error("crie a QApplication antes da Cena");
     cont_ = QWidget::createWindowContainer(new Janela(m_, gl), nullptr);
   }
-  ~Cena() {
+  ~Viewport() {
     m_->parar();
     if (cont_ && !cont_->parent()) { if (QThread::currentThread() == cont_->thread()) delete cont_.data(); else cont_->deleteLater(); }
   }
   uintptr_t viewport_ptr() const { return reinterpret_cast<uintptr_t>(cont_.data()); }
   void iniciar() { m_->iniciar(); }
-  void parar() { nb::gil_scoped_release lib; m_->parar(); }
+  void parar() { m_->parar(); }
   bool viva() { return m_->viva(); }
-  int64_t adicionar_lote(nb::object lote) { return m_->cena_.adicionar_lote(lote); }  // valida/copia sem o bloqueio e sem o mutex do Motor
+  int64_t adicionar_lote(const LoteBruto& lote) { return m_->cena_.adicionar_lote(lote); }  // valida/copia sem o mutex do Motor
   void limpar() { m_->cena_.limpar(); }
-  nb::dict objetos(int64_t seq) { return m_->cena_.objetos(seq); }
+  std::shared_ptr<Dados> lote(int64_t seq) { return m_->cena_.lote(seq); }
   std::vector<std::tuple<double, int64_t>> relogio() { return m_->relogio(); }
-  nb::tuple capturar() { std::tuple<int, int, std::string> r; { nb::gil_scoped_release lib; r = m_->capturar(); }
-    return nb::make_tuple(std::get<0>(r), std::get<1>(r), nb::bytes(std::get<2>(r).data(), std::get<2>(r).size())); }
-  nb::dict camera() {
-    Camera c = m_->cam_.ler(); nb::dict d;
-    d["alvo"] = nb::make_tuple(c.alvo[0], c.alvo[1], c.alvo[2]); d["distancia"] = c.distancia; d["azimute"] = c.azimute; d["elevacao"] = c.elevacao;
-    return d;
-  }
-  void definir_camera(nb::object alvo, nb::object distancia, nb::object azimute, nb::object elevacao) {
-    std::vector<double> t; if (!alvo.is_none()) { t = nb::cast<std::vector<double>>(alvo); if (t.size() != 3) throw nb::value_error("alvo = 3 números"); }
-    const double dist = distancia.is_none() ? 0 : nb::cast<double>(distancia), az = azimute.is_none() ? 0 : nb::cast<double>(azimute), el = elevacao.is_none() ? 0 : nb::cast<double>(elevacao);
+  std::tuple<int, int, std::string> capturar() { return m_->capturar(); }
+  Camera camera() { return m_->cam_.ler(); }
+  void definir_camera(const std::optional<std::array<double, 3>>& alvo, std::optional<double> distancia, std::optional<double> azimute, std::optional<double> elevacao) {
     m_->cam_.modificar([&](Camera& c) {
-      if (!t.empty()) std::copy(t.begin(), t.end(), c.alvo);
-      if (!distancia.is_none()) c.distancia = std::clamp(dist, 0.1, 10000.0);
-      if (!azimute.is_none()) c.azimute = az;
-      if (!elevacao.is_none()) c.elevacao = std::clamp(el, -89.0, 89.0);
+      if (alvo) std::copy(alvo->begin(), alvo->end(), c.alvo);
+      if (distancia) c.distancia = std::clamp(*distancia, 0.1, 10000.0);
+      if (azimute) c.azimute = *azimute;
+      if (elevacao) c.elevacao = std::clamp(*elevacao, -89.0, 89.0);
     });
   }
   // T09: da thread da janela; só enfileiram (a thread de desenho aplica, na ordem). dx, dy em pixels do mouse.
   void orbitar(double dx, double dy) { m_->cam_.enfileirar({Entrada::Orbitar, dx, dy}); }
   void mover(double dx, double dy) { m_->cam_.enfileirar({Entrada::Mover, dx, dy}); }
   void aproximar(double fator) {
-    if (!(fator > 0) || std::isinf(fator)) throw nb::value_error("fator deve ser maior que zero");
+    if (!(fator > 0) || std::isinf(fator)) throw std::invalid_argument("fator deve ser maior que zero");
     m_->cam_.enfileirar({Entrada::Aproximar, fator, 0});
   }
   void enquadrar() { m_->cam_.enfileirar({Entrada::Enquadrar, 0, 0}); }
   void animar_orbita(double graus_por_s) { m_->cam_.animar(graus_por_s); }  // por relógio, não por quadro
   void parar_animacao() { m_->cam_.animar(0); }
-  int64_t atualizar(nb::object lote_novo, nb::object guids_remover) { return m_->cena_.atualizar(lote_novo, guids_remover); }
-  nb::dict estatisticas() { return m_->estatisticas(); }
+  int64_t atualizar(const LoteBruto* lote_novo, std::set<std::string> guids_remover) { return m_->cena_.atualizar(lote_novo, std::move(guids_remover)); }
+  Estatisticas estatisticas() { return m_->estatisticas(); }
   // T10/T10c: (x, y) em pixels LÓGICOS (os do mouse do Qt); o pixel físico do backbuffer é lógico * devicePixelRatio. Câmera, tamanho e `perto` vêm juntos do último
   // quadro apresentado; trabalha sobre cópia imutável dos dados (nenhum mutex do Motor é pedido).
-  nb::object selecionar(double x, double y) {
+  std::optional<std::string> selecionar(double x, double y) {
     Motor::Quadro q; { std::lock_guard<std::mutex> l(m_->mc_); q = m_->quadro_; }
     double r = m_->escala_teste_.load(); if (!(r > 0)) r = m_->dpr_.load();
     const double px = x * r, py = y * r;
-    if (!q.ok || !std::isfinite(x) || !std::isfinite(y) || q.larg <= 0 || q.alt <= 0 || x < 0 || y < 0 || px >= q.larg || py >= q.alt) throw nb::value_error("selecionar: ponto fora da janela");
-    const auto lotes = m_->cena_.lotes(); std::optional<std::string> res;
-    { nb::gil_scoped_release lib; res = obim::selecionar(lotes, raio_do_pixel(q.c, q.larg, q.alt, px, py, q.perto)); }
-    return res ? nb::object(nb::str(res->c_str())) : nb::none();
+    if (!q.ok || !std::isfinite(x) || !std::isfinite(y) || q.larg <= 0 || q.alt <= 0 || x < 0 || y < 0 || px >= q.larg || py >= q.alt) throw std::invalid_argument("selecionar: ponto fora da janela");
+    return obim::selecionar(m_->cena_.lotes(), raio_do_pixel(q.c, q.larg, q.alt, px, py, q.perto));
   }
   void definir_escala_teste(double r) {  // gancho de teste: usa r (> 0) no lugar do devicePixelRatio real
-    if (!std::isfinite(r) || r <= 0) throw nb::value_error("escala deve ser maior que zero");
+    if (!std::isfinite(r) || r <= 0) throw std::invalid_argument("escala deve ser maior que zero");
     m_->escala_teste_ = r;
   }
   void perder_contexto() { m_->perder = true; }  // gancho de teste: simula FrameOpDeviceLost
@@ -442,20 +422,4 @@ class Cena {  // objeto Python: só guarda o Motor e ponteiros fracos; o Qt é d
  private:
   std::shared_ptr<Motor> m_; QPointer<QWidget> cont_;
 };
-}  // namespace
-
-void registrar_viewport(nb::module_& m) {
-  m.def("agora", &agora_ms, "relógio do C++ (ms, steady_clock), o mesmo de Cena.relogio()");
-  nb::class_<Cena>(m, "Cena")
-      .def(nb::init<bool>(), nb::arg("gl"))
-      .def("viewport_ptr", &Cena::viewport_ptr).def("iniciar", &Cena::iniciar).def("parar", &Cena::parar).def("viva", &Cena::viva)
-      .def("adicionar_lote", &Cena::adicionar_lote, nb::arg("lote")).def("limpar", &Cena::limpar).def("objetos", &Cena::objetos, nb::arg("sequencia")).def("relogio", &Cena::relogio)
-      .def("capturar", &Cena::capturar).def("camera", &Cena::camera)
-      .def("definir_camera", &Cena::definir_camera, nb::arg("alvo") = nb::none(), nb::arg("distancia") = nb::none(),
-           nb::arg("azimute") = nb::none(), nb::arg("elevacao") = nb::none())
-      .def("orbitar", &Cena::orbitar, nb::arg("dx"), nb::arg("dy")).def("mover", &Cena::mover, nb::arg("dx"), nb::arg("dy"))
-      .def("aproximar", &Cena::aproximar, nb::arg("fator")).def("enquadrar", &Cena::enquadrar)
-      .def("animar_orbita", &Cena::animar_orbita, nb::arg("graus_por_s")).def("parar_animacao", &Cena::parar_animacao)
-      .def("atualizar", &Cena::atualizar, nb::arg("lote_novo").none(), nb::arg("guids_remover"))
-      .def("selecionar", &Cena::selecionar, nb::arg("x"), nb::arg("y")).def("definir_escala_teste", &Cena::definir_escala_teste, nb::arg("r")).def("estatisticas", &Cena::estatisticas).def("perder_contexto", &Cena::perder_contexto).def("info", &Cena::info);
-}
+}  // namespace obim

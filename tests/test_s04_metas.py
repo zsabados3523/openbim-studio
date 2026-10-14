@@ -12,12 +12,14 @@ CONTRATO DA FERRAMENTA (`python prototypes/s04/medir_s04.py`; o oráculo troca o
  (200, 200, 50 ms), M4 < 20 s e maior intervalo < 200 ms. É a mesma régua de s04_fluxo_aux.veredito. `erros` lista cada violação; `ok` de cada meta = sem erro com o nome dela; aprovado = sem erros e (sem --b ou saída igual).
  M6 (informativo, nunca reprova): razoes = mediana de A / mediana de B em M2, M2b, M3 e M4 (um valor). folga_minima = menor entre 200/p95(M2), 200/p95(M2b), 50/p95(M3), 20000/max(M4), 200/maior_intervalo(M5);
  pesa = folga_minima < 2 (decisão do PO: só pesa se alguma meta absoluta ficar com menos de 2x de folga). As 3 rodadas alternadas do §2.2 ficam para a rodada oficial (a ferramenta lê um par A/B por vez).
- Entrada inválida (código 2; LOTE_OPUS_23 §B): a mensagem em stderr começa com "ENTRADA INVÁLIDA:", cita `passo <id>` quando o problema é de um passo e NUNCA é traceback. Casos:
- (i) tempo que não é número finito (NaN, infinito, texto); fora de ordem em qualquer repetição: `t0_ms <= t_comando_ms <= t_quadro_ms` (e `t_painel_ms >= t0_ms` no 4a); relógio (4c e 5b) com tempo não finito.
- A ferramenta ORDENA os tempos do relógio antes de medir os intervalos (relógio fora de ordem dá o mesmo resultado do ordenado). (ii) menos repetições do que o `n` de `fluxo_a/roteiro_r.json` (200) nos passos 3, 4a e 4b, ou `len(criados)` do 5b
+ Entrada inválida (código 2; LOTE_OPUS_23 §B): a mensagem em stderr começa com "ENTRADA INVÁLIDA:", cita `passo <id>` quando o problema é de um passo e NUNCA é traceback nos casos abaixo (LOTE_OPUS_24 B). Casos:
+ (i) tempo que não é número finito (NaN, infinito, texto, inteiro gigante como 10**400: `_num` trata OverflowError como "não é número"; vale para TODO campo numérico, inclusive os do relógio, `sequencia` e `base.produtos`); fora de ordem em qualquer repetição: `t0_ms <= t_comando_ms <= t_quadro_ms` (e `t_painel_ms >= t0_ms` no 4a); relógio (4c e 5b) com tempo não finito ou REPETIDO (dois quadros no mesmo instante: relógio duplicado esconde parada e infla a contagem por janela).
+ A ferramenta ORDENA os tempos do relógio antes de medir os intervalos (relógio fora de ordem dá o mesmo resultado do ordenado). (ii) número de repetições diferente do `n` de `fluxo_a/roteiro_r.json` (200) nos passos 3, 4a e 4b: regra `len(reps) != n`, MENOS OU MAIS (201 e 500 também: repetições extras baratas puxariam a mediana e o p95), ou `len(criados)` do 5b
  diferente da `quantidade` do roteiro (1000) ou ausente (o oráculo lê os dois valores do roteiro; mesma regra para B). (iii) passo sem `id`, sem `reps` ou com `reps` que não é lista; repetição sem os campos de tempo do passo; IFC do passo 7 ilegível (A ou B).
- (iv) 5b sem `sequencia`, ou `primeiro_quadro(relogio, sequencia)` None ou maior que `t_quadro_ms` (o lote nunca apareceu num quadro). (v) régua estrita (--estrito ou OBIM_S04_ESTRITO=1) com `base.produtos` ausente ou < 3000: não é o modelo oficial.
+ (iv) 5b sem `sequencia`, com `sequencia` que não é inteiro >= 1 (0, negativa e 3,5 tornam o primeiro quadro trivial), com `criados` de GlobalIds repetidos (`len(set(criados))` tem de ser o lote), ou `primeiro_quadro(relogio, sequencia)` None ou maior que `t_quadro_ms` (o lote nunca apareceu num quadro). (v) régua estrita (--estrito ou OBIM_S04_ESTRITO=1) com `base.produtos` ausente ou < 3000: não é o modelo oficial.
  Também código 2: arquivo ausente, passos de B diferentes dos de A (ids ou número de repetições), `base.produtos` diferente (os dois têm de ter medido o mesmo modelo).
+ Rede de segurança de `main` (erro de programação: KeyError, TypeError, IndexError, AttributeError fora do formato): código 2, primeira linha de stderr "ENTRADA INVÁLIDA: ..." e, DEPOIS dela, o `traceback.format_exc()` (o implementador precisa ver onde quebrou). `main(argv)` chama `avaliar(pasta_a, pasta_b, estrito)`.
+ LIMITE CONHECIDO (LOTE_OPUS_24 B5): duração zero (`t_quadro_ms == t0_ms`) é aceita e passa nas metas; não há caso de oráculo para isso (exigir `t_quadro_ms > t0_ms` é opcional).
  Saída igual (§2.2): IFC inteiro, como gravado (comprimentos na unidade do próprio IFC, convertidos para metros: um IFC em mm e outro em m com as mesmas medidas são iguais) (GlobalIds e ids de linha podem diferir): mesmas contagens por classe (fora geometria de apoio e relações de material, que A compartilha e B não); para cada parede mesmo tipo, pavimento,
  espessuras de camada, nome, FireRating, triângulos, caixa e volume a 1e-6 (ifcopenshell.geom, em metros); os dois passam em `ifcopenshell.validate(express_rules=True)` (nível "error" em minúsculas). Parede de A sem par em B = diferença.
  `primeiro_quadro(relogio, seq)`: tempo do primeiro quadro com sequência >= seq, ou None (LOTE_OPUS_15: a sequência cai a 0 no reenvio da cena).
@@ -255,6 +257,62 @@ def test_a_com_valor_invalido_ou_roteiro_incompleto_e_entrada_invalida_nunca_apr
     rc, js, p = avaliar(tmp_path, m)
     assert rc == 2 and p.stderr.startswith("ENTRADA INVÁLIDA:") and "Traceback" not in p.stderr and (token is None or token in p.stderr), (nome, rc, p.stdout[-300:], p.stderr[-600:])
     assert js is None or not js.get("aprovado"), "entrada inválida nunca aprova"
+
+# ---------- LOTE_OPUS_24 B: 201 e 500 repetições, relógio duplicado, sequencia e criados, inteiro gigante ----------
+GIG = 10**400  # json.dumps escreve os 401 dígitos; math.isfinite(GIG) levanta OverflowError
+lento12 = [[1000.0 / 12 * i, i] for i in range(1, 37)]  # 12 quadros por segundo: honestamente reprova no M5 (so 12 por janela), mas duplicado pareceria 24
+dobra = lambda i: lambda m: passo(m, i)["reps"][0].update(relogio=[list(x) for e in passo(m, i)["reps"][0]["relogio"] for x in (e, e)])  # noqa: E731  (cada tempo 2x)
+repete = lambda i: lambda m: passo(m, i)["reps"][0]["relogio"].insert(11, list(passo(m, i)["reps"][0]["relogio"][10]))  # noqa: E731  (um único tempo repetido)
+NOVOS = [("201 repetições no M2", {"reps": N + 1}, None, "passo 3"), ("201 repetições só no M3", {"m3": [10.0] * (N + 1)}, None, "passo 4a"),
+         ("201 repetições só no M2b", {"m2b": [20.0] * (N + 1)}, None, "passo 4b"), ("500 repetições", {"reps": 500}, None, "passo 3"),
+         ("200 a 250 ms mais 300 a 20 ms no M2 (puxam a mediana para baixo)", {"m2": [250.0] * N + [20.0] * 300}, None, "passo 3"),
+         ("200 a 250 ms mais 300 a 20 ms no M2b", {"m2b": [250.0] * N + [20.0] * 300}, None, "passo 4b"),
+         ("5b: cada quadro do relógio 2x (12 fps parece 24)", {"quadros": lento12}, dobra("5b"), "passo 5b"), ("5b: cada quadro do relógio 2x (relógio bom)", {}, dobra("5b"), "passo 5b"),
+         ("5b: um tempo repetido no relógio", {}, repete("5b"), "passo 5b"), ("4c: cada quadro do relógio parado 2x", {}, dobra("4c"), "passo 4c"),
+         ("4c: um tempo repetido no relógio parado", {}, repete("4c"), "passo 4c"), ("4c duplicado com o lote reprovando (entrada inválida vem antes do veredito)", {"quadros": lento12}, dobra("4c"), "passo 4c"),
+         ("sequencia 0", {"seq": 0}, None, "passo 5b"), ("sequencia -1", {"seq": -1}, None, "passo 5b"), ("sequencia não inteira 3,5", {"seq": 3.5}, None, "passo 5b"),
+         ("sequencia não inteira 0,5", {"seq": 0.5}, None, "passo 5b"), ("sequencia booleana", {"seq": True}, None, "passo 5b"),
+         ("criados com 1 GlobalId repetido", {}, lambda m: passo(m, "5b")["reps"][0]["criados"].__setitem__(5, "g4"), "passo 5b"),
+         ("criados todos iguais", {}, lambda m: passo(m, "5b")["reps"][0].update(criados=["g0"] * LOTE), "passo 5b"),
+         ("10**400 em t_quadro_ms", {}, poe("3", 7, t_quadro_ms=GIG), "passo 3"), ("10**400 em t0_ms", {}, poe("3", 7, t0_ms=GIG), "passo 3"),
+         ("10**400 em t_comando_ms", {}, poe("4b", 7, t_comando_ms=GIG), "passo 4b"), ("10**400 negativo em t0_ms", {}, poe("3", 7, t0_ms=-GIG), "passo 3"),
+         ("10**400 em t_painel_ms", {}, poe("4a", 7, t_painel_ms=GIG), "passo 4a"), ("10**400 em t_quadro_ms do M2b", {}, poe("4b", 7, t_quadro_ms=GIG), "passo 4b"),
+         ("10**400 no tempo do relógio do lote", {}, lambda m: passo(m, "5b")["reps"][0]["relogio"].__setitem__(10, [GIG, 11]), "passo 5b"),
+         ("10**400 na sequência do relógio do lote", {}, lambda m: passo(m, "5b")["reps"][0]["relogio"].__setitem__(10, [176.0, GIG]), "passo 5b"),
+         ("10**400 no relógio do parado", {}, lambda m: passo(m, "4c")["reps"][0]["relogio"].__setitem__(10, [GIG, 11]), "passo 4c"),
+         ("10**400 em t_quadro_ms do 5b", {}, poe("5b", 0, t_quadro_ms=GIG), "passo 5b"), ("10**400 em sequencia", {"seq": GIG}, None, "passo 5b")]
+
+@pytest.mark.parametrize("c", NOVOS, ids=[c[0] for c in NOVOS])
+def test_lote_24_repeticoes_a_mais_relogio_duplicado_sequencia_criados_e_inteiro_gigante_sao_entrada_invalida(ferramenta, tmp_path, c):
+    nome, kw, mut, token = c
+    m = med(**kw)
+    mut and mut(m)
+    rc, js, p = avaliar(tmp_path, m)
+    assert rc == 2 and p.stderr.startswith("ENTRADA INVÁLIDA:") and "Traceback" not in p.stderr and token in p.stderr, (nome, rc, p.stdout[-300:], p.stderr[-600:])
+    assert js is None or not js.get("aprovado"), "entrada inválida nunca aprova"
+
+def test_controle_sem_duplicar_o_relogio_a_meta_que_falha_continua_codigo_1(ferramenta, tmp_path):  # a validação nova não pode virar rc 2 para um relógio honesto que reprova
+    rc, js, p = avaliar(tmp_path, med(quadros=lento12))
+    assert rc == 1 and js["aprovado"] is False and any(e.startswith("M5:") for e in js["erros"]), (rc, js and js["erros"], p.stderr[-400:])
+    assert avaliar(tmp_path, med(parado=[[60.0 * i, i] for i in range(1, 51)]), nome="p")[0] == 0, "relógio parado distinto e mais lento (60 ms) continua válido"
+
+def test_inteiro_gigante_em_base_produtos_da_estrita_e_entrada_invalida(ferramenta, tmp_path):
+    rc, js, p = avaliar(tmp_path, med(produtos=GIG), estrito=True)
+    assert rc == 2 and p.stderr.startswith("ENTRADA INVÁLIDA:") and "Traceback" not in p.stderr, (rc, p.stderr[-600:])
+
+def test_rede_de_seguranca_de_main_imprime_a_linha_e_depois_o_traceback(ferramenta, tmp_path, monkeypatch, capsys):  # erro de programação injetado em `avaliar` (nome fixado no contrato)
+    sp = importlib.util.spec_from_file_location("medir_s04_rede", MEDIR)
+    mod = importlib.util.module_from_spec(sp)
+    sp.loader.exec_module(mod)
+    pasta = gravar(tmp_path / "a", med())
+    def quebra(*a, **k):
+        raise KeyError("erro_de_programacao_injetado")
+    monkeypatch.setattr(mod, "avaliar", quebra)
+    rc = mod.main(["--a", str(pasta), "--json", str(tmp_path / "x.json")])
+    err = capsys.readouterr().err
+    assert rc == 2 and err.startswith("ENTRADA INVÁLIDA:"), (rc, err[-600:])
+    assert "Traceback (most recent call last)" in err and "erro_de_programacao_injetado" in err and err.index("ENTRADA INVÁLIDA:") < err.index("Traceback"), err[-800:]
+    assert not (tmp_path / "x.json").exists(), "erro de programação nunca grava resultado"
 
 def test_o_roteiro_r_ainda_diz_200_repeticoes_e_lote_de_1000():  # os números do contrato vêm de fluxo_a/roteiro_r.json
     assert (ROT["3"]["n"], ROT["4a"]["n"], ROT["4b"]["n"], ROT["5b"]["quantidade"]) == (200, 200, 200, 1000)

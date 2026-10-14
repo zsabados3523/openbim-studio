@@ -145,11 +145,13 @@ def test_entradas_invalidas_dao_codigo_2_ou_1_sem_medicao_parcial(exe, tmp_path)
     tela()
     ifcopenshell.file(schema="IFC2X3").write(str(tmp_path / "x23.ifc"))
     (tmp_path / "ruim.json").write_text(json.dumps({"versao": 1, "passos": [{"id": "1", "cmd": "nao_existe"}]}), encoding="utf-8")
-    casos = [("base ausente", ["--base", tmp_path / "nao_existe.ifc", "--roteiro", jx.ROTEIRO], 2), ("base IFC2X3", ["--base", tmp_path / "x23.ifc", "--roteiro", jx.ROTEIRO], 2),
-             ("roteiro ausente", ["--roteiro", tmp_path / "nao_existe.json"], 2), ("comando desconhecido", ["--roteiro", tmp_path / "ruim.json"], 1)]
-    for nome, args, rc in casos:
+    # sob xvfb-run (Linux) o stderr do executável vem JUNTO do stdout (o script roda o comando com `2>&1`): a mensagem é lida do fluxo unido
+    casos = [("base ausente", ["--base", tmp_path / "nao_existe.ifc", "--roteiro", jx.ROTEIRO], 2, "base inválida"), ("base IFC2X3", ["--base", tmp_path / "x23.ifc", "--roteiro", jx.ROTEIRO], 2, "IFC4"),
+             ("roteiro ausente", ["--roteiro", tmp_path / "nao_existe.json"], 2, "roteiro ausente"), ("comando desconhecido", ["--roteiro", tmp_path / "ruim.json"], 1, "comando desconhecido")]
+    for nome, args, rc, trecho in casos:
         p = jx.rodar(exe, [*args, "--saida", tmp_path / "s"], grafico=True, env={"LC_ALL": "C"}, timeout=120)
-        assert p.returncode == rc and p.stderr.strip() and not (tmp_path / "s" / "medicao.json").exists(), (nome, p.returncode, p.stderr[-400:])
+        msg = p.stdout + p.stderr
+        assert p.returncode == rc and trecho in msg and not (tmp_path / "s" / "medicao.json").exists(), (nome, p.returncode, msg[-400:])
 
 # ---------- o roteiro R inteiro no executável, contra o fluxo A ----------
 @pytest.fixture(scope="module")
@@ -176,8 +178,8 @@ def b(exe, saida_a, a_med, tmp_path_factory):  # o MESMO modelo de base e o MESM
         gerar_modelo_grande.gerar(str(base), paredes=int(BASE))
     pasta = tmp_path_factory.mktemp("b")
     p = jx.rodar(exe, ["--base", base, "--roteiro", jx.ROTEIRO, "--saida", pasta, "--painel-log", pasta / "painel.jsonl"], grafico=True, env={"LC_ALL": "C", "OBIM_LIMITE": "900"})
-    assert p.returncode == 0 and (pasta / "medicao.json").is_file(), f"B CAIU ou falhou no roteiro (código {p.returncode}):\n{p.stdout[-800:]}\n{p.stderr[-2500:]}"
-    assert p.stdout.splitlines()[-1].startswith("MEDICAO ")
+    assert p.returncode == 0 and (pasta / "medicao.json").is_file(), f"B CAIU ou falhou no roteiro (código {p.returncode}):\n{(p.stdout + p.stderr)[-3000:]}"
+    assert any(x.startswith("MEDICAO ") for x in p.stdout.splitlines()[-3:]), "faltou a linha MEDICAO no fim da saída"
     os.environ["OBIM_S04_SAIDA_B"] = str(pasta)  # o test_b_real_... do oráculo da T12 lê daqui (arquivo de teste anterior, mesma sessão)
     med = json.loads((pasta / "medicao.json").read_text())
     ifc = Path(med["arquivo_ifc"]) if Path(med["arquivo_ifc"]).is_absolute() else pasta / med["arquivo_ifc"]
@@ -250,5 +252,5 @@ def test_b_saida_igual_a_de_a(b, a_med):  # §2.2: mesmas classes, e por parede 
 def test_b_aceito_pelo_medir_s04(b, saida_a, medir, tmp_path):  # a ferramenta da T12 lê o mesmo medicao.json de A e de B e compara os IFCs do passo 7
     p = rodar_medir("--a", saida_a, "--b", b["pasta"], "--json", tmp_path / "ab.json")
     js = json.loads((tmp_path / "ab.json").read_text())
-    assert p.returncode == 0 and js["aprovado"] and js["saida_igual"] == {"ok": True, "diferencas": []}, (js["erros"], js["saida_igual"], p.stderr[-800:])
+    assert p.returncode == 0 and js["aprovado"] and js["saida_igual"] == {"ok": True, "diferencas": []}, (js["erros"], js["saida_igual"], (p.stdout + p.stderr)[-800:])
     print("M6", json.dumps(js["m6"]))

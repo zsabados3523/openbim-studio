@@ -30,9 +30,9 @@ def rodar(exe, args, grafico=False, env=None, timeout=900):  # grafico: tela vir
     pre = ["xvfb-run", "-a", "-s", "-screen 0 1280x800x24"] if grafico and sys.platform != "win32" else []
     return subprocess.run([*pre, str(exe), *map(str, args)], env=e, capture_output=True, text=True, timeout=timeout)
 
-def resultado(p, rotulo):  # JSON da linha `RESULTADO`; queda ou DLL/plugin Qt ausente aparecem com o código de saída e o stderr
+def resultado(p, rotulo):  # JSON da linha `RESULTADO`; queda ou DLL/plugin Qt ausente aparecem com o código de saída e a saída unida (sob xvfb-run o stderr vem junto do stdout)
     linhas = [x for x in p.stdout.splitlines() if x.startswith("RESULTADO ")]
-    assert p.returncode == 0 and linhas, f"{rotulo}: o executável CAIU ou não respondeu (código {p.returncode}; no Windows 0xC0000135 = DLL ausente, 'platform plugin' = Qt sem plugin):\n{p.stdout[-800:]}\n{p.stderr[-1500:]}"
+    assert p.returncode == 0 and linhas, f"{rotulo}: o executável CAIU ou não respondeu (código {p.returncode}; no Windows 0xC0000135 = DLL ausente, 'platform plugin' = Qt sem plugin):\n{(p.stdout + p.stderr)[-2300:]}"
     return json.loads(linhas[-1][10:])
 
 def roteiro_json():

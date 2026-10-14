@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   # Os nomes dos jobs linux e windows são usados na regra de bloqueio de merge. Não renomear.
-  # (macos não bloqueia.)
+  # (macos não bloqueia.) O instalador do Windows roda em paralelo no job `windows-instalador`.
   linux:
     runs-on: ubuntu-latest
     env:
@@ -199,22 +199,6 @@ jobs:
         shell: bash
         run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Detecta se o empacotamento mudou (decide se o instalador é montado e testado)
-        id: detecta
-        shell: bash
-        env:
-          EVENTO: ${{ github.event_name }}
-          BASE: ${{ github.base_ref }}
-        run: |
-          # push (main) e tag: sempre. Pull request: só se o diff contra a base toca o empacotamento. Na dúvida, true.
-          r=true; motivo="evento $EVENTO"
-          if [ "$EVENTO" = "pull_request" ]; then
-            if git fetch --no-tags --depth=1 origin "$BASE" 2>/dev/null && lista=$(git diff --name-only FETCH_HEAD HEAD); then
-              if echo "$lista" | grep -qE '^(packaging/|app/|environment[^/]*\.yml$|environment\.[^/]*\.lock$|pyproject[^/]*$|\.github/workflows/ci\.yml$|scripts/(prune_packages|license_inventory|collect_package_licenses)\.py$|LICENSES/)'; then motivo="o PR mexe no empacotamento"; else r=false; motivo="o PR não mexe no empacotamento"; fi
-            else motivo="não consegui comparar com a base"; fi
-          fi
-          echo "instalador=$r" >> "$GITHUB_OUTPUT"
-          echo "::notice title=instalador::instalador=$r ($motivo)"
       - name: Cache de pacotes do conda
         id: cache_conda
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -354,6 +338,80 @@ jobs:
           cat out/s04_sonda/sonda.json || true
           echo "::notice title=sonda da thread de desenho no ${RUNNER_OS}::$(python -c "import json; r=json.load(open('out/s04_sonda/sonda.json')); print('rc=$rc meta_atingida=%s' % r.get('meta_atingida'), {k:v.get('maior_intervalo_ms') for k,v in r['fases'].items() if isinstance(v,dict)})" || echo sem resultado)"
           true
+      - name: Gravação do roteiro (experimento T12; não bloqueia)
+        shell: bash -el {0}
+        continue-on-error: true
+        run: |
+          mkdir -p out/video
+          QT_QPA_PLATFORM=offscreen python tests/video/gravar_roteiro.py out/video docs/acceptance/amostras/casa-simples.ifc
+      - name: Pacote do app esqueleto
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p out
+          tar czf out/app.tar.gz app/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: openbim-ci-windows
+          path: out/
+          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
+      - name: Tempo total
+        if: always()
+        shell: bash
+        run: |
+          echo "### windows: tempo total do job até aqui: $(( $(date +%s) - T0 )) s (build limpo, sem cache do ambiente conda; incremental não medido)" >> "$GITHUB_STEP_SUMMARY"
+
+  # Instalador do Windows (montagem e teste) em paralelo com o job `windows`, para encurtar o tempo total.
+  # Nenhum teste foi retirado: os passos são os mesmos que antes ficavam no fim do job `windows`.
+  # Não confundir com o nome `windows` (regra de bloqueio de merge): este job tem nome próprio.
+  windows-instalador:
+    runs-on: windows-latest
+    env:
+      PLAT: win-64
+    timeout-minutes: 60
+    steps:
+      - name: Início (relógio)
+        shell: bash
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Detecta se o empacotamento mudou (decide se o instalador é montado e testado)
+        id: detecta
+        shell: bash
+        env:
+          EVENTO: ${{ github.event_name }}
+          BASE: ${{ github.base_ref }}
+        run: |
+          # push (main) e tag: sempre. Pull request: só se o diff contra a base toca o empacotamento. Na dúvida, true.
+          r=true; motivo="evento $EVENTO"
+          if [ "$EVENTO" = "pull_request" ]; then
+            if git fetch --no-tags --depth=1 origin "$BASE" 2>/dev/null && lista=$(git diff --name-only FETCH_HEAD HEAD); then
+              if echo "$lista" | grep -qE '^(packaging/|app/|environment[^/]*\.yml$|environment\.[^/]*\.lock$|pyproject[^/]*$|\.github/workflows/ci\.yml$|scripts/(prune_packages|license_inventory|collect_package_licenses)\.py$|LICENSES/)'; then motivo="o PR mexe no empacotamento"; else r=false; motivo="o PR não mexe no empacotamento"; fi
+            else motivo="não consegui comparar com a base"; fi
+          fi
+          echo "instalador=$r" >> "$GITHUB_OUTPUT"
+          echo "::notice title=instalador::instalador=$r ($motivo)"
+      - name: Cache de pacotes do conda
+        if: steps.detecta.outputs.instalador == 'true'
+        id: cache_conda
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/conda_pkgs
+          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'environment.*.lock', 'packaging/runtime-environment.yml') }}
+      - name: Pasta de pacotes do conda
+        if: steps.detecta.outputs.instalador == 'true'
+        shell: bash
+        run: |
+          echo "CONDA_PKGS_DIRS=$RUNNER_TEMP/conda_pkgs" >> "$GITHUB_ENV"
+          echo "::notice title=cache de pacotes::cache-hit=${{ steps.cache_conda.outputs.cache-hit }}"
+      - uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
+        if: steps.detecta.outputs.instalador == 'true'
+        with:
+          activate-environment: openbim
+          channels: conda-forge
+          conda-remove-defaults: "true"
+          channel-priority: strict
+          miniforge-version: latest
       - name: Instalador Windows (ambiente de runtime e NSIS)
         if: steps.detecta.outputs.instalador == 'true'
         shell: bash -el {0}
@@ -385,30 +443,17 @@ jobs:
             echo "::error title=teste do instalador falhou (código $rc)::$msg"
             exit $rc
           fi
-          echo "Instalação, abertura e desinstalação sem sobras: OK" >> "$GITHUB_STEP_SUMMARY"
-      - name: Gravação do roteiro (experimento T12; não bloqueia)
-        shell: bash -el {0}
-        continue-on-error: true
-        run: |
-          mkdir -p out/video
-          QT_QPA_PLATFORM=offscreen python tests/video/gravar_roteiro.py out/video docs/acceptance/amostras/casa-simples.ifc
-      - name: Pacote do app esqueleto
-        if: always()
-        shell: bash
-        run: |
-          mkdir -p out
-          tar czf out/app.tar.gz app/
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
+          echo "Instalação, abertura e desinstalação sem sobras: OK" >> "$GITHUB_STEP_SUMMARY"      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.detecta.outputs.instalador == 'true' && always()
         with:
-          name: openbim-ci-windows
+          name: openbim-ci-windows-instalador
           path: out/
           retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
       - name: Tempo total
         if: always()
         shell: bash
         run: |
-          echo "### windows: tempo total do job até aqui: $(( $(date +%s) - T0 )) s (build limpo, sem cache do ambiente conda; incremental não medido)" >> "$GITHUB_STEP_SUMMARY"
+          echo "### windows-instalador: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
 
   # Melhor esforço (R12): falha vira aviso e não entra na regra de bloqueio de merge.
 

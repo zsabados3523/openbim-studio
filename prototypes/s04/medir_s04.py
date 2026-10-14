@@ -169,7 +169,7 @@ def _num(x):
 def _roteiro():  # {"n": {passo: repetições}, "lote": tamanho do lote do 5b}: os números do roteiro R, nunca fixos aqui
     try:
         ps = {p["id"]: p for p in json.loads(ROTEIRO.read_text(encoding="utf-8"))["passos"]}
-        return {"n": {i: int(ps[i]["n"]) for i in ("3", "4a", "4b")}, "lote": int(ps["5b"]["quantidade"])}
+        return {"n": {i: int(ps[i].get("n", 1)) for i in MEDIDOS}, "lote": int(ps["5b"]["quantidade"])}
     except (OSError, ValueError, KeyError, TypeError) as e:
         raise ValueError(f"não consegui ler os números do roteiro R em {ROTEIRO}: {e!r}")
 
@@ -186,13 +186,15 @@ def _tempos(pid, k, r, painel):  # t0 <= t_comando <= t_quadro (e t_painel >= t0
         raise ValueError(f"passo {pid}, repetição {k}: t_painel_ms {r['t_painel_ms']!r} antes de t0_ms {r['t0_ms']!r}")
 
 
-def _relogio(pid, r):  # [[t_ms, seq], ...] ordenado por tempo (a ferramenta nunca confia na ordem gravada)
+def _relogio(pid, r):  # [[t_ms, seq], ...] ordenado por tempo (a ferramenta nunca confia na ordem gravada); r já passou por _tempos
     rel = r.get("relogio")
     if not isinstance(rel, list):
         raise ValueError(f"passo {pid}: `relogio` ausente ou não é lista")
     for k, x in enumerate(rel):
         if not (isinstance(x, (list, tuple)) and len(x) == 2 and _num(x[0]) and _num(x[1])):
             raise ValueError(f"passo {pid}: entrada {k} do relógio inválida ({x!r})")
+        if not r["t0_ms"] <= x[0] <= r["t_quadro_ms"]:  # janela inclusiva da própria repetição: rejeita, não filtra
+            raise ValueError(f"passo {pid}: quadro do relógio em {x[0]!r} ms fora da janela [{r['t0_ms']!r}, {r['t_quadro_ms']!r}] da repetição")
     r = sorted(([float(x[0]), x[1]] for x in rel), key=lambda x: x[0])
     if len({x[0] for x in r}) != len(r):
         raise ValueError(f"passo {pid}: relógio com tempo repetido")
@@ -216,8 +218,8 @@ def _validar_medicao(m, rotulo):
         if pid not in por_id:
             raise ValueError(f"{rotulo}: passo {pid} ausente")
         reps = por_id[pid]["reps"]
-        if pid in ro["n"] and len(reps) != ro["n"][pid] or pid not in ro["n"] and not reps:  # o roteiro fixa N: nem a menos nem a mais
-            raise ValueError(f"{rotulo}: passo {pid} com {len(reps)} repetições (o roteiro pede {ro['n'].get(pid, 'ao menos 1')})")
+        if len(reps) != ro["n"][pid]:  # o roteiro fixa N (padrão 1 onde não define; o fluxo A faz int(p.get("n", 1))): nem a menos nem a mais
+            raise ValueError(f"{rotulo}: passo {pid} com {len(reps)} repetições (o roteiro pede {ro['n'][pid]})")
         for k, r in enumerate(reps):
             _tempos(pid, k, r, pid == "4a")
             if pid in ("4c", "5b"):

@@ -128,3 +128,7 @@ Uma linha por tarefa concluída ou escalada, e por mudança de classe de tarefa.
 2026-10-13 | S04-T14 | T3 | dividida em T14a/T14b/T14c (não cabe em 400 linhas; ampliados arquivos permitidos: paredes.*, ponte.cpp, obimcore) | oráculo achou
 2026-10-13 | S04-T11c e T12 | T3 | Opus lote 23 REPROVOU os dois (T11c custo quadrático; T12 aprova NaN/n=1). Correções em curso; 1ª reprovação | 
 2026-10-13 | CI | T0 | ERRO do líder: ao resolver conflito do PR 78 mantive só a versão do ramo e descartei o passo 'Fluxo B, paredes em C++ (T13)' do ci.yml no main; restaurado no PR 82 (merge de main). Até o 82 entrar, o main não roda o oráculo da T13 no CI | corrigido no PR 82
+2026-10-14 | S04-T11c e T12 | T3 | Opus lote 24: 2ª reprovação dos dois; cartões reescritos (LOTE_OPUS_24.md) | correções pequenas e especificadas
+2026-10-14 | S04-T11c | T3 | Opus lote 25: conteúdo APROVADO (aguarda CI verde) | 
+2026-10-14 | S04-T14a | T3 | Opus lote 25 REPROVOU (contexto Plan fora do projeto; CI sem o passo do fluxo B). Também registrado: tests/s04_fluxo_b_t14a_aux.py e CONTRATO.md fora dos arquivos permitidos, aceitos pelo Opus | correção em curso
+2026-10-14 | S04-T14b | T3 | diff 529 linhas (304 inseridas, resto movido): exceção aceita pelo líder (precedentes 434/520/650) | PR aberto, aguarda Opus

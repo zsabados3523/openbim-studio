@@ -259,15 +259,16 @@ class FluxoA:
         pavs = self.ifc.by_type("IfcBuildingStorey")
         if tipo is None or min(comp, alt, esp) <= 0 or not pavs or n < 1:
             raise ValueError(f"parede inválida (tipo {c['tipo']!r} inexistente, medida <= 0 ou modelo sem pavimento)")
-        ws = []
+        ws, conj = [], E.get_material(tipo, should_inherit=False)  # conjunto de camadas do tipo: cada parede ganha o seu IfcMaterialLayerSetUsage (T11c)
         for k in range(n):
             g, w = self._g + k, api("root.create_entity", self.ifc, ifc_class="IfcWall", name="Parede")
             self._representacoes(w, comp, alt, esp)
             m = np.eye(4)
             m[:2, 3] = (g % 50) * 5.0, (g // 50) * 4.0
             api("geometry.edit_object_placement", self.ifc, product=w, matrix=m)
-            api("type.assign_type", self.ifc, related_objects=[w], relating_type=tipo)  # uma parede por chamada: cada uma ganha o seu IfcMaterialLayerSetUsage e o seu IfcRelAssociatesMaterial (T11c); a relação de tipo segue 1 só
+            api("material.assign_material", self.ifc, products=[w], type="IfcMaterialLayerSetUsage", material=conj)
             ws.append(w)
+        api("type.assign_type", self.ifc, related_objects=ws, relating_type=tipo, should_map_representations=False)  # uma chamada só para o lote: evita custo quadrático (lote Opus 23 A1)
         api("spatial.assign_container", self.ifc, products=ws, relating_structure=min(pavs, key=lambda s: s.Name or ""))
         u["criados"], u["geometria"] = [w.GlobalId for w in ws], [w.GlobalId for w in ws]
         u["dg"] = n

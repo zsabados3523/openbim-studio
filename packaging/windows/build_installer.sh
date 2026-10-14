@@ -37,6 +37,11 @@ for d in "$PKG"/env/Lib/site-packages/vtkmodules "$PKG"/env/Lib/site-packages/vt
   [ -d "$d" ] && find "$d" -depth -type d -empty -delete
 done
 
+# 1b3. etc/conda/test-files/<pacote>: arquivos de teste da compilação no conda-forge (alguns pacotes novos, como o
+# x264, passaram a trazer isso em 2026-10-14). Só servem ao conda-build, o app não usa. Sem isso sobra a pasta
+# de um pacote podado (ex.: x264) e o teste do instalador a acusa como arquivo podado.
+rm -rf "$PKG/env/etc/conda/test-files"
+
 # 1c. Arquivos que só servem para COMPILAR contra as bibliotecas (o app roda sem eles): bibliotecas de
 # importação .lib, cmake, pkg-config, documentação, símbolos de depuração e testes.
 rm -rf "$PKG/env/Library/lib/cmake" "$PKG/env/Library/lib/pkgconfig" "$PKG/env/Library/share/man" \

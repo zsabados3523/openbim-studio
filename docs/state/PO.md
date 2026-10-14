@@ -98,3 +98,6 @@ C hospedagem GitHub + espelho Codeberg · D interface híbrida (confirmar na S09
 2. Forro e rodapé na F2 depois da F2-S07 (por contorno e por parede); "por ambiente" na F3.
 3. Fundações só como elemento, sem cálculo estrutural (F4, candidatas).
 4. Atualizar `v2/02` numa única revisão com as 14 mudanças de escopo; **não** recalcular 21–42 meses antes da medição da F0.
+
+## 2026-10-13 (noite): exceção de ausência até o PO voltar
+PO: "vou ficar fora do computador até amanhã, pode continuar sem mim. Você tem minha autorização até eu voltar." Vale o mesmo regime das exceções de 12 e 13/10: o líder segue as próprias recomendações dentro da autorização permanente; continuam com o PO (a frente para e o líder passa a outra): ADR, meta do portão, escopo, licença, regras do processo e CLAUDE.md, instalar ferramenta nova, baixar arquivo, cota extra, apagar dados, credenciais, `main` direto, execução na tela real, meta da F0 não atingida. Opus só com semanal >25% restante e janela <70%.

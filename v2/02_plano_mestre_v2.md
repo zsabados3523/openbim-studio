@@ -88,6 +88,8 @@ flowchart TD
   GEO --> AUX
 ```
 
+**Decisão do ADR-004 (PO, 2026-10-15; `docs/adr/ADR-004-processos-threads-e-trava.md`):** a edição acontece em **um processo só**, com uma única cópia do modelo, como no desenho acima. Há um acréscimo ao desenho: um **processo auxiliar descartável** faz a primeira tesselação de arquivos grandes e a de peças suspeitas (que estouraram o tempo ou derrubaram o auxiliar), e pode ser morto sem perder o trabalho. Dentro do processo da janela, a geometria roda numa thread própria, **uma passada por vez**, com várias threads dentro da passada. O acesso ao modelo passa por uma porta única, com trava de leitura e de escrita, conferida pelo módulo C++. Os números que podem rever essa decisão estão na seção 9 do ADR.
+
 **Pontos críticos a provar na F0:**
 - A mesma instância de `ifcopenshell.file` precisa ser compartilhada entre Python (ifcopenshell-python, que já é um wrapper do C++) e o módulo C++ sem cópia. Isso exige compilar nosso módulo contra **a mesma versão/ABI do IfcOpenShell** que o Python usa (ou compilar IfcOpenShell e o wrapper juntos). É o maior risco técnico da arquitetura **[verificar F0: só um protótipo responde; não é verificável na web]**.
 - O loop de renderização não pode depender do GIL do Python: viewport e tesselação rodam em threads C++.

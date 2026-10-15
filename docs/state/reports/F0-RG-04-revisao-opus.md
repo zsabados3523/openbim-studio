@@ -42,7 +42,7 @@
 ## PR 125: correções exigidas
 
 5. **Soma calculada em toda carga sem uso.** A soma só é usada na conferência final com `manter_arquivo=True`; os filhos conferem só tamanho e data. Mesmo assim `tirar(self.caminho)` lê o arquivo inteiro a cada carga. Num IFC de 1 GB isso é uma leitura extra inteira, e ela não pode ser cancelada: `AdaptadorCarga.cancelar` espera 5 s e depois recusa abrir outro arquivo ("a carga anterior ainda não terminou"). Exigido: `foto_arquivo.tirar(self.caminho, com_soma=self.manter_arquivo)`.
-6. **Conferência final com soma sem teste.** Mutação: apagar as três linhas `trocou = ...; if trocou: raise` em `_rodar` não quebra nenhum teste. Exigido: teste com `manter_arquivo=True` em que o `tirar` do pai devolve a foto real com `soma` trocada (tamanho e data iguais, então o filho passa); confere `r.estado == "concluido"`, uma linha "não foi possível manter o arquivo aberto: o arquivo mudou durante a carga (o conteúdo mudou)" em `r.mensagens` e `car.arquivo()` igual a `None`.
+6. **Conferência final com soma sem teste.** Mutação: apagar as três linhas `trocou = ...; if trocou: raise` em `_rodar` não quebra nenhum teste. Exigido: teste com `manter_arquivo=True` em que o `tirar` do pai devolve a foto real com `soma` trocada (tamanho e data iguais, então o filho passa); confere `r.estado == "concluido"`, uma linha "não foi possível manter o arquivo aberto: o arquivo mudou durante a carga (o conteúdo mudou)" em `r.mensagens` e `car.arquivo is None`.
 
 ## Recomendado (não bloqueia)
 

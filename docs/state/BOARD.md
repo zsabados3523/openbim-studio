@@ -62,6 +62,9 @@
 | F0-S01-R1 | Revisão S01: aceite contra o plano e cobertura | T2 | sonnet | opus (lote) | PR 93 | FEITA (2026-10-14); falta lote e parecer do PO |
 | F0-S01-R2 | Revisão S01: pendências de licença (SINAPI, Qt Shader Tools, conda-forge, ReportLab) | T2 | sonnet | opus (lote) | R1 | FEITA (2026-10-14); 1 item para o PO (ReportLab) |
 | F0-S01-R3 | Revisão S01: coerência, testes e relatório para o lote Opus | T2 | sonnet | opus (lote) | R1, R2 | FEITA (2026-10-14); lote 29 aguarda uso e PO |
+| F0-S02-R1 | Revisão S02: aceite contra o plano e metas com a meta original | T2 | sonnet | opus (lote) | S01-R3 | NÃO INICIADA |
+| F0-S02-R2 | Revisão S02: pendências abertas e licenças dos pacotes | T2 | sonnet | opus (lote) | S02-R1 | NÃO INICIADA |
+| F0-S02-R3 | Revisão S02: coerência, testes e relatório para o lote Opus | T2 | sonnet | opus (lote) | S02-R1, S02-R2 | NÃO INICIADA |
 
 Nenhum cartão de S01 ou S02 é T3 (ver LOG.md). A prova do R1 (ponte C++/Python) é T3 e fica na S04.
 

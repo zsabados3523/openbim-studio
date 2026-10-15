@@ -8,7 +8,7 @@
 | # | Item | Origem | Entrou em | Pré-requisito | Prioridade |
 |---|---|---|---|---|---|
 | 1 | Revisão da fatia S01 (cartões `F0-S01-R1` a `R3`; relatório numerado em `reports/`) | PROPOSTA_REVISAO_F0 §3.1 | 2026-10-14 | **Pedido pronto em `LOTE_OPUS_29.md` (2026-10-14).** R1 a R3 feitos; PO aceitou o parecer (D6, 2026-10-15); falta checar o uso (PO informou uso parado, sem percentuais) | Alta |
-| 2 | Revisão da fatia S02 (T17/T18 já conferidas no lote 3; falta runtime do appimagetool, T23, tempo do Windows) | PROPOSTA_REVISAO_F0 §3.2 | 2026-10-14 | Lote 1 feito; cartões `F0-S02-R*` ainda por escrever | Média |
+| 2 | Revisão da fatia S02 (T17/T18 já conferidas no lote 3; falta runtime do appimagetool, T23, tempo do Windows) | PROPOSTA_REVISAO_F0 §3.2 | 2026-10-14 | Lote 1 feito; cartões `F0-S02-R1` a `R3` escritos em 2026-10-15 (ainda não executados) | Média |
 | 3 | Revisão da fatia S03 (exceções: memória 6 GB, Windows em VM, teste de tempo 16→100 ms) | PROPOSTA_REVISAO_F0 §3.3 | 2026-10-14 | Lote 2 feito; cartões `F0-S03-R*` ainda por escrever | Média |
 | 4 | T14c (Fluxo B, janela Qt Widgets; ramo `s04-t14c`, 501 linhas, exceção aceita) | LOG 2026-10-14 | 2026-10-14 | **Pausada pela D1** até S01 a S03 revisadas e D1 a D8 respondidas | Baixa até a D1 acabar |
 | 5 | T15, T17, T18, T19 (cartões esqueleto; T19 é ADR, decisão do PO) | BOARD | 2026-10-14 | Pausadas pela D1; reescrever cartões antes | Baixa até a D1 acabar |

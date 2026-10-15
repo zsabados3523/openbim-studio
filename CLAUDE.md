@@ -8,12 +8,12 @@ Programa BIM aberto (AGPL v3), instalável no Windows e no Linux, geral (núcleo
 - PO: Rafael, arquiteto, **não programa**. Fale em pt-BR claro, sem jargão; perguntas objetivas, sempre com recomendação.
 - O PO aceita por roteiro, vídeo e instalador, nunca lendo código.
 - Fonte de verdade: pasta `v2/` (00 a 08). **Em conflito, v2/ prevalece.**
-- `implementation_plan.md`, `claude_code_setup.md`, `orchestrator_briefing.md` na raiz = plano antigo. Não usar, não alterar.
+- `implementation_plan.md`, `claude_code_setup.md`, `orchestrator_briefing.md` = plano antigo, agora em `docs/arquivo/`. Não usar, não alterar.
 - Ambiguidade ou conflito nos documentos: listar e perguntar ao PO. Não inventar.
 
 ## Onde está o estado
-- `docs/state/BOARD.md` quadro (fatia, tarefa, classe, modelo, status) · `cards/` cartões · `LOG.md` uma linha por tarefa concluída ou escalada
-- `docs/state/QUOTA.md` cota por sessão · `QUEUE_OPUS.md` fila do lote Opus · `PO.md` perguntas e respostas · `reports/` relatórios
+- `docs/state/BOARD.md` quadro (fatia, tarefa, classe, modelo, status) · `cards/` cartões (uma pasta por fatia aberta; fatias fechadas em `arquivo/`) · `LOG.md` uma linha por tarefa concluída ou escalada
+- `docs/state/QUOTA.md` cota por sessão · `QUEUE_OPUS.md` fila do lote Opus · `PO.md` perguntas e respostas · `reports/` relatórios de fatia e de revisão · `lotes/LOTE_OPUS_N/` pedido e resultado de cada lote Opus · `arquivo/` o que já fechou
 - `docs/adr/` decisões · `docs/research/` fichas de pesquisa · `docs/acceptance/` roteiros do PO
 - Início de sessão ("Leia docs/state e continue"): ler BOARD, PO, QUEUE_OPUS e as últimas linhas de QUOTA.
 - Fim de sessão: atualizar BOARD, LOG, QUOTA (pedir ao PO os percentuais de `/usage`) e o "próximo passo" do cartão em curso.
@@ -66,5 +66,5 @@ Programa BIM aberto (AGPL v3), instalável no Windows e no Linux, geral (núcleo
 3. Pode dar merge do PR quando `linux` e `windows` estiverem verdes e o PR for só de tarefa T0, T1 ou T2 já aprovada em cartão. **T3: também pode, desde que o conteúdo exato tenha sido aprovado pelo Opus (ver 6) e `linux` e `windows` estejam verdes; avisar o PO em seguida com resumo curto. ADR, meta do portão e qualquer coisa que mexa em licença, regras do processo ou este `CLAUDE.md` o PO aprova antes.**
 4. Pode rodar subagentes sonnet e haiku conforme o cartão. Opus: ver 6.
 5. Continuam pedindo ok do PO: instalar ferramenta nova, baixar arquivo, gastar cota extra, apagar dados, mexer em credenciais ou no `main`. O auto-merge está ativado no projeto.
-6. **Lote Opus pelo líder (PO, 2026-10-12).** O líder abre o lote Opus como subagente (`model: opus`, contexto fechado, mesma saída aprovado/reprovado com lista numerada), sem pedir ok, lê o relatório, aplica as recomendações e grava o relatório inteiro em `docs/state/reports/`. Antes de abrir confere o uso (`get_usage`): semanal com mais de 25% restante e janela de 5 h abaixo de 70% (PO, 2026-10-13; era 60%); senão espera a renovação. Resumo curto ao PO depois, em pt-BR simples e sem siglas. Continuam do PO: decisões de meta, ADR, escopo, licença e regras. O Opus nunca revisa o que ele mesmo escreveu na tarefa; oráculo e implementação seguem em subagentes diferentes.
+6. **Lote Opus pelo líder (PO, 2026-10-12).** O líder abre o lote Opus como subagente (`model: opus`, contexto fechado, mesma saída aprovado/reprovado com lista numerada), sem pedir ok, lê o relatório, aplica as recomendações e grava o relatório inteiro em `docs/state/lotes/LOTE_OPUS_N/resultado.md` (pedido em `pedido.md`). Antes de abrir confere o uso (`get_usage`): semanal com mais de 25% restante e janela de 5 h abaixo de 70% (PO, 2026-10-13; era 60%); senão espera a renovação. Resumo curto ao PO depois, em pt-BR simples e sem siglas. Continuam do PO: decisões de meta, ADR, escopo, licença e regras. O Opus nunca revisa o que ele mesmo escreveu na tarefa; oráculo e implementação seguem em subagentes diferentes.
 7. **Esforço dos subagentes (PO, 2026-10-13).** Ao lançar subagentes haiku e sonnet, o líder passa `effort: "high"` (alto). Opus segue o esforço padrão, salvo ordem do PO.

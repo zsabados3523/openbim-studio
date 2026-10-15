@@ -204,7 +204,7 @@ class FluxoA:
 
     def _lote(self, guids):  # malhas do núcleo -> LoteMalha (sombreado chapado: 3 vértices por triângulo, normal da face; posições relativas ao deslocamento da cena)
         import obimcore
-        from viewport_qrhi.carregador import DTYPE_OBJETO, DTYPE_VERTICE, LoteMalha
+        from formato_malha import DTYPE_OBJETO, DTYPE_VERTICE, LoteMalha
         mal = obimcore.malhas(self.ifc, list(guids))
         gs = [g for g in guids if len(mal[g]["indices"])]
         if not gs:

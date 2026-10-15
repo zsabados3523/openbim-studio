@@ -38,6 +38,7 @@ import s04_fluxo_aux as aux
 from s04_fluxo_aux import FIRE, PAREDE, PASTA, ROTEIRO, TIPO, calcular, estado, fire, forma, ids_modelo, sintetico, veredito
 from test_s04_viewport import caso as _caso  # xvfb-run, LC_ALL=C, resultado em JSON
 
+UTM_AUX = aux.AQUI.parent / "s04_fluxo_utm_aux.py"
 caso = lambda nome, *a, **k: _caso(nome, *a, alvo=aux.AQUI, **k)  # noqa: E731
 OBRIGATORIO = "1" in (os.environ.get("OBIM_S04_T11_OBRIGATORIO"), os.environ.get("OBIM_S04_T11B_OBRIGATORIO"), os.environ.get("OBIM_S04_T11C_OBRIGATORIO"))
 BASE = os.environ.get("OBIM_S04_BASE", "300")
@@ -791,3 +792,30 @@ def test_desfazer_e_refazer_com_falha_na_cena_voltam_o_modelo_e_o_registro(fino)
         assert v["voltou"], onde
         for qual in ("desfazer", "refazer"):
             assert all(v[qual].values()), (onde, qual, {k: x for k, x in v[qual].items() if not x})
+
+# ---------- F0-RG-07: deslocamento da cena (coordenadas georreferenciadas) ----------
+@pytest.mark.parametrize("base", [(333000.0, 7400000.0, 0.0), (-333000.0, -7400000.0, -50.0)])
+def test_rg07_lote_com_coordenada_utm_usa_deslocamento_e_nao_perde_precisao(novo, base):
+    try:
+        import obimcore  # noqa: F401  (o `_lote` monta o LoteMalha com a ponte; no CI vem de out/s04)
+    except ImportError:
+        pular("obimcore ausente")
+    f = novo()
+    f.executar(TIPO)
+    g1, g2 = f.executar(PAREDE)[0], f.executar(PAREDE)[0]
+    for g in (g1, g2):  # Y perto de 7,4 milhões de metros: em float32 o degrau é ~0,5 m
+        f.executar({"cmd": "mover", "alvo": g, "dx": base[0], "dy": base[1], "dz": base[2]})
+    lote = f._lote([g1])
+    assert np.allclose(lote.deslocamento, np.rint(lote.deslocamento)) and abs(lote.deslocamento[1] - base[1]) < 10
+    mundo = lote.vertices["pos"].astype(np.float64) + lote.deslocamento  # volta ao mundo: tem de bater com o ifcopenshell
+    _, dim, canto = forma(f.ifc.by_guid(g1))
+    assert np.abs(mundo.min(0) - canto).max() < 1e-3 and np.abs(mundo.max(0) - mundo.min(0) - dim).max() < 1e-3
+    assert np.abs(lote.vertices["pos"]).max() < 100, "posições relativas à cena têm de ser pequenas"
+    assert np.array_equal(f._lote([g2]).deslocamento, lote.deslocamento), "todos os lotes da sessão usam o mesmo deslocamento"
+
+@pytest.mark.parametrize("sinal", ["mais", "menos"])
+def test_rg07_com_janela_camera_em_coordenada_do_mundo_selecao_e_desenho_certos(tela, sinal):
+    c = _caso("utm", sinal, alvo=UTM_AUX, limite=600)
+    assert c["janela"] and c["viva"], c
+    assert c["sel_antes"] == c["g1"] and c["sel_depois"] == c["g1"], c
+    assert c["muda"] > 50, f"mover 1 m não mudou o desenho (pixels: {c['muda']})"

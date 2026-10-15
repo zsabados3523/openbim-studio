@@ -30,7 +30,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/conda_pkgs
-          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'environment.*.lock', 'packaging/runtime-environment.yml') }}
+          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'environment.*.lock', 'packaging/runtime-environment.yml', 'packaging/runtime-environment.*.lock') }}
       - name: Pasta de pacotes do conda
         shell: bash
         run: |
@@ -498,7 +498,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/conda_pkgs
-          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'environment.*.lock', 'packaging/runtime-environment.yml') }}
+          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'environment.*.lock', 'packaging/runtime-environment.yml', 'packaging/runtime-environment.*.lock') }}
       - name: Pasta de pacotes do conda
         if: steps.detecta.outputs.instalador == 'true'
         shell: bash
@@ -521,7 +521,13 @@ jobs:
           exec > >(tee "$RUNNER_TEMP/passo.log") 2>&1
           mkdir -p out
           t0=$(date +%s)
-          conda env create -f packaging/runtime-environment.yml -p "$RUNNER_TEMP/rt" -y -q
+          # Ambiente de runtime (o que vai ao usuário): pela trava, se existir (F0-RG-10; PO.md A3); senão pelo .yml
+          LOCK="packaging/runtime-environment.${PLAT}.lock"
+          if [ -f "$LOCK" ]; then conda create -p "$RUNNER_TEMP/rt" --file "$LOCK" -y -q; echo "::notice title=ambiente de runtime::criado pela trava $LOCK"
+          else conda env create -f packaging/runtime-environment.yml -p "$RUNNER_TEMP/rt" -y -q; echo "::notice title=ambiente de runtime::sem trava para ${PLAT}; criado pelo .yml"; fi
+          conda list -p "$RUNNER_TEMP/rt" --explicit --md5 > "out/runtime-environment.${PLAT}.lock"
+          if [ -f "$LOCK" ] && diff <(grep -v '^#' "$LOCK" | tr -d '\r') <(grep -v '^#' "out/runtime-environment.${PLAT}.lock" | tr -d '\r') >/dev/null; then echo "::notice title=trava do runtime ${PLAT}::igual à do repositório"
+          else echo "::notice title=trava do runtime ${PLAT}::ausente ou DIFERENTE da do repositório (atualizar com o conteúdo abaixo)"; echo "=====INICIO-TRAVA-RUNTIME-${PLAT}====="; tr -d '\r' < "out/runtime-environment.${PLAT}.lock"; echo "=====FIM-TRAVA-RUNTIME-${PLAT}====="; fi
           echo "Ambiente de runtime criado em $(( $(date +%s) - t0 )) s" | tee -a "$GITHUB_STEP_SUMMARY"
           # NSIS não vem mais no windows-latest (Server 2025): usa o pacote conda-forge `nsis` (só ferramenta, não entra no instalador)
           conda create -n nsis -c conda-forge --override-channels nsis=3.12=h4c425fd_1 -y -q
@@ -630,7 +636,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/conda_pkgs
-          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'environment.*.lock', 'packaging/runtime-environment.yml') }}
+          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'environment.*.lock', 'packaging/runtime-environment.yml', 'packaging/runtime-environment.*.lock') }}
       - name: Pasta de pacotes do conda
         shell: bash
         run: |
@@ -638,12 +644,22 @@ jobs:
           echo "::notice title=cache de pacotes::cache-hit=${{ steps.cache_conda.outputs.cache-hit }}"
       - uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
         with:
-          environment-file: packaging/runtime-environment.yml
           activate-environment: openbim-runtime
           channels: conda-forge
           conda-remove-defaults: "true"
           channel-priority: strict
           miniforge-version: latest
+      - name: Criar o ambiente de runtime (pela trava, se existir; F0-RG-10, PO.md A3)
+        shell: bash -el {0}
+        run: |
+          PLAT=linux-64
+          LOCK="packaging/runtime-environment.${PLAT}.lock"
+          if [ -f "$LOCK" ]; then conda install -n openbim-runtime -y -q --file "$LOCK"; echo "::notice title=ambiente de runtime::criado pela trava $LOCK"
+          else conda env update -n openbim-runtime -f packaging/runtime-environment.yml -q; echo "::notice title=ambiente de runtime::sem trava para ${PLAT}; criado pelo .yml"; fi
+          mkdir -p out
+          conda list -n openbim-runtime --explicit --md5 > "out/runtime-environment.${PLAT}.lock"
+          if [ -f "$LOCK" ] && diff <(grep -v '^#' "$LOCK" | tr -d '\r') <(grep -v '^#' "out/runtime-environment.${PLAT}.lock" | tr -d '\r') >/dev/null; then echo "::notice title=trava do runtime ${PLAT}::igual à do repositório"
+          else echo "::notice title=trava do runtime ${PLAT}::ausente ou DIFERENTE da do repositório (atualizar com o conteúdo abaixo)"; echo "=====INICIO-TRAVA-RUNTIME-${PLAT}====="; tr -d '\r' < "out/runtime-environment.${PLAT}.lock"; echo "=====FIM-TRAVA-RUNTIME-${PLAT}====="; fi
       - name: Ferramenta appimagetool (versão fixa 1.9.1, sha256 conferido)
         run: |
           curl -fsSL -o appimagetool.AppImage https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
@@ -661,11 +677,13 @@ jobs:
             echo "::error title=AppImage falhou::$msg"
             exit $rc
           fi
+      - name: libfuse2 (o AppImage montado de verdade precisa dela; sem ela o usuário vê o programa não abrir)
+        run: sudo apt-get install -y libfuse2t64
       - name: Testar o AppImage (licenças, extração, troca de biblioteca, tamanho)
         run: |
           set +e
           IMG="$RUNNER_TEMP/ai/OpenBIM-Studio-x86_64.AppImage"
-          QT_QPA_PLATFORM=offscreen timeout 900 bash packaging/linux/test_appimage.sh "$IMG" > teste-ai.log 2>&1
+          OBIM_EXIGIR_FUSE=1 QT_QPA_PLATFORM=offscreen timeout 900 bash packaging/linux/test_appimage.sh "$IMG" > teste-ai.log 2>&1
           rc=$?
           cat teste-ai.log
           if [ $rc -ne 0 ]; then

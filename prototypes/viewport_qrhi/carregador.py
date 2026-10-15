@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Carregador de malhas do IFC (S03-T05 parte A; processo separado na S03-T08-B1). Python puro, sem Qt.
 
-Especificação: docs/state/reports/LOTE_OPUS_4.md §1.2 e §1.3 e LOTE_OPUS_6.md §2.2 D3. Quem abre o IFC e gera
+Especificação: docs/state/arquivo/lotes-1-a-28/LOTE_OPUS_4/resultado.md §1.2 e §1.3 e arquivo/lotes-1-a-28/LOTE_OPUS_6/resultado.md §2.2 D3. Quem abre o IFC e gera
 os triângulos (`ifcopenshell.geom.iterator`, um iterador por bloco) é um processo filho (`processo_malhas.py`);
 a thread interna só lê as mensagens, vigia o filho e entrega `LoteMalha` (só numpy) por uma fila limitada.
 Durante a carga o pai não abre o arquivo (`manter_arquivo=True` abre depois que o filho terminou).

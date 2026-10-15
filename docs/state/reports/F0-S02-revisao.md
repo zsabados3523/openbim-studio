@@ -2,7 +2,7 @@
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 # Revisão da S02 (CI Windows e Linux, app esqueleto, instalador e AppImage)
-Data: 2026-10-15 · Cartões: F0-S02-R1 (seções 1 e 2), R2 (seção 3) e R3 (seções 4 a 6 e lista final). Roteiro: `PROPOSTA_REVISAO_F0.md` §3 e §3.2. Status: **R1, R2 e R3 prontas; falta o lote Opus 30 e a resposta do PO às perguntas abaixo**.
+Data: 2026-10-15 · Cartões: F0-S02-R1 (seções 1 e 2), R2 (seção 3) e R3 (seções 4 a 6 e lista final). Roteiro: `PROPOSTA_REVISAO_F0.md` §3 e §3.2. Status: **R1, R2 e R3 prontas; PO aceitou a S02 em 2026-10-15; falta o lote Opus 30**.
 
 ## Resumo de 5 linhas para o PO
 1. A S02 entregou o que o plano pede: o programa esqueleto abre um IFC no Windows e no Linux, instalado por você sem terminal (roteiro cumprido em 2026-10-11), com instalador de 309 MB e AppImage de 389 MB (meta 600 MB) e ADR-005 aceito.
@@ -76,3 +76,6 @@ Run `38653866732` (PR 93 com o `main`, 2026-10-14): `linux`, `windows`, `appimag
 3. R2, seção 3: o destino de cada pendência é adequado (T23, T21/T22/T24 no `main`, macOS)? → _
 4. R2: a afirmação "o inventário cobre o que vai no pacote; a tabela cobre o que escolhemos" é correta e suficiente? → _
 5. R3: as 4 correções de coerência e a contagem de testes estão corretas? → _
+
+## Respostas do PO (2026-10-15)
+1. Aceita a S02. 2. Quer seguir a questão do build incremental do Windows (cartão `F0-S02-T25`). 3. Capturas e GIF substituem o MP4. 4. O job `appimage` já é obrigatório no `main`. 5. T23 entra no plano (cartão `F0-PLANO-T01`, texto a aprovar).

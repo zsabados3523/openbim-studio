@@ -57,12 +57,14 @@ Aliases sempre (`haiku`, `sonnet`, `opus`), sem versões fixas.
 ```
 CLAUDE.md                 (≤ 100 linhas: missão, regras, comandos de build/test, onde está o estado)
 docs/state/BOARD.md       quadro: fatia, tarefa, classe, modelo, status
-docs/state/cards/         cartões de tarefa
+docs/state/cards/         cartões de tarefa (uma pasta por fatia aberta)
 docs/state/LOG.md         uma linha por tarefa concluída/escalada
 docs/state/QUOTA.md       registro semanal de cota (ver §6)
 docs/state/QUEUE_OPUS.md  fila de itens aguardando lote opus
 docs/state/PO.md          perguntas pendentes ao PO (com recomendação) e respostas
-docs/state/reports/       relatórios por fatia e por portão
+docs/state/reports/       relatórios por fatia, por revisão e por portão
+docs/state/lotes/         um lote Opus por pasta: pedido.md e resultado.md
+docs/state/arquivo/       fatias e lotes fechados, histórico do PO.md e do BOARD.md
 docs/adr/  docs/research/  docs/acceptance/ (roteiros)
 ```
 Comandos personalizados: nenhum no início. Se o PO repetir o mesmo pedido > 5 vezes, criar o comando correspondente (provavelmente `/status` e `/retomar` primeiro).

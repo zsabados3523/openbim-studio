@@ -62,6 +62,22 @@ ach=$(find "$D/env" \( -iname 'avcodec*' -o -iname 'avformat*' -o -iname 'x264*'
 passo "abrindo o app (isolado, com variáveis de ambiente sujas)"
 selftest "primeira abertura"
 
+selftest_pythonw() {  # o atalho usa pythonw.exe (sem janela de texto): o registro de erros tem de funcionar sem console (F0-RG-11)
+  local logdir logw rc
+  logdir="$(mktemp -d)"; logw="$(cygpath -w "$logdir")"
+  timeout 120 env -i SYSTEMROOT="$SYSTEMROOT" TEMP="$TEMP" QT_QPA_PLATFORM=offscreen OPENBIM_LOG_DIR="$logw" OPENBIM_SEM_DIALOGO=1 \
+        "$D/env/pythonw.exe" -I "$D/app/OpenBIM-Studio.pyw" --selftest; rc=$?
+  [ "$rc" -eq 0 ] || falha "pythonw --selftest saiu com código $rc"
+  grep -q "selftest OK" "$logdir/openbim.log" || falha "pythonw: o registro não tem 'selftest OK' ($(ls "$logdir" | tr '\n' ' '))"
+  timeout 120 env -i SYSTEMROOT="$SYSTEMROOT" TEMP="$TEMP" QT_QPA_PLATFORM=offscreen OPENBIM_LOG_DIR="$logw" OPENBIM_SEM_DIALOGO=1 \
+        "$D/env/pythonw.exe" -I "$D/app/OpenBIM-Studio.pyw" --selftest-falha; rc=$?
+  [ "$rc" -ne 0 ] || falha "pythonw: a falha provocada não deu código de erro"
+  grep -q "falha provocada" "$logdir/abertura.log" || falha "pythonw: a falha na abertura não ficou em abertura.log"
+  rm -rf "$logdir"
+}
+passo "atalho do Windows (pythonw, sem console): abre e, se falhar, deixa registro"
+selftest_pythonw
+
 passo "troca de uma DLL do Qt (sem trava de hash/assinatura)"
 Q="$D/env/Library/bin/Qt6Core.dll"
 a=$(sha256sum "$Q" | cut -d' ' -f1); printf '\0' >> "$Q"; b=$(sha256sum "$Q" | cut -d' ' -f1)

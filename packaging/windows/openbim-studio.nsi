@@ -9,6 +9,8 @@ Name "OpenBIM Studio"
 OutFile "${SAIDA}"
 RequestExecutionLevel user
 InstallDir "$LOCALAPPDATA\Programs\OpenBIM Studio"
+; reinstalar lembra a pasta escolhida da vez anterior (chave que o próprio instalador grava; /D= continua mandando)
+InstallDirRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\OpenBIM Studio" "InstallLocation"
 SetCompressor /SOLID lzma
 SetCompressorDictSize 64
 
@@ -41,6 +43,33 @@ Function PastaOcupada
   fim:
 FunctionEnd
 
+; $2 = arquivo; $0 vira 1 se ele existe e outro processo o está usando (abrir para escrita falha em programa em execução)
+Function TestaEmUso
+  IfFileExists "$2" 0 fim
+  ClearErrors
+  FileOpen $3 "$2" a
+  IfErrors 0 livre
+    StrCpy $0 1
+    Goto fim
+  livre:
+    FileClose $3
+  fim:
+FunctionEnd
+
+; $0 = 1 se o programa já instalado nesta pasta está aberto (reinstalar apagaria arquivos em uso e deixaria a instalação pela metade)
+Function AppAberto
+  StrCpy $0 0
+  StrCpy $2 "$INSTDIR\env\python.exe"
+  Call TestaEmUso
+  StrCmp $0 1 fim
+  StrCpy $2 "$INSTDIR\env\pythonw.exe"
+  Call TestaEmUso
+  StrCmp $0 1 fim
+  StrCpy $2 "$INSTDIR\env\Library\bin\Qt6Core.dll"
+  Call TestaEmUso
+  fim:
+FunctionEnd
+
 ; pasta com arquivos de outra coisa: instala numa subpasta própria, para nunca apagar o que não é nosso
 Function AjustaPasta
   Call PastaOcupada
@@ -62,6 +91,13 @@ Section "OpenBIM Studio"
   StrCmp $0 0 +3
     MessageBox MB_OK|MB_ICONSTOP "A pasta de instalação já tem outros arquivos. Escolha outra pasta. Nada foi instalado." /SD IDOK
     Abort
+  ; programa aberto: nada é apagado; pede para fechar (na instalação silenciosa, cancela com código de erro)
+  verificar_aberto:
+    Call AppAberto
+    StrCmp $0 0 livre
+    MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "O OpenBIM Studio está aberto. Feche o programa e clique em Tentar novamente. Nada foi apagado." /SD IDCANCEL IDRETRY verificar_aberto
+    Abort "O OpenBIM Studio está aberto. Nada foi alterado."
+  livre:
   ; espaço necessário (KB): o programa instalado ocupa ~1,4 GB; a página de pasta avisa se não couber
   AddSize 1500000
   SetOutPath "$INSTDIR"

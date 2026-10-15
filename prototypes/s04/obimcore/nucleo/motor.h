@@ -162,11 +162,18 @@ class Motor {
       else { QRhiD3D11InitParams p; g.rhi.reset(QRhi::create(QRhi::D3D11, &p, f)); }
 #endif
     };
+    software_ = false;  // sem aviso velho se a criação falhar
     abrir(fl);
-    bool por_software = fl.testFlag(QRhi::PreferSoftwareRenderer);
-    if (!g.rhi && !por_software) { abrir(fl | QRhi::PreferSoftwareRenderer); por_software = true; }  // sem placa (máquina virtual, área de trabalho remota): tenta por software
+    bool refeito = false;
+#ifdef Q_OS_WIN
+    if (!g.rhi && !gl_ && !fl.testFlag(QRhi::PreferSoftwareRenderer)) { abrir(fl | QRhi::PreferSoftwareRenderer); refeito = true; }  // sem placa (máquina virtual, área de trabalho remota): WARP; no OpenGL o Qt ignora o pedido
+#endif
     if (!g.rhi) return false;
-    software_ = por_software || g.rhi->driverInfo().deviceType == QRhiDriverInfo::CpuDevice;
+    const QRhiDriverInfo di = g.rhi->driverInfo();  // o aviso só vale quando o dispositivo de fato é de software
+    const QString nome = di.deviceName;
+    software_ = refeito || di.deviceType == QRhiDriverInfo::CpuDevice || nome.contains("llvmpipe", Qt::CaseInsensitive) ||
+                nome.contains("softpipe", Qt::CaseInsensitive) || nome.contains("SwiftShader", Qt::CaseInsensitive) ||
+                nome.contains("Microsoft Basic Render", Qt::CaseInsensitive);
     { std::lock_guard<std::mutex> l(m_); info_ = std::string(g.rhi->backendName()) + " | " + g.rhi->driverInfo().deviceName.toStdString(); }
     g.sc.reset(g.rhi->newSwapChain()); g.sc->setWindow(w); g.sc->setFlags(QRhiSwapChain::UsedAsTransferSource);
     g.ds.reset(g.rhi->newRenderBuffer(QRhiRenderBuffer::DepthStencil, QSize(), 1, QRhiRenderBuffer::UsedWithSwapChainOnly));

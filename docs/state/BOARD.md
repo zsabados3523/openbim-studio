@@ -62,9 +62,9 @@
 | F0-S01-R1 | Revisão S01: aceite contra o plano e cobertura | T2 | sonnet | opus (lote) | PR 93 | FEITA (2026-10-14); lote 29 aprovou |
 | F0-S01-R2 | Revisão S01: pendências de licença (SINAPI, Qt Shader Tools, conda-forge, ReportLab) | T2 | sonnet | opus (lote) | R1 | FEITA (2026-10-14); ReportLab decidido pelo PO; lote 29 aprovou |
 | F0-S01-R3 | Revisão S01: coerência, testes e relatório para o lote Opus | T2 | sonnet | opus (lote) | R1, R2 | FEITA (2026-10-14); lote 29 aprovou |
-| F0-S02-R1 | Revisão S02: aceite contra o plano e metas com a meta original | T2 | sonnet | opus (lote) | S01-R3 | FEITA (2026-10-15); lote 30 aguarda uso e PO |
-| F0-S02-R2 | Revisão S02: pendências abertas e licenças dos pacotes | T2 | sonnet | opus (lote) | S02-R1 | FEITA (2026-10-15); lote 30 aguarda uso e PO |
-| F0-S02-R3 | Revisão S02: coerência, testes e relatório para o lote Opus | T2 | sonnet | opus (lote) | S02-R1, S02-R2 | FEITA (2026-10-15); lote 30 aguarda uso e PO |
+| F0-S02-R1 | Revisão S02: aceite contra o plano e metas com a meta original | T2 | sonnet | opus (lote) | S01-R3 | FEITA (2026-10-15); lote Opus 30 feito, correções aplicadas |
+| F0-S02-R2 | Revisão S02: pendências abertas e licenças dos pacotes | T2 | sonnet | opus (lote) | S02-R1 | FEITA (2026-10-15); lote Opus 30 feito, correções aplicadas |
+| F0-S02-R3 | Revisão S02: coerência, testes e relatório para o lote Opus | T2 | sonnet | opus (lote) | S02-R1, S02-R2 | FEITA (2026-10-15); lote Opus 30 feito, correções aplicadas |
 | F0-S02-T25 | Reduzir o tempo do job `windows` do CI (incremental) | T2 | sonnet | sonnet; amostra opus | S02 revisada | NÃO INICIADA (pedido do PO, 2026-10-15) |
 | F0-PLANO-T01 | T23 no plano (`v2/03`) | TA | opus/sonnet | PO (resumo) | — | FEITA (2026-10-15; PO aprovou) |
 | F0-S03-R1 | Revisão S03: aceite e exceções com a meta original | T2 | sonnet | opus (lote) | S02-R3 | FEITA (2026-10-15); lote 31 aguarda |

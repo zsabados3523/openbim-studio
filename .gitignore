@@ -24,3 +24,10 @@ autosave/
 # Modelos grandes gerados (benchmark); nunca vao ao repositorio
 corpus/*
 !corpus/README.md
+
+# Modelos do usuário: nunca vão ao repositório público (um IFC copiado por engano não teria volta).
+# Exceção: a amostra pública do roteiro de aceitação.
+*.ifc
+*.ifczip
+*.obim
+!docs/acceptance/amostras/casa-simples.ifc

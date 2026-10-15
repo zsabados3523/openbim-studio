@@ -375,9 +375,14 @@ class FluxoA:
         met, chaves = CAMERA[c["cmd"]]
         return [] if self.cena is None else getattr(self.cena, met)(*(float(c[k]) for k in chaves.split())) or []
 
-    def _c_camera(self, c, u):
+    def _c_camera(self, c, u):  # `alvo` vem em coordenadas do MUNDO; a cena está em mundo menos o deslocamento (RG-07)
         if self.cena is not None:
-            self.cena.definir_camera(**{k: ([float(a) for a in c[k]] if k == "alvo" else float(c[k])) for k in ("alvo", "distancia", "azimute", "elevacao") if k in c})
+            a = {k: ([float(x) for x in c[k]] if k == "alvo" else float(c[k])) for k in ("alvo", "distancia", "azimute", "elevacao") if k in c}
+            if "alvo" in a:
+                if self._desl is None:  # câmera antes de qualquer malha: o deslocamento da cena nasce do alvo (o 1º lote o usa)
+                    self._desl = np.rint(np.asarray(a["alvo"], np.float64))
+                a["alvo"] = [float(x) for x in np.asarray(a["alvo"], np.float64) - self._desl]
+            self.cena.definir_camera(**a)
         return []
 
     _c_esperar = lambda self, c, u: self._bombear(lambda: False, float(c["ms"])) or []  # noqa: E731  (bombeia eventos até passar o tempo)

@@ -2,7 +2,7 @@
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 # ADR-004: Processos, threads e trava do modelo
-- Status: **RASCUNHO, aguarda decisão do PO.** Nada aqui vale como regra até o PO escolher as opções da seção 8.
+- Status: **decidido pelo PO** (2026-10-15, no chat do projeto: "Aprovar tudo"; opções 1C, 2C e 3C). Falta a revisão de um Opus que não escreveu este texto e os números N1 a N4 (RG-02); se eles disparam a seção 9, o ADR é revisto.
 - Autor: opus (cartão F0-RG-01, TA) · Data: 2026-10-15
 - Base: relatório `docs/state/reports/F0-REVISAO-GERAL-2026-10-15.md` (achados A2, A3, B1, B13); lotes Opus 6 (D3, D4), 9 (§1.4, regras 1 a 8), 10 (mutex, regra 9, T04b); `v2/02 §5`; `v2/03` (S03 e S04, lista de ADRs).
 - Escopo: o tema "Threads (UI, geometria, I/O, GIL)" da lista de ADRs de `v2/03 §3`. Não decide a stack (ADR-001, depois das medições da S04) nem o formato da gravação (ADR-003 e cartão RG-06).
@@ -114,14 +114,14 @@ Essas três escolhas foram feitas em lotes Opus (6, 9 e 10) sem ADR. A regra do 
 - A meta da S03 "iterador multithread" passa a ser cumprida no auxiliar e, se N3 passar, também dentro do processo. Registrar no portão (regra D8) como **atingida por outro caminho**, não como exceção silenciosa.
 - Memória: durante a abertura, o pico é o maior entre pai e auxiliar, não a soma (se o pai abrir depois). Os 6,8 GB da S03 continuam sendo o número a bater.
 
-## 8. Decisão (a preencher pelo PO)
+## 8. Decisão
 | Pergunta | Opções | Recomendação | Decisão do PO |
 |---|---|---|---|
-| 1. Onde a geometria roda | 1A dentro · 1B sempre separado · 1C misto | **1C** | _pendente_ |
-| 2. Várias peças ao mesmo tempo | 2A uma por vez · 2B várias passadas · 2C várias threads numa passada | **2C** | _pendente_ |
-| 3. Trava do modelo | 3A combinação · 3B dono único · 3C porta única | **3C** | _pendente_ |
+| 1. Onde a geometria roda | 1A dentro · 1B sempre separado · 1C misto | **1C** | **1C** (PO, 2026-10-15) |
+| 2. Várias peças ao mesmo tempo | 2A uma por vez · 2B várias passadas · 2C várias threads numa passada | **2C** | **2C** (PO, 2026-10-15) |
+| 3. Trava do modelo | 3A combinação · 3B dono único · 3C porta única | **3C** | **3C** (PO, 2026-10-15) |
 
-Depois da escolha: os números N1 a N4 são medidos no RG-02; este ADR é revisto por um Opus que não o escreveu (regra 6 do `CLAUDE.md`) e passa a "aceito".
+Próximos passos: os números N1 a N4 são medidos no RG-02; este ADR é revisto por um Opus que não o escreveu (regra 6 do `CLAUDE.md`) e passa a "aceito". A frase nova de `v2/02 §5` sobre o processo auxiliar vai no cartão RG-24, com aprovação do PO.
 
 ## 9. O que nos faria mudar de ideia
 - N2 mostrar que mandar uma edição ao auxiliar custa bem menos de 200 ms → 1B fica viável e mais segura.

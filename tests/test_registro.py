@@ -90,7 +90,7 @@ def test_menu_ajuda_abre_a_pasta_de_registros(monkeypatch, tmp_path):
         w.action_logs.trigger()
     finally:
         w.close()
-    assert abertos == [str(tmp_path / "logs-openbim")] and (tmp_path / "logs-openbim").is_dir()
+    assert [Path(a) for a in abertos] == [tmp_path / "logs-openbim"] and (tmp_path / "logs-openbim").is_dir()
 
 
 def _rodar_pyw(*args, **extra):

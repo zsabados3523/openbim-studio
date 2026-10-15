@@ -85,7 +85,7 @@ Contagem lida do registro do job; os "pulam" são testes que precisam de tela ou
 
 ## 6. Qualidade e plano (passos 5 e 6)
 - Os arquivos da S01 (README, CONTRIBUTING, `THIRD_PARTY.md`, `REUSE.toml`, fichas) não têm duplicação nem texto sobrando que justifique reescrita. Nada foi reescrito além das 3 correções da seção 4.
-- **Velocidade (P2):** a S01 levou cerca de 1 dia de trabalho e é fatia fácil (texto, sem código). Não serve para calibrar S04 a S06; o calendário não foi recalculado.
+- **Velocidade (P2):** a S01 foi feita de 2026-10-10 a 2026-10-11 e é fatia fácil (texto, sem código). Não serve para calibrar S04 a S06; o calendário não foi recalculado.
 - **O que muda no plano:** nada em `v2/`. Dois itens vão ao PO: parecer sobre S01-a (D6) e ReportLab (A14).
 
 ## Lista numerada para o lote Opus (preencher: aprovado ou reprovado)

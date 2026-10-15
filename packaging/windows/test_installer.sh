@@ -29,11 +29,14 @@ instalar() {  # $1 = pasta de destino (padrão: $DEST)
 
 selftest() {  # $1 = rótulo; ambiente sujo e Python isolado (-I), como o atalho
   local t0=$(date +%s) out dur
-  out="$(timeout 120 env -i SYSTEMROOT="$SYSTEMROOT" TEMP="$TEMP" QT_QPA_PLATFORM=offscreen \
+  out="$(timeout 120 env -i SYSTEMROOT="$SYSTEMROOT" TEMP="$TEMP" QT_QPA_PLATFORM=offscreen OPENBIM_SEM_DIALOGO=1 \
+        OPENBIM_LOG_DIR="$TEMP/openbim-selftest-logs" \
         PYTHONPATH='C:\nao-existe' PYTHONHOME='C:\nao-existe' PYTHONUSERBASE='C:\nao-existe' \
         "$D/env/python.exe" -I "$D/app/OpenBIM-Studio.pyw" --selftest 2>&1)"
   dur=$(( $(date +%s) - t0 ))
-  out="$(printf "%s" "$out" | tail -n 1 | tr -d '\r')"
+  todo="$(printf "%s" "$out" | tr -d '\r')"
+  out="$(printf "%s" "$todo" | tail -n 1)"
+  if [ "$out" != "OK" ]; then echo "--- saída completa do selftest ---"; printf "%s\n" "$todo" | tail -n 40; cat "$TEMP"/openbim-selftest-logs/*.log 2>/dev/null | tail -n 40; fi
   echo "   $1: '$out' em ${dur}s"
   [ "$out" = "OK" ] || falha "$1: selftest não imprimiu OK"
   [ "$dur" -le 10 ] || falha "$1: abriu em ${dur}s (meta: até 10 s)"
@@ -61,6 +64,22 @@ ach=$(find "$D/env" \( -iname 'avcodec*' -o -iname 'avformat*' -o -iname 'x264*'
 
 passo "abrindo o app (isolado, com variáveis de ambiente sujas)"
 selftest "primeira abertura"
+
+selftest_pythonw() {  # o atalho usa pythonw.exe (sem janela de texto): o registro de erros tem de funcionar sem console (F0-RG-11)
+  local logdir logw rc
+  logdir="$(mktemp -d)"; logw="$(cygpath -w "$logdir")"
+  timeout 120 env -i SYSTEMROOT="$SYSTEMROOT" TEMP="$TEMP" QT_QPA_PLATFORM=offscreen OPENBIM_LOG_DIR="$logw" OPENBIM_SEM_DIALOGO=1 \
+        "$D/env/pythonw.exe" -I "$D/app/OpenBIM-Studio.pyw" --selftest; rc=$?
+  [ "$rc" -eq 0 ] || falha "pythonw --selftest saiu com código $rc"
+  grep -q "selftest OK" "$logdir/openbim.log" || falha "pythonw: o registro não tem 'selftest OK' ($(ls "$logdir" | tr '\n' ' '))"
+  timeout 120 env -i SYSTEMROOT="$SYSTEMROOT" TEMP="$TEMP" QT_QPA_PLATFORM=offscreen OPENBIM_LOG_DIR="$logw" OPENBIM_SEM_DIALOGO=1 \
+        "$D/env/pythonw.exe" -I "$D/app/OpenBIM-Studio.pyw" --selftest-falha; rc=$?
+  [ "$rc" -ne 0 ] || falha "pythonw: a falha provocada não deu código de erro"
+  grep -q "falha provocada" "$logdir/abertura.log" || falha "pythonw: a falha na abertura não ficou em abertura.log"
+  rm -rf "$logdir"
+}
+passo "atalho do Windows (pythonw, sem console): abre e, se falhar, deixa registro"
+selftest_pythonw
 
 passo "troca de uma DLL do Qt (sem trava de hash/assinatura)"
 Q="$D/env/Library/bin/Qt6Core.dll"

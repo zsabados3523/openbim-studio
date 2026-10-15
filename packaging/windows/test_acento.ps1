@@ -19,14 +19,15 @@ $saida = (& $py -I $pyw --selftest 2>&1 | Select-Object -Last 1)
 if ("$saida".Trim() -ne 'OK') { Falha "selftest em pasta com acento e espaço: '$saida'" }
 Write-Host "   abriu em '$dest'"
 
+# (o PowerShell não distingue maiúsculas: $Ifc e $ifc seriam a mesma variável)
 # IFC com acento no nome e na pasta (o ifcopenshell converte o caminho para a página de códigos do sistema?)
 $pasta = Join-Path $Base 'Documentos João\Residência'
 New-Item -ItemType Directory -Force -Path $pasta | Out-Null
-$ifc = Join-Path $pasta 'Casa Térrea.ifc'
-Copy-Item -LiteralPath $Ifc -Destination $ifc
+$destIfc = Join-Path $pasta 'Casa Térrea.ifc'
+Copy-Item -LiteralPath $Ifc -Destination $destIfc
 $cod = 'import sys; sys.path.insert(0, sys.argv[1]); from openbim_app.ifc_summary import count_by_class; print(count_by_class(sys.argv[2]).total)'
-$n = (& $py -I -c $cod (Join-Path $dest 'app') $ifc 2>&1 | Select-Object -Last 1)
-if ("$n".Trim() -notmatch '^[1-9][0-9]*$') { Falha "abrir o IFC '$ifc': '$n'" }
+$n = (& $py -I -c $cod (Join-Path $dest 'app') $destIfc 2>&1 | Select-Object -Last 1)
+if ("$n".Trim() -notmatch '^[1-9][0-9]*$') { Falha "abrir o IFC '$destIfc': '$n'" }
 Write-Host "   abriu o IFC acentuado: $n elementos"
 
 # caminho mais longo do que foi instalado (o limite clássico do Windows é 260 caracteres)

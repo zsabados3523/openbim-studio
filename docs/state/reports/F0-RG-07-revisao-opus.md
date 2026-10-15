@@ -35,3 +35,19 @@ O cálculo está certo. O problema é o que ele muda em volta: a câmera.
 ## Para o implementador
 
 Arquivos permitidos: `prototypes/s04/fluxo_a/fluxo_a.py`, `prototypes/s04/fluxo_a/CONTRATO.md`, `tests/test_s04_fluxo_a.py` (só os testes novos do RG-07). Não editar `tests/s04_fluxo_aux.py` nem os testes antigos. Depois das correções, volta para nova revisão Opus (T3).
+
+---
+
+# Segunda revisão (commit `a7347e1`)
+
+## Veredito: APROVADO (o merge continua dependendo do CI obrigatório verde)
+
+Conferência das 3 correções:
+
+1. **Câmera em coordenada do mundo: feito.** `_c_camera` (`fluxo_a.py:378-386`) subtrai `self._desl` do alvo; se a câmera chega antes de qualquer malha, o deslocamento nasce de `np.rint(alvo)` e o 1º lote o usa (o `_lote` só fixa quando ainda é `None`). No caso antigo `c_cena` o deslocamento fica (7, 0, 1) e o alvo na cena vira (0, 0.075, 0.4): o centro da tela volta ao meio da parede 1, sem depender de arredondamento. `CONTRATO.md` atualizado. `s04_fluxo_aux.py` e os testes antigos não foram tocados.
+2. **Teste com janela e UTM: feito.** `tests/s04_fluxo_utm_aux.py` + `test_rg07_com_janela_...` (positivo e negativo): grava um modelo com 3 paredes já em UTM, abre com janela, põe a câmera em coordenada do mundo, abre todos os lotes (nenhum pode ser recusado, senão o caso cai), confere seleção no centro antes e depois de mover a parede 1 m para cima e que o desenho mudou. Roda em processo próprio sob xvfb, como os outros casos com tela.
+3. **Coordenada negativa: feito.** O teste unitário virou parametrizado com (333000, 7400000, 0) e (−333000, −7400000, −50).
+
+Notas sem bloqueio:
+- No caso com janela a câmera vem antes do `abrir`, então ali o deslocamento nasce do alvo; o caminho "1º lote fixa o deslocamento" com coordenada UTM fica coberto pelo teste unitário. Suficiente para a F0.
+- A observação 4 da primeira revisão (vários terrenos muito distantes) continua valendo para o RG-04.

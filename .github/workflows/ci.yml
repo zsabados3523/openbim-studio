@@ -189,55 +189,16 @@ jobs:
         run: |
           echo "Tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
 
-  windows:
+  # Windows em jobs paralelos (T25). O job `windows` no fim só junta o resultado: o nome é o usado na regra de bloqueio de merge.
+  windows-testes:
     runs-on: windows-latest
-    env:
-      PLAT: win-64
     timeout-minutes: 60
     steps:
       - name: Início (relógio)
         shell: bash
         run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Cache de pacotes do conda
-        id: cache_conda
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ runner.temp }}/conda_pkgs
-          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'environment.*.lock', 'packaging/runtime-environment.yml') }}
-      - name: Pasta de pacotes do conda
-        shell: bash
-        run: |
-          echo "CONDA_PKGS_DIRS=$RUNNER_TEMP/conda_pkgs" >> "$GITHUB_ENV"
-          echo "::notice title=cache de pacotes::cache-hit=${{ steps.cache_conda.outputs.cache-hit }}"
-      - uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
-        with:
-          activate-environment: openbim
-          channels: conda-forge
-          conda-remove-defaults: "true"
-          channel-priority: strict
-          miniforge-version: latest
-      - name: Criar o ambiente (pela trava environment.win-64.lock, se existir)
-        shell: bash -el {0}
-        run: |
-          LOCK="environment.${PLAT}.lock"
-          if [ -f "$LOCK" ]; then
-            if conda env list | grep -qE '^openbim[[:space:]]'; then conda install -n openbim -y -q --file "$LOCK"; else conda create -n openbim -y -q --file "$LOCK"; fi
-            echo "::notice title=ambiente::criado pela trava $LOCK"
-          else
-            conda env update -n openbim -f environment.yml -q
-            echo "::notice title=ambiente::sem trava para ${PLAT}; criado pelo environment.yml"
-          fi
-      - name: Trava do ambiente (informativo; o líder traz o arquivo ao repositório)
-        shell: bash -el {0}
-        continue-on-error: true
-        run: |
-          mkdir -p out
-          conda list -n openbim --explicit --md5 > "out/environment.${PLAT}.lock"
-          if [ -f "environment.${PLAT}.lock" ]; then
-            if diff <(grep -v '^#' "environment.${PLAT}.lock" | tr -d '\r') <(grep -v '^#' "out/environment.${PLAT}.lock" | tr -d '\r') >/dev/null; then r="igual à do repositório"; else r="DIFERENTE da do repositório (atualizar)"; fi
-          else r="ainda não existe no repositório (trazer o artefato)"; fi
-          echo "::notice title=trava ${PLAT}::${r}"
+      - uses: ./.github/actions/ambiente-windows
       - name: Testes
         shell: bash -el {0}
         run: |
@@ -291,6 +252,39 @@ jobs:
           mkdir -p out
           bash prototypes/cpp_probe_3b/run.sh out docs/acceptance/amostras/casa-simples.ifc 2>&1 | tee out/sonda-3b.txt
           echo "::notice title=sonda 3b no ${RUNNER_OS}::$(grep SONDA3B out/sonda-3b.txt || echo sem resultado)"
+      - name: Gravação do roteiro (experimento T12; não bloqueia)
+        shell: bash -el {0}
+        continue-on-error: true
+        run: |
+          mkdir -p out/video
+          QT_QPA_PLATFORM=offscreen python tests/video/gravar_roteiro.py out/video docs/acceptance/amostras/casa-simples.ifc
+      - name: Pacote do que o job gerou
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p out
+          tar czf out/app.tar.gz app/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: openbim-ci-windows-testes
+          path: out/
+          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
+      - name: Tempo total
+        if: always()
+        shell: bash
+        run: |
+          echo "### windows-testes: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
+
+  windows-viewport-a:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Início (relógio)
+        shell: bash
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/ambiente-windows
       - name: Módulo obimcore (S04-T03; compila com a ponte e roda o oráculo R1-a a R1-i; bloqueia o merge)
         shell: bash -el {0}
         run: |
@@ -306,14 +300,82 @@ jobs:
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_S04_OBRIGATORIO=1  # pulo vira falha (T04c entregou versao()["registro_ifc4"])
           QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_ponte.py
-      - name: Viewport C++ (S04-T06/T07; bloqueia o merge)
+      - name: Viewport C++ (parte A; S04-T06/T07; bloqueia o merge)
         shell: bash -el {0}
         timeout-minutes: 30
         run: |
           # O oráculo abre a tela virtual sozinho em subprocesso (xvfb-run no Linux; no Windows, WARP). Nada na tela real.
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_S04_TELA_VIRTUAL=1 QSG_RHI_BACKEND=d3d11 QSG_RHI_PREFER_SOFTWARE_RENDERER=1  # WARP, como no passo do cubo
-          OBIM_S04_OBRIGATORIO=1 OBIM_S04_VIEWPORT_OBRIGATORIO=1 OBIM_S04_T07B_OBRIGATORIO=1 OBIM_S04_T08_OBRIGATORIO=1 OBIM_S04_T09_OBRIGATORIO=1 OBIM_S04_T10_OBRIGATORIO=1 OBIM_S04_T10B_OBRIGATORIO=1 OBIM_S04_T10C_OBRIGATORIO=1 OBIM_S04_T11_OBRIGATORIO=1 OBIM_S04_T11C_OBRIGATORIO=1 OBIM_S04_T11B_OBRIGATORIO=1 OBIM_S04_T16_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_viewport.py tests/test_s04_viewport_b.py tests/test_s04_cena.py tests/test_s04_selecao.py tests/test_s04_selecao_c.py tests/test_s04_profundidade.py tests/test_s04_fluxo_a.py tests/test_s04_abertura.py
+          OBIM_S04_OBRIGATORIO=1 OBIM_S04_VIEWPORT_OBRIGATORIO=1 OBIM_S04_T07B_OBRIGATORIO=1 OBIM_S04_T08_OBRIGATORIO=1 OBIM_S04_T09_OBRIGATORIO=1 OBIM_S04_T10_OBRIGATORIO=1 OBIM_S04_T10B_OBRIGATORIO=1 OBIM_S04_T10C_OBRIGATORIO=1 OBIM_S04_T11_OBRIGATORIO=1 OBIM_S04_T11C_OBRIGATORIO=1 OBIM_S04_T11B_OBRIGATORIO=1 OBIM_S04_T16_OBRIGATORIO=1 pytest -q -rsP --durations=10 tests/test_s04_fluxo_a.py tests/test_s04_profundidade.py tests/test_s04_viewport_b.py
+      - name: Pacote do que o job gerou
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p out
+          tar czf out/app.tar.gz app/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: openbim-ci-windows-viewport-a
+          path: out/
+          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
+      - name: Tempo total
+        if: always()
+        shell: bash
+        run: |
+          echo "### windows-viewport-a: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
+
+  windows-viewport-b:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Início (relógio)
+        shell: bash
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/ambiente-windows
+      - name: Módulo obimcore (só o build, para os testes deste job; a ponte é testada no job windows-viewport-a)
+        shell: bash -el {0}
+        run: CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04
+      - name: Viewport C++ (parte B; S04-T06/T07; bloqueia o merge)
+        shell: bash -el {0}
+        timeout-minutes: 30
+        run: |
+          # O oráculo abre a tela virtual sozinho em subprocesso (xvfb-run no Linux; no Windows, WARP). Nada na tela real.
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          export OBIM_S04_TELA_VIRTUAL=1 QSG_RHI_BACKEND=d3d11 QSG_RHI_PREFER_SOFTWARE_RENDERER=1  # WARP, como no passo do cubo
+          OBIM_S04_OBRIGATORIO=1 OBIM_S04_VIEWPORT_OBRIGATORIO=1 OBIM_S04_T07B_OBRIGATORIO=1 OBIM_S04_T08_OBRIGATORIO=1 OBIM_S04_T09_OBRIGATORIO=1 OBIM_S04_T10_OBRIGATORIO=1 OBIM_S04_T10B_OBRIGATORIO=1 OBIM_S04_T10C_OBRIGATORIO=1 OBIM_S04_T11_OBRIGATORIO=1 OBIM_S04_T11C_OBRIGATORIO=1 OBIM_S04_T11B_OBRIGATORIO=1 OBIM_S04_T16_OBRIGATORIO=1 pytest -q -rsP --durations=10 tests/test_s04_viewport.py tests/test_s04_cena.py tests/test_s04_selecao.py tests/test_s04_selecao_c.py tests/test_s04_abertura.py
+      - name: Pacote do que o job gerou
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p out
+          tar czf out/app.tar.gz app/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: openbim-ci-windows-viewport-b
+          path: out/
+          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
+      - name: Tempo total
+        if: always()
+        shell: bash
+        run: |
+          echo "### windows-viewport-b: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
+
+  windows-fluxo-b:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Início (relógio)
+        shell: bash
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/ambiente-windows
+      - name: Módulo obimcore (só o build, para os testes deste job; a ponte é testada no job windows-viewport-a)
+        shell: bash -el {0}
+        run: CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04
       - name: Fluxo B, paredes em C++ (S04-T13; bloqueia o merge)
         shell: bash -el {0}
         timeout-minutes: 20
@@ -323,6 +385,37 @@ jobs:
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_S04_T14A_OBRIGATORIO=1
           OBIM_S04_T13_OBRIGATORIO=1 OBIM_S04_T11C_OBRIGATORIO=1 OBIM_S04_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_fluxo_b_paredes.py
+      - name: Pacote do que o job gerou
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p out
+          tar czf out/app.tar.gz app/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: openbim-ci-windows-fluxo-b
+          path: out/
+          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
+      - name: Tempo total
+        if: always()
+        shell: bash
+        run: |
+          echo "### windows-fluxo-b: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
+
+  # Informativo: fora da regra de bloqueio e fora do caminho do `windows` (a sonda esgota 3 min por conta própria).
+  windows-sonda:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Início (relógio)
+        shell: bash
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/ambiente-windows
+      - name: Módulo obimcore (só o build, para os testes deste job; a ponte é testada no job windows-viewport-a)
+        shell: bash -el {0}
+        run: CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04
       - name: Sonda da thread de desenho (S04-T05; informativo, não bloqueia)
         shell: bash -el {0}
         continue-on-error: true
@@ -338,13 +431,7 @@ jobs:
           cat out/s04_sonda/sonda.json || true
           echo "::notice title=sonda da thread de desenho no ${RUNNER_OS}::$(python -c "import json; r=json.load(open('out/s04_sonda/sonda.json')); print('rc=$rc meta_atingida=%s' % r.get('meta_atingida'), {k:v.get('maior_intervalo_ms') for k,v in r['fases'].items() if isinstance(v,dict)})" || echo sem resultado)"
           true
-      - name: Gravação do roteiro (experimento T12; não bloqueia)
-        shell: bash -el {0}
-        continue-on-error: true
-        run: |
-          mkdir -p out/video
-          QT_QPA_PLATFORM=offscreen python tests/video/gravar_roteiro.py out/video docs/acceptance/amostras/casa-simples.ifc
-      - name: Pacote do app esqueleto
+      - name: Pacote do que o job gerou
         if: always()
         shell: bash
         run: |
@@ -353,14 +440,28 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: openbim-ci-windows
+          name: openbim-ci-windows-sonda
           path: out/
           retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
       - name: Tempo total
         if: always()
         shell: bash
         run: |
-          echo "### windows: tempo total do job até aqui: $(( $(date +%s) - T0 )) s (build limpo, sem cache do ambiente conda; incremental não medido)" >> "$GITHUB_STEP_SUMMARY"
+          echo "### windows-sonda: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
+
+  # Mantém o nome `windows` (regra de bloqueio de merge): passa só se TODOS os jobs paralelos acima passarem.
+  windows:
+    if: always()
+    needs: [windows-testes, windows-viewport-a, windows-viewport-b, windows-fluxo-b]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Todos os jobs do Windows passaram
+        env:
+          RESULTADOS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "resultados: $RESULTADOS"
+          for r in $RESULTADOS; do [ "$r" = success ] || { echo "::error title=windows::algum job do Windows não passou ($RESULTADOS)"; exit 1; }; done
 
   # Instalador do Windows em job próprio: roda ao mesmo tempo que o job windows, em vez de depois dele.
   instalador-windows:

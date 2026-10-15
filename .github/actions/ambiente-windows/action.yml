@@ -1,0 +1,56 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: Ambiente openbim no Windows
+description: Cache de pacotes, conda-forge, ambiente openbim pela trava (com cache do ambiente pronto) e registro da trava.
+runs:
+  using: composite
+  steps:
+    - name: Cache de pacotes do conda
+      id: cache_conda
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/conda_pkgs
+        key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'environment.*.lock', 'packaging/runtime-environment.yml') }}
+    - name: Pasta de pacotes do conda
+      shell: bash
+      run: |
+        echo "CONDA_PKGS_DIRS=$RUNNER_TEMP/conda_pkgs" >> "$GITHUB_ENV"
+        echo "::notice title=cache de pacotes::cache-hit=${{ steps.cache_conda.outputs.cache-hit }}"
+    - uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
+      with:
+        activate-environment: openbim
+        channels: conda-forge
+        conda-remove-defaults: "true"
+        channel-priority: strict
+        miniforge-version: latest
+    # Ambiente já criado (T25): a chave é o hash da trava; trava nova = chave nova = ambiente refeito do zero.
+    - name: Cache do ambiente openbim já criado
+      id: cache_env
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ env.CONDA }}/envs/openbim
+        key: ambiente-${{ runner.os }}-${{ hashFiles('environment.win-64.lock', 'environment.yml') }}-v1
+    - name: Criar o ambiente (pela trava environment.win-64.lock, se não veio do cache)
+      if: steps.cache_env.outputs.cache-hit != 'true'
+      shell: bash -el {0}
+      run: |
+        LOCK="environment.win-64.lock"
+        if [ -f "$LOCK" ]; then
+          if conda env list | grep -qE '^openbim[[:space:]]'; then conda install -n openbim -y -q --file "$LOCK"; else conda create -n openbim -y -q --file "$LOCK"; fi
+          echo "::notice title=ambiente::criado pela trava $LOCK"
+        else
+          conda env update -n openbim -f environment.yml -q
+          echo "::notice title=ambiente::sem trava para win-64; criado pelo environment.yml"
+        fi
+    - name: Ambiente
+      shell: bash -el {0}
+      run: echo "::notice title=ambiente do cache::cache-hit=${{ steps.cache_env.outputs.cache-hit }}"
+    - name: Trava do ambiente (informativo; o líder traz o arquivo ao repositório)
+      shell: bash -el {0}
+      continue-on-error: true
+      run: |
+        mkdir -p out
+        conda list -n openbim --explicit --md5 > "out/environment.win-64.lock"
+        if [ -f "environment.win-64.lock" ]; then
+          if diff <(grep -v '^#' "environment.win-64.lock" | tr -d '\r') <(grep -v '^#' "out/environment.win-64.lock" | tr -d '\r') >/dev/null; then r="igual à do repositório"; else r="DIFERENTE da do repositório (atualizar)"; fi
+        else r="ainda não existe no repositório (trazer o artefato)"; fi
+        echo "::notice title=trava win-64::${r}"

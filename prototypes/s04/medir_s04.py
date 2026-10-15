@@ -15,7 +15,11 @@ from pathlib import Path
 import numpy as np
 
 LIMITES = {"M2": 200.0, "M2b": 200.0, "M3": 50.0}  # ms; p95 na régua estrita, mediana na virtual
-TETO, M4_MS, M5_VIRTUAL_MS, M5_ESTRITO_MS = 3.0, 20000.0, 100.0, 200.0
+TETO, TETO_MIN_MS, M4_MS, M5_VIRTUAL_MS, M5_ESTRITO_MS = 3.0, 250.0, 20000.0, 100.0, 200.0
+
+
+def _teto_ms(lim):  # teto rígido de um valor só (RG-09); mesma conta de tests/s04_fluxo_aux.teto_ms
+    return max(TETO * lim, TETO_MIN_MS)
 OFICIAL = 3000  # paredes do modelo oficial (régua estrita)
 TOL = 1e-6
 SUFIXOS = {".py", ".cpp", ".h", ".hpp", ".cc"}
@@ -284,8 +288,8 @@ def _erros(c, estrito):  # a mesma régua de s04_fluxo_aux.veredito
             e.append(f"{k}: p95 {r['p95_ms']:.0f} ms >= {lim:.0f}")
         if not estrito and r["mediana_ms"] >= lim:
             e.append(f"{k}: mediana {r['mediana_ms']:.0f} ms >= {lim:.0f}")
-        if not estrito and r["max_ms"] >= TETO * lim:
-            e.append(f"{k}: máximo {r['max_ms']:.0f} ms >= {TETO * lim:.0f}")
+        if not estrito and r["max_ms"] >= _teto_ms(lim):
+            e.append(f"{k}: máximo {r['max_ms']:.0f} ms >= {_teto_ms(lim):.0f}")
     if c["M4"]["max_ms"] >= M4_MS:
         e.append(f"M4: {c['M4']['max_ms']:.0f} ms >= {M4_MS:.0f}")
     q, lim5 = c["M5"], M5_ESTRITO_MS if estrito else M5_VIRTUAL_MS

@@ -4,9 +4,6 @@
 # Nao confere hash nem assinatura de nenhuma biblioteca: voce pode trocar os .so (ver LGPL-COMO-TROCAR.md).
 HERE="$(dirname "$(readlink -f "$0")")"
 export APPDIR="$HERE"
-export PYTHONHOME="$HERE/env"
-export PYTHONPATH="$HERE/app"
-export PYTHONNOUSERSITE=1
 export PATH="$HERE/env/bin:$PATH"
 # Seletor de arquivos nativo (T24): usa o portal do desktop (Favoritos, pastas de rede) quando ha barramento de
 # sessao D-Bus. Sem ele (CI, terminal puro) nao muda nada e vale o seletor de reserva do Qt.
@@ -16,4 +13,7 @@ if [ -z "${QT_QPA_PLATFORMTHEME:-}" ] && [ -z "${OPENBIM_SEM_PORTAL:-}" ] && [ -
     export QT_QPA_PLATFORMTHEME=xdgdesktopportal
   fi
 fi
-exec "$HERE/env/bin/python" -m openbim_app "$@"
+# Modo isolado do Python (-I = -E -s, o mesmo do atalho do Windows): ignora PYTHONPATH, PYTHONHOME e o site do usuario,
+# entao uma instalacao de Python ou um PYTHONPATH do usuario nao misturam bibliotecas com as do pacote (F0-RG-13).
+# O Python acha o proprio ambiente pelo caminho do executavel; app/ entra no caminho aqui.
+exec "$HERE/env/bin/python" -I -c 'import runpy, sys; sys.path.insert(0, sys.argv.pop(1)); runpy.run_module("openbim_app", run_name="__main__", alter_sys=True)' "$HERE/app" "$@"

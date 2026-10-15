@@ -30,7 +30,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/conda_pkgs
-          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'environment.*.lock', 'packaging/runtime-environment.yml') }}
+          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'environment.*.lock', 'packaging/runtime-environment.yml', 'packaging/runtime-environment.*.lock') }}
       - name: Pasta de pacotes do conda
         shell: bash
         run: |
@@ -44,18 +44,18 @@ jobs:
           channel-priority: strict
           miniforge-version: latest
       - name: Criar o ambiente (pela trava environment.linux-64.lock, se existir)
-        shell: bash -el {0}
+        shell: bash -elo pipefail {0}
         run: |
           LOCK="environment.${PLAT}.lock"
           if [ -f "$LOCK" ]; then
-            if conda env list | grep -qE '^openbim[[:space:]]'; then conda install -n openbim -y -q --file "$LOCK"; else conda create -n openbim -y -q --file "$LOCK"; fi
+            envs=$(conda env list); if grep -qE '^openbim[[:space:]]' <<<"$envs"; then conda install -n openbim -y -q --file "$LOCK"; else conda create -n openbim -y -q --file "$LOCK"; fi
             echo "::notice title=ambiente::criado pela trava $LOCK"
           else
             conda env update -n openbim -f environment.yml -q
             echo "::notice title=ambiente::sem trava para ${PLAT}; criado pelo environment.yml"
           fi
       - name: Trava do ambiente (informativo; o líder traz o arquivo ao repositório)
-        shell: bash -el {0}
+        shell: bash -elo pipefail {0}
         continue-on-error: true
         run: |
           mkdir -p out
@@ -64,17 +64,25 @@ jobs:
             if diff <(grep -v '^#' "environment.${PLAT}.lock" | tr -d '\r') <(grep -v '^#' "out/environment.${PLAT}.lock" | tr -d '\r') >/dev/null; then r="igual à do repositório"; else r="DIFERENTE da do repositório (atualizar)"; fi
           else r="ainda não existe no repositório (trazer o artefato)"; fi
           echo "::notice title=trava ${PLAT}::${r}"
-      - name: Localidade pt_BR na máquina descartável (T26; informativo, não bloqueia)
-        continue-on-error: true
+          echo "Trava do ambiente (${PLAT}): ${r}" >> "$GITHUB_STEP_SUMMARY"
+      - name: Localidade pt_BR na máquina descartável (T26; bloqueia o merge)
         run: |
-          if sudo locale-gen pt_BR.UTF-8 >/dev/null 2>&1 && sudo update-locale >/dev/null 2>&1 && locale -a | grep -qi '^pt_BR\.utf-\?8$'; then r="criada"; else r="NÃO criada (os testes da T26 vão pular)"; fi
-          echo "::notice title=localidade pt_BR::${r}"
+          # RG-03: sem a localidade os testes da T26 pulariam sem avisar; agora o passo falha e a chave liga o "pulo vira falha".
+          sudo locale-gen pt_BR.UTF-8 >/dev/null 2>&1 || true
+          sudo update-locale >/dev/null 2>&1 || true
+          locais=$(locale -a); if grep -qi '^pt_BR\.utf-\?8$' <<<"$locais"; then
+            echo "OBIM_LOCALIDADE_OBRIGATORIA=1" >> "$GITHUB_ENV"
+            echo "::notice title=localidade pt_BR::criada"
+          else
+            echo "::error title=localidade pt_BR::não foi criada; os testes da T26 e do fluxo B não podem rodar"
+            exit 1
+          fi
       - name: Testes
-        shell: bash -el {0}
+        shell: bash -elo pipefail {0}
         run: |
           # Em caso de falha, as últimas linhas viram anotação pública (o log completo exige login no GitHub).
           set +e
-          QT_QPA_PLATFORM=offscreen pytest -q tests > pytest.log 2>&1
+          QT_QPA_PLATFORM=offscreen pytest -q -rs tests > pytest.log 2>&1
           rc=$?
           cat pytest.log
           if [ $rc -ne 0 ]; then
@@ -82,46 +90,25 @@ jobs:
             echo "::error title=pytest falhou::$msg"
           fi
           exit $rc
-      - name: Desenho do cubo com tela virtual e Mesa por software (T25; informativo, não bloqueia)
-        shell: bash -el {0}
-        continue-on-error: true
+      - name: Testes de tela da S03 e desenho do cubo (tela virtual e Mesa por software; bloqueia o merge)
+        shell: bash -elo pipefail {0}
+        timeout-minutes: 20
         run: |
+          # RG-03: estes testes pulavam sem tela (offscreen). Aqui rodam com Xvfb e Mesa (llvmpipe), e pulo vira falha (OBIM_TELA_OBRIGATORIA=1).
           mkdir -p out/desenho
-          # Xvfb e Mesa (llvmpipe) vêm do próprio runner Ubuntu; se faltar, instala só no runner.
+          # Xvfb e Mesa vêm do próprio runner Ubuntu; se faltar, instala só no runner.
           command -v xvfb-run >/dev/null || sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0
-          set +e
-          OBIM_EXIGIR_DESENHO=1 OBIM_PNG_SAIDA=out/desenho LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe \
+          OBIM_TELA_OBRIGATORIA=1 OBIM_EXIGIR_DESENHO=1 OBIM_PNG_SAIDA=out/desenho LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe \
             QT_QPA_PLATFORM=xcb xvfb-run -a -s "-screen 0 1280x1024x24" \
-            pytest -q -s -rs tests/test_viewport_qrhi.py > out/desenho/pytest-desenho.log 2>&1
-          rc=$?
-          cat out/desenho/pytest-desenho.log
-          if [ $rc -eq 0 ] && [ -f out/desenho/cubo.png ]; then r="DESENHA ($(grep 'RHI backend' out/desenho/pytest-desenho.log | head -n 1))"; else r="NÃO DESENHA (código $rc): $(tail -n 3 out/desenho/pytest-desenho.log | tr '\n' ' ' | cut -c1-300)"; fi
-          echo "::notice title=desenho do cubo no Linux::${r}"
-          echo "Desenho do cubo (Linux): ${r}" >> "$GITHUB_STEP_SUMMARY"
-          exit 0
+            pytest -q -rs tests/test_viewport_qrhi.py tests/test_viewport_camera.py tests/test_viewport_malha.py tests/test_viewport_adaptador.py tests/test_viewport_responsivo.py tests/test_viewport_selecao.py
+          test -f out/desenho/cubo.png
       - name: Inventário de licenças e canal
-        shell: bash -el {0}
+        shell: bash -elo pipefail {0}
         run: |
           mkdir -p out
           python scripts/license_inventory.py out/license-inventory.md --informativo
-      - name: Teste 2 do ADR-005 (o pacote do IfcOpenShell; não bloqueia)
-        shell: bash -el {0}
-        continue-on-error: true
-        run: |
-          mkdir -p out
-          python scripts/sonda_ifcopenshell.py out/sonda-ifcopenshell.txt 2>&1 | grep -v "No stream support" || true
-          v=$(grep -E "^VEREDITO" out/sonda-ifcopenshell.txt || echo "VEREDITO: sem resultado")
-          m=$(grep -E "^  liga em|^módulo" out/sonda-ifcopenshell.txt | cut -c1-400 | sed ':a;N;$!ba;s/\n/%0A/g')
-          echo "::notice title=ifcopenshell no ${RUNNER_OS}::${v}%0A${m}"
-      - name: Sonda 3b do ADR-005 (compilar com os cabeçalhos pesados do IfcOpenShell; não bloqueia)
-        shell: bash -el {0}
-        continue-on-error: true
-        run: |
-          mkdir -p out
-          bash prototypes/cpp_probe_3b/run.sh out docs/acceptance/amostras/casa-simples.ifc 2>&1 | tee out/sonda-3b.txt
-          echo "::notice title=sonda 3b no ${RUNNER_OS}::$(grep SONDA3B out/sonda-3b.txt || echo sem resultado)"
       - name: Módulo obimcore (S04-T03; compila com a ponte e roda o oráculo R1-a a R1-i; bloqueia o merge)
-        shell: bash -el {0}
+        shell: bash -elo pipefail {0}
         run: |
           # Ambiente criado pela trava (T01); nada é instalado aqui. Build limpo e depois incremental, com os tempos no resumo.
           set +e
@@ -136,14 +123,15 @@ jobs:
           export OBIM_S04_OBRIGATORIO=1  # pulo vira falha (T04c entregou versao()["registro_ifc4"])
           QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_ponte.py
       - name: Viewport C++ (S04-T06/T07; bloqueia o merge)
-        shell: bash -el {0}
+        shell: bash -elo pipefail {0}
         timeout-minutes: 30
         run: |
           # O oráculo abre a tela virtual sozinho em subprocesso (xvfb-run no Linux; no Windows, WARP). Nada na tela real.
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           OBIM_S04_OBRIGATORIO=1 OBIM_S04_VIEWPORT_OBRIGATORIO=1 OBIM_S04_T07B_OBRIGATORIO=1 OBIM_S04_T08_OBRIGATORIO=1 OBIM_S04_T09_OBRIGATORIO=1 OBIM_S04_T10_OBRIGATORIO=1 OBIM_S04_T10B_OBRIGATORIO=1 OBIM_S04_T10C_OBRIGATORIO=1 OBIM_S04_T11_OBRIGATORIO=1 OBIM_S04_T11C_OBRIGATORIO=1 OBIM_S04_T11B_OBRIGATORIO=1 OBIM_S04_T12_OBRIGATORIO=1 OBIM_S04_T16_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_viewport.py tests/test_s04_viewport_b.py tests/test_s04_cena.py tests/test_s04_selecao.py tests/test_s04_selecao_c.py tests/test_s04_profundidade.py tests/test_s04_fluxo_a.py tests/test_s04_metas.py tests/test_s04_abertura.py
+          OBIM_S04_OBRIGATORIO=1 OBIM_S04_VIEWPORT_OBRIGATORIO=1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe pytest -q -rsP tests/test_s04_viewport_software.py  # aviso de desenho por software (F0-RG-13)
       - name: Fluxo B, paredes em C++ (S04-T13; bloqueia o merge)
-        shell: bash -el {0}
+        shell: bash -elo pipefail {0}
         timeout-minutes: 20
         run: |
           # Sem janela: compara o IFC da biblioteca C++ com o do fluxo A (saída igual).
@@ -152,7 +140,7 @@ jobs:
           export OBIM_S04_T14A_OBRIGATORIO=1
           OBIM_S04_T13_OBRIGATORIO=1 OBIM_S04_T11C_OBRIGATORIO=1 OBIM_S04_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_fluxo_b_paredes.py
       - name: Sonda da thread de desenho (S04-T05; informativo, não bloqueia)
-        shell: bash -el {0}
+        shell: bash -elo pipefail {0}
         continue-on-error: true
         timeout-minutes: 5
         run: |
@@ -165,18 +153,20 @@ jobs:
           QT_QPA_PLATFORM=xcb LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x800x24" python prototypes/s04/sonda_desenho/sonda.py "$O" out/s04_sonda/sonda.json; rc=$?
           cat out/s04_sonda/sonda.json || true
           echo "::notice title=sonda da thread de desenho no ${RUNNER_OS}::$(python -c "import json; r=json.load(open('out/s04_sonda/sonda.json')); print('rc=$rc meta_atingida=%s' % r.get('meta_atingida'), {k:v.get('maior_intervalo_ms') for k,v in r['fases'].items() if isinstance(v,dict)})" || echo sem resultado)"
+          echo "Sonda da thread de desenho (${RUNNER_OS}): código $rc, relatório em out/s04_sonda/sonda.json" >> "$GITHUB_STEP_SUMMARY"
           true
       - name: REUSE (ferramenta só no CI, ambiente separado)
-        shell: bash -el {0}
+        shell: bash -elo pipefail {0}
         run: |
           conda create -n reuse -c conda-forge --override-channels reuse=6.2.0 -y
           conda run -n reuse reuse lint
       - name: Gravação do roteiro (experimento T12; não bloqueia)
-        shell: bash -el {0}
+        shell: bash -elo pipefail {0}
         continue-on-error: true
         run: |
           mkdir -p out/video
-          QT_QPA_PLATFORM=offscreen python tests/video/gravar_roteiro.py out/video docs/acceptance/amostras/casa-simples.ifc
+          if QT_QPA_PLATFORM=offscreen python tests/video/gravar_roteiro.py out/video docs/acceptance/amostras/casa-simples.ifc; then r=gravou; else r="FALHOU (experimento, não bloqueia)"; fi
+          echo "Gravação do roteiro (${RUNNER_OS}): ${r}" >> "$GITHUB_STEP_SUMMARY"
       - name: Pacote do app esqueleto
         run: tar czf out/app.tar.gz app/
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -200,11 +190,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/ambiente-windows
       - name: Testes
-        shell: bash -el {0}
+        shell: bash -elo pipefail {0}
         run: |
           # Em caso de falha, as últimas linhas viram anotação pública (o log completo exige login no GitHub).
           set +e
-          QT_QPA_PLATFORM=offscreen pytest -q tests > pytest.log 2>&1
+          QT_QPA_PLATFORM=offscreen pytest -q -rs tests > pytest.log 2>&1
           rc=$?
           cat pytest.log
           if [ $rc -ne 0 ]; then
@@ -213,7 +203,7 @@ jobs:
           fi
           exit $rc
       - name: Desenho do cubo com WARP do Direct3D 11 (T25; informativo, não bloqueia)
-        shell: bash -el {0}
+        shell: bash -elo pipefail {0}
         continue-on-error: true
         run: |
           mkdir -p out/desenho
@@ -232,32 +222,17 @@ jobs:
           echo "Desenho do cubo (Windows): ${r}" >> "$GITHUB_STEP_SUMMARY"
           exit 0
       - name: Inventário de licenças e canal
-        shell: bash -el {0}
+        shell: bash -elo pipefail {0}
         run: |
           mkdir -p out
           python scripts/license_inventory.py out/license-inventory.md --informativo
-      - name: Teste 2 do ADR-005 (o pacote do IfcOpenShell; não bloqueia)
-        shell: bash -el {0}
-        continue-on-error: true
-        run: |
-          mkdir -p out
-          python scripts/sonda_ifcopenshell.py out/sonda-ifcopenshell.txt 2>&1 | grep -v "No stream support" || true
-          v=$(grep -E "^VEREDITO" out/sonda-ifcopenshell.txt || echo "VEREDITO: sem resultado")
-          m=$(grep -E "^  liga em|^módulo" out/sonda-ifcopenshell.txt | cut -c1-400 | sed ':a;N;$!ba;s/\n/%0A/g')
-          echo "::notice title=ifcopenshell no ${RUNNER_OS}::${v}%0A${m}"
-      - name: Sonda 3b do ADR-005 (compilar com os cabeçalhos pesados do IfcOpenShell; não bloqueia)
-        shell: bash -el {0}
-        continue-on-error: true
-        run: |
-          mkdir -p out
-          bash prototypes/cpp_probe_3b/run.sh out docs/acceptance/amostras/casa-simples.ifc 2>&1 | tee out/sonda-3b.txt
-          echo "::notice title=sonda 3b no ${RUNNER_OS}::$(grep SONDA3B out/sonda-3b.txt || echo sem resultado)"
       - name: Gravação do roteiro (experimento T12; não bloqueia)
-        shell: bash -el {0}
+        shell: bash -elo pipefail {0}
         continue-on-error: true
         run: |
           mkdir -p out/video
-          QT_QPA_PLATFORM=offscreen python tests/video/gravar_roteiro.py out/video docs/acceptance/amostras/casa-simples.ifc
+          if QT_QPA_PLATFORM=offscreen python tests/video/gravar_roteiro.py out/video docs/acceptance/amostras/casa-simples.ifc; then r=gravou; else r="FALHOU (experimento, não bloqueia)"; fi
+          echo "Gravação do roteiro (${RUNNER_OS}): ${r}" >> "$GITHUB_STEP_SUMMARY"
       - name: Pacote do que o job gerou
         if: always()
         shell: bash
@@ -286,7 +261,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/ambiente-windows
       - name: Módulo obimcore (S04-T03; compila com a ponte e roda o oráculo R1-a a R1-i; bloqueia o merge)
-        shell: bash -el {0}
+        shell: bash -elo pipefail {0}
         run: |
           # Ambiente criado pela trava (T01); nada é instalado aqui. Build limpo e depois incremental, com os tempos no resumo.
           set +e
@@ -301,7 +276,7 @@ jobs:
           export OBIM_S04_OBRIGATORIO=1  # pulo vira falha (T04c entregou versao()["registro_ifc4"])
           QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_ponte.py
       - name: Viewport C++ (parte A; S04-T06/T07; bloqueia o merge)
-        shell: bash -el {0}
+        shell: bash -elo pipefail {0}
         timeout-minutes: 30
         run: |
           # O oráculo abre a tela virtual sozinho em subprocesso (xvfb-run no Linux; no Windows, WARP). Nada na tela real.
@@ -336,16 +311,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/ambiente-windows
       - name: Módulo obimcore (só o build, para os testes deste job; a ponte é testada no job windows-viewport-a)
-        shell: bash -el {0}
+        shell: bash -elo pipefail {0}
         run: CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04
       - name: Viewport C++ (parte B; S04-T06/T07; bloqueia o merge)
-        shell: bash -el {0}
+        shell: bash -elo pipefail {0}
         timeout-minutes: 30
         run: |
           # O oráculo abre a tela virtual sozinho em subprocesso (xvfb-run no Linux; no Windows, WARP). Nada na tela real.
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_S04_TELA_VIRTUAL=1 QSG_RHI_BACKEND=d3d11 QSG_RHI_PREFER_SOFTWARE_RENDERER=1  # WARP, como no passo do cubo
-          OBIM_S04_OBRIGATORIO=1 OBIM_S04_VIEWPORT_OBRIGATORIO=1 OBIM_S04_T07B_OBRIGATORIO=1 OBIM_S04_T08_OBRIGATORIO=1 OBIM_S04_T09_OBRIGATORIO=1 OBIM_S04_T10_OBRIGATORIO=1 OBIM_S04_T10B_OBRIGATORIO=1 OBIM_S04_T10C_OBRIGATORIO=1 OBIM_S04_T11_OBRIGATORIO=1 OBIM_S04_T11C_OBRIGATORIO=1 OBIM_S04_T11B_OBRIGATORIO=1 OBIM_S04_T12_OBRIGATORIO=1 OBIM_S04_T16_OBRIGATORIO=1 pytest -q -rsP --durations=10 tests/test_s04_viewport.py tests/test_s04_cena.py tests/test_s04_selecao.py tests/test_s04_selecao_c.py tests/test_s04_metas.py tests/test_s04_abertura.py
+          OBIM_S04_OBRIGATORIO=1 OBIM_S04_VIEWPORT_OBRIGATORIO=1 OBIM_S04_T07B_OBRIGATORIO=1 OBIM_S04_T08_OBRIGATORIO=1 OBIM_S04_T09_OBRIGATORIO=1 OBIM_S04_T10_OBRIGATORIO=1 OBIM_S04_T10B_OBRIGATORIO=1 OBIM_S04_T10C_OBRIGATORIO=1 OBIM_S04_T11_OBRIGATORIO=1 OBIM_S04_T11C_OBRIGATORIO=1 OBIM_S04_T11B_OBRIGATORIO=1 OBIM_S04_T12_OBRIGATORIO=1 OBIM_S04_T16_OBRIGATORIO=1 pytest -q -rsP --durations=10 tests/test_s04_viewport.py tests/test_s04_cena.py tests/test_s04_selecao.py tests/test_s04_selecao_c.py tests/test_s04_metas.py tests/test_s04_abertura.py tests/test_s04_viewport_software.py
       - name: Pacote do que o job gerou
         if: always()
         shell: bash
@@ -374,10 +349,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/ambiente-windows
       - name: Módulo obimcore (só o build, para os testes deste job; a ponte é testada no job windows-viewport-a)
-        shell: bash -el {0}
+        shell: bash -elo pipefail {0}
         run: CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04
       - name: Fluxo B, paredes em C++ (S04-T13; bloqueia o merge)
-        shell: bash -el {0}
+        shell: bash -elo pipefail {0}
         timeout-minutes: 20
         run: |
           # Sem janela: compara o IFC da biblioteca C++ com o do fluxo A (saída igual).
@@ -414,10 +389,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/ambiente-windows
       - name: Módulo obimcore (só o build, para os testes deste job; a ponte é testada no job windows-viewport-a)
-        shell: bash -el {0}
+        shell: bash -elo pipefail {0}
         run: CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04
       - name: Sonda da thread de desenho (S04-T05; informativo, não bloqueia)
-        shell: bash -el {0}
+        shell: bash -elo pipefail {0}
         continue-on-error: true
         timeout-minutes: 5
         run: |
@@ -485,7 +460,7 @@ jobs:
           r=true; motivo="evento $EVENTO"
           if [ "$EVENTO" = "pull_request" ]; then
             if git fetch --no-tags --depth=1 origin "$BASE" 2>/dev/null && lista=$(git diff --name-only FETCH_HEAD HEAD); then
-              if echo "$lista" | grep -qE '^(packaging/|app/|environment[^/]*\.yml$|environment\.[^/]*\.lock$|pyproject[^/]*$|\.github/workflows/ci\.yml$|scripts/(prune_packages|license_inventory|collect_package_licenses)\.py$|LICENSES/)'; then motivo="o PR mexe no empacotamento"; else r=false; motivo="o PR não mexe no empacotamento"; fi
+              if grep -qE '^(packaging/|app/|environment[^/]*\.yml$|environment\.[^/]*\.lock$|pyproject[^/]*$|\.github/workflows/ci\.yml$|scripts/(prune_packages|license_inventory|collect_package_licenses)\.py$|LICENSES/)' <<<"$lista"; then motivo="o PR mexe no empacotamento"; else r=false; motivo="o PR não mexe no empacotamento"; fi
             else motivo="não consegui comparar com a base"; fi
           fi
           echo "instalador=$r" >> "$GITHUB_OUTPUT"
@@ -496,7 +471,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/conda_pkgs
-          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'environment.*.lock', 'packaging/runtime-environment.yml') }}
+          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'environment.*.lock', 'packaging/runtime-environment.yml', 'packaging/runtime-environment.*.lock') }}
       - name: Pasta de pacotes do conda
         if: steps.detecta.outputs.instalador == 'true'
         shell: bash
@@ -513,13 +488,19 @@ jobs:
           miniforge-version: latest
       - name: Instalador Windows (ambiente de runtime e NSIS)
         if: steps.detecta.outputs.instalador == 'true'
-        shell: bash -el {0}
+        shell: bash -elo pipefail {0}
         run: |
           trap 'rc=$?; if [ $rc -ne 0 ]; then msg=$(tail -n 40 "$RUNNER_TEMP/passo.log" | sed ":a;N;\$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g"); echo "::error title=instalador falhou::$msg"; fi' EXIT
           exec > >(tee "$RUNNER_TEMP/passo.log") 2>&1
           mkdir -p out
           t0=$(date +%s)
-          conda env create -f packaging/runtime-environment.yml -p "$RUNNER_TEMP/rt" -y -q
+          # Ambiente de runtime (o que vai ao usuário): pela trava, se existir (F0-RG-10; PO.md A3); senão pelo .yml
+          LOCK="packaging/runtime-environment.${PLAT}.lock"
+          if [ -f "$LOCK" ]; then conda create -p "$RUNNER_TEMP/rt" --file "$LOCK" -y -q; echo "::notice title=ambiente de runtime::criado pela trava $LOCK"
+          else conda env create -f packaging/runtime-environment.yml -p "$RUNNER_TEMP/rt" -y -q; echo "::notice title=ambiente de runtime::sem trava para ${PLAT}; criado pelo .yml"; fi
+          conda list -p "$RUNNER_TEMP/rt" --explicit --md5 > "out/runtime-environment.${PLAT}.lock"
+          if [ -f "$LOCK" ] && diff <(grep -v '^#' "$LOCK" | tr -d '\r') <(grep -v '^#' "out/runtime-environment.${PLAT}.lock" | tr -d '\r') >/dev/null; then echo "::notice title=trava do runtime ${PLAT}::igual à do repositório"
+          else echo "::notice title=trava do runtime ${PLAT}::ausente ou DIFERENTE da do repositório (atualizar com o conteúdo abaixo)"; echo "=====INICIO-TRAVA-RUNTIME-${PLAT}====="; tr -d '\r' < "out/runtime-environment.${PLAT}.lock"; echo "=====FIM-TRAVA-RUNTIME-${PLAT}====="; fi
           echo "Ambiente de runtime criado em $(( $(date +%s) - t0 )) s" | tee -a "$GITHUB_STEP_SUMMARY"
           # NSIS não vem mais no windows-latest (Server 2025): usa o pacote conda-forge `nsis` (só ferramenta, não entra no instalador)
           conda create -n nsis -c conda-forge --override-channels nsis=3.12=h4c425fd_1 -y -q
@@ -574,11 +555,11 @@ jobs:
           channel-priority: strict
           miniforge-version: latest
       - name: Testes
-        shell: bash -el {0}
+        shell: bash -elo pipefail {0}
         run: |
           # Em caso de falha, as últimas linhas viram anotação pública (o log completo exige login no GitHub).
           set +e
-          QT_QPA_PLATFORM=offscreen pytest -q tests > pytest.log 2>&1
+          QT_QPA_PLATFORM=offscreen pytest -q -rs tests > pytest.log 2>&1
           rc=$?
           cat pytest.log
           if [ $rc -ne 0 ]; then
@@ -587,7 +568,7 @@ jobs:
           fi
           exit $rc
       - name: Inventário de licenças e canal
-        shell: bash -el {0}
+        shell: bash -elo pipefail {0}
         run: |
           mkdir -p out
           python scripts/license_inventory.py out/license-inventory.md --informativo
@@ -628,7 +609,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/conda_pkgs
-          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'environment.*.lock', 'packaging/runtime-environment.yml') }}
+          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'environment.*.lock', 'packaging/runtime-environment.yml', 'packaging/runtime-environment.*.lock') }}
       - name: Pasta de pacotes do conda
         shell: bash
         run: |
@@ -636,19 +617,29 @@ jobs:
           echo "::notice title=cache de pacotes::cache-hit=${{ steps.cache_conda.outputs.cache-hit }}"
       - uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
         with:
-          environment-file: packaging/runtime-environment.yml
           activate-environment: openbim-runtime
           channels: conda-forge
           conda-remove-defaults: "true"
           channel-priority: strict
           miniforge-version: latest
+      - name: Criar o ambiente de runtime (pela trava, se existir; F0-RG-10, PO.md A3)
+        shell: bash -elo pipefail {0}
+        run: |
+          PLAT=linux-64
+          LOCK="packaging/runtime-environment.${PLAT}.lock"
+          if [ -f "$LOCK" ]; then conda install -n openbim-runtime -y -q --file "$LOCK"; echo "::notice title=ambiente de runtime::criado pela trava $LOCK"
+          else conda env update -n openbim-runtime -f packaging/runtime-environment.yml -q; echo "::notice title=ambiente de runtime::sem trava para ${PLAT}; criado pelo .yml"; fi
+          mkdir -p out
+          conda list -n openbim-runtime --explicit --md5 > "out/runtime-environment.${PLAT}.lock"
+          if [ -f "$LOCK" ] && diff <(grep -v '^#' "$LOCK" | tr -d '\r') <(grep -v '^#' "out/runtime-environment.${PLAT}.lock" | tr -d '\r') >/dev/null; then echo "::notice title=trava do runtime ${PLAT}::igual à do repositório"
+          else echo "::notice title=trava do runtime ${PLAT}::ausente ou DIFERENTE da do repositório (atualizar com o conteúdo abaixo)"; echo "=====INICIO-TRAVA-RUNTIME-${PLAT}====="; tr -d '\r' < "out/runtime-environment.${PLAT}.lock"; echo "=====FIM-TRAVA-RUNTIME-${PLAT}====="; fi
       - name: Ferramenta appimagetool (versão fixa 1.9.1, sha256 conferido)
         run: |
           curl -fsSL -o appimagetool.AppImage https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
           echo "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  appimagetool.AppImage" | sha256sum -c -
           chmod +x appimagetool.AppImage
       - name: Montar o AppImage
-        shell: bash -el {0}
+        shell: bash -elo pipefail {0}
         run: |
           set +e
           RUNTIME_ENV="$CONDA_PREFIX" bash packaging/linux/build_appimage.sh "$RUNNER_TEMP/ai" "$PWD/appimagetool.AppImage" > ai.log 2>&1
@@ -659,11 +650,13 @@ jobs:
             echo "::error title=AppImage falhou::$msg"
             exit $rc
           fi
+      - name: libfuse2 (o AppImage montado de verdade precisa dela; sem ela o usuário vê o programa não abrir)
+        run: sudo apt-get install -y libfuse2t64
       - name: Testar o AppImage (licenças, extração, troca de biblioteca, tamanho)
         run: |
           set +e
           IMG="$RUNNER_TEMP/ai/OpenBIM-Studio-x86_64.AppImage"
-          QT_QPA_PLATFORM=offscreen timeout 900 bash packaging/linux/test_appimage.sh "$IMG" > teste-ai.log 2>&1
+          OBIM_EXIGIR_FUSE=1 QT_QPA_PLATFORM=offscreen timeout 900 bash packaging/linux/test_appimage.sh "$IMG" > teste-ai.log 2>&1
           rc=$?
           cat teste-ai.log
           if [ $rc -ne 0 ]; then

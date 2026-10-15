@@ -11,7 +11,7 @@ Uma pessoa experiente em C++ e Python (ou em IFC) que olhe, em cerca de 3 a 4 ho
 ## Parte 1: a ponte Python/C++ (pronta para revisão)
 Resumo: uma biblioteca em C++ (`obimcore`, nanobind) desenha o modelo e responde ao clique; o Python (PySide6 + ifcopenshell) edita o modelo. As duas conversam sem copiar o arquivo.
 - Código: `prototypes/s04/obimcore/` (`ponte.cpp`, `malha.cpp`, `viewport.cpp`, `cena.*`, `camera.*`, `selecao.*`).
-- Regras de posse e threads: `docs/state/reports/LOTE_OPUS_9.md` §1.4 e §5.2; achados e correções nos lotes 10 a 18 (`docs/state/reports/`).
+- Regras de posse e threads: `docs/state/arquivo/lotes-1-a-28/LOTE_OPUS_9/resultado.md` §1.4 e §5.2; achados e correções nos lotes 10 a 18 (`docs/state/arquivo/lotes-1-a-28/LOTE_OPUS_N/resultado.md`).
 - Testes: `tests/test_s04_ponte.py`, `test_s04_viewport*.py`, `test_s04_cena.py`, `test_s04_selecao*.py`, `test_s04_profundidade.py`, `test_s04_fluxo_a.py`.
 - Perguntas ao revisor: (1) a regra "Python é dono, C++ nunca guarda endereço" tem furo? (2) o mutex provisório de geometria e a ordem dos mutex estão certos? (3) o uso do contador do Python (`GIL`) em `atualizar` e `selecionar`; (4) a viewport em thread própria dentro de uma janela do Qt: onde pode travar ou perder contexto? (5) o reenvio da cena inteira a cada troca de peça é um problema real?
 
@@ -19,7 +19,7 @@ Resumo: uma biblioteca em C++ (`obimcore`, nanobind) desenha o modelo e responde
 Gravação do par `Casa.ifc` + `Casa.obim` (oplog, transações, recuperação). Será preparada depois da S05; este pacote será atualizado antes de qualquer envio.
 
 ## Como entregar
-Uma pasta com os arquivos acima, `docs/state/reports/LOTE_OPUS_*.md` e instruções de build (`docs/dev-setup.md`); ou o link do repositório público no ramo `main`. O revisor responde por issue ou e-mail; as respostas viram achados numerados em `docs/state/reports/`.
+Uma pasta com os arquivos acima, `docs/state/lotes/` e `docs/state/arquivo/lotes-1-a-28/` (um `resultado.md` por lote) e instruções de build (`docs/dev-setup.md`); ou o link do repositório público no ramo `main`. O revisor responde por issue ou e-mail; as respostas viram achados numerados em `docs/state/reports/`.
 
 ---
 

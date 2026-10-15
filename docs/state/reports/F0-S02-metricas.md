@@ -26,7 +26,12 @@ macOS (melhor esforço, não bloqueia): 93 s, verde.
 2. Guardar o **ambiente já criado** em cache (não só os pacotes); economiza ~8 min, mas tem risco de ambiente velho e cache de vários GB.
 3. Pular o instalador quando só mudar documentação (CI condicional); não reduz o tempo de uma mudança de código.
 
+## Atualização 2026-10-14/15 (revisão da S02)
+O instalador do Windows saiu do job `windows` e roda em job próprio, `instalador-windows`, e só quando o empacotamento muda (PR 91, ok do PO em 2026-10-14; depois PR 95). Efeito: o tempo do CI de um PR comum já não inclui o instalador; os números acima valem para mudanças de empacotamento. A meta original (incremental ≤ 10 min) segue registrada como **não atingida** (D8).
+
 ## Cota da S02 (3 linhas)
 - Sessões 1 e 2 (preparação, S01, início da S02): janela de 5 h entre 22% e 34%; semana de 2% a 3%.
 - Sessão 3 (S02 T07 a T14: CI, instalador, poda): a semana foi a 8%, sem parar por limite; o custo veio das muitas execuções de CI diagnosticadas à mão.
 - Lição: instrumentar o CI para publicar o erro (feito) e testar localmente o que for possível antes de empurrar economiza cota.
+
+Run 38653866732 (PR 93, 2026-10-14, lote Opus 30): `windows` 28 min 29 s e `linux` 17 min 27 s. O aumento vem dos passos da S04 (Windows ~15 min, Linux ~10 min). Build incremental (meta original ≤ 10 min) **não atingido também no Linux**. Falta o PO definir o que conta como "build incremental" (cartão `F0-S02-T25`).

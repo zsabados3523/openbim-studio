@@ -3,7 +3,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 # S03-T25: prova de desenho do cubo no CI
 
-Estado: **passo escrito, ainda não executado no CI** (não pode haver commit/push nesta sessão). O resultado real sai da primeira execução do ramo.
+Estado (atualização 2026-10-15: o passo existe no `ci.yml` e roda nos dois sistemas, informativo; o texto abaixo é o de 2026-10-12): **passo escrito, ainda não executado no CI** (não pode haver commit/push nesta sessão). O resultado real sai da primeira execução do ramo.
 
 ## O que foi feito
 - `tests/test_viewport_qrhi.py`: duas variáveis opcionais. `OBIM_EXIGIR_DESENHO=1` transforma "pulou por falta de GPU" em falha; `OBIM_PNG_SAIDA=<pasta>` grava o `cubo.png`; o teste imprime o backend usado. Sem as variáveis, nada muda (os jobs bloqueantes continuam iguais).

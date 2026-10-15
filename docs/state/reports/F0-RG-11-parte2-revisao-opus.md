@@ -36,3 +36,16 @@ O código está certo. O teste do caso principal (arquivo travado no Windows) n�
 ## Para o implementador
 
 Arquivos permitidos: `tests/test_registro.py` (só os testes novos do RG-11 parte 2) e, se fizer o item 4, `app/openbim_app/ifc_summary.py`. Depois das correções, volta para nova revisão Opus (T3).
+
+---
+
+# Segunda revisão (commit `570f3b3`)
+
+## Veredito: APROVADO (a mesclagem continua dependendo do CI obrigatório verde)
+
+Conferência das 2 correções exigidas (só `tests/test_registro.py` mudou; `ifc_summary.py` igual ao `dd67695`):
+
+1. **Arquivo travado imita o Windows: feito.** `_Travado(PermissionError)` com `winerror` 32/33, usado no teste parametrizado e no teste de abertura. Mutação repetida: pôr `PermissionError` antes do código 32/33 agora quebra 3 testes.
+2. **Motivo no registro: feito.** O teste do arquivo travado chama `registro.iniciar()` e confere `"Leitura recusada"`. Mutação repetida: apagar o `log.warning` agora quebra 1 teste.
+
+As 9 mutações da primeira revisão foram rodadas de novo: as 9 são pegas. As recomendações 3, 4 e 5 ficaram de fora, como permitido (não bloqueiam); continuam valendo para quando o app ler arquivos fora da thread da janela (RG-05).

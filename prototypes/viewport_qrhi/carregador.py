@@ -19,6 +19,11 @@ from dataclasses import dataclass, field, replace
 
 import numpy as np
 
+try:
+    from . import foto_arquivo
+except ImportError:  # pragma: no cover  (módulo importado fora do pacote)
+    import foto_arquivo
+
 DTYPE_VERTICE = np.dtype([("pos", "<f4", (3,)), ("normal", "<f4", (3,)), ("cor", "u1", (4,))])
 DTYPE_OBJETO = np.dtype([
     ("id_step", "<i4"), ("guid", "S22"),
@@ -251,26 +256,32 @@ class CarregadorMalhas:
         t0 = time.perf_counter()
         est = {"estado": "erro", "erro": None, "produtos_total": 0, "ids": set(), "tri": 0, "vert": 0,
                "lotes": 0, "sem": [], "t": {"abrir_s": 0.0, "listar_s": 0.0, "geometria_s": 0.0}, "msgs": [],
-               "pico_filho": 0.0, "resolvidos": set(), "simp": [], "desl": None, "acusadas": 0, "espera": 0.0}
+               "pico_filho": 0.0, "foto": None, "resolvidos": set(), "simp": [], "desl": None, "acusadas": 0, "espera": 0.0}
         try:
+            est["foto"] = foto_arquivo.tirar(self.caminho)  # antes de qualquer filho; cada filho confere a sua cópia
             self._ler(est)
             est["estado"] = "concluido"
         except _Cancelado:
             est["estado"] = "cancelado"
         except BaseException as e:  # nenhuma exceção escapa da thread
-            est["estado"], est["erro"] = "erro", f"{type(e).__name__}: {e}" or "erro desconhecido"
-        est["t"]["total_s"] = time.perf_counter() - t0
-        if est["estado"] == "concluido" and self.manter_arquivo:  # só depois que o filho terminou (picos não se somam)
-            try:
-                import ifcopenshell
-                self._arquivo = ifcopenshell.open(self.caminho)
-            except Exception as e:
-                est["msgs"].append(f"não foi possível manter o arquivo aberto: {e}")
-        self._resumo = ResumoCarga(
-            est["estado"], est["erro"], est["produtos_total"], len(est["ids"]), est["tri"], est["vert"],
-            est["lotes"], est["sem"], est["t"], self.threads, self.tamanho_bloco, est["msgs"] + self._linhas_resumo(est["simp"]),
-            est["pico_filho"], est["simp"])
-        self._pronto.set()
+            est["estado"], est["erro"] = "erro", f"{type(e).__name__}: {str(e) or 'erro desconhecido'}"
+        try:
+            est["t"]["total_s"] = time.perf_counter() - t0
+            if est["estado"] == "concluido" and self.manter_arquivo:  # só depois que o filho terminou (picos não se somam)
+                try:
+                    import ifcopenshell
+                    trocou = foto_arquivo.mudou(self.caminho, est["foto"], com_soma=True)
+                    if trocou:
+                        raise RuntimeError(trocou)
+                    self._arquivo = ifcopenshell.open(self.caminho)
+                except Exception as e:
+                    est["msgs"].append(f"não foi possível manter o arquivo aberto: {e}")
+            self._resumo = ResumoCarga(
+                est["estado"], est["erro"], est["produtos_total"], len(est["ids"]), est["tri"], est["vert"],
+                est["lotes"], est["sem"], est["t"], self.threads, self.tamanho_bloco, est["msgs"] + self._linhas_resumo(est["simp"]),
+                est["pico_filho"], est["simp"])
+        finally:  # o resumo existe ou não, quem espera nunca fica preso
+            self._pronto.set()
 
     def _linhas_resumo(self, simp):
         cortadas = sum(1 for s in simp if s[4] == MOTIVO_CORTE)
@@ -365,7 +376,7 @@ class CarregadorMalhas:
             import processo_malhas
         params = {"caminho": self.caminho, "threads": 1 if isolado else self.threads, "tamanho_bloco": self.tamanho_bloco,
                   "excluir": self.excluir, "biblioteca": self.biblioteca, "max_bytes_lote": self.max_bytes_lote,
-                  "ids": ids, "isolado": isolado, "desl": est["desl"], "por_peca": por_peca}
+                  "ids": ids, "isolado": isolado, "desl": est["desl"], "por_peca": por_peca, "foto": est["foto"]}
         self._conv, self._feitos, self._fase, self._atual = 0, set(), None, None
 
         def limite():
@@ -456,7 +467,7 @@ class CarregadorMalhas:
             return tipo == "fim"
 
         self._fase = None
-        params = {"caminho": self.caminho, "ids": [i for i, _, _ in itens]}
+        params = {"caminho": self.caminho, "ids": [i for i, _, _ in itens], "foto": est["foto"]}
         try:
             r = self._executar(est, pm.entrada_caixa, params, receber,
                                lambda: pm.LIMITE_CAIXA_S + 1.0 if self._fase == "caixa" else self.limite_abrir_s)

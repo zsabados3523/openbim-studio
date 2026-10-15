@@ -136,7 +136,18 @@ def entrada(tx, params):
             raise RuntimeError("o separador decimal do processo de conversão não é o ponto")
         _converter(enviar, params)
     except BaseException as e:  # nada escapa sem aviso
-        enviar("erro", f"{type(e).__name__}: {e}" or "erro desconhecido")
+        enviar("erro", f"{type(e).__name__}: {str(e) or 'erro desconhecido'}")
+
+
+def _conferir_foto(params):
+    """Para a carga se o arquivo não é mais o da foto tirada pelo pai (F0-RG-04). Confere só tamanho e data (barato)."""
+    try:
+        from . import foto_arquivo
+    except ImportError:  # pragma: no cover
+        import foto_arquivo
+    motivo = foto_arquivo.mudou(params["caminho"], params.get("foto"))
+    if motivo:
+        raise RuntimeError(motivo)
 
 
 def _converter(enviar, params):
@@ -146,9 +157,11 @@ def _converter(enviar, params):
     lentas, matar = _lentas(), os.environ.get("OBIM_TESTE_MATAR_FILHO")
     tempos = {"abrir_s": 0.0, "listar_s": 0.0, "geometria_s": 0.0}
     enviar("fase", "abrindo")
+    _conferir_foto(params)
     t = time.perf_counter()
     arq = ifcopenshell.open(params["caminho"])
     tempos["abrir_s"] = time.perf_counter() - t
+    _conferir_foto(params)  # mudou enquanto lia? então o que foi lido pode misturar duas versões
     enviar("fase", "listando")
     t = time.perf_counter()
     excluir = tuple(params["excluir"])
@@ -344,7 +357,9 @@ def entrada_caixa(tx, params):
         import ifcopenshell.util.placement as util_p
         import ifcopenshell.util.unit as util_u
         enviar("fase", "abrindo")
+        _conferir_foto(params)
         arq = ifcopenshell.open(params["caminho"])
+        _conferir_foto(params)
         escala = util_u.calculate_unit_scale(arq)  # unidade do arquivo -> metros
         falhar = os.environ.get("OBIM_TESTE_FALHAR_CAIXA")
         for i in params["ids"]:
@@ -359,4 +374,4 @@ def entrada_caixa(tx, params):
             enviar("caixa", (i, mn, mx, metodo))
         enviar("fim", None)
     except BaseException as e:
-        enviar("erro", f"{type(e).__name__}: {e}" or "erro desconhecido")
+        enviar("erro", f"{type(e).__name__}: {str(e) or 'erro desconhecido'}")

@@ -342,6 +342,34 @@ def test_o8_arquivo_invalido(tmp_path, modo, excecoes_em_thread):
     assert excecoes_em_thread == [], f"...mas com exceção: {excecoes_em_thread}"  # ...sem exceção
 
 
+def test_foto_do_arquivo_detecta_tamanho_data_e_conteudo(tmp_path):
+    """F0-RG-04: a foto (tamanho, data, soma) acusa qualquer mudança no arquivo e diz o que mudou."""
+    from viewport_qrhi import foto_arquivo as fa
+    c = tmp_path / "a.ifc"
+    c.write_bytes(b"abcdef")
+    foto = fa.tirar(c)
+    assert foto["tamanho"] == 6 and len(foto["soma"]) == 32 and fa.mudou(c, foto, com_soma=True) is None
+    os.utime(c, ns=(foto["data_ns"] + 10**9, foto["data_ns"] + 10**9))
+    assert "data de modificação" in fa.mudou(c, foto)
+    c.write_bytes(b"abcdefg")
+    assert "tamanho 6 -> 7" in fa.mudou(c, foto)
+    c.write_bytes(b"abcdeX")
+    os.utime(c, ns=(foto["data_ns"], foto["data_ns"]))  # mesmo tamanho e data: só a soma pega
+    assert fa.mudou(c, foto) is None and "conteúdo" in fa.mudou(c, foto, com_soma=True)
+    assert fa.tirar(tmp_path / "nao_existe.ifc") is None and fa.mudou(tmp_path / "x", None) is None
+
+
+def test_arquivo_trocado_durante_a_carga_para_com_mensagem_clara(tmp_path, monkeypatch, excecoes_em_thread):
+    """O filho recebe a foto tirada pelo pai; se o arquivo já não bate, a carga termina em erro (não mistura versões)."""
+    from viewport_qrhi import carregador as cr
+    c = _gerar_cor(tmp_path / "cor.ifc")
+    boa = cr.foto_arquivo.tirar(c)
+    monkeypatch.setattr(cr.foto_arquivo, "tirar", lambda caminho, com_soma=True: {**boa, "tamanho": boa["tamanho"] + 1})
+    lotes, r, car = _carregar(c)
+    assert lotes == [] and r.estado == "erro" and "mudou durante a carga" in r.erro
+    assert car.aguardar(timeout=5.0) and excecoes_em_thread == []
+
+
 def test_o8_produto_defeituoso(tmp_path):
     caminho, id_ruim = _gerar_defeito(tmp_path / "defeito.ifc")
     assert _contar_simples(caminho, id_ruim) == 0, "o iterador simples passou a devolver a parede defeituosa: refazer a receita"

@@ -111,6 +111,6 @@ Nenhum cartão de S01 ou S02 é T3 (ver LOG.md). A prova do R1 (ponte C++/Python
 | F0-S04-T17 | Módulo no AppImage e instalador | T2 | NÃO INICIADA (esqueleto; depende da T15) |
 | F0-S04-T18 | Tempos de build e relatório da fatia | T1 | NÃO INICIADA (esqueleto) |
 | F0-S04-T19 | ADR-001 e ADR-004 com números | TA | NÃO INICIADA (decisão do PO; esqueleto) |
-| F0-S04-T20 | Memória final do viewport abaixo de 6,0 GB (fecha a exceção E1) | T3 | CARTÃO ESCRITO (2026-10-15, a pedido do PO); fase 1 (opções) aguarda; fase 2 depende da retomada da S04 (D1) |
+| F0-S04-T20 | Memória final do viewport abaixo de 6,0 GB (fecha a exceção E1) | T3 | CARTÃO ESCRITO (2026-10-15, a pedido do PO); PO: nada por enquanto (2026-10-15), nem a fase 1; fase 2 depende da retomada da S04 (D1) |
 
 Observação: os cartões não têm campo de status; este quadro é a fonte (achado 3 do inventário). Nova regra: ao mudar o status de um cartão, mudar aqui e no `LOG.md`.

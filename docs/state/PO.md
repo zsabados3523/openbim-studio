@@ -174,3 +174,5 @@ O teste do instalador (~10 min por PR) passa a rodar só em push no `main`/tag o
 - **2026-10-15, S03 e revisão geral (Rafael):** aceita o limite de 100 ms (E3) e todas as recomendações do líder: aprovar o cartão T28, regra do teste de tempo (aquecer, 7 rodadas, mediana contra 100 ms, 16 ms só aviso na máquina do PO) e aceitar o limite de licenças da S02 (pacote com licença permitida e fora da tabela da S01 passa sem aviso). Quer uma revisão completa depois da implementação; se for feita antes da S10, que seja de **tudo** (código, arquitetura, documentos).
 
 - **2026-10-15, memória (Rafael):** a decisão da memória abaixo de 6,0 GB vira cartão da S04: `F0-S04-T20`.
+
+- **2026-10-15 (Rafael):** não abrir a fase 1 do T20 agora. Nada será desenvolvido por enquanto.

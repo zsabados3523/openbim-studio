@@ -66,7 +66,7 @@
 | F0-S02-R2 | Revisão S02: pendências abertas e licenças dos pacotes | T2 | sonnet | opus (lote) | S02-R1 | FEITA (2026-10-15); lote 30 aguarda uso e PO |
 | F0-S02-R3 | Revisão S02: coerência, testes e relatório para o lote Opus | T2 | sonnet | opus (lote) | S02-R1, S02-R2 | FEITA (2026-10-15); lote 30 aguarda uso e PO |
 | F0-S02-T25 | Reduzir o tempo do job `windows` do CI (incremental) | T2 | sonnet | sonnet; amostra opus | S02 revisada | NÃO INICIADA (pedido do PO, 2026-10-15) |
-| F0-PLANO-T01 | T23 no plano (`v2/03`) | TA | opus/sonnet | PO (resumo) | — | AGUARDA APROVAÇÃO DO TEXTO |
+| F0-PLANO-T01 | T23 no plano (`v2/03`) | TA | opus/sonnet | PO (resumo) | — | FEITA (2026-10-15; PO aprovou) |
 | F0-S03-R1 | Revisão S03: aceite e exceções com a meta original | T2 | sonnet | opus (lote) | S02-R3 | NÃO INICIADA |
 | F0-S03-R2 | Revisão S03: pendências, risco do Windows, teste de tempo | T2 | sonnet | opus (lote) | S03-R1 | NÃO INICIADA |
 | F0-S03-R3 | Revisão S03: coerência, testes e relatório para o lote Opus | T2 | sonnet | opus (lote) | S03-R1, S03-R2 | NÃO INICIADA |

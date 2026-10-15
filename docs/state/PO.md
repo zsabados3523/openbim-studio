@@ -3,7 +3,7 @@
 > Três partes: **Regras em vigor** (curta; o que vale hoje), **Abertas** (o que espera o PO) e **Histórico de respostas** (ordem cronológica; só consulta). Cada pergunta traz a recomendação do líder. Sem resposta, vale a recomendação como decisão assumida, registrada aqui. Atualizado: 2026-10-14.
 
 ## Regras em vigor (2026-10-14)
-- **Opus:** abrir sessão só com semanal acima de 25% restante e janela de 5 h abaixo de 70% (D9). A exceção de cota de 13/10 **encerrou** em 14/10 09:00Z. Quem abre: o líder, como subagente, conforme o `CLAUDE.md` item 6.
+- **Opus:** abrir sessão só com semanal acima de 25% restante e janela de 5 h abaixo de 70% (D9). A exceção de cota de 13/10 **encerrou** em 14/10 09:00Z. Quem abre: o líder, como subagente, conforme o `CLAUDE.md` item 6. **Exceção de 2026-10-15 (PO):** lotes 29, 30 e 31 podem abrir sem checar o uso, só desta vez.
 - **S04 pausada (D1):** nenhuma T3 nova na S04 (T14c, T15 em diante) até as revisões de S01, S02 e S03 e as respostas D1 a D8. Só terminam PR 83 (T12).
 - **Escopo da 1.0 (D3):** versão mínima **inclui detalhes 2D**. DXF e fachadas são candidatos a adiar na sessão de escopo. Prazo de 21 a 42 meses não é recalculado antes da medição da F0.
 - **Planos antigos (D2):** estão em `docs/arquivo/`. O `CLAUDE.md` ainda os cita pela raiz; mudar isso exige cartão aprovado pelo PO.
@@ -29,12 +29,18 @@
 | A11 | D5: nomes dos colegas de estágio para testar e momento | Sem prazo; combinar antes da F1 |
 | A12 | ~~D6~~ **Respondida em 2026-10-15:** o PO aceita o parecer da IA como aceite da S01 | — |
 | A16 | ~~S02~~ **Respondida em 2026-10-15:** aceita a S02; build incremental do Windows deve seguir (cartão S02-T25); capturas e GIF substituem o MP4; `appimage` já é obrigatório; T23 entra no plano (cartão F0-PLANO-T01, aguarda aprovação do texto) | — |
-| A17 | Aprovar o texto do cartão F0-PLANO-T01 (T23 no plano) antes de qualquer mudança em `v2/` | Ler o cartão (30 linhas) e dizer sim ou ajustar |
+| A17 | ~~Texto do F0-PLANO-T01~~ **Aprovado em 2026-10-15** e aplicado em `v2/03` | — |
 | A13 | Aceite do resumo da entrevista S09 (`docs/research/2026-10-13-entrevista-s09-resumo.md`) | Ler e aceitar antes dos wireframes |
 | A14 | ~~ReportLab~~ **Respondida em 2026-10-15:** PO confirma BSD (pypi.org/project/reportlab); veredito passou a "Sim, com condição" (sem pyRXP) | — |
 | A15 | SINAPI: o PO informou (2026-10-15) que o uso gratuito é permitido, mas software que automatiza processos ou buscas precisa de autorização da CAIXA. Confirmar o texto e pedir a autorização formal | Consulta formal à CAIXA como requisito da F5; texto fica em `docs/research/2026-10-10-sinapi-termos.md` |
 
 ## Histórico de respostas
+
+### 2026-10-15: exceção de cota do Opus (PO: "Pode executar o opus sem preocupação dessa vez")
+O limite está sendo descontado dos créditos de uso do projeto. Vale **para esta vez**: o líder pode abrir os lotes Opus 29, 30 e 31 (revisões de S01, S02 e S03) sem checar semanal e janela. Depois volta a regra de D9. Também: o cartão S02-T25 passa a outro subagente.
+
+### 2026-10-15: plano da T23
+Cartão F0-PLANO-T01 aprovado; texto aplicado em `v2/03`.
 
 ### 2026-10-15: revisão da S02
 Aceita a S02. Seguir a questão do build incremental do Windows (cartão S02-T25, medir primeiro). Capturas e GIF substituem o MP4. `appimage` já é obrigatório no `main`. T23 entra no plano (cartão F0-PLANO-T01).

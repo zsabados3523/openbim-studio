@@ -125,5 +125,5 @@ Método: para cada ramo, comparei os arquivos que ele mudou com os do main. "Igu
 
 - Manter: 5 ramos de PR aberto, `estado-s03-relatorio`, `s04-t14`, `s04-t14c`.
 - Recuperar: `catalogo-editar`.
-- Apagar com aprovação: os demais (44), mais os 49 já mesclados.
+- Apagar com aprovação: os demais (43), mais os 49 já mesclados.
 - Apagados até agora: nenhum.

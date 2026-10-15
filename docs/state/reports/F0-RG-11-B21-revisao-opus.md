@@ -50,3 +50,11 @@ Só testes mudaram (`tests/_queda_alvos.py` novo e `tests/test_viewport_queda_re
 3. **Falha da caixa: feito.** `_executar` envolvido só quando o alvo é `pm.entrada_caixa` (mesmo objeto de módulo que o carregador usa: os dois importam `viewport_qrhi.processo_malhas`). O teste confere o aviso no registro e a peça em `sem_malha` com "não foi possível calcular a caixa". Voltar o `except` para `pass` agora quebra teste.
 
 Os itens 4 e 5 (recomendados) ficaram de fora; continuam valendo para depois.
+
+---
+
+# Depois da mesclagem: choque com a RG-03 e conserto (2026-10-15, 05:30)
+
+- **O que aconteceu:** o PR 113 entrou no `main` usando as guardas `requer_a` e `requer_limite` de `tests/test_viewport_processo.py`. O PR 103 (RG-03), mesclado logo depois, tirou essas guardas: pela regra da RG-03, módulo ausente agora falha em vez de pular. Os dois PRs entraram sem conflito de texto, mas a coleta de `tests/test_viewport_queda_registro.py` passou a falhar com `ImportError`, e todo PR que trouxesse o `main` ficava vermelho (`windows-testes`, `linux`). Esta revisão não pegou o problema porque o PR 103 ainda não estava no `main` quando o 113 foi aprovado.
+- **Conserto:** commit `4cda557`, no PR 111. Tira o import das duas guardas e os dois decoradores `@requer_a @requer_limite`; nada mais muda. Com isso, os dois testes seguem a regra da RG-03: se o módulo faltar, falham em vez de pular.
+- **Sem a palavra do Rafael:** o conserto foi feito por este revisor e entrou no PR 111 sem ordem do Rafael. Outra conversa tentou o mesmo conserto, a edição foi bloqueada lá, e o coordenador abriu um cartão de decisão para o Rafael. Por isso a mesclagem automática do PR 111 foi **desligada**: ele só entra depois da resposta do Rafael.

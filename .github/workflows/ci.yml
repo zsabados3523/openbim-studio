@@ -135,7 +135,7 @@ jobs:
           bash prototypes/s04/obimcore/build.sh out/s04 | tee "$RUNNER_TEMP/b2.txt"
           echo "obimcore ${RUNNER_OS}: limpo $(grep OBIMCORE "$RUNNER_TEMP/b1.txt") | incremental $(grep OBIMCORE "$RUNNER_TEMP/b2.txt")" >> "$GITHUB_STEP_SUMMARY"
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
-          export OBIM_S04_OBRIGATORIO=1  # pulo vira falha (T04c entregou versao()["registro_ifc4"])
+          export OBIM_CI=1  # liga todas as chaves de obrigatório (pulo vira falha; tests/conftest.py) (T04c entregou versao()["registro_ifc4"])
           QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_ponte.py
       - name: Viewport C++ (S04-T06/T07; bloqueia o merge)
         shell: bash -el {0}
@@ -143,7 +143,7 @@ jobs:
         run: |
           # O oráculo abre a tela virtual sozinho em subprocesso (xvfb-run no Linux; no Windows, WARP). Nada na tela real.
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
-          OBIM_S04_OBRIGATORIO=1 OBIM_S04_VIEWPORT_OBRIGATORIO=1 OBIM_S04_T07B_OBRIGATORIO=1 OBIM_S04_T08_OBRIGATORIO=1 OBIM_S04_T09_OBRIGATORIO=1 OBIM_S04_T10_OBRIGATORIO=1 OBIM_S04_T10B_OBRIGATORIO=1 OBIM_S04_T10C_OBRIGATORIO=1 OBIM_S04_T11_OBRIGATORIO=1 OBIM_S04_T11C_OBRIGATORIO=1 OBIM_S04_T11B_OBRIGATORIO=1 OBIM_S04_T12_OBRIGATORIO=1 OBIM_S04_T16_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_viewport.py tests/test_s04_viewport_b.py tests/test_s04_cena.py tests/test_s04_selecao.py tests/test_s04_selecao_c.py tests/test_s04_profundidade.py tests/test_s04_fluxo_a.py tests/test_s04_metas.py tests/test_s04_abertura.py
+          OBIM_CI=1 pytest -q -rsP tests/test_s04_viewport.py tests/test_s04_viewport_b.py tests/test_s04_cena.py tests/test_s04_selecao.py tests/test_s04_selecao_c.py tests/test_s04_profundidade.py tests/test_s04_fluxo_a.py tests/test_s04_metas.py tests/test_s04_abertura.py
       - name: Fluxo B, paredes em C++ (S04-T13; bloqueia o merge)
         shell: bash -el {0}
         timeout-minutes: 20
@@ -151,8 +151,7 @@ jobs:
           # Sem janela: compara o IFC da biblioteca C++ com o do fluxo A (saída igual).
           bash prototypes/s04/fluxo_b/build.sh out/s04
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
-          export OBIM_S04_T14A_OBRIGATORIO=1
-          OBIM_S04_T13_OBRIGATORIO=1 OBIM_S04_T11C_OBRIGATORIO=1 OBIM_S04_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_fluxo_b_paredes.py
+          OBIM_CI=1 pytest -q -rsP tests/test_s04_fluxo_b_paredes.py
       - name: Sonda da thread de desenho (S04-T05; informativo, não bloqueia)
         shell: bash -el {0}
         continue-on-error: true
@@ -300,7 +299,7 @@ jobs:
           bash prototypes/s04/obimcore/build.sh out/s04 | tee "$RUNNER_TEMP/b2.txt"
           echo "obimcore ${RUNNER_OS}: limpo $(grep OBIMCORE "$RUNNER_TEMP/b1.txt") | incremental $(grep OBIMCORE "$RUNNER_TEMP/b2.txt")" >> "$GITHUB_STEP_SUMMARY"
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
-          export OBIM_S04_OBRIGATORIO=1  # pulo vira falha (T04c entregou versao()["registro_ifc4"])
+          export OBIM_CI=1  # liga todas as chaves de obrigatório (pulo vira falha; tests/conftest.py) (T04c entregou versao()["registro_ifc4"])
           QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_ponte.py
       - name: Viewport C++ (parte A; S04-T06/T07; bloqueia o merge)
         shell: bash -el {0}
@@ -309,7 +308,7 @@ jobs:
           # O oráculo abre a tela virtual sozinho em subprocesso (xvfb-run no Linux; no Windows, WARP). Nada na tela real.
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_S04_TELA_VIRTUAL=1 QSG_RHI_BACKEND=d3d11 QSG_RHI_PREFER_SOFTWARE_RENDERER=1  # WARP, como no passo do cubo
-          OBIM_S04_OBRIGATORIO=1 OBIM_S04_VIEWPORT_OBRIGATORIO=1 OBIM_S04_T07B_OBRIGATORIO=1 OBIM_S04_T08_OBRIGATORIO=1 OBIM_S04_T09_OBRIGATORIO=1 OBIM_S04_T10_OBRIGATORIO=1 OBIM_S04_T10B_OBRIGATORIO=1 OBIM_S04_T10C_OBRIGATORIO=1 OBIM_S04_T11_OBRIGATORIO=1 OBIM_S04_T11C_OBRIGATORIO=1 OBIM_S04_T11B_OBRIGATORIO=1 OBIM_S04_T12_OBRIGATORIO=1 OBIM_S04_T16_OBRIGATORIO=1 pytest -q -rsP --durations=10 tests/test_s04_fluxo_a.py tests/test_s04_profundidade.py tests/test_s04_viewport_b.py
+          OBIM_CI=1 pytest -q -rsP --durations=10 tests/test_s04_fluxo_a.py tests/test_s04_profundidade.py tests/test_s04_viewport_b.py
       - name: Pacote do que o job gerou
         if: always()
         shell: bash
@@ -347,7 +346,7 @@ jobs:
           # O oráculo abre a tela virtual sozinho em subprocesso (xvfb-run no Linux; no Windows, WARP). Nada na tela real.
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_S04_TELA_VIRTUAL=1 QSG_RHI_BACKEND=d3d11 QSG_RHI_PREFER_SOFTWARE_RENDERER=1  # WARP, como no passo do cubo
-          OBIM_S04_OBRIGATORIO=1 OBIM_S04_VIEWPORT_OBRIGATORIO=1 OBIM_S04_T07B_OBRIGATORIO=1 OBIM_S04_T08_OBRIGATORIO=1 OBIM_S04_T09_OBRIGATORIO=1 OBIM_S04_T10_OBRIGATORIO=1 OBIM_S04_T10B_OBRIGATORIO=1 OBIM_S04_T10C_OBRIGATORIO=1 OBIM_S04_T11_OBRIGATORIO=1 OBIM_S04_T11C_OBRIGATORIO=1 OBIM_S04_T11B_OBRIGATORIO=1 OBIM_S04_T12_OBRIGATORIO=1 OBIM_S04_T16_OBRIGATORIO=1 pytest -q -rsP --durations=10 tests/test_s04_viewport.py tests/test_s04_cena.py tests/test_s04_selecao.py tests/test_s04_selecao_c.py tests/test_s04_metas.py tests/test_s04_abertura.py
+          OBIM_CI=1 pytest -q -rsP --durations=10 tests/test_s04_viewport.py tests/test_s04_cena.py tests/test_s04_selecao.py tests/test_s04_selecao_c.py tests/test_s04_metas.py tests/test_s04_abertura.py
       - name: Pacote do que o job gerou
         if: always()
         shell: bash
@@ -385,8 +384,7 @@ jobs:
           # Sem janela: compara o IFC da biblioteca C++ com o do fluxo A (saída igual).
           bash prototypes/s04/fluxo_b/build.sh out/s04
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
-          export OBIM_S04_T14A_OBRIGATORIO=1
-          OBIM_S04_T13_OBRIGATORIO=1 OBIM_S04_T11C_OBRIGATORIO=1 OBIM_S04_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_fluxo_b_paredes.py
+          OBIM_CI=1 pytest -q -rsP tests/test_s04_fluxo_b_paredes.py
       - name: Pacote do que o job gerou
         if: always()
         shell: bash

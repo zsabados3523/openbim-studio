@@ -258,7 +258,7 @@ class CarregadorMalhas:
                "lotes": 0, "sem": [], "t": {"abrir_s": 0.0, "listar_s": 0.0, "geometria_s": 0.0}, "msgs": [],
                "pico_filho": 0.0, "foto": None, "resolvidos": set(), "simp": [], "desl": None, "acusadas": 0, "espera": 0.0}
         try:
-            est["foto"] = foto_arquivo.tirar(self.caminho)  # antes de qualquer filho; cada filho confere a sua cópia
+            est["foto"] = foto_arquivo.tirar(self.caminho, com_soma=self.manter_arquivo)  # antes de qualquer filho; a soma (lê o arquivo todo) só vale com manter_arquivo
             self._ler(est)
             est["estado"] = "concluido"
         except _Cancelado:

@@ -10,6 +10,7 @@ import os
 import sys
 import threading
 import time
+import types
 from functools import lru_cache
 from pathlib import Path
 
@@ -368,6 +369,31 @@ def test_arquivo_trocado_durante_a_carga_para_com_mensagem_clara(tmp_path, monke
     lotes, r, car = _carregar(c)
     assert lotes == [] and r.estado == "erro" and "mudou durante a carga" in r.erro
     assert car.aguardar(timeout=5.0) and excecoes_em_thread == []
+
+
+def test_manter_arquivo_recusa_arquivo_com_conteudo_trocado(tmp_path, monkeypatch):
+    """Mesmo tamanho e data, conteúdo diferente: a carga conclui, mas o arquivo NÃO é mantido aberto e a mensagem diz por quê."""
+    from viewport_qrhi import carregador as cr
+    c = _gerar_cor(tmp_path / "cor.ifc")
+    real = cr.foto_arquivo
+    boa = real.tirar(c)
+    assert boa["soma"]
+    falsa = types.SimpleNamespace(tirar=lambda caminho, com_soma=True: {**boa, "soma": "0" * 32}, mudou=real.mudou)
+    monkeypatch.setattr(cr, "foto_arquivo", falsa)  # só o carregador vê a foto com a soma errada; mudou() relê a soma de verdade
+    lotes, r, car = _carregar(c, manter_arquivo=True)
+    assert r.estado == "concluido" and lotes
+    assert any("não foi possível manter o arquivo aberto: o arquivo mudou durante a carga (o conteúdo mudou)" in m for m in r.mensagens)
+    assert car.arquivo is None
+
+
+def test_soma_so_com_manter_arquivo(tmp_path, monkeypatch):
+    """Sem manter_arquivo a carga não lê o arquivo inteiro só para a soma (não dá para cancelar essa leitura)."""
+    from viewport_qrhi import carregador as cr
+    pedidos = []
+    original = cr.foto_arquivo.tirar
+    monkeypatch.setattr(cr.foto_arquivo, "tirar", lambda caminho, com_soma=True: pedidos.append(com_soma) or original(caminho, com_soma))
+    _carregar(_gerar_cor(tmp_path / "cor.ifc"))
+    assert pedidos == [False]
 
 
 def test_o8_produto_defeituoso(tmp_path):

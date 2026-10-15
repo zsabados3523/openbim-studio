@@ -21,9 +21,9 @@ import time
 import numpy as np
 
 try:
-    from .carregador import DTYPE_VERTICE, MOTIVO_SEM_GEOMETRIA, _montar_lote, _paleta, _produto_para_numpy
+    from .carregador import DTYPE_VERTICE, MOTIVO_SEM_GEOMETRIA, montar_lote, paleta_da_peca, produto_para_numpy
 except ImportError:  # pragma: no cover  (módulo importado fora do pacote)
-    from carregador import DTYPE_VERTICE, MOTIVO_SEM_GEOMETRIA, _montar_lote, _paleta, _produto_para_numpy
+    from carregador import DTYPE_VERTICE, MOTIVO_SEM_GEOMETRIA, montar_lote, paleta_da_peca, produto_para_numpy
 
 
 def pico_memoria_mb(ident=None) -> float:
@@ -176,7 +176,7 @@ def _converter(enviar, params):
                 mx = np.max([p[2].max(axis=0) for p in grupo], axis=0)
                 estado["desl"] = np.rint((mn + mx) / 2.0).astype(np.float64)
                 estado["desl"].flags.writeable = False
-            enviar("lote", _montar_lote(estado["indice"], grupo, estado["desl"], feitos, total))
+            enviar("lote", montar_lote(estado["indice"], grupo, estado["desl"], feitos, total))
             estado["indice"] += 1
 
     feitos = 0
@@ -247,7 +247,7 @@ def _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar, entrega
                 return [], sem
             while True:
                 s = it.get()
-                r = _produto_para_numpy(s.geometry, _paleta(s.geometry))
+                r = produto_para_numpy(s.geometry, paleta_da_peca(s.geometry))
                 if r is not None and s.id in porid:
                     achados[s.id] = None if entregar else r
                 guid = porid[s.id].GlobalId if s.id in porid else None

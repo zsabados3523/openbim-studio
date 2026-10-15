@@ -13,7 +13,7 @@
 #include <vector>
 
 namespace obim {
-constexpr int BYTES_VERTICE = 28;  // pos f4x3, normal f4x3, cor u1x4 (DTYPE_VERTICE da S03)
+constexpr int BYTES_VERTICE = 28;  // pos f4x3, normal f4x3, cor u1x4 (DTYPE_VERTICE em prototypes/formato_malha.py; tests/test_formato_malha.py confere)
 
 struct Objeto {  // uma linha de DTYPE_OBJETO do carregador.py
   int32_t id_step; std::string guid; uint32_t pi, ni, pv, nv; float cmin[3], cmax[3];  // pi/ni: índices; pv/nv: vértices (deslocamentos)

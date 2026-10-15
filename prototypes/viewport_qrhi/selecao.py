@@ -4,6 +4,9 @@
 Uma `Malha` é uma lista de objetos (id, vértices, triângulos). O `pick` lança o raio, testa a caixa
 de cada objeto (vetorizado em numpy), ordena pela entrada do raio e só testa triângulos dos objetos
 cuja caixa pode ainda vencer o melhor acerto (parada antecipada).
+
+CONGELADO (F0-RG-04): este arquivo é do caminho da S03 (viewport em Python). O caminho do produto tem a sua própria versão em C++
+(`prototypes/s04/obimcore/nucleo/selecao.*`). Só corrigir defeito aqui; recurso novo vai para o C++ (ADR-004, decidido pelo PO em 2026-10-15).
 """
 from __future__ import annotations
 

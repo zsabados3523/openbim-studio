@@ -56,3 +56,11 @@ Os dois PRs mexem no topo de `carregador.py` (123 troca os dtypes pelo `import` 
 ## Para o implementador
 
 Arquivos permitidos. PR 123: `tests/test_formato_malha.py`, `prototypes/s04/obimcore/nucleo/cena.cpp` (só a linha das constantes e as linhas 69-71 para usar os nomes), `prototypes/s04/obimcore/nucleo/cena.h` (só o comentário da linha 18). PR 125: `prototypes/viewport_qrhi/carregador.py` (só a linha do `tirar` em `_rodar`), `tests/test_viewport_carregador.py` (só testes novos; não mudar os oráculos existentes). Depois volta para nova revisão Opus (T3).
+
+---
+
+## Segunda rodada (2026-10-15): APROVADO
+
+- PR 123 em `20d83fa`: **APROVADO.** Itens 1 a 4 feitos. Os seis testes de `tests/test_formato_malha.py` passam aqui. Mutações que antes escapavam e agora falham: troca de `normal` e `cor` no Python (2 testes caem), troca de `id_step` e `guid` no Python (2), `motor.h` normal 12→16 e cor 24→20 (1 cada), `O_GUID` 4→8 e `N_GUID` 22→20 no `cena.cpp` (1 cada), `guid` S22→S24 e `cor` u1→u2 no texto da ponte (1 cada). Não sobrou número solto do formato em `cena.cpp`.
+- PR 125 em `ed6429b`: **APROVADO.** Item 5 feito (`com_soma=self.manter_arquivo`). Item 6 feito: o teste novo troca só a soma vista pelo carregador; o filho (aberto por "spawn") vê tamanho e data iguais e passa, e a conferência final relê a soma de verdade. Apagar o bloco `trocou/raise` deixa o arquivo aberto e o teste cai; voltar a soma para sempre derruba `test_soma_so_com_manter_arquivo`. Esses dois testes precisam de IfcOpenShell e foram avaliados lendo o caminho; o CI os roda.
+- Mesclagem: 123 primeiro (mesclagem automática ligada). Depois o autor traz o `main` para o ramo do 125; o revisor confere que a resolução do choque só junta os dois `import`s antes de ligar a mesclagem automática do 125.

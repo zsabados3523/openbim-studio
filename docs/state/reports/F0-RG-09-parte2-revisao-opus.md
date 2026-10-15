@@ -32,4 +32,4 @@ Nenhum ponto fica mais frouxo que a decisão do Rafael (mediana de 7 contra 100 
 
 4. Tirar a conferência de 100 ms não quebra o teste da régua, porque a de 50 ms já cobre. Está certo manter a linha (é a regra do Rafael escrita no código).
 5. Tirar a razão lote/parado também não quebra o teste da régua. Isso já era assim antes deste PR; um caso com mediana de 45 ms na fase C e 10 ms na A cobriria.
-6. O caso com rodadas extras de aquecimento deixa o teste uns 20 s mais longo no CI; o limite de 900 s do caso sobra.
+6. O caso com rodadas extras de aquecimento deixa o teste uns 10 s mais longo no CI; o limite de 900 s do caso sobra.

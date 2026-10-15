@@ -3,10 +3,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 # Painel do projeto OpenBIM Studio
 
-Para o PO. Uma página para saber **onde estamos, o que está decidido, o que entra onde e o que falta decidir**. Atualizado em 2026-10-13 (plano `v2/02` na Revisão 3, com as 14 mudanças de escopo que você aprovou). O líder atualiza no fim de cada sessão. Detalhes: `docs/state/BOARD.md` (quadro), `docs/state/PO.md` (decisões), `v2/02_plano_mestre_v2.md` (plano).
+Para o PO. Uma página para saber **onde estamos, o que está decidido, o que entra onde e o que falta decidir**. Atualizado em 2026-10-15 (revisão geral da F0 em andamento; plano `v2/02` na Revisão 3). O líder atualiza no fim de cada sessão. Detalhes: `docs/state/BOARD.md` (quadro), `docs/state/PO.md` (decisões), `v2/02_plano_mestre_v2.md` (plano).
 
 ## 1. Em que fase estamos
-**Fase 0 (provas técnicas), perto do meio.** Das 10 fatias, 3 estão concluídas (S01, S02, S03), a S04 está na reta final do trabalho, e a S09 (interface com você) tem a entrevista feita e espera os desenhos. Ainda não existe programa utilizável.
+**Fase 0 (provas técnicas), perto do meio.** Das 10 fatias, 3 estão concluídas e aceitas por você (S01, S02, S03). A S04 (ponte entre Python e C++) está **pausada** desde 14/10, por decisão sua, até a revisão geral e o ADR-004 (rascunho, aguarda você). A S09 (interface com você) tem a entrevista feita e espera o seu aceite do resumo. Ainda não existe programa utilizável.
 
 ## 2. Plano principal (as 7 fases)
 **Atenção aos prazos:** a tabela abaixo ainda mostra a faixa antiga. O escopo cresceu um pouco com as decisões de 13/10, mas os prazos **não foram recalculados**: serão refeitos depois da medição da Fase 0 (portão S10), com a velocidade real. Se a faixa subir mais de 30%, cortamos escopo primeiro; os candidatos são fundações, importar padrões e a biblioteca de itens de detalhe.
@@ -29,28 +29,28 @@ Portões (você decide se passa): F0 (go ou não go da arquitetura), F1 (roteiro
 | S01 | Repositório, licenças, pesquisa | **Feita** |
 | S02 | Testes automáticos Windows + Linux e programa esqueleto | **Feita** (você aceitou) |
 | S03 | Protótipo de visualização 3D | **Feita** (você aprovou o portão) |
-| **S04** | **Ponte entre Python e C++ (decide a arquitetura)** | **Em andamento** (ver abaixo) |
+| **S04** | **Ponte entre Python e C++ (decide a arquitetura)** | **Pausada** (ver abaixo) |
 | S05 | Desfazer, refazer e gravar o par `.ifc` + `.obim` | Não iniciada (depende da S04) |
 | S06 | Planta e corte automáticos (HLR) | Não iniciada |
 | S07 | Tipo paramétrico por script | Não iniciada |
 | S08 | Corpus de modelos de teste | Contínua |
-| **S09** | **Interface com você (entrevista e desenhos de tela)** | **Entrevista feita; falta o seu aceite e os desenhos** |
+| **S09** | **Interface com você (entrevista e desenhos de tela)** | **Entrevista feita; falta o seu aceite do resumo e os desenhos** |
 | S10 | Calibração e portão da F0 | Não iniciada |
 
-### Dentro da S04 (19 pequenas tarefas)
+### Dentro da S04 (20 pequenas tarefas; pausada)
 | Tarefa | O que é | Situação |
 |---|---|---|
-| T01 a T04 | Ambiente de compilação e a ponte básica | Feitas |
+| T01 a T04c | Ambiente de compilação e a ponte básica | Feitas |
 | T05 a T08 | Janela 3D em C++ dentro do Python, desenho e captura | Feitas |
-| T09 | Câmera e troca de peças | Feita |
-| T10, T10c | Clique com precisão de triângulo e escala de tela | Feitas |
-| T11, T11b | Fluxo A: comandos em Python (criar, mover, desfazer) | Feitas |
-| T13 | Fluxo B: paredes escritas em C++ | Em teste e revisão |
-| T16 | Abertura de arquivos grandes (peças lentas) | Em correção (revisão reprovou uma vez) |
-| T12 | Medições oficiais e comparação A × B | Próxima |
-| T14, T15 | Fluxo B com janela Qt; threads | Depois |
-| T17 | Módulo dentro do instalador | Pendente |
+| T09, T10, T10c | Câmera, clique com precisão de triângulo e escala de tela | Feitas |
+| T11, T11b, T11c | Fluxo A: comandos em Python (criar, mover, desfazer) | Feitas |
+| T12 | Medições oficiais e comparação A × B (código das provas) | Feita (as medições oficiais na tela real ainda não rodaram) |
+| T13, T14a, T14b | Fluxo B: paredes em C++ e núcleo sem janela | Feitas |
+| T16, T16b | Abertura de arquivos grandes (peças lentas) | Feitas |
+| T14c, T15, T04b | Fluxo B com janela Qt; threads; registro de mensagens | Pausadas |
+| T17 | Módulo dentro do instalador | Não iniciada |
 | T18, T19 | Relatório da fatia e **decisões de arquitetura (ADR-001 e ADR-004), com você** | Final |
+| T20 | Memória do viewport abaixo de 6,0 GB | Pausada (você pediu para esperar) |
 
 ## 4. O que entra onde (ferramentas)
 **F1** (ver): navegar em 3D, **voar (botão direito do mouse mais W, A, S, D)**, atalhos configuráveis, cubo de vistas, enquadrar, selecionar, filtro por classe, navegador do projeto e árvore, propriedades, ocultar/isolar, transparência, cor por propriedade, **"Por que não vejo isto?" (versão mínima)**, caixa e plano de corte, medir, salvar sem perdas, instalador. Antes da F1: **testes de comportamento básico de janela e navegação** (cartão F1-PRE-T01).
@@ -70,7 +70,7 @@ Portões (você decide se passa): F0 (go ou não go da arquitetura), F1 (roteiro
 - **Arquivos:** IFC limpo + arquivo lateral `.obim` (vistas, pranchas, cotas); pacote `.obimpack` para enviar.
 - **Interface:** híbrida (navegador e propriedades à Revit; caixa de ferramentas e favoritos à ArchiCAD); vistas independentes como no Revit; abas de vistas; navegador e propriedades em abas no mesmo painel; atalhos de duas letras configuráveis (TR, AL, MM, MI, RR, CC, TG, WA).
 - **Escopo (13/10), já aplicado ao plano `v2/02` (Revisão 3):** detalhes 2D e nuvem de revisão entram na 1.0; texto simples na F3; importar padrões com seleção na F3; referências quebradas mínimas na F3; Piso unificado, forro e rodapé na F2; fundações candidatas da F4 (só o elemento); telhado e escada na F4; voar no 3D e "Por que não vejo isto?" na F1; navegador organizável em pastas; atalhos de duas letras (uma letra só como opção em Preferências); tags por atributo; folha por modelo de folha; análises fora do núcleo. Prazos **não recalculados** até a medição da F0.
-- **Processo:** testes escritos por agente diferente do que escreve o código; revisão do Opus para partes críticas; tudo registrado em `docs/state/reports/`.
+- **Processo:** testes escritos por agente diferente do que escreve o código; revisão do Opus para partes críticas; tudo registrado em `docs/state/` (relatórios, lotes Opus e LOG).
 - **Transparência:** texto no README sobre quem faz e como; revisão externa será convidada quando você decidir.
 
 ## 6. O que ainda precisa decidir (com recomendação)
@@ -79,8 +79,8 @@ Portões (você decide se passa): F0 (go ou não go da arquitetura), F1 (roteiro
 | 1 | ~~Aprovar a atualização do plano (`v2/02`) com as 14 mudanças de escopo~~ | **Resolvido (13/10)** | Aprovado; plano na Revisão 3. **Prazos não recalculados**: refazer a faixa de 21 a 42 meses depois da medição da F0 (S10) |
 | 2 | **Aceite da entrevista** (resumo, respostas, híbrido): você disse "de acordo" | Feito | Wireframes podem começar |
 | 3 | **Wireframes** (desenhos de tela): quando você mandar as imagens da pasta `design/` | Quando puder | Mandar as imagens que já fez; o líder cruza com o catálogo |
-| 4 | **ADR-001** (híbrido Python + C++ ou C++ puro) e **ADR-004** (threads) | No fim da S04 (T19) | Decidir com os números das medições |
-| 5 | **Execução na tela real do Linux** (medida oficial de quadros) | Fim da S04 | Autorizar uma execução |
+| 4 | **ADR-004** (processos, threads e trava do modelo; rascunho pronto no PR 101) e depois **ADR-001** (híbrido ou C++ puro) | ADR-004 já; ADR-001 depois de medir (F0-RG-02) | Ler o rascunho e escolher; ADR-001 só com os números das medições |
+| 5 | **Execução na tela real do Linux** (medida oficial de quadros) | Quando a S04 for retomada | Autorizar uma execução |
 | 6 | **Meta do portão F0** (se a meta de desempenho não for atingida: opções) | S10 | Decidir só se acontecer |
 | 7 | **Quando e para quem enviar o convite de revisão externa** | Quando quiser | Depois da S04 fechada |
 | 8 | ~~Navegador do projeto: pastas livres ou categorias fixas~~ | **Resolvido (13/10)** | Pastas livres + agrupamentos prontos (F1-S03 e F2-S10) |

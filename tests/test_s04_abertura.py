@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Oráculo da S04-T16 (abertura: orçamento de peças lentas, modo isolado mais barato) e da S03-T08-G. Sem tela, sem Qt.
-Especificação: docs/state/reports/LOTE_OPUS_9.md (T16), LOTE_OPUS_8.md §2.3 itens 3 e 4, LOTE_OPUS_7.md §1.4 (opção ii), LOTE_OPUS_20.md (T16b: ordem do iterador, orçamento no laço de confirmações, cópias fora da contagem). Casos P13/P14/P18
+Especificação: docs/state/arquivo/lotes-1-a-28/LOTE_OPUS_9/resultado.md (T16), arquivo/lotes-1-a-28/LOTE_OPUS_8/resultado.md §2.3 itens 3 e 4, arquivo/lotes-1-a-28/LOTE_OPUS_7/resultado.md §1.4 (opção ii), arquivo/lotes-1-a-28/LOTE_OPUS_20/resultado.md (T16b: ordem do iterador, orçamento no laço de confirmações, cópias fora da contagem). Casos P13/P14/P18
 ficam em test_viewport_processo.py (rodar junto: devem continuar verdes); aqui há também as condições do P14 com o modo isolado novo.
 GUARDA: pula enquanto `CarregadorMalhas.__init__` não aceitar `max_pecas_condenadas` e `max_espera_s`; FALHA com OBIM_S04_T16_OBRIGATORIO=1.
 CONTRATO PARA O IMPLEMENTADOR (nomes exatos; o oráculo não depende de mais nada):

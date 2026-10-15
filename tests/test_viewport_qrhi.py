@@ -36,7 +36,7 @@ def _desenhar(app, api=None):
 
 def test_cubo_desenha_quadro_nao_uniforme(app, tmp_path):
     w, quadros = _desenhar(app)
-    exigir = os.environ.get("OBIM_EXIGIR_DESENHO") == "1"  # passo informativo do CI (T25): sem desenho = falha, não pulo
+    exigir = "1" in (os.environ.get("OBIM_EXIGIR_DESENHO"), os.environ.get("OBIM_TELA_OBRIGATORIA"))  # passo informativo do CI (T25): sem desenho = falha, não pulo
     if w.rhi() is None or not quadros:
         w.close()
         if exigir:

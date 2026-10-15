@@ -9,6 +9,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
+from formato_malha import BYTES_VERTICE
 from PySide6.QtCore import QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import (
     QColor,
@@ -39,7 +40,7 @@ except ImportError:  # pragma: no cover
 
 SHADERS = Path(__file__).resolve().parent / "shaders"
 FLOATS_POR_VERTICE = 6  # x, y, z, r, g, b
-BYTES_VERTICE_MALHA = 28  # pos 3xf32, normal 3xf32, cor 4xu8 (LoteMalha)
+BYTES_VERTICE_MALHA = BYTES_VERTICE  # pos 3xf32, normal 3xf32, cor 4xu8 (formato_malha.py)
 
 
 def cubo_padrao() -> tuple[np.ndarray, np.ndarray]:

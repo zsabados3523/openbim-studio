@@ -12,6 +12,7 @@ from gerar_modelo_grande import gerar  # noqa: E402
 from PySide6.QtCore import QCoreApplication  # noqa: E402
 from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget  # noqa: E402
 import pytest  # noqa: E402
+from obrigatorio import pular_sem_tela  # noqa: E402
 
 from viewport_qrhi.adaptador import AdaptadorCarga  # noqa: E402
 from viewport_qrhi.cubo_rhi import CuboViewport  # noqa: E402
@@ -51,7 +52,7 @@ def test_adaptador_m600(tmp_path):
     assert app is not None
 
 
-# ---------- P17 (cartão T08-0b, LOTE_OPUS_7.md §1.6 e §4 item 5): troca de janela com a liberação ligada ----------
+# ---------- P17 (cartão T08-0b, arquivo/lotes-1-a-28/LOTE_OPUS_7/resultado.md §1.6 e §4 item 5): troca de janela com a liberação ligada ----------
 # Esperado da T08-E: ao perder lotes, o viewport emite o sinal `contexto_perdido` (sem argumentos) e zera a caixa da cena;
 # o `AdaptadorCarga` reabre o arquivo sozinho (mesmo caminho e opções). (Antes da T08-E a cena ficava vazia em silêncio.)
 
@@ -80,7 +81,7 @@ def _trocar_de_janela(tmp_path):
     _esperar(app, lambda: quadros, 5.0)
     if w.rhi() is None or not quadros:
         a.close()
-        pytest.skip("P17 precisa de tela virtual com contexto gráfico (rode com xvfb e QT_QPA_PLATFORM=xcb)")
+        pular_sem_tela("P17 precisa de tela virtual com contexto gráfico (rode com xvfb e QT_QPA_PLATFORM=xcb)")
     ad = AdaptadorCarga(w)
     ad.terminou.connect(fins.append)
     ad.abrir(caminho)

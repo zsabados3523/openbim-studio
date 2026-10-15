@@ -120,6 +120,10 @@ class Motor {
     return {cap_w_, cap_h_, std::move(cap_)};
   }
   std::string info() { std::lock_guard<std::mutex> l(m_); return info_; }
+  bool software() const { return software_.load(); }  // true: sem placa de vídeo compatível, o desenho está sendo feito por software (F0-RG-13)
+  std::string aviso() const {  // texto pronto para mostrar ao usuário; vazio quando a placa de vídeo é usada
+    return software_.load() ? "Sem placa de vídeo compatível: o desenho está sendo feito por software e fica mais lento." : "";
+  }
 
  private:
   static void bombear() {  // Windows: atende mensagens enviadas (SendMessage) por outras threads, sem retirar nada da fila
@@ -152,11 +156,24 @@ class Motor {
     QWindow* w; QOffscreenSurface* fb; QSurfaceFormat fmt;
     { std::lock_guard<std::mutex> l(m_); w = win_; fb = fb_; fmt = fmt_; }
     if (!w) return false;
-    if (gl_) { QRhiGles2InitParams p; p.fallbackSurface = fb; p.window = w; p.format = fmt; g.rhi.reset(QRhi::create(QRhi::OpenGLES2, &p, fl)); }
+    auto abrir = [&](QRhi::Flags f) {
+      if (gl_) { QRhiGles2InitParams p; p.fallbackSurface = fb; p.window = w; p.format = fmt; g.rhi.reset(QRhi::create(QRhi::OpenGLES2, &p, f)); }
 #ifdef Q_OS_WIN
-    else { QRhiD3D11InitParams p; g.rhi.reset(QRhi::create(QRhi::D3D11, &p, fl)); }
+      else { QRhiD3D11InitParams p; g.rhi.reset(QRhi::create(QRhi::D3D11, &p, f)); }
+#endif
+    };
+    software_ = false;  // sem aviso velho se a criação falhar
+    abrir(fl);
+    bool refeito = false;
+#ifdef Q_OS_WIN
+    if (!g.rhi && !gl_ && !fl.testFlag(QRhi::PreferSoftwareRenderer)) { abrir(fl | QRhi::PreferSoftwareRenderer); refeito = true; }  // sem placa (máquina virtual, área de trabalho remota): WARP; no OpenGL o Qt ignora o pedido
 #endif
     if (!g.rhi) return false;
+    const QRhiDriverInfo di = g.rhi->driverInfo();  // o aviso só vale quando o dispositivo de fato é de software
+    const QString nome = di.deviceName;
+    software_ = refeito || di.deviceType == QRhiDriverInfo::CpuDevice || nome.contains("llvmpipe", Qt::CaseInsensitive) ||
+                nome.contains("softpipe", Qt::CaseInsensitive) || nome.contains("SwiftShader", Qt::CaseInsensitive) ||
+                nome.contains("Microsoft Basic Render", Qt::CaseInsensitive);
     { std::lock_guard<std::mutex> l(m_); info_ = std::string(g.rhi->backendName()) + " | " + g.rhi->driverInfo().deviceName.toStdString(); }
     g.sc.reset(g.rhi->newSwapChain()); g.sc->setWindow(w); g.sc->setFlags(QRhiSwapChain::UsedAsTransferSource);
     g.ds.reset(g.rhi->newRenderBuffer(QRhiRenderBuffer::DepthStencil, QSize(), 1, QRhiRenderBuffer::UsedWithSwapChainOnly));
@@ -325,6 +342,7 @@ class Motor {
     terminou_ = true;  // ÚLTIMA coisa: depois disto a thread da janela pode fazer o join
   }
   bool gl_;
+  std::atomic<bool> software_{false};
   std::mutex m_, mq_, th_m_; std::condition_variable cv_; std::thread th_;
   QWindow* win_ = nullptr; QOffscreenSurface* fb_ = nullptr; QSurfaceFormat fmt_;
   bool rodando_ = false, solto_ = false, cap_pedida_ = false, cap_pronta_ = false;
@@ -419,6 +437,8 @@ class Viewport {  // o Qt é dono do contêiner (depois de posto num layout); es
   }
   void perder_contexto() { m_->perder = true; }  // gancho de teste: simula FrameOpDeviceLost
   std::string info() { return m_->info(); }
+  bool desenho_por_software() { return m_->software(); }  // F0-RG-13: true quando não há placa de vídeo compatível
+  std::string aviso() { return m_->aviso(); }  // texto para mostrar ao usuário; vazio com placa de vídeo
  private:
   std::shared_ptr<Motor> m_; QPointer<QWidget> cont_;
 };

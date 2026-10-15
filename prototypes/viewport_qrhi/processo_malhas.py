@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Processo filho que converte o IFC em malhas (S03-T08-B1; LOTE_OPUS_6.md §2.2 D3). Python puro, sem Qt.
+"""Processo filho que converte o IFC em malhas (S03-T08-B1; arquivo/lotes-1-a-28/LOTE_OPUS_6/resultado.md §2.2 D3). Python puro, sem Qt.
 
 O filho abre o arquivo, lista os produtos, converte com `ifcopenshell.geom.iterator` e manda mensagens
 `(tipo, dados)` por um `Pipe` de mão única: `fase`, `inicio`, `lote`, `feitos`, `atual`, `sem_malha`, `erro`, `fim`.
@@ -21,9 +21,9 @@ import time
 import numpy as np
 
 try:
-    from .carregador import DTYPE_VERTICE, MOTIVO_SEM_GEOMETRIA, _montar_lote, _paleta, _produto_para_numpy
+    from .carregador import DTYPE_VERTICE, MOTIVO_SEM_GEOMETRIA, montar_lote, paleta_da_peca, produto_para_numpy
 except ImportError:  # pragma: no cover  (módulo importado fora do pacote)
-    from carregador import DTYPE_VERTICE, MOTIVO_SEM_GEOMETRIA, _montar_lote, _paleta, _produto_para_numpy
+    from carregador import DTYPE_VERTICE, MOTIVO_SEM_GEOMETRIA, montar_lote, paleta_da_peca, produto_para_numpy
 
 
 def pico_memoria_mb(ident=None) -> float:
@@ -176,7 +176,7 @@ def _converter(enviar, params):
                 mx = np.max([p[2].max(axis=0) for p in grupo], axis=0)
                 estado["desl"] = np.rint((mn + mx) / 2.0).astype(np.float64)
                 estado["desl"].flags.writeable = False
-            enviar("lote", _montar_lote(estado["indice"], grupo, estado["desl"], feitos, total))
+            enviar("lote", montar_lote(estado["indice"], grupo, estado["desl"], feitos, total))
             estado["indice"] += 1
 
     feitos = 0
@@ -247,7 +247,7 @@ def _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar, entrega
                 return [], sem
             while True:
                 s = it.get()
-                r = _produto_para_numpy(s.geometry, _paleta(s.geometry))
+                r = produto_para_numpy(s.geometry, paleta_da_peca(s.geometry))
                 if r is not None and s.id in porid:
                     achados[s.id] = None if entregar else r
                 guid = porid[s.id].GlobalId if s.id in porid else None
@@ -265,6 +265,7 @@ def _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar, entrega
             del it
     except Exception as e:
         if entregar and len(porid) > 1:  # não dá para dizer qual peça deu erro: cai, e o pai confirma uma a uma
+            enviar("nota", f"erro em um bloco de {len(porid)} peças ({type(e).__name__}: {e}); o filho cai para o pai testar uma a uma")
             os._exit(3)
         falhou([i for i in porid if i not in achados], f"o conversor falhou nesta peça: {type(e).__name__}: {e}")
     else:

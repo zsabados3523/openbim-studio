@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from obrigatorio import pular_sem_tela
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "prototypes"))
 
@@ -120,7 +121,7 @@ def test_mouse_muda_o_quadro(app, tmp_path):
     w.show()
     if not _quadro(w) or w.rhi() is None:
         w.close()
-        pytest.skip("sem contexto gráfico: rode com QT_QPA_PLATFORM=xcb e tela real")
+        pular_sem_tela("sem contexto gráfico: rode com QT_QPA_PLATFORM=xcb e tela real")
     antes = w.grab_image()
     assert antes.save(str(tmp_path / "antes.png"))
     _arrastar(w, Qt.LeftButton)

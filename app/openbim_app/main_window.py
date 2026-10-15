@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Janela principal: menus, barra de status, área central reservada e arrastar-e-soltar de .ifc."""
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QAction, QDesktopServices, QKeySequence
 from PySide6.QtWidgets import QFileDialog, QLabel, QMainWindow, QMessageBox
 
+from openbim_app import registro
 from openbim_app.ifc_summary import IfcSummaryError, count_by_class, format_summary
 
 
@@ -49,6 +50,16 @@ class MainWindow(QMainWindow):
         self.action_about = QAction(self.tr("Sobre"), self)
         self.action_about.triggered.connect(self._show_about)
         help_menu.addAction(self.action_about)
+        self.action_logs = QAction(self.tr("Abrir pasta de registros"), self)
+        self.action_logs.triggered.connect(self.open_log_folder)
+        help_menu.addAction(self.action_logs)
+
+    def open_log_folder(self):
+        """Abre a pasta dos registros de erro no gerenciador de arquivos. Devolve a pasta."""
+        pasta = registro.pasta_registros()
+        pasta.mkdir(parents=True, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(pasta)))
+        return pasta
 
     def _choose_and_open(self):
         path, _ = QFileDialog.getOpenFileName(

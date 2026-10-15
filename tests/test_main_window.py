@@ -28,7 +28,7 @@ def test_menus(window):
     menus = {a.text().replace("&", ""): a.menu() for a in window.menuBar().actions()}
     assert set(menus) == {"Arquivo", "Ajuda"}
     assert _titles(menus["Arquivo"]) == ["Abrir IFC…", "Sair"]
-    assert _titles(menus["Ajuda"]) == ["Sobre"]
+    assert _titles(menus["Ajuda"]) == ["Sobre", "Abrir pasta de registros"]  # RG-11: item novo
 
 
 def test_central_placeholder_and_status(window):

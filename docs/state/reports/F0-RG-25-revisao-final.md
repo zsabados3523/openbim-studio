@@ -85,3 +85,13 @@ Recomendação: aceitar a régua e pedir um cartão pequeno que acrescente duas 
 | 105 | Instalador Windows (programa aberto, acento no caminho) | CI e revisão |
 | 108 | Relatório Opus da RG-07 | Só documento |
 | 119, 120 | Organização dos testes; CI mais enxuto | Main verde (PR 111), depois trazer o main |
+
+## Decisão do Rafael (2026-10-15, 08:54)
+
+"Ok, siga com suas recomendações". Feito em seguida:
+- PR 111 mesclado (conserto do main).
+- Item 6: régua aceita com as duas travas a mais, no cartão `cards/F0-RG-26.md`.
+- Item 7: cartão crítico `cards/F0-RG-27.md` para investigar o teste de seleção concorrente.
+- Item 8: linhas da noite gravadas em `LOG.md`.
+- Item 9: T27 e T28 movidos para `cards/F0-S03/`.
+- Itens 10 e 11: cartão `cards/F0-RG-28.md` com o texto do `CLAUDE.md`. O texto exato ainda volta ao Rafael.

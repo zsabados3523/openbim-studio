@@ -22,7 +22,7 @@
 | Cartão | Título | Classe | Status | Nota |
 |---|---|---|---|---|
 | F0-S02-T23 | Antes do primeiro release | T2 | NAO_INICIADA | Bloqueia release público |
-| F0-S03-T27 | Teste da reabertura (P17) no CI | T1 | ABERTA | Sem bloquear |
+| F0-S03-T27 | Teste da reabertura (P17) no CI | T1 | ABERTA | Sem bloquear; cartão em `cards/F0-S03/` |
 | F0-S03-T28 | Medir o viewport num Windows físico | T1 | NAO_INICIADA | Aprovada pelo PO; dono: PO; antes da entrega final |
 | F0-S04-T04b | Registro local de mensagens e fim do mutex | T3 | PAUSADA | D1 |
 | F0-S04-T14c | Fluxo B: executável com janela Qt Widgets | T3 | PAUSADA | D1; ramo pronto, 501 linhas |
@@ -34,6 +34,13 @@
 
 ## Revisão geral da F0 (2026-10-15)
 Cartões F0-RG-01 a RG-25 (relatório `reports/F0-REVISAO-GERAL-2026-10-15.md`, Parte D). Andamento de cada um: `LOG.md` e os PRs no GitHub.
+Revisão final da noite: `reports/F0-RG-25-revisao-final.md`. Cartões novos que saíram dela:
+
+| Cartão | Título | Classe | Status | Nota |
+|---|---|---|---|---|
+| F0-RG-26 | Duas travas a mais na régua do intervalo máximo | T3 | PRONTA | Aprovado pelo PO; revisão Opus de outra sessão |
+| F0-RG-27 | Seleção devolveu objeto já removido (teste concorrente) | T3 | PRONTA | Aprovado pelo PO; fase 1 é diagnóstico |
+| F0-RG-28 | CLAUDE.md: pasta dos relatórios Opus e guarda dos oráculos | TA | AGUARDA_PO | PO aprova o texto exato |
 
 ## Feito (resumo; detalhes no histórico)
 - S01: T01 a T12, R1 a R3. S02: T01 a T22, T24, T25 (PR 98), R1 a R3. S03: T01 a T08 (todas as partes), T25, T26 e emendas, R1 a R3. F0-PLANO-T01.

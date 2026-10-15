@@ -87,7 +87,7 @@ def test_r1a_versao_e_build_iguais_aos_do_python(oc):  # compilação (cabeçalh
 def test_r1b_registro_de_esquemas_unico(oc):  # achado 6: o mesmo registro IFC4 dos dois lados
     import ifcopenshell.ifcopenshell_wrapper as w
     if "registro_ifc4" not in oc.versao():
-        pytest.skip("\n!!! aguarda S04-T04c: versao()['registro_ifc4'] (prova de uma cópia só do IfcOpenShell) !!!\n")
+        pular("\n!!! aguarda S04-T04c: versao()['registro_ifc4'] (prova de uma cópia só do IfcOpenShell) !!!\n")
     assert oc.versao()["registro_ifc4"] == int(w.schema_by_name("IFC4").this)
 
 @pytest.mark.parametrize("esq", ESQ)

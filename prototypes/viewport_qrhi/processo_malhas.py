@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Processo filho que converte o IFC em malhas (S03-T08-B1; LOTE_OPUS_6.md §2.2 D3). Python puro, sem Qt.
+"""Processo filho que converte o IFC em malhas (S03-T08-B1; arquivo/lotes-1-a-28/LOTE_OPUS_6/resultado.md §2.2 D3). Python puro, sem Qt.
 
 O filho abre o arquivo, lista os produtos, converte com `ifcopenshell.geom.iterator` e manda mensagens
 `(tipo, dados)` por um `Pipe` de mão única: `fase`, `inicio`, `lote`, `feitos`, `atual`, `sem_malha`, `erro`, `fim`.
@@ -265,6 +265,7 @@ def _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar, entrega
             del it
     except Exception as e:
         if entregar and len(porid) > 1:  # não dá para dizer qual peça deu erro: cai, e o pai confirma uma a uma
+            enviar("nota", f"erro em um bloco de {len(porid)} peças ({type(e).__name__}: {e}); o filho cai para o pai testar uma a uma")
             os._exit(3)
         falhou([i for i in porid if i not in achados], f"o conversor falhou nesta peça: {type(e).__name__}: {e}")
     else:

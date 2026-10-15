@@ -27,6 +27,7 @@ import ifcopenshell.util.element as E
 import ifcopenshell.util.placement as P
 import pytest
 import s04_fluxo_b_aux as aux
+from obrigatorio import pular as pular_chave
 from s04_fluxo_b_aux import CAMADAS, FIRE, PAR, FluxoAd, FluxoBd, alfabeto_ok, assinatura, igual, roteiro, validar
 
 OBRIGATORIO = os.environ.get("OBIM_S04_T13_OBRIGATORIO") == "1"
@@ -269,7 +270,7 @@ def roteirinho(b):
 
 def test_gravar_com_localidade_pt_br_nao_poe_virgula_decimal(mod, tmp_path):  # armadilha 3 da etapa 3 (T26): o fluxo B não tem o garantir_numerico_c do Python
     nome = next((n for n in ("pt_BR.UTF-8", "pt_BR.utf8", "Portuguese_Brazil.1252", "pt_BR") if _tem(n)), None)
-    nome or pytest.skip("\n!!! SEM LOCALIDADE pt_BR NESTA MÁQUINA: o caso da vírgula decimal NÃO FOI EXECUTADO !!!\n")
+    nome or pular_chave("\n!!! SEM LOCALIDADE pt_BR NESTA MÁQUINA: o caso da vírgula decimal NÃO FOI EXECUTADO !!!\n", "OBIM_LOCALIDADE_OBRIGATORIA")
     b = mod.Paredes()
     roteirinho(b)
     b.gravar(str(tmp_path / "c.ifc"))
@@ -630,7 +631,7 @@ def filho(*args):
 def test_item1_localidade_por_thread_gravacoes_simultaneas_com_virgula_no_processo(mod14, tmp_path, t, n):
     r = filho("localidade", t, n, tmp_path)
     if r["localidade"] is None:
-        pytest.skip("\n!!! SEM LOCALIDADE pt_BR NESTA MÁQUINA: o caso da vírgula decimal NÃO FOI EXECUTADO !!!\n")
+        pular_chave("\n!!! SEM LOCALIDADE pt_BR NESTA MÁQUINA: o caso da vírgula decimal NÃO FOI EXECUTADO !!!\n", "OBIM_LOCALIDADE_OBRIGATORIA")
     s = r["sondas"]
     assert not r["erros"] and r["virgula_no_processo"] is True and s["total"] > 100, r
     assert s["dentro_de_gravacao"] >= 20, f"quase nenhuma sonda caiu DENTRO de uma gravação: a ponte tem de soltar o GIL em comandos e gravar (nb::gil_scoped_release); senão nada roda em paralelo e o caso não prova nada ({s})"

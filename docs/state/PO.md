@@ -172,3 +172,5 @@ O teste do instalador (~10 min por PR) passa a rodar só em push no `main`/tag o
 - **2026-10-15, S03 (Rafael):** "aceito o plano", mas a memória abaixo de 6,0 GB precisa ser tratada (cartão da S04 a definir). O teste no Windows com placa de vídeo (T28) pode esperar até antes da entrega final; o PO não tem Windows instalado na máquina. Sem resposta explícita sobre a E3 (limite 100 ms) e sobre a regra da mediana: seguem como pergunta.
 
 - **2026-10-15, S03 e revisão geral (Rafael):** aceita o limite de 100 ms (E3) e todas as recomendações do líder: aprovar o cartão T28, regra do teste de tempo (aquecer, 7 rodadas, mediana contra 100 ms, 16 ms só aviso na máquina do PO) e aceitar o limite de licenças da S02 (pacote com licença permitida e fora da tabela da S01 passa sem aviso). Quer uma revisão completa depois da implementação; se for feita antes da S10, que seja de **tudo** (código, arquitetura, documentos).
+
+- **2026-10-15, memória (Rafael):** a decisão da memória abaixo de 6,0 GB vira cartão da S04: `F0-S04-T20`.

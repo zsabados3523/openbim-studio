@@ -37,7 +37,7 @@ def guarda(var):  # pula; com OBIM_S04_OBRIGATORIO=1 e a variável da etapa = 1,
 def test_info_diz_qual_desenho_foi_usado(viewport):
     r = _caso("imagem")  # o resultado do caso da imagem (cacheado) traz info()
     if r.get("info") is None:
-        pytest.skip("obimcore.Cena.info() ausente")
+        guarda("OBIM_S04_OBRIGATORIO")("\n!!! obimcore.Cena.info() ausente (R de qual desenho foi usado NÃO FOI EXECUTADO) !!!\n")
     desenho, _, placa = r["info"].partition("|")
     quer = ("d3d11", "direct3d 11") if os.environ.get("RHI", "d3d11" if sys.platform == "win32" else "gl") != "gl" else ("opengl",)
     assert not r["info"].startswith("ERRO") and placa.strip(), f"QRhi sem placa: {r['info']!r}"

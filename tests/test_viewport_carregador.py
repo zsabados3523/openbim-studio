@@ -6,7 +6,6 @@ Sem o carregador (S03-T05 parte A) os testes pulam. Testes lentos (M1M): OBIM_TE
 """
 import gc
 import hashlib
-import importlib.util
 import os
 import sys
 import threading
@@ -27,16 +26,9 @@ sys.path.insert(0, str(RAIZ / "scripts"))
 
 from gerar_modelo_grande import gerar  # noqa: E402
 
-if importlib.util.find_spec("viewport_qrhi.carregador"):
-    from viewport_qrhi.carregador import CarregadorMalhas, LoteMalha, ResumoCarga  # noqa: E402
-else:
-    CarregadorMalhas = LoteMalha = ResumoCarga = None
-
-requer_a = pytest.mark.skipif(
-    CarregadorMalhas is None, reason="aguarda S03-T05 parte A (CarregadorMalhas, LoteMalha, ResumoCarga)"
-)
-TEM_PROCESSO = importlib.util.find_spec("viewport_qrhi.processo_malhas") is not None
-requer_processo = pytest.mark.skipif(not TEM_PROCESSO, reason="aguarda S03-T08-B1 (processo_malhas.py)")
+# Importação direta (RG-03): se o módulo sumir ou for renomeado, a coleta FALHA; antes o teste só pulava.
+from viewport_qrhi.carregador import CarregadorMalhas, LoteMalha, ResumoCarga  # noqa: E402
+import viewport_qrhi.processo_malhas  # noqa: E402,F401
 M1M_CAMINHO = RAIZ / "corpus" / "modelo-grande-1m.ifc"
 
 
@@ -193,7 +185,6 @@ def excecoes_em_thread(monkeypatch):
 
 
 # ---------- O1 a O11 ----------
-@requer_a
 def test_o1_contagem_m600(m600, excecoes_em_thread):
     lotes, r, car = _carregar(m600)
     assert car.aguardar(timeout=5.0) and excecoes_em_thread == [], "exceção não tratada na thread do carregador"
@@ -203,7 +194,6 @@ def test_o1_contagem_m600(m600, excecoes_em_thread):
     assert sum(int(lt.objetos["n_indices"].sum()) for lt in lotes) == 21600
 
 
-@requer_a
 @pytest.mark.parametrize("bloco", [4000, 0])
 def test_o2_contagem_referencia_m1m(bloco):
     caminho = _m1m_ou_pular()
@@ -222,7 +212,6 @@ def _por_produto(lotes):
     return d
 
 
-@requer_a
 @pytest.mark.parametrize("modelo", ["m600", "mab"])
 def test_o3_threads_e_blocos_dao_o_mesmo(modelo, request):
     caminho = request.getfixturevalue(modelo)
@@ -248,7 +237,6 @@ def test_o3_threads_e_blocos_dao_o_mesmo(modelo, request):
             assert np.allclose(outro[k][1], mn, rtol=0, atol=1e-5) and np.allclose(outro[k][2], mx, rtol=0, atol=1e-5)
 
 
-@requer_a
 def test_o4_filtro_e_aberturas_mab(mab):
     lotes, r, car = _carregar(mab)
     f = ifcopenshell.open(str(mab))
@@ -262,7 +250,6 @@ def test_o4_filtro_e_aberturas_mab(mab):
     assert por[grande] == _contar_simples(mab, grande)
 
 
-@requer_a
 @pytest.mark.parametrize("bloco", [4000, 200])  # 200 gera vários lotes: confere também as regras entre lotes
 def test_o5_invariantes_de_cada_lote_m600(m600, bloco):
     lotes, r, _ = _carregar(m600, tamanho_bloco=bloco)
@@ -307,7 +294,6 @@ def test_o5_invariantes_de_cada_lote_m600(m600, bloco):
         assert np.allclose(linhas[i][1], [x0 + 3.0, y0 + 0.15, z0 + 2.8], rtol=0, atol=1e-3)
 
 
-@requer_a
 def test_o6_cor(tmp_path):
     caminho = _gerar_cor(tmp_path / "cor.ifc")
     lotes, r, _ = _carregar(caminho)
@@ -321,7 +307,6 @@ def test_o6_cor(tmp_path):
     assert np.all(c1 == (255, 0, 0, 255))  # vermelho puro: exato
 
 
-@requer_a
 def test_o7_cancelamento_m3000(m3000):
     car = CarregadorMalhas(str(m3000), tamanho_bloco=200)
     car.iniciar()
@@ -345,7 +330,6 @@ def test_o7_cancelamento_m3000(m3000):
     assert novo.estado == "concluido" and novo.triangulos == 36000
 
 
-@requer_a
 @pytest.mark.parametrize("modo", ["inexistente", "texto"])
 def test_o8_arquivo_invalido(tmp_path, modo, excecoes_em_thread):
     caminho = tmp_path / "nada.ifc"
@@ -358,7 +342,6 @@ def test_o8_arquivo_invalido(tmp_path, modo, excecoes_em_thread):
     assert excecoes_em_thread == [], f"...mas com exceção: {excecoes_em_thread}"  # ...sem exceção
 
 
-@requer_a
 def test_o8_produto_defeituoso(tmp_path):
     caminho, id_ruim = _gerar_defeito(tmp_path / "defeito.ifc")
     assert _contar_simples(caminho, id_ruim) == 0, "o iterador simples passou a devolver a parede defeituosa: refazer a receita"
@@ -369,7 +352,6 @@ def test_o8_produto_defeituoso(tmp_path):
     assert r.triangulos == 24 and sum(len(lt.objetos) for lt in lotes) == 2
 
 
-@requer_a
 def test_o9_fila_limitada_m3000(m3000):
     car = CarregadorMalhas(str(m3000), tamanho_bloco=200, fila_max=2)
     car.iniciar()
@@ -394,10 +376,9 @@ def _soma(lotes):
     return h.hexdigest()
 
 
-@requer_a
 def test_o10_vida_dos_dados_m600(m600):
     # emenda T08-0: com o processo separado, o arquivo só é aberto no pai se pedido (manter_arquivo)
-    car = CarregadorMalhas(str(m600), **({"manter_arquivo": True} if TEM_PROCESSO else {}))
+    car = CarregadorMalhas(str(m600), manter_arquivo=True)
     car.iniciar()
     assert car.arquivo is None  # durante a carga
     lotes, r = [], None
@@ -416,7 +397,6 @@ def test_o10_vida_dos_dados_m600(m600):
     assert _soma(lotes) == antes and all(lt.vertices["pos"].size for lt in lotes)
 
 
-@requer_a
 @pytest.mark.parametrize("t", [0.0, 1e-9, 0.01, 0.05])
 def test_o11_obter_com_timeout_sempre_volta(tmp_path, t):
     """P0b-3: com o trabalhador terminado e a fila vazia, obter(timeout=t) volta em < t + 0,1 s (pega o defeito A-1)."""

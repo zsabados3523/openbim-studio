@@ -14,6 +14,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from obrigatorio import pular_sem_tela
 from PySide6.QtCore import QCoreApplication, QElapsedTimer, QEventLoop, Qt, QTimer
 from PySide6.QtWidgets import QApplication
 
@@ -24,14 +25,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "prototypes"))
 
 from test_viewport_carregador import (  # noqa: E402,F401  (modelos, M1M e fixtures compartilhados)
-    CarregadorMalhas, LoteMalha, ResumoCarga, _m1m_ou_pular, m3000, mab, requer_a, TEM_PROCESSO,
+    CarregadorMalhas, LoteMalha, ResumoCarga, _m1m_ou_pular, m3000, mab,
 )
 from viewport_qrhi.cubo_rhi import CuboViewport  # noqa: E402
 
 MAX_MS, P95_MS = 200.0, 33.0
-requer_b = pytest.mark.skipif(
-    not hasattr(CuboViewport, "adicionar_lote"), reason="aguarda S03-T05 parte B (Viewport.adicionar_lote)"
-)
+assert hasattr(CuboViewport, "adicionar_lote"), "CuboViewport sem adicionar_lote (S03-T05 parte B)"
 
 
 @pytest.fixture(scope="module")
@@ -98,7 +97,6 @@ def _conferir(atrasos, resumo, rotulo, capsys, record_property):
     assert p95 <= P95_MS, f"percentil 95 {p95:.1f} ms > {P95_MS} ms"
 
 
-@requer_a
 def test_r1a_janela_responsiva_m3000_sem_viewport(app, m3000, capsys, record_property):
     lista = []
     atrasos, resumo = _medir(m3000, lista.append, tamanho_bloco=4000)
@@ -106,7 +104,6 @@ def test_r1a_janela_responsiva_m3000_sem_viewport(app, m3000, capsys, record_pro
     _conferir(atrasos, resumo, "R1a M3000", capsys, record_property)
 
 
-@requer_a
 def test_r1a_janela_responsiva_m1m_lento(app, capsys, record_property):
     caminho = _m1m_ou_pular()
     lista = []
@@ -126,12 +123,10 @@ def _viewport_visivel(app):
         QCoreApplication.processEvents()
     if w.rhi() is None or not quadros:
         w.close()
-        pytest.skip("R1b precisa de tela (sem contexto gráfico; rode com QT_QPA_PLATFORM=xcb)")
+        pular_sem_tela("R1b precisa de tela (sem contexto gráfico; rode com QT_QPA_PLATFORM=xcb)")
     return w
 
 
-@requer_a
-@requer_b
 @pytest.mark.parametrize("lento", [False, True], ids=["m3000", "m1m_lento"])
 def test_r1b_janela_responsiva_com_viewport(app, m3000, lento, capsys, record_property):
     caminho = _m1m_ou_pular() if lento else m3000
@@ -144,8 +139,6 @@ def test_r1b_janela_responsiva_com_viewport(app, m3000, lento, capsys, record_pr
 
 @pytest.fixture(scope="module")
 def r2_medida(app, mab):
-    if CarregadorMalhas is None:
-        pytest.skip("aguarda S03-T05 parte A (CarregadorMalhas, LoteMalha, ResumoCarga)")
     f = ifcopenshell.open(str(mab))
     s = ifcopenshell.geom.settings()
     s.set("use-world-coords", True)
@@ -172,18 +165,6 @@ def test_r2_carga_termina_certa(r2_medida):
     assert resumo.estado == "concluido" and resumo.produtos_com_malha == 21 and resumo.sem_malha == []
 
 
-@pytest.mark.skipif(TEM_PROCESSO, reason="emenda T08-0: com o processo separado o fenômeno do GIL some (o teste de 200 ms vale)")
-def test_r2_demonstra_o_fenomeno_do_gil(r2_medida, capsys, record_property):
-    """Passa hoje: next() segura o GIL, então a janela para por quase o tempo do elemento lento.
-    Se a S04 resolver o GIL, este teste FALHA e avisa (aí remover o xfail do teste de 200 ms)."""
-    atrasos, _, maior_next = r2_medida
-    _publicar(capsys, record_property, "R2", _r2_texto(atrasos, maior_next))
-    assert atrasos.max() >= 0.5 * maior_next * 1000.0, (
-        f"o fenômeno sumiu (GIL resolvido?): {_r2_texto(atrasos, maior_next)}; revisar o xfail de R2"
-    )
-
-
-@pytest.mark.xfail(not TEM_PROCESSO, strict=False, reason="R1 do lote Opus 4: next() segura o GIL (some com o processo, T08)")
 def test_r2_atraso_maximo_com_elemento_lento(r2_medida):
     atrasos, _, maior_next = r2_medida
     assert atrasos.max() <= MAX_MS, f"atraso {atrasos.max():.1f} ms (next() mais longo {maior_next * 1000:.1f} ms)"

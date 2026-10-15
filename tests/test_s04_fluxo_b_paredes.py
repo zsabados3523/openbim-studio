@@ -451,7 +451,7 @@ def test_t14a_contrato_e_ci_declaram_a_parte_2a():
 
 def test_t14a_ci_liga_a_variavel_no_passo_do_fluxo_b_dos_dois_jobs():  # falha com mensagem clara se o passo 'Fluxo B, paredes em C++' faltar no ci.yml (não é para o oráculo recriá-lo)
     ci = (aux.RAIZ / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-    assert len(re.findall(r"OBIM_S04_T14A_OBRIGATORIO=1[^\n]*\n[^\n]*test_s04_fluxo_b_paredes\.py", ci)) == 2, "OBIM_S04_T14A_OBRIGATORIO=1 tem de estar no passo do fluxo B dos dois jobs (linux e windows)"
+    assert len(re.findall(r"OBIM_CI=1 pytest[^\n]*test_s04_fluxo_b_paredes\.py", ci)) == 2, "OBIM_CI=1 (que liga OBIM_S04_T14A_OBRIGATORIO) tem de estar no passo do fluxo B dos dois jobs (linux e windows)"
 
 def test_t14a_sentinela_o_fluxo_a_cumpre_o_esperado_da_base(base_mm, marcos_a):
     assert conferir(marcos_a, base_mm[1]) == []

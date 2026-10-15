@@ -11,13 +11,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "prototypes"))
 
 import _queda_alvos  # noqa: E402
-from test_viewport_processo import _tempo_carga, mapeadas1, requer_a, requer_limite  # noqa: E402,F401
+from test_viewport_processo import _tempo_carga, mapeadas1  # noqa: E402,F401
 from viewport_qrhi import processo_malhas as pm  # noqa: E402
 from viewport_qrhi.carregador import CarregadorMalhas  # noqa: E402
 
 
-@requer_a
-@requer_limite
 def test_queda_do_filho_grava_o_codigo_de_saida(mapeadas1, monkeypatch, caplog):
     caminho, [(id_l, guid)] = mapeadas1
     monkeypatch.setenv("OBIM_TESTE_MATAR_FILHO", guid)
@@ -96,8 +94,6 @@ def test_filho_manda_a_nota_antes_de_cair_no_bloco_com_erro(monkeypatch):
     assert tipo == "nota" and "estrutura quebrada" in texto and "2 peças" in texto
 
 
-@requer_a
-@requer_limite
 def test_falha_da_caixa_substituta_fica_no_registro_e_a_peca_vai_para_sem_malha(mapeadas1, monkeypatch, caplog):
     caminho, [(id_l, guid)] = mapeadas1
     original = CarregadorMalhas._executar

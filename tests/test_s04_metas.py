@@ -8,7 +8,7 @@ CONTRATO DA FERRAMENTA (`python prototypes/s04/medir_s04.py`; o oráculo troca o
  JSON do --a/--b: {"estrito", "metas": {M2, M2b, M3, M4: {n, mediana_ms, p95_ms, max_ms, limite_ms, ok}, M5: {janelas, maior_intervalo_ms, maior_intervalo_parado_ms, ok}}, "erros": [texto "Mx: ..."],
   "m6": null sem --b ou {"razoes": {M2, M2b, M3, M4}, "folga_minima", "pesa"}, "saida_igual": null sem --b ou {"ok", "diferencas": [texto]}, "aprovado"}.
  Metas (§2.2, §2.3): SEMPRE dos tempos brutos de A (nunca do campo `metas` gravado). Passos: M2 = passo 3; M2b = 4b; M3 = 4a até t_painel_ms; M4 = 5b; M5 = 5b contra o passo 4c (parado); tempo = t_quadro_ms - t0_ms; percentil linear (numpy).
- Régua do CI virtual (sem --estrito): mediana < limite e nenhum valor >= 3 x limite (M2, M2b, M3); M4 < 20 s; M5: toda janela de 1 s com >= 20 quadros, maior intervalo < 100 ms e <= 3 x o do parado. Com --estrito: p95 < limite
+ Régua do CI virtual (sem --estrito): mediana < limite e nenhum valor >= max(3 x limite, 250 ms) (M2, M2b, M3); M4 < 20 s; M5: toda janela de 1 s com >= 20 quadros, maior intervalo < 100 ms e <= 3 x o do parado. Com --estrito: p95 < limite
  (200, 200, 50 ms), M4 < 20 s e maior intervalo < 200 ms. É a mesma régua de s04_fluxo_aux.veredito. `erros` lista cada violação; `ok` de cada meta = sem erro com o nome dela; aprovado = sem erros e (sem --b ou saída igual).
  M6 (informativo, nunca reprova): razoes = mediana de A / mediana de B em M2, M2b, M3 e M4 (um valor). folga_minima = menor entre 200/p95(M2), 200/p95(M2b), 50/p95(M3), 20000/max(M4), 200/maior_intervalo(M5);
  pesa = folga_minima < 2 (decisão do PO: só pesa se alguma meta absoluta ficar com menos de 2x de folga). As 3 rodadas alternadas do §2.2 ficam para a rodada oficial (a ferramenta lê um par A/B por vez).
@@ -107,7 +107,8 @@ def ferramenta(tmp_path_factory):  # o esqueleto levanta NotImplementedError: o 
 # ---------- tabela de casos: (nome, parâmetros de A, passa na régua virtual, passa na estrita, erro esperado) ----------
 CASOS = [("bom", {}, True, True, None), ("m2 mediana alta", {"m2": 250.0}, False, False, "M2"), ("m2 10% dos valores em 210 (virtual passa, p95 reprova)", {"m2": topo(100.0, 210.0)}, True, False, "M2"),
          ("m2 um valor em 650 (teto reprova, p95 passa)", {"m2": topo(100.0, 650.0, 1)}, False, True, "M2"), ("m2b mediana alta", {"m2b": 300.0}, False, False, "M2b"),
-         ("m3 mediana alta", {"m3": 60.0}, False, False, "M3"), ("m3 10% dos valores em 55", {"m3": topo(20.0, 55.0)}, True, False, "M3"), ("m4 lote lento", {"m4": 25000.0}, False, False, "M4"),
+         ("m3 mediana alta", {"m3": 60.0}, False, False, "M3"), ("m3 um valor em 187 (RG-09: pausa isolada abaixo do teto de 250 ms)", {"m3": topo(20.0, 187.0, 1)}, True, True, None),
+         ("m3 um valor em 300 (acima do teto de 250 ms)", {"m3": topo(20.0, 300.0, 1)}, False, True, "M3"), ("m3 10% dos valores em 55", {"m3": topo(20.0, 55.0)}, True, False, "M3"), ("m4 lote lento", {"m4": 25000.0}, False, False, "M4"),
          ("m5 10 quadros por segundo", {"quadros": [[100.0 * i, i] for i in range(1, 31)]}, False, False, "M5"),
          ("m5 parada de 330 ms", {"quadros": [[16.0 * i, i] for i in range(1, 100)] + [[1900.0 + 16.0 * i, 100 + i] for i in range(68)]}, False, False, "M5")]
 IDS = [c[0] for c in CASOS]

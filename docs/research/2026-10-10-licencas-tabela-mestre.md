@@ -16,7 +16,7 @@
 | PySide6 | LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only (PyPI 6.12.0; conda 6.11.2) | b | Sim (opção LGPL-3) | Relink; GPL-2.0-only não vale |
 | nanobind, pybind11 | BSD-3-Clause (3.1.0) | b (cabeçalhos no build) | Sim | Aviso de copyright |
 | QPdfWriter (Qt) | como Qt (cabeçalho lido no qtbase 6.9, não na versão travada) | b | Sim | Idem Qt; reconfirmar |
-| ReportLab | BSD-3-Clause (site cita parser GPL) (5.0.1) | b | Condição | Fora até alguém ler a licença do pacote. **R2 (2026-10-14):** PyPI (3.1.44) e docs.reportlab.com dizem BSD; o parser GPL é o pyRXP, pacote separado. Texto do LICENSE.txt da versão travada continua não lido; veredito **não mudado** (PRECISA_PO) |
+| ReportLab | BSD-3-Clause (site cita parser GPL) (5.0.1) | b | **Sim, com condição** (decisão do PO, 2026-10-15) | PyPI e docs.reportlab.com dizem BSD; o parser GPL é o pyRXP, pacote separado e **não pode entrar**. Reconferir o LICENSE.txt da versão travada quando o pacote entrar no ambiente (F5) |
 | fpdf2 | LGPL-3.0-only (2.8.9) | b | Sim | Relink |
 | CairoSVG (+ cairocffi, cairo) | LGPL-3.0 (PyPI or-later; conda only); cairo LGPL-2.1 OU MPL-1.1 | b | Sim | Relink |
 | ezdxf | MIT | b | Sim | Aviso de copyright |
@@ -40,7 +40,7 @@ O instalador e o AppImage carregam dezenas de pacotes além dos listados (Python
 - Nenhum componente é "Não" sem alternativa: DXF → ezdxf; instalador → NSIS; PDF → QPdfWriter ou fpdf2.
 
 ## Não verificado (consolidado)
-Termos próprios do conda-forge (R2: duas páginas de docs sem termos; receitas em BSD-3 no staged-recipes; segue não verificado) · lista de módulos só comerciais do Qt · ~~licença do Qt Shader Tools~~ (fechada pela R2, ver linha) · texto do LICENSE do ReportLab (R2: BSD confirmado em fontes oficiais, arquivo da versão travada não lido) · versão oficial da LGPL do pythonocc-core · identificador SPDX da exceção do OCCT · versão do NSIS · termos do SINAPI (site da CAIXA inacessível; R2: o robô de leitura é bloqueado pelo site, não contornado).
+Termos próprios do conda-forge (R2: duas páginas de docs sem termos; receitas em BSD-3 no staged-recipes; segue não verificado) · lista de módulos só comerciais do Qt · ~~licença do Qt Shader Tools~~ (fechada pela R2, ver linha) · texto do LICENSE do ReportLab (BSD em fontes oficiais; PO aceitou em 2026-10-15; arquivo da versão travada a reconferir na F5) · versão oficial da LGPL do pythonocc-core · identificador SPDX da exceção do OCCT · versão do NSIS · termos do SINAPI (site da CAIXA inacessível; R2: o robô de leitura é bloqueado pelo site, não contornado).
 
 ## Conferência do lote opus 2 (2026-10-11)
 - Tabela aprovada (12 de 12 defeitos corrigidos). Lista real dos pacotes distribuídos: `licenses/INVENTARIO.md` de cada pacote e `license-inventory.md` no artefato do CI (gerados do ambiente de runtime; nada é escrito à mão).

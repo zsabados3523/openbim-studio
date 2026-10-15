@@ -2,7 +2,7 @@
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 # Revisão da S01 (repositório, licenças e pesquisa)
-Data: 2026-10-14 · Cartões: F0-S01-R1 (seções 1 e 2, abaixo), R2 (seção 3, a escrever) e R3 (seções 4 a 6 e a lista final). Roteiro: `PROPOSTA_REVISAO_F0.md` §3. Status: **R1, R2 e R3 prontas; falta o lote Opus 29 e o parecer do PO**.
+Data: 2026-10-14 · Cartões: F0-S01-R1 (seções 1 e 2, abaixo), R2 (seção 3, a escrever) e R3 (seções 4 a 6 e a lista final). Roteiro: `PROPOSTA_REVISAO_F0.md` §3. Status: **R1, R2 e R3 prontas; PO aceitou o parecer em 2026-10-15; falta o lote Opus 29**.
 
 ## Resumo de 5 linhas para o PO (D6)
 1. A S01 entregou o que o plano pede: repositório público com `main` protegida, licença AGPL v3 conferida, READMEs em dois idiomas e tabela de licenças com 23 linhas e nenhum componente incompatível sem alternativa.
@@ -95,3 +95,9 @@ Contagem lida do registro do job; os "pulam" são testes que precisam de tela ou
 4. R2: manter ReportLab "fora" e SINAPI "não verificado" é a decisão certa? → _
 5. R3: as 3 correções de coerência e a lista de pendências estão corretas? → _
 6. R3: os números de teste (seção 5) batem com o CI? → _
+
+## Respostas do PO (2026-10-15)
+1. Aceita o parecer da IA como aceite da S01.
+2. ReportLab é BSD (PyPI): tabela passou a "Sim, com condição" (sem pyRXP).
+3. SINAPI: uso gratuito, mas automação exige autorização da CAIXA; requisito da F5.
+4. Uso do Opus parado por ora (créditos iniciais), sem percentuais.

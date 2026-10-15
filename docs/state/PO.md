@@ -27,12 +27,18 @@
 | A9 | Confirmar que as exceções de ausência acabaram | Sim |
 | A10 | Passar os números do `/usage` de 13 e 14/10 para `QUOTA.md` | Informar janela e semana, antes e depois |
 | A11 | D5: nomes dos colegas de estágio para testar e momento | Sem prazo; combinar antes da F1 |
-| A12 | D6: ler o resumo de 5 linhas da S01 (aceite da tabela de licenças como aceite seu) e dar o parecer sobre S01-a | Sim. **Resumo pronto** em `reports/F0-S01-revisao.md` (topo); leva cerca de 10 minutos |
+| A12 | ~~D6~~ **Respondida em 2026-10-15:** o PO aceita o parecer da IA como aceite da S01 | — |
 | A13 | Aceite do resumo da entrevista S09 (`docs/research/2026-10-13-entrevista-s09-resumo.md`) | Ler e aceitar antes dos wireframes |
-| A14 | ReportLab: manter "fora" até a F5 e ler o LICENSE da versão travada na hora de usar? (fontes oficiais dizem BSD) | Sim, manter fora por ora |
-| A15 | SINAPI: abrir a página da CAIXA no navegador e colar os termos (opcional, só importa na F5) | Fazer perto da F5 |
+| A14 | ~~ReportLab~~ **Respondida em 2026-10-15:** PO confirma BSD (pypi.org/project/reportlab); veredito passou a "Sim, com condição" (sem pyRXP) | — |
+| A15 | SINAPI: o PO informou (2026-10-15) que o uso gratuito é permitido, mas software que automatiza processos ou buscas precisa de autorização da CAIXA. Confirmar o texto e pedir a autorização formal | Consulta formal à CAIXA como requisito da F5; texto fica em `docs/research/2026-10-10-sinapi-termos.md` |
 
 ## Histórico de respostas
+
+### 2026-10-15: revisão da S01
+1. Aceita o parecer da IA sobre a tabela de licenças (aceite da S01; D6 cumprida).
+2. SINAPI: uso gratuito do banco de dados, mas automação (busca, processos em software) exige autorização da CAIXA. Registrado na ficha; vira requisito da F5.
+3. ReportLab é BSD (PyPI). Aplicado na tabela: "Sim, com condição" (sem pyRXP).
+4. Uso do Opus: o PO informa que o uso está parado por enquanto porque o projeto está gastando os créditos iniciais; **sem percentuais**. Lote 29 segue na fila.
 
 ### Perguntas iniciais P1 a P7 (todas respondidas em 2026-10-10)
 

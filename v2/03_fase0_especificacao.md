@@ -28,6 +28,7 @@
 - **Metas:** build limpo do zero ≤ 60 min no CI (Windows e Linux); build incremental ≤ 10 min; instalador ≤ 600 MB.
 - **Aceite pelo PO:** instala no Windows e no Linux sem terminal e abre um IFC público do corpus (ou seu, se já tiver). macOS: sem aceite manual.
 - **Decisão produzida:** ADR-005 (dependências: conda-forge vs vcpkg vs híbrido).
+- **Pré-requisitos do primeiro lançamento público (cartão S02-T23; não bloqueiam a F0 nem os builds de teste do CI; aprovado pelo PO em 2026-10-15, cartão F0-PLANO-T01):** (1) fixar versão e sha256 da peça "runtime" do appimagetool; (2) oferta de código-fonte por 3 anos e tabela de fontes por pacote; (3) tela "Sobre > Licenças" no programa; (4) trava do ambiente de runtime; (5) barra de progresso no instalador Windows e lista conferida dos pacotes sem texto de licença; (6) parecer jurídico humano sobre as exceções dos runtimes da Microsoft e sobre a combinação LGPL e AGPL.
 
 ### F0-S03. Protótipo de viewport (M)
 - Qt RHI (D3D11 no Windows, Vulkan/OpenGL no Linux; Metal no Mac só se compilar no CI). QRhi é API semi-pública (exige `GuiPrivate`) **[verificado em 2026-10-10]**: isolar atrás de interface própria e fixar versão do Qt; tesselação via IfcOpenShell C++ (iterador de geometria multithread), orbitar/pan/zoom, seleção por clique.

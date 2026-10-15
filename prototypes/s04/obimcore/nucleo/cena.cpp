@@ -8,7 +8,7 @@
 
 namespace obim {
 namespace {
-constexpr size_t BYTES_OBJETO = 66, O_PI = 26, O_NI = 30, O_PV = 34, O_NV = 38, O_MIN = 42, O_MAX = 54;  // DTYPE_OBJETO empacotado (sem alinhamento)
+constexpr size_t BYTES_OBJETO = 66, O_ID = 0, O_GUID = 4, N_GUID = 22, O_PI = 26, O_NI = 30, O_PV = 34, O_NV = 38, O_MIN = 42, O_MAX = 54;  // DTYPE_OBJETO de prototypes/formato_malha.py, empacotado (sem alinhamento); tests/test_formato_malha.py confere
 void caixa_de(Dados& d) {  // caixa dos vértices (pura, sem Python)
   for (size_t k = 0; k < d.v.size() / BYTES_VERTICE; ++k) {
     float f[3]; std::memcpy(f, d.v.data() + k * BYTES_VERTICE, 12);
@@ -66,9 +66,9 @@ std::shared_ptr<Dados> DadosCena::preparar(const LoteBruto& L) {
     for (uint32_t x : d->i) if (x >= V.n) { erro = "indices: índice maior ou igual ao número de vértices"; break; }
     for (size_t k = 0; !erro && k < O.n; ++k) {
       const unsigned char* p = O.p + k * BYTES_OBJETO; Objeto o;
-      std::memcpy(&o.id_step, p, 4); std::memcpy(&o.pi, p + O_PI, 4); std::memcpy(&o.ni, p + O_NI, 4);
+      std::memcpy(&o.id_step, p + O_ID, 4); std::memcpy(&o.pi, p + O_PI, 4); std::memcpy(&o.ni, p + O_NI, 4);
       std::memcpy(&o.pv, p + O_PV, 4); std::memcpy(&o.nv, p + O_NV, 4); std::memcpy(o.cmin, p + O_MIN, 12); std::memcpy(o.cmax, p + O_MAX, 12);
-      o.guid.assign(reinterpret_cast<const char*>(p + 4), strnlen(reinterpret_cast<const char*>(p + 4), 22));
+      o.guid.assign(reinterpret_cast<const char*>(p + O_GUID), strnlen(reinterpret_cast<const char*>(p + O_GUID), N_GUID));
       if (uint64_t(o.pi) + o.ni > I.n || uint64_t(o.pv) + o.nv > V.n) { erro = "objetos: faixa fora do lote"; break; }
       caixa_do_objeto(*d, o);  // pelos triângulos; sem geometria: NaN, nunca [0,0,0,0,0,0]
       d->objs.push_back(std::move(o));

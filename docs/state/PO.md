@@ -6,7 +6,7 @@
 - **Opus:** abrir sessão só com semanal acima de 25% restante e janela de 5 h abaixo de 70% (D9). A exceção de cota de 13/10 **encerrou** em 14/10 09:00Z. Quem abre: o líder, como subagente, conforme o `CLAUDE.md` item 6. **Exceção de 2026-10-15 (PO):** lotes 29, 30 e 31 podem abrir sem checar o uso, só desta vez.
 - **S04 pausada (D1):** nenhuma T3 nova na S04 (T14c, T15 em diante) até as revisões de S01, S02 e S03 e as respostas D1 a D8. Só terminam PR 83 (T12).
 - **Escopo da 1.0 (D3):** versão mínima **inclui detalhes 2D**. DXF e fachadas são candidatos a adiar na sessão de escopo. Prazo de 21 a 42 meses não é recalculado antes da medição da F0.
-- **Planos antigos (D2):** estão em `docs/arquivo/`. O `CLAUDE.md` ainda os cita pela raiz; mudar isso exige cartão aprovado pelo PO.
+- **Planos antigos (D2):** estão em `docs/arquivo/`; `CLAUDE.md` atualizado (F0-RG-24, aprovado pelo PO em 2026-10-15).
 - **Exceção de portão (D8):** toda exceção registra a meta original e o motivo; o portão F0 (S10) é reavaliado com as metas originais.
 - **macOS:** melhor esforço, sem garantia, nunca prometido em texto ao usuário (2026-10-13).
 - **Nada em fórum ou convite externo em nome do PO** sem ordem dele (2026-10-13).
@@ -23,7 +23,6 @@
 | A5 | Se os testes de tempo do Windows continuarem a oscilar: dar folga aos limites (muda metas) | Preferir medir pela mediana de várias rodadas; folga só com a meta original registrada (D8) |
 | A6 | Quando e a quem enviar o convite de revisão externa; wireframes da S09; 8 testes no Revit | Decidir depois das revisões S01 a S03 |
 | A7 | Atualizar o ambiente local (`zlib`, `libxml2`) para compilar o fluxo B na máquina do PO (instalar pede ok) | Sim, quando a D1 acabar |
-| A8 | Ajustar `CLAUDE.md` para os planos em `docs/arquivo/` (cartão de mudança, aprovação do PO) | Cartão T0 pequeno, só trocar os caminhos |
 | A9 | Confirmar que as exceções de ausência acabaram | Sim |
 | A10 | Passar os números do `/usage` de 13 e 14/10 para `QUOTA.md` | Informar janela e semana, antes e depois |
 | A11 | D5: nomes dos colegas de estágio para testar e momento | Sem prazo; combinar antes da F1 |

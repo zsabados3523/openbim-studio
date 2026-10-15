@@ -8,10 +8,12 @@ import sys
 import threading
 from pathlib import Path
 
+import pytest
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QApplication
 
-from openbim_app import registro
+from openbim_app import ifc_summary, registro
+from openbim_app.ifc_summary import IfcSummaryError, count_by_class
 from openbim_app.main_window import MainWindow
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -116,3 +118,83 @@ def test_lancador_falha_na_abertura_grava_abertura_log_e_sai_com_erro(tmp_path):
     assert r.returncode == 1
     texto = (pasta / "abertura.log").read_text(encoding="utf-8")
     assert "falha provocada por --selftest-falha" in texto and "Traceback" in texto
+
+
+class _Fake(OSError):
+    def __init__(self, winerror, strerror="x"):
+        super().__init__(strerror)
+        self.winerror, self.strerror = winerror, strerror
+
+
+@pytest.mark.parametrize("exc, trecho", [
+    (_Fake(32), "aberto em outro programa"),
+    (_Fake(33), "aberto em outro programa"),
+    (_Fake(389), "OneDrive"),
+    (PermissionError(13, "negado"), "sem permissão"),
+    (OSError(5, "erro de E/S"), "o sistema recusou o acesso"),
+    (IsADirectoryError(21, "pasta"), "é uma pasta"),
+])
+def test_mensagem_de_erro_do_sistema(exc, trecho):
+    assert trecho in ifc_summary._erro_do_sistema(exc, "Casa.ifc")
+
+
+def test_arquivo_travado_e_diferente_de_ifc_invalido(monkeypatch, tmp_path):
+    arq = tmp_path / "Residência João.ifc"
+    arq.write_text("ISO-10303-21;")
+
+    def abrir(*a, **k):
+        raise _Fake(32)
+
+    monkeypatch.setattr(ifc_summary, "open", abrir, raising=False)
+    with pytest.raises(IfcSummaryError, match="aberto em outro programa"):
+        count_by_class(arq)
+
+
+def test_falta_de_memoria_ao_abrir_e_ao_ler(monkeypatch, tmp_path):
+    arq = tmp_path / "a.ifc"
+    arq.write_text("ISO-10303-21;")
+
+    def sem_memoria(*a, **k):
+        raise MemoryError
+
+    monkeypatch.setattr(ifc_summary.ifcopenshell, "open", sem_memoria)
+    with pytest.raises(IfcSummaryError, match="faltou memória"):
+        count_by_class(arq)
+
+    class Modelo:
+        schema = "IFC4"
+
+        def by_type(self, _):
+            raise MemoryError
+
+    monkeypatch.setattr(ifc_summary.ifcopenshell, "open", lambda p: Modelo())
+    with pytest.raises(IfcSummaryError, match="faltou memória"):
+        count_by_class(arq)
+
+
+def test_erro_depois_de_abrir_vira_mensagem_e_fica_no_registro(monkeypatch, tmp_path):
+    registro.iniciar()
+    arq = tmp_path / "b.ifc"
+    arq.write_text("ISO-10303-21;")
+
+    class Modelo:
+        schema = "IFC4"
+
+        def by_type(self, _):
+            raise RuntimeError("estrutura quebrada")
+
+    monkeypatch.setattr(ifc_summary.ifcopenshell, "open", lambda p: Modelo())
+    with pytest.raises(IfcSummaryError, match="não foi possível ler os elementos"):
+        count_by_class(arq)
+    assert "estrutura quebrada" in _texto_log()
+
+
+def test_ifc_invalido_deixa_a_causa_no_registro(tmp_path):
+    registro.iniciar()
+    ruim = tmp_path / "ruim.ifc"
+    ruim.write_text("isto não é IFC")
+    with pytest.raises(IfcSummaryError, match="não é um IFC válido"):
+        count_by_class(ruim)
+    assert "Falha ao abrir como IFC" in _texto_log()
+
+

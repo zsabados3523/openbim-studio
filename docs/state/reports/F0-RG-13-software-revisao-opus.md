@@ -35,3 +35,16 @@ O caminho com placa de vídeo não muda e o oráculo da S04 não muda. Mas o tes
 ## Para o implementador
 
 Arquivos permitidos: `prototypes/s04/obimcore/nucleo/motor.h` (só a criação do desenho e `software()`/`aviso()`), `tests/test_s04_viewport_software.py` e, em `.github/workflows/ci.yml`, só acrescentar o arquivo de teste às listas das linhas 144 e 348. Não mexer nos outros testes da S04 nem nos limites do oráculo. Só aprovar de novo com o CI obrigatório verde de verdade (o C++ só compila lá). Depois volta para nova revisão Opus (T3).
+
+---
+
+# Segunda revisão (commit `1ca7afb`)
+
+## Veredito: APROVADO (a mesclagem continua dependendo do CI obrigatório verde)
+
+1. **O teste roda no CI: feito.** O arquivo entrou na lista do `windows-viewport-b` (com WARP) e numa linha própria no passo da viewport do Linux (`LIBGL_ALWAYS_SOFTWARE=1`, `llvmpipe`). A guarda da S04 troca o "pular" por falha com `OBIM_S04_VIEWPORT_OBRIGATORIO=1`, então CI verde quer dizer que o teste rodou. Conferido no registro do `windows-viewport-b`: "209 passed, 2 skipped", e os dois pulos são de `test_s04_metas.py`.
+2. **Aviso só no caso certo: feito.** A segunda tentativa só acontece no Direct3D 11 (`#ifdef Q_OS_WIN` e `!gl_`). `software_` vem do dispositivo (`CpuDevice` ou nome com `llvmpipe`, `softpipe`, `SwiftShader`, `Microsoft Basic Render`) ou da segunda tentativa, que só existe no Direct3D, onde ela de fato usa o WARP.
+3. **Conferência nos dois sistemas: feito.** Com WARP ou com `LIBGL_ALWAYS_SOFTWARE=1`, o teste exige `software is True` e "software" no aviso. Se `aviso()` voltar vazio ou `desenho_por_software()` voltar falso, o teste falha nos dois.
+4. **Item 5 (recomendado) também feito:** `software_` é zerado antes de cada criação.
+
+Com placa de vídeo o caminho continua igual: mesma criação, e o aviso só aparece se o dispositivo for de software.

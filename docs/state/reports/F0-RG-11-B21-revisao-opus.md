@@ -36,3 +36,17 @@ O código fecha os três pontos do achado B21. O teste cobre só um deles.
 ## Para o implementador
 
 Arquivos permitidos: `tests/test_viewport_queda_registro.py` e um auxiliar novo em `tests/` para os alvos do item 1. Se fizer os itens 4 ou 5, também `prototypes/viewport_qrhi/carregador.py` (só `_texto_saida` e o `log.warning` da queda). Não editar `tests/test_viewport_processo.py` nem os outros oráculos. Depois volta para nova revisão Opus (T3).
+
+---
+
+# Segunda revisão (commit `b190350`)
+
+## Veredito: APROVADO (a mesclagem continua dependendo do CI obrigatório verde)
+
+Só testes mudaram (`tests/_queda_alvos.py` novo e `tests/test_viewport_queda_registro.py`); o código do carregador é o mesmo de `51a8067`.
+
+1. **Saída limpa e queda por sinal: feito.** `sair_zero` (`os._exit(0)` sem `fim`) e `morrer_por_sinal` (`SIGTERM`: −15 no Linux, 15 no Windows) rodam por `_executar` com processo filho de verdade; o teste confere `motivo`, `codigo` e o texto no registro. Os alvos ficam num módulo de teste importável, como o "spawn" exige (o caminho do Python vai junto para o filho).
+2. **Nota: feito.** `_tratar("nota", ...)` confere o registro. `_bloco` com `ifcopenshell` falso (iterador que levanta erro, 2 peças, `entregar` ligado, `os._exit` trocado por exceção) confere que a última mensagem é a nota, com o texto do erro e "2 peças", e que a saída é com código 3. Tirar o `enviar("nota", ...)` ou o ramo de `_tratar` agora quebra teste.
+3. **Falha da caixa: feito.** `_executar` envolvido só quando o alvo é `pm.entrada_caixa` (mesmo objeto de módulo que o carregador usa: os dois importam `viewport_qrhi.processo_malhas`). O teste confere o aviso no registro e a peça em `sem_malha` com "não foi possível calcular a caixa". Voltar o `except` para `pass` agora quebra teste.
+
+Os itens 4 e 5 (recomendados) ficaram de fora; continuam valendo para depois.

@@ -38,3 +38,11 @@ Isso **não afrouxa o limite de 100 ms** (a mediana continua contra 100 ms). Mud
 ## Para o implementador
 
 Arquivos permitidos: só o texto do cabeçalho de `tests/test_s04_metas.py` (linha 11) e de `tests/test_s04_fluxo_a.py` (linha 6). Depois volta para nova revisão Opus (T3).
+
+---
+
+# Segunda revisão (commit `9607811`)
+
+## Veredito: APROVADO (a mesclagem continua dependendo do CI obrigatório verde)
+
+1. **Contrato escrito: feito.** `tests/test_s04_metas.py:11` e `tests/test_s04_fluxo_a.py:6` agora dizem "nenhum valor >= max(3 x limite, 250 ms)". Só texto; nenhum caso nem número mudou (conferido no diff contra `d917462`).

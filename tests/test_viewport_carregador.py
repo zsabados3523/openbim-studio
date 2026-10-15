@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Oráculo da S03-T05 (Parte 0), O1 a O10: carregador de malhas do IFC, sem Qt e sem tela.
 
-Transcrição de docs/state/reports/LOTE_OPUS_4.md §1.5. Congelado: não afrouxar número nem remover caso.
+Transcrição de docs/state/arquivo/lotes-1-a-28/LOTE_OPUS_4/resultado.md §1.5. Congelado: não afrouxar número nem remover caso.
 Sem o carregador (S03-T05 parte A) os testes pulam. Testes lentos (M1M): OBIM_TESTES_LENTOS=1.
 """
 import gc

@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Oráculo da S03-T08 (cartão T08-0), P1 a P12: carga de malhas em processo separado, sem tela.
 
-Transcrição de docs/state/reports/LOTE_OPUS_6.md §2.4. Congelado: não afrouxar número nem remover caso.
+Transcrição de docs/state/arquivo/lotes-1-a-28/LOTE_OPUS_6/resultado.md §2.4. Congelado: não afrouxar número nem remover caso.
 Guardas de ativação (a suíte não fica vermelha entre cartões): `requer_processo` liga quando existir
 `processo_malhas.py`; `requer_limite` liga quando `CarregadorMalhas` aceitar `limite_peca_s`.
 Peça lenta injetada no filho: OBIM_TESTE_PECA_LENTA="<guid>=<s>[,...]"; filho que cai: OBIM_TESTE_MATAR_FILHO="<guid>".
 Teste lento (P6): OBIM_TESTES_LENTOS=1.
 
-P13 a P18 (cartão T08-0b, LOTE_OPUS_7.md §4 item 5): defeitos achados no lote 7. Cada um é `xfail(strict=True)` até a
+P13 a P18 (cartão T08-0b, arquivo/lotes-1-a-28/LOTE_OPUS_7/resultado.md §4 item 5): defeitos achados no lote 7. Cada um é `xfail(strict=True)` até a
 S03-T08-E: quando passar, o xfail estrito vira falha e avisa para tirar a marca. Gancho de teste novo:
 OBIM_TESTE_FALHAR_CAIXA="<guid>" (o filho da caixa falha nessa peça). As guardas `requer_caixa_falha` e `OBIM_FORCAR_GUARDAS`
 saíram na S04-T16 (cartão S03-T08-G): o recurso já está no `main`.

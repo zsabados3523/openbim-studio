@@ -7,7 +7,7 @@
 |---|---|---|---|---|---|---|
 | F0-S01 | Repositório, licenças e pesquisa | P | — | FEITA (2026-10-11; aprovada no lote Opus 2) | S01-T01 a T12 | Revisão em curso (R1 a R3, 2026-10-14). Abertos sem bloquear: termos do conda-forge, SINAPI (autorização da CAIXA para automação, requisito da F5), ReportLab (aceito pelo PO em 2026-10-15); Qt Shader Tools fechado pela R2; espelho Codeberg depois |
 | F0-S02 | CI Windows+Linux e app esqueleto | M→G (tratada como G) | S01 | CONCLUÍDA (aceite do PO em 2026-10-11, Windows e Linux) | S02-T01 a T16 | S02-T01 pode começar quando S01-T01 estiver feita |
-| F0-S03 | Protótipo de viewport (Qt RHI) | M | S02; S08 contínuo | CONCLUÍDA (2026-10-12; PO aprovou o portão: atingido no Linux, Windows em software; placa real no Windows é risco para a S10) | S03-T01 a T08, T25 a T27 (tabela abaixo) | Abertos, sem bloquear: T08-G (T3 pequeno), T27 (P17 no CI), T23 (antes do primeiro release). Relatório: reports/F0-S03.md. Metas medidas na máquina do PO; memória somada 6,8 GB contra meta de 6 GB, aceita "na prática" (ver PO.md) |
+| F0-S03 | Protótipo de viewport (Qt RHI) | M | S02; S08 contínuo | CONCLUÍDA (2026-10-12; PO aprovou o portão: atingido no Linux, Windows em software; placa real no Windows é risco para a S10) | S03-T01 a T08, T25 a T27 (tabela abaixo) | Abertos, sem bloquear: T27 (P17 no CI), T28 (Windows físico); T08-G está feita; T23 virou item do plano. Relatório: reports/F0-S03.md. Metas medidas na máquina do PO; memória somada 6,8 GB contra meta de 6 GB, aceita "na prática" (ver PO.md) |
 | F0-S04 | Ponte Python↔C++ (híbrido vs C++ puro) | G, crítica | S02 | PAUSADA nas T3 que faltam (D1, 2026-10-14); só terminam PR 83 (T12) | 19 cartões e sufixos (tabela abaixo); relatório: reports/LOTE_OPUS_9.md | Etapa 1 (T01 a T04c) e etapa 2 até T14b feitas. Nenhuma meta medida oficialmente (medições M1 a M6 só na máquina do PO). Contém T3 (ponte, threads) |
 | F0-S05 | Oplog, undo e merge | M | S04 | NÃO INICIADA | — | Contém T3 (transações, gravação do par). Precisa de formato mínimo provisório do `.obim` antes do ADR-003 |
 | F0-S06 | Planta e corte (HLR) + vista no `.obim` | G, crítica | S02; S08 contínuo | NÃO INICIADA | — | Contém T3 (HLR, arquivo lateral) |
@@ -67,9 +67,9 @@
 | F0-S02-R3 | Revisão S02: coerência, testes e relatório para o lote Opus | T2 | sonnet | opus (lote) | S02-R1, S02-R2 | FEITA (2026-10-15); lote 30 aguarda uso e PO |
 | F0-S02-T25 | Reduzir o tempo do job `windows` do CI (incremental) | T2 | sonnet | sonnet; amostra opus | S02 revisada | NÃO INICIADA (pedido do PO, 2026-10-15) |
 | F0-PLANO-T01 | T23 no plano (`v2/03`) | TA | opus/sonnet | PO (resumo) | — | FEITA (2026-10-15; PO aprovou) |
-| F0-S03-R1 | Revisão S03: aceite e exceções com a meta original | T2 | sonnet | opus (lote) | S02-R3 | NÃO INICIADA |
-| F0-S03-R2 | Revisão S03: pendências, risco do Windows, teste de tempo | T2 | sonnet | opus (lote) | S03-R1 | NÃO INICIADA |
-| F0-S03-R3 | Revisão S03: coerência, testes e relatório para o lote Opus | T2 | sonnet | opus (lote) | S03-R1, S03-R2 | NÃO INICIADA |
+| F0-S03-R1 | Revisão S03: aceite e exceções com a meta original | T2 | sonnet | opus (lote) | S02-R3 | FEITA (2026-10-15); lote 31 aguarda |
+| F0-S03-R2 | Revisão S03: pendências, risco do Windows, teste de tempo | T2 | sonnet | opus (lote) | S03-R1 | FEITA (2026-10-15); lote 31 aguarda |
+| F0-S03-R3 | Revisão S03: coerência, testes e relatório para o lote Opus | T2 | sonnet | opus (lote) | S03-R1, S03-R2 | FEITA (2026-10-15); lote 31 aguarda |
 
 Nenhum cartão de S01 ou S02 é T3 (ver LOG.md). A prova do R1 (ponte C++/Python) é T3 e fica na S04.
 
@@ -84,10 +84,11 @@ Nenhum cartão de S01 ou S02 é T3 (ver LOG.md). A prova do R1 (ponte C++/Python
 | F0-S03-T06, T06b | Seleção por clique | T2 | FEITA (teste de tempo: 16→100 ms, exceção; ver revisão da S03) |
 | F0-S03-T07 | Benchmark e relatório da fatia | T1 | FEITA (reports/F0-S03.md) |
 | F0-S03-T08-0, 0b, A, B1, B2, C, D, E | Processo separado, limite por peça, memória | T3 | FEITA (D medida na tela real) |
-| F0-S03-T08-G | Duas correções pequenas e guardas | T3 | ABERTA (sem bloquear) |
+| F0-S03-T08-G | Duas correções pequenas e guardas | T3 | FEITA (no `main`, conferido em 2026-10-15) |
 | F0-S03-T25, T25-C1 | Desenho 3D no CI | T2 | FEITA (S03 concluída) |
 | F0-S03-T26, T26b | Localidade numérica na gravação do IFC | T3 / T1 | FEITA |
 | F0-S03-T27 | Teste da reabertura (P17) no CI | T1 | ABERTA (sem bloquear) |
+| F0-S03-T28 | Medir o viewport num Windows físico (placa real e Intel) | T1 | NÃO INICIADA (antes da S10; criada na revisão da S03) |
 
 ## Cartões da S04 (estado conferido no `LOG.md`, 2026-10-14)
 | Cartão | Título | Classe | Status |

@@ -98,3 +98,6 @@ Resultado: 5 itens reprovados por texto, nenhum por código ou medida; correçõ
 
 ## Resposta do PO (2026-10-15)
 Aceita o plano. A memória abaixo de 6,0 GB precisa ser tratada (cartão da S04 a definir; hoje proposto T18, alternativa T10). O teste no Windows com placa de vídeo (T28) pode ficar para antes da entrega final, porque o PO não tem Windows instalado. Sem resposta explícita sobre a E3 e sobre a regra da mediana: seguem abertas. Registrado em `PO.md`.
+
+### Respostas finais do PO (2026-10-15, segunda mensagem)
+Aceita a E3 (limite de 100 ms), o cartão T28 e a regra do teste de tempo (aquecer, 7 rodadas, mediana contra 100 ms). Pedido de revisão completa registrado em `QUEUE_OPUS.md`. Registrado em `PO.md`.

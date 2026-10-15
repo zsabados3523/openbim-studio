@@ -88,7 +88,7 @@ Nenhum cartão de S01 ou S02 é T3 (ver LOG.md). A prova do R1 (ponte C++/Python
 | F0-S03-T25, T25-C1 | Desenho 3D no CI | T2 | FEITA (S03 concluída) |
 | F0-S03-T26, T26b | Localidade numérica na gravação do IFC | T3 / T1 | FEITA |
 | F0-S03-T27 | Teste da reabertura (P17) no CI | T1 | ABERTA (sem bloquear) |
-| F0-S03-T28 | Medir o viewport num Windows físico (placa real e Intel) | T1 | NÃO INICIADA (PO aceitou em 2026-10-15 deixar para antes da entrega final; dono: PO; prazo original: antes do portão da F0, S10; criada na revisão da S03; texto reforçado no lote Opus 31) |
+| F0-S03-T28 | Medir o viewport num Windows físico (placa real e Intel) | T1 | APROVADA pelo PO em 2026-10-15, NÃO INICIADA (PO aceitou em 2026-10-15 deixar para antes da entrega final; dono: PO; prazo original: antes do portão da F0, S10; criada na revisão da S03; texto reforçado no lote Opus 31) |
 
 ## Cartões da S04 (estado conferido no `LOG.md`, 2026-10-14)
 | Cartão | Título | Classe | Status |

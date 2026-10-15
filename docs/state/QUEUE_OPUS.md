@@ -16,3 +16,6 @@
 - **Lote 29 (S01), 2026-10-15: APROVADO 6 de 6** (`reports/LOTE_OPUS_29.md`). Aberto pelo líder com a exceção de cota do PO.
 - Lotes 1 a 28 executados entre 2026-10-10 e 2026-10-14. O último, lote 28, **aprovou a T12** (PR 83; mescla quando `linux` e `windows` ficarem verdes).
 - Opcionais do Opus que ficaram sem cartão (do relatório do dia 14/10): T14b (visibilidade hidden, guarda NOMINMAX), duração zero do juiz de metas (limite conhecido), lote 24 de T16b (estado morto, `sem_malha` por peça, medir modo uma-peça no arquivo real do PO). Viram cartão quando a D1 acabar.
+
+## Pedido do PO (2026-10-15): revisão completa
+Revisão Opus de **tudo** (código, arquitetura, documentos), depois da implementação. Se feita antes da S10, cobre todo o projeto implementado até então. Recomendo no fim da S04, antes do portão da F0. Ainda sem lote nem data; abrir só com o uso conferido (regra D9) ou com ok do PO por evento.

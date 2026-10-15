@@ -153,3 +153,4 @@ Uma linha por tarefa concluída ou escalada, e por mudança de classe de tarefa.
 2026-10-15 | F0-S03 (correção de LOG.md:106) | CORREÇÃO | A linha 106 diz "T26b pendente"; a T26b está FEITA (PR 42): `LOG.md:102` e `BOARD.md:89`. Linha 106 mantida como estava.
 2026-10-15 | LOTE_OPUS_31 | 5 reprovados por texto | Revisão da S03 (Opus subagente). Correções aplicadas em F0-S03-revisao, F0-S03, cartões T06b e T28 e BOARD. Sem novo lote. Itens sem fonte conferida estão marcados no texto. Detalhe: reports/LOTE_OPUS_31.md
 2026-10-15 | F0-S03 | PO aceita o plano | Memória abaixo de 6,0 GB deve ser tratada; teste no Windows com placa (T28) pode esperar até antes da entrega final. E3 e regra da mediana ainda sem resposta.
+2026-10-15 | F0-S03 | ACEITA pelo PO | E3 (100 ms) aceita; T28 aprovada; regra da mediana aprovada; limite de licenças da S02 aceito. Revisão completa Opus de tudo registrada na fila.

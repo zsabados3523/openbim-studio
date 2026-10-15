@@ -28,6 +28,7 @@
 | A10 | Passar os números do `/usage` de 13 e 14/10 para `QUOTA.md` | Informar janela e semana, antes e depois |
 | A11 | D5: nomes dos colegas de estágio para testar e momento | Sem prazo; combinar antes da F1 |
 | A12 | ~~D6~~ **Respondida em 2026-10-15:** o PO aceita o parecer da IA como aceite da S01 | — |
+| A16 | S02: aceita a S02 com as ressalvas (incremental do Windows, vídeo MP4 não feito, T23 só antes do lançamento)? Quer o MP4? Já marcou o job `appimage` como obrigatório no `main`? Quer a T23 como pré-requisito no plano? | Aceitar; MP4 não por ora; marcar `appimage`; T23 no plano. Resumo no topo de `reports/F0-S02-revisao.md` |
 | A13 | Aceite do resumo da entrevista S09 (`docs/research/2026-10-13-entrevista-s09-resumo.md`) | Ler e aceitar antes dos wireframes |
 | A14 | ~~ReportLab~~ **Respondida em 2026-10-15:** PO confirma BSD (pypi.org/project/reportlab); veredito passou a "Sim, com condição" (sem pyRXP) | — |
 | A15 | SINAPI: o PO informou (2026-10-15) que o uso gratuito é permitido, mas software que automatiza processos ou buscas precisa de autorização da CAIXA. Confirmar o texto e pedir a autorização formal | Consulta formal à CAIXA como requisito da F5; texto fica em `docs/research/2026-10-10-sinapi-termos.md` |

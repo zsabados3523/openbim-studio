@@ -18,5 +18,5 @@ STATUS: SUCESSO parcial (plano B funciona; vídeo MP4 não testado por falta de 
 | Sistema | Resultado | Arquivo | Link |
 |---|---|---|---|
 | Linux (local) | funcionou | roteiro.gif | `F0-S02-video/roteiro.gif` |
-| Linux (CI) | a confirmar no 1º run | | |
-| Windows (CI) | a confirmar no 1º run | | |
+| Linux (CI) | passo "Gravação do roteiro" roda sem bloquear (revisão S02, 2026-10-15: conferir no próximo run) | | |
+| Windows (CI) | idem | | |

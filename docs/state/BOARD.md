@@ -48,10 +48,10 @@
 | F0-S02-T13 | Medir metas de build e tamanho | T1 | sonnet | sonnet | S02-T10, S02-T11, S02-T16 | FEITA (relatório F0-S02-metricas.md; build incremental do Windows aceito pelo PO, revisão na S04) |
 | F0-S02-T14 | Roteiro de aceite do PO e relatório da S02 | T1 | sonnet | PO | S02-T10, S02-T11 | FEITA (PO executou o roteiro nos dois sistemas: tudo ok, 2026-10-11) |
 | F0-S02-T15 | ADR-005 final (decisão com testes) | TA | opus (lote) | PO (resumo) | S02-T13, S02-T02 | FEITA (lote opus 3; PO aprovou: ADR-005 aceito, 2026-10-11) |
-| F0-S02-T21 | Instalador não apaga arquivos do usuário (N1) | T2 | sonnet | sonnet | S02-T18 | FEITA no ramo, aguarda CI |
-| F0-S02-T22 | Inventário: parênteses e lista (D1 e ajustes) | T2 | sonnet | sonnet | S02-T20 | FEITA no ramo, aguarda CI |
+| F0-S02-T21 | Instalador não apaga arquivos do usuário (N1) | T2 | sonnet | sonnet | S02-T18 | FEITA (no `main`, conferido em 2026-10-15) |
+| F0-S02-T22 | Inventário: parênteses e lista (D1 e ajustes) | T2 | sonnet | sonnet | S02-T20 | FEITA (no `main`, conferido em 2026-10-15) |
 | F0-S02-T23 | Antes do primeiro release | T2 | sonnet | opus (lote) | T17, T18, T22 | NÃO INICIADA (bloqueia release público) |
-| F0-S02-T24 | Seletor de arquivos nativo no AppImage (portal do desktop) | T2 | sonnet | sonnet | S02-T17 | FEITA no ramo (AppRun ativa o portal do desktop quando há D-Bus; teste no CI; o PO confere no passo 15 do roteiro) |
+| F0-S02-T24 | Seletor de arquivos nativo no AppImage (portal do desktop) | T2 | sonnet | sonnet | S02-T17 | FEITA (no `main`, conferido em 2026-10-15; AppRun ativa o portal do desktop quando há D-Bus; teste no CI; o PO confere no passo 15 do roteiro) |
 | F0-S02-T16 | Sonda C++ mínima (pacote IfcOpenShell e módulo nanobind) | T2 | sonnet | sonnet; amostra opus | S02-T03 | FEITA (amostra aprovada no lote Opus 2; testes 2 e 3 do ADR-005 fecham só no Linux; ver S02-T19) |
 | F0-S02-T17 | Correções do AppImage (lote opus 2, defeitos 1 a 7) | T2 | sonnet | **opus, em lote (diff)** | S02-T10 | FEITA no CI (verde, 389 MB, testes de licença e troca de .so); falta conferência opus (lote 3); runtime do appimagetool pendente |
 | F0-S02-T18 | Correções do instalador Windows (defeitos 1 a 4 e riscos 5 a 7) | T2 | sonnet | **opus, em lote (diff)** | S02-T11, S02-T17 | FEITA no CI (verde, 309 MB sem MKL, testes de reinstalação, DLL trocada e arquivo do usuário); falta conferência opus (lote 3) |
@@ -62,9 +62,9 @@
 | F0-S01-R1 | Revisão S01: aceite contra o plano e cobertura | T2 | sonnet | opus (lote) | PR 93 | FEITA (2026-10-14); falta lote e parecer do PO |
 | F0-S01-R2 | Revisão S01: pendências de licença (SINAPI, Qt Shader Tools, conda-forge, ReportLab) | T2 | sonnet | opus (lote) | R1 | FEITA (2026-10-14); 1 item para o PO (ReportLab) |
 | F0-S01-R3 | Revisão S01: coerência, testes e relatório para o lote Opus | T2 | sonnet | opus (lote) | R1, R2 | FEITA (2026-10-14); lote 29 aguarda uso e PO |
-| F0-S02-R1 | Revisão S02: aceite contra o plano e metas com a meta original | T2 | sonnet | opus (lote) | S01-R3 | NÃO INICIADA |
-| F0-S02-R2 | Revisão S02: pendências abertas e licenças dos pacotes | T2 | sonnet | opus (lote) | S02-R1 | NÃO INICIADA |
-| F0-S02-R3 | Revisão S02: coerência, testes e relatório para o lote Opus | T2 | sonnet | opus (lote) | S02-R1, S02-R2 | NÃO INICIADA |
+| F0-S02-R1 | Revisão S02: aceite contra o plano e metas com a meta original | T2 | sonnet | opus (lote) | S01-R3 | FEITA (2026-10-15); lote 30 aguarda uso e PO |
+| F0-S02-R2 | Revisão S02: pendências abertas e licenças dos pacotes | T2 | sonnet | opus (lote) | S02-R1 | FEITA (2026-10-15); lote 30 aguarda uso e PO |
+| F0-S02-R3 | Revisão S02: coerência, testes e relatório para o lote Opus | T2 | sonnet | opus (lote) | S02-R1, S02-R2 | FEITA (2026-10-15); lote 30 aguarda uso e PO |
 
 Nenhum cartão de S01 ou S02 é T3 (ver LOG.md). A prova do R1 (ponte C++/Python) é T3 e fica na S04.
 

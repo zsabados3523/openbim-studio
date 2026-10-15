@@ -791,3 +791,23 @@ def test_desfazer_e_refazer_com_falha_na_cena_voltam_o_modelo_e_o_registro(fino)
         assert v["voltou"], onde
         for qual in ("desfazer", "refazer"):
             assert all(v[qual].values()), (onde, qual, {k: x for k, x in v[qual].items() if not x})
+
+# ---------- F0-RG-07: deslocamento da cena (coordenadas georreferenciadas) ----------
+def test_rg07_lote_com_coordenada_utm_usa_deslocamento_e_nao_perde_precisao(novo):
+    try:
+        import obimcore  # noqa: F401  (o `_lote` monta o LoteMalha com a ponte; no CI vem de out/s04)
+    except ImportError:
+        pular("obimcore ausente")
+    f = novo()
+    f.executar(TIPO)
+    g1, g2 = f.executar(PAREDE)[0], f.executar(PAREDE)[0]
+    utm = (333000.0, 7400000.0, 0.0)  # Y perto de 7,4 milhões de metros: em float32 o degrau é ~0,5 m
+    for g in (g1, g2):
+        f.executar({"cmd": "mover", "alvo": g, "dx": utm[0], "dy": utm[1], "dz": utm[2]})
+    lote = f._lote([g1])
+    assert np.allclose(lote.deslocamento, np.rint(lote.deslocamento)) and abs(lote.deslocamento[1] - 7400000.0) < 10
+    mundo = lote.vertices["pos"].astype(np.float64) + lote.deslocamento  # volta ao mundo: tem de bater com o ifcopenshell
+    _, dim, canto = forma(f.ifc.by_guid(g1))
+    assert np.abs(mundo.min(0) - canto).max() < 1e-3 and np.abs(mundo.max(0) - mundo.min(0) - dim).max() < 1e-3
+    assert np.abs(lote.vertices["pos"]).max() < 100, "posições relativas à cena têm de ser pequenas"
+    assert np.array_equal(f._lote([g2]).deslocamento, lote.deslocamento), "todos os lotes da sessão usam o mesmo deslocamento"

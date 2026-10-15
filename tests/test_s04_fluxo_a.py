@@ -3,7 +3,7 @@
 GUARDA: pula enquanto `prototypes/s04/fluxo_a/fluxo_a.py` não existir; FALHA com OBIM_S04_T11_OBRIGATORIO=1, OBIM_S04_T11B_OBRIGATORIO=1 ou OBIM_S04_T11C_OBRIGATORIO=1 (todo skip vira falha; só o caso da localidade no Windows segue sendo pulado, não se aplica lá). Casos sem janela rodam no processo;
 os gráficos rodam em SUBPROCESSO sob `xvfb-run` (nunca na tela real; Windows só no CI ou com OBIM_S04_TELA_VIRTUAL=1) e o roteiro R inteiro roda UMA vez.
 Suposições do oráculo (o Opus confere): parede = prisma retangular = 12 triângulos; a base é `scripts/gerar_modelo_grande.py` com OBIM_S04_BASE paredes
-(padrão 300; oficial 3000); régua do CI virtual = mediana < limite e nenhum valor acima de TETO x limite (M2, M2b, M3), M4 < 20 s, M5 pela régua do lote 11
+(padrão 300; oficial 3000); régua do CI virtual = mediana < limite e nenhum valor >= max(3 x limite, 250 ms) (M2, M2b, M3), M4 < 20 s, M5 pela régua do lote 11
 (maior intervalo < 100 ms, >= 20 quadros por janela de 1 s, <= 3x o parado); OBIM_S04_ESTRITO=1 (máquina do PO) troca por p95 < limite.
 Fora do escopo (T12): M1, M6, M7 e a comparação A x B. Sentinelas sem fluxo_a: roteiro, ifcopenshell sozinho e a conta das metas.
 

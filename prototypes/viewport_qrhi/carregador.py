@@ -19,12 +19,11 @@ from dataclasses import dataclass, field, replace
 
 import numpy as np
 
-DTYPE_VERTICE = np.dtype([("pos", "<f4", (3,)), ("normal", "<f4", (3,)), ("cor", "u1", (4,))])
-DTYPE_OBJETO = np.dtype([
-    ("id_step", "<i4"), ("guid", "S22"),
-    ("primeiro_indice", "<u4"), ("n_indices", "<u4"), ("primeiro_vertice", "<u4"), ("n_vertices", "<u4"),
-    ("caixa_min", "<f4", (3,)), ("caixa_max", "<f4", (3,)),
-])
+try:  # o formato vive fora do pacote (a S04 também o usa); `prototypes/` precisa estar no caminho
+    from formato_malha import DTYPE_OBJETO, DTYPE_VERTICE, LoteMalha
+except ImportError:  # pragma: no cover  (módulo executado fora do pacote)
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from formato_malha import DTYPE_OBJETO, DTYPE_VERTICE, LoteMalha
 log = logging.getLogger("openbim.viewport")
 MAX_BYTES_LOTE = 8 * 1024 * 1024
 CINZA = (204, 204, 204, 255)
@@ -32,17 +31,6 @@ ORANGE = (255, 140, 0, 255)  # caixa substituta (D4)
 FATIA_S = 0.05
 MOTIVO_SEM_GEOMETRIA = "o conversor não achou geometria nesta peça"
 MOTIVO_CORTE = "esta carga já tinha peças lentas demais; a peça foi mostrada como caixa sem tentar de novo"
-
-
-@dataclass(frozen=True)
-class LoteMalha:
-    indice_lote: int
-    vertices: np.ndarray
-    indices: np.ndarray
-    objetos: np.ndarray
-    deslocamento: np.ndarray
-    produtos_feitos: int
-    produtos_total: int
 
 
 @dataclass(frozen=True)
@@ -72,7 +60,7 @@ def _unitarias(n):
     return np.where(c > 1e-12, n / np.where(c > 1e-12, c, 1.0), np.array([0.0, 0.0, 1.0]))
 
 
-def _produto_para_numpy(geo, paleta):
+def produto_para_numpy(geo, paleta):
     """Geometria do iterador -> (pos float64 (n,3), normal float32 (n,3), cor uint8 (n,4), indices uint32 (3m,)) ou None."""
     # D2 (LOTE_OPUS_6 §2.2): vetores prontos do IfcOpenShell (int32 e float64) em vez de tuplas; ~17x mais rápido.
     faces = np.frombuffer(geo.faces_buffer, dtype=np.int32).astype(np.int64).reshape(-1, 3)
@@ -98,7 +86,7 @@ def _produto_para_numpy(geo, paleta):
     return pos[orig], normais[orig], paleta[uniq % p], inv.astype(np.uint32)
 
 
-def _paleta(geo):
+def paleta_da_peca(geo):
     linhas = []
     for m in geo.materials:
         try:
@@ -113,7 +101,7 @@ def _paleta(geo):
     return np.array(linhas, dtype=np.uint8).reshape(-1, 4)
 
 
-def _montar_lote(indice, prods, desl, feitos, total):
+def montar_lote(indice, prods, desl, feitos, total):
     """prods: lista de (id_step, guid, pos64, normal, cor, indices) em ordem de id."""
     nv = sum(len(p[2]) for p in prods)
     verts = np.empty(nv, dtype=DTYPE_VERTICE)
@@ -475,7 +463,7 @@ class CarregadorMalhas:
             if est["desl"] is None:
                 est["desl"] = np.rint((mn + mx) / 2.0).astype(np.float64)
                 est["desl"].flags.writeable = False
-            lote = _montar_lote(est["lotes"], [(i, g, *_malha_caixa(mn, mx))], est["desl"], len(est["resolvidos"]) + 1,
+            lote = montar_lote(est["lotes"], [(i, g, *_malha_caixa(mn, mx))], est["desl"], len(est["resolvidos"]) + 1,
                                 est["produtos_total"])
             est["simp"].append((i, g, c, n, motivo, float(seg)))
             self._contar_lote(est, lote)

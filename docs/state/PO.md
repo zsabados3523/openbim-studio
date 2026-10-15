@@ -29,6 +29,8 @@
 | A11 | D5: nomes dos colegas de estágio para testar e momento | Sem prazo; combinar antes da F1 |
 | A12 | D6: ler o resumo de 5 linhas da S01 (aceite da tabela de licenças como aceite seu) e dar o parecer sobre S01-a | Sim. **Resumo pronto** em `reports/F0-S01-revisao.md` (topo); leva cerca de 10 minutos |
 | A13 | Aceite do resumo da entrevista S09 (`docs/research/2026-10-13-entrevista-s09-resumo.md`) | Ler e aceitar antes dos wireframes |
+| A14 | ReportLab: manter "fora" até a F5 e ler o LICENSE da versão travada na hora de usar? (fontes oficiais dizem BSD) | Sim, manter fora por ora |
+| A15 | SINAPI: abrir a página da CAIXA no navegador e colar os termos (opcional, só importa na F5) | Fazer perto da F5 |
 
 ## Histórico de respostas
 

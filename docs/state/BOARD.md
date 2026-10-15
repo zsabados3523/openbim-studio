@@ -5,7 +5,7 @@
 ## Fatias
 | Fatia | Nome | Tam. | Depende de | Status | Cartões | Observação |
 |---|---|---|---|---|---|---|
-| F0-S01 | Repositório, licenças e pesquisa | P | — | FEITA (2026-10-11; aprovada no lote Opus 2) | S01-T01 a T12 | Abertos sem bloquear: termos conda-forge, Qt Shader Tools, ReportLab, SINAPI; espelho Codeberg depois |
+| F0-S01 | Repositório, licenças e pesquisa | P | — | FEITA (2026-10-11; aprovada no lote Opus 2) | S01-T01 a T12 | Revisão em curso (R1 a R3, 2026-10-14). Abertos sem bloquear: termos do conda-forge, SINAPI (site bloqueia leitura), ReportLab (PO decide, A14); Qt Shader Tools fechado pela R2; espelho Codeberg depois |
 | F0-S02 | CI Windows+Linux e app esqueleto | M→G (tratada como G) | S01 | CONCLUÍDA (aceite do PO em 2026-10-11, Windows e Linux) | S02-T01 a T16 | S02-T01 pode começar quando S01-T01 estiver feita |
 | F0-S03 | Protótipo de viewport (Qt RHI) | M | S02; S08 contínuo | CONCLUÍDA (2026-10-12; PO aprovou o portão: atingido no Linux, Windows em software; placa real no Windows é risco para a S10) | S03-T01 a T08, T25 a T27 (tabela abaixo) | Abertos, sem bloquear: T08-G (T3 pequeno), T27 (P17 no CI), T23 (antes do primeiro release). Relatório: reports/F0-S03.md. Metas medidas na máquina do PO; memória somada 6,8 GB contra meta de 6 GB, aceita "na prática" (ver PO.md) |
 | F0-S04 | Ponte Python↔C++ (híbrido vs C++ puro) | G, crítica | S02 | PAUSADA nas T3 que faltam (D1, 2026-10-14); só terminam PR 83 (T12) | 19 cartões e sufixos (tabela abaixo); relatório: reports/LOTE_OPUS_9.md | Etapa 1 (T01 a T04c) e etapa 2 até T14b feitas. Nenhuma meta medida oficialmente (medições M1 a M6 só na máquina do PO). Contém T3 (ponte, threads) |
@@ -60,8 +60,8 @@
 
 
 | F0-S01-R1 | Revisão S01: aceite contra o plano e cobertura | T2 | sonnet | opus (lote) | PR 93 | FEITA (2026-10-14); falta lote e parecer do PO |
-| F0-S01-R2 | Revisão S01: pendências de licença (SINAPI, Qt Shader Tools, conda-forge, ReportLab) | T2 | sonnet | opus (lote) | R1 | NÃO INICIADA |
-| F0-S01-R3 | Revisão S01: coerência, testes e relatório para o lote Opus | T2 | sonnet | opus (lote) | R1, R2 | NÃO INICIADA |
+| F0-S01-R2 | Revisão S01: pendências de licença (SINAPI, Qt Shader Tools, conda-forge, ReportLab) | T2 | sonnet | opus (lote) | R1 | FEITA (2026-10-14); 1 item para o PO (ReportLab) |
+| F0-S01-R3 | Revisão S01: coerência, testes e relatório para o lote Opus | T2 | sonnet | opus (lote) | R1, R2 | FEITA (2026-10-14); lote 29 aguarda uso e PO |
 
 Nenhum cartão de S01 ou S02 é T3 (ver LOG.md). A prova do R1 (ponte C++/Python) é T3 e fica na S04.
 

@@ -16,4 +16,5 @@ Nenhum.
 Mantém-se a regra de `v2/05` §4: só importar a planilha que o próprio usuário baixar; registrar mês, UF e fonte; não distribuir planilhas nem apresentar como orçamento oficial. Consulta formal à CAIXA continua prevista para a F5 (decisão J).
 ## Riscos de IP identificados
 Risco desconhecido enquanto os termos não forem lidos. Sugestão: o PO abre a página no navegador dele, procura termos de uso/redistribuição e cola aqui o endereço ou o texto (opcional, não bloqueia nada).
-## Revisado por: pendente (sonnet)
+## Revisado por: não revisada, **ficha incompleta** (R2, 2026-10-14)
+Nova tentativa em 2026-10-14: a página do SINAPI no site da CAIXA bloqueia leitura automática (robots), então os termos seguem **não verificados**. Não tentamos contornar. Dono: PO, que pode abrir a página no navegador e colar o endereço ou o texto (opcional). Prazo: antes da F5 (só importa lá). Até lá a regra de `v2/05` §4 vale: importar só a planilha que o usuário baixar.

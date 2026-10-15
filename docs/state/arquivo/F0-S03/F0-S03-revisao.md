@@ -41,9 +41,9 @@ Observação: o 16 ms era mais rígido que a meta do plano (100 ms). A meta orig
 | # | Pendência | Estado conferido | Destino (cartão) | Dono e prazo |
 |---|---|---|---|---|
 | 1 | T08-G (guardas e posição ilegível) | **Feita no `main`**: `prototypes/viewport_qrhi/processo_malhas.py:320` registra "S03-T08-G" | Quadro corrigido | — |
-| 2 | T27 (rodar `test_viewport_adaptador.py` no passo de desenho do CI) | **Aberta**: `.github/workflows/ci.yml` não cita o teste (o passo de desenho roda só `tests/test_viewport_qrhi.py`, linhas 95 e 264) | `arquivo/F0-S03/cartoes/F0-S03-T27.md` (30 linhas, informativa) | Líder; antes do fim da S04 |
+| 2 | T27 (rodar `test_viewport_adaptador.py` no passo de desenho do CI) | **Aberta**: `.github/workflows/ci.yml` não cita o teste (o passo de desenho roda só `tests/test_viewport_qrhi.py`, linhas 95 e 264) | `cards/F0-S03/F0-S03-T27.md` (30 linhas, informativa) | Líder; antes do fim da S04 |
 | 3 | T23 (antes do primeiro lançamento) | Entrou no plano em `v2/03` (2026-10-15) | Fechado aqui | — |
-| 4 | Windows com placa real e Intel integrada | Sem cartão antes desta revisão | `arquivo/F0-S03/cartoes/F0-S03-T28.md` | PO executa; antes do portão da F0 (S10) |
+| 4 | Windows com placa real e Intel integrada | Sem cartão antes desta revisão | `cards/F0-S03/F0-S03-T28.md` | PO executa; antes do portão da F0 (S10) |
 | 5 | Teste de tempo sem depender do robô | Proposta abaixo | Decisão do PO (pergunta (c)) | PO decide; líder aplica no teste |
 | 6a | Peças lentas (lote 8 §2.3 item 2: orçamento de peças lentas) | Modo isolado e orçamento nas confirmações: T16 e T16b, feitas (`BOARD.md:110`; `LOG.md:125`, `:127`). A pergunta ao usuário sobre o orçamento total de peças condenadas: sem fonte conferida de cartão | T16/T16b; relatórios `arquivo/lotes-1-a-28/LOTE_OPUS_20/resultado.md` e `arquivo/lotes-1-a-28/LOTE_OPUS_21/resultado.md` | — (pergunta ao usuário: sem dono conferido) |
 | 6b | Seleção por triângulo (lote 8 §2.3) | Feita: T10 (`BOARD.md:103`; `LOG.md:119`) | T10; relatório `arquivo/lotes-1-a-28/LOTE_OPUS_16/resultado.md` | — |

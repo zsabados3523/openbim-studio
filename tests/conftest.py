@@ -9,6 +9,11 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # números com vírgula nos modelos gerados nos testes. Localidade "C" mantém a saída igual no CI e na máquina do PO.
 os.environ["LC_ALL"] = "C"
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from obrigatorio import ligar_ci  # noqa: E402
+
+ligar_ci()  # OBIM_CI=1: liga as chaves de obrigatório antes de qualquer teste ler o ambiente
 
 
 def pytest_terminal_summary(terminalreporter):

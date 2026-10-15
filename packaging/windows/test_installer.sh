@@ -65,6 +65,18 @@ ach=$(find "$D/env" \( -iname 'avcodec*' -o -iname 'avformat*' -o -iname 'x264*'
 passo "abrindo o app (isolado, com variáveis de ambiente sujas)"
 selftest "primeira abertura"
 
+passo "reinstalar com o programa aberto: recusa, sem apagar nada (F0-RG-13)"
+"$D/env/python.exe" -I -c "import time; time.sleep(180)" &
+aberto=$!
+sleep 3
+"$EXE" /S "/D=$DEST" &
+pid=$!; wait "$pid"; rc=$?
+kill "$aberto" 2>/dev/null; wait "$aberto" 2>/dev/null
+[ "$rc" -ne 0 ] || falha "o instalador seguiu em frente com o programa aberto"
+[ -f "$D/app/OpenBIM-Studio.pyw" ] && [ -f "$D/env/python.exe" ] || falha "a recusa apagou arquivos da instalação"
+sleep 2
+selftest "depois da recusa"
+
 selftest_pythonw() {  # o atalho usa pythonw.exe (sem janela de texto): o registro de erros tem de funcionar sem console (F0-RG-11)
   local logdir logw rc
   logdir="$(mktemp -d)"; logw="$(cygpath -w "$logdir")"
@@ -93,6 +105,15 @@ c=$(sha256sum "$Q" | cut -d' ' -f1)
 [ "$c" = "$a" ] || falha "instalar por cima não restaurou a DLL original"
 selftest "depois da reinstalação"
 
+passo "reinstalar sem escolher pasta lembra a pasta da vez anterior (F0-RG-13)"
+printf '\0' >> "$Q"
+"$EXE" /S &
+pid=$!; wait "$pid"; rc=$?
+[ "$rc" -eq 0 ] || falha "instalador sem /D saiu com código $rc"
+d=$(sha256sum "$Q" | cut -d' ' -f1)
+[ "$d" = "$a" ] || falha "instalar sem /D não foi para a pasta anterior (DLL não voltou ao original)"
+selftest "depois da reinstalação sem /D"
+
 passo "desinstalando (um arquivo do usuário na pasta deve sobreviver)"
 echo "meu arquivo" > "$D/arquivo-do-usuario.txt"
 MSYS2_ARG_CONV_EXCL="*" timeout 300 "$D/Uninstall.exe" /S "_?=$DEST" || falha "desinstalador saiu com código $?"
@@ -102,4 +123,8 @@ rm -f "$D/Uninstall.exe"
 rm -f "$D/arquivo-do-usuario.txt"
 for x in env app licenses; do [ ! -e "$D/$x" ] || falha "sobrou $x depois de desinstalar"; done
 rmdir "$D" 2>/dev/null
+passo "pasta com acento e espaço, IFC acentuado e caminho mais longo (F0-RG-13)"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$REPO/packaging/windows/test_acento.ps1")" \
+  -Exe "$(cygpath -w "$EXE")" -Base "$(cygpath -w "$(dirname "$D")")" -Ifc "$(cygpath -w "$REPO/docs/acceptance/amostras/casa-simples.ifc")" || falha "teste com acento e espaço"
 passo "OK: instalação, abertura isolada, troca de DLL, reinstalação e desinstalação sem sobras"

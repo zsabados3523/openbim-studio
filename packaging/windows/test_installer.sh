@@ -29,11 +29,14 @@ instalar() {  # $1 = pasta de destino (padrão: $DEST)
 
 selftest() {  # $1 = rótulo; ambiente sujo e Python isolado (-I), como o atalho
   local t0=$(date +%s) out dur
-  out="$(timeout 120 env -i SYSTEMROOT="$SYSTEMROOT" TEMP="$TEMP" QT_QPA_PLATFORM=offscreen \
+  out="$(timeout 120 env -i SYSTEMROOT="$SYSTEMROOT" TEMP="$TEMP" QT_QPA_PLATFORM=offscreen OPENBIM_SEM_DIALOGO=1 \
+        OPENBIM_LOG_DIR="$TEMP/openbim-selftest-logs" \
         PYTHONPATH='C:\nao-existe' PYTHONHOME='C:\nao-existe' PYTHONUSERBASE='C:\nao-existe' \
         "$D/env/python.exe" -I "$D/app/OpenBIM-Studio.pyw" --selftest 2>&1)"
   dur=$(( $(date +%s) - t0 ))
-  out="$(printf "%s" "$out" | tail -n 1 | tr -d '\r')"
+  todo="$(printf "%s" "$out" | tr -d '\r')"
+  out="$(printf "%s" "$todo" | tail -n 1)"
+  if [ "$out" != "OK" ]; then echo "--- saída completa do selftest ---"; printf "%s\n" "$todo" | tail -n 40; cat "$TEMP"/openbim-selftest-logs/*.log 2>/dev/null | tail -n 40; fi
   echo "   $1: '$out' em ${dur}s"
   [ "$out" = "OK" ] || falha "$1: selftest não imprimiu OK"
   [ "$dur" -le 10 ] || falha "$1: abriu em ${dur}s (meta: até 10 s)"

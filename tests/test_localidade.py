@@ -2,7 +2,7 @@
 """Oráculo da T26 (lote Opus 6, §3.3): o IFC não pode sair com vírgula decimal depois de criar o QApplication.
 
 Cada caso roda em SUBPROCESSO sem LC_ALL (o conftest.py põe LC_ALL=C no pytest e isso esconderia o defeito).
-Casos que dependem de app/openbim_app/localidade.py pulam até o módulo existir (S03-T26).
+O módulo app/openbim_app/localidade.py é exigido na coleta (RG-03).
 Sem localidade pt_BR na máquina, tudo pula COM MENSAGEM EM DESTAQUE; nunca passa em silêncio.
 """
 import json
@@ -12,12 +12,12 @@ import sys
 from pathlib import Path
 
 import pytest
+from obrigatorio import pular as pular_chave
 
 RAIZ = Path(__file__).resolve().parent.parent
 APP = RAIZ / "app"
 AUX = Path(__file__).resolve().parent / "localidade_aux.py"
-TEM_MODULO = (APP / "openbim_app" / "localidade.py").exists()
-AGUARDA = pytest.mark.skipif(not TEM_MODULO, reason="aguarda S03-T26: localidade.py")
+assert (APP / "openbim_app" / "localidade.py").exists(), "falta app/openbim_app/localidade.py (S03-T26)"  # RG-03: antes os casos pulavam
 WIN = sys.platform == "win32"
 LINUX = sys.platform.startswith("linux")
 
@@ -55,8 +55,8 @@ def destaque(msg):
 def virgula_disponivel():
     nome = caso("provar_locale")["nome"]
     if not nome:
-        pytest.skip(destaque("SEM LOCALIDADE pt_BR NESTA MAQUINA: oraculo da T26 NAO FOI EXECUTADO "
-                             "(Linux: locale-gen pt_BR.UTF-8)"))
+        pular_chave(destaque("SEM LOCALIDADE pt_BR NESTA MAQUINA: oraculo da T26 NAO FOI EXECUTADO "
+                       "(Linux: locale-gen pt_BR.UTF-8)"), "OBIM_LOCALIDADE_OBRIGATORIA")
     return nome
 
 
@@ -96,14 +96,12 @@ def test_l1w_canario_forcando_virgula_a_mao(virgula_disponivel):
     assert "2799,9" in r["texto"], "o IfcOpenShell não enxerga a localidade forçada"
 
 
-@AGUARDA
 def test_l2_gravacao_identica_a_processo_em_c(canario_windows_ok, referencia):
     r = caso("l2")
     assert r["numerico_ok"] and r["ponto"] == "."
     conferir_gravacao(r, referencia)
 
 
-@AGUARDA
 def test_l3_interface_continua_brasileira(canario_windows_ok):
     r = caso("l3")
     assert r["numerico_ok"]
@@ -116,7 +114,6 @@ def test_l3_interface_continua_brasileira(canario_windows_ok):
         assert (r["fmt"], r["nome_qt"]) == (ref["fmt"], ref["nome_qt"]), (r, ref)
 
 
-@AGUARDA
 def test_l4_outra_biblioteca_desfaz_a_correcao(canario_windows_ok, referencia):
     r = caso("l4")
     assert r["desfeito"] == ",", "pré-condição: a localidade com vírgula deveria ter voltado"
@@ -125,18 +122,15 @@ def test_l4_outra_biblioteca_desfaz_a_correcao(canario_windows_ok, referencia):
     conferir_gravacao(r, referencia)
 
 
-@AGUARDA
 def test_l5_gravacao_em_thread_secundaria(canario_windows_ok, referencia):
     conferir_gravacao(caso("l5"), referencia)
 
 
-@AGUARDA
 def test_l6_selftest_em_pt_br(virgula_disponivel):
     p = rodar("-m", "openbim_app", "--selftest", env=ambiente())
     assert p.stdout.strip().splitlines()[-1] == "OK", p.stdout + p.stderr
 
 
-@AGUARDA
 def test_l6_qapplication_so_em_localidade_py():
     achados = {f.name for f in (APP / "openbim_app").rglob("*.py") if "QApplication(" in f.read_text(encoding="utf-8")}
     assert achados == {"localidade.py"}, f"QApplication( deve aparecer só em localidade.py; achado em {sorted(achados)}"

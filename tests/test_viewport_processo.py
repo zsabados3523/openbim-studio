@@ -1,13 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Oráculo da S03-T08 (cartão T08-0), P1 a P12: carga de malhas em processo separado, sem tela.
 
-Transcrição de docs/state/reports/LOTE_OPUS_6.md §2.4. Congelado: não afrouxar número nem remover caso.
-Guardas de ativação (a suíte não fica vermelha entre cartões): `requer_processo` liga quando existir
-`processo_malhas.py`; `requer_limite` liga quando `CarregadorMalhas` aceitar `limite_peca_s`.
+Transcrição de docs/state/arquivo/lotes-1-a-28/LOTE_OPUS_6/resultado.md §2.4. Congelado: não afrouxar número nem remover caso.
+As guardas de ativação (requer_processo, requer_limite) saíram na RG-03: módulo ou parâmetro ausente agora FALHA, não pula.
 Peça lenta injetada no filho: OBIM_TESTE_PECA_LENTA="<guid>=<s>[,...]"; filho que cai: OBIM_TESTE_MATAR_FILHO="<guid>".
 Teste lento (P6): OBIM_TESTES_LENTOS=1.
 
-P13 a P18 (cartão T08-0b, LOTE_OPUS_7.md §4 item 5): defeitos achados no lote 7. Cada um é `xfail(strict=True)` até a
+P13 a P18 (cartão T08-0b, arquivo/lotes-1-a-28/LOTE_OPUS_7/resultado.md §4 item 5): defeitos achados no lote 7. Cada um é `xfail(strict=True)` até a
 S03-T08-E: quando passar, o xfail estrito vira falha e avisa para tirar a marca. Gancho de teste novo:
 OBIM_TESTE_FALHAR_CAIXA="<guid>" (o filho da caixa falha nessa peça). As guardas `requer_caixa_falha` e `OBIM_FORCAR_GUARDAS`
 saíram na S04-T16 (cartão S03-T08-G): o recurso já está no `main`.
@@ -33,16 +32,12 @@ sys.path.insert(0, str(RAIZ / "prototypes"))
 from test_viewport_adaptador import _ViewportFalso  # noqa: E402
 from test_viewport_carregador import (  # noqa: E402,F401  (modelos e fixtures compartilhados)
     CarregadorMalhas, LoteMalha, ResumoCarga, _carregar, _novo, _percorrer, _por_produto, m600, m3000,
-    _caixa, mab, requer_a, requer_processo, TEM_PROCESSO,
+    _caixa, mab,
 )
 from test_viewport_responsivo import MAX_MS, P95_MS, _medir, _publicar, app  # noqa: E402,F401
 
-TEM_LIMITE = CarregadorMalhas is not None and "limite_peca_s" in inspect.signature(CarregadorMalhas.__init__).parameters
-requer_limite = pytest.mark.skipif(not TEM_LIMITE, reason="aguarda S03-T08-B2 (parâmetro limite_peca_s)")
-requer_divisao = pytest.mark.skipif(
-    CarregadorMalhas is None or "max_bytes_lote" not in inspect.signature(CarregadorMalhas.__init__).parameters,
-    reason="aguarda S03-T08-B1 (parâmetro max_bytes_lote)",
-)
+_PARAMS = inspect.signature(CarregadorMalhas.__init__).parameters
+assert "limite_peca_s" in _PARAMS and "max_bytes_lote" in _PARAMS, "CarregadorMalhas sem limite_peca_s/max_bytes_lote"
 
 
 def _aguarda_e(item):
@@ -55,7 +50,7 @@ def _lento_ou_pular():
 
 
 def _kw_sem_limite():
-    return {"limite_peca_s": None} if TEM_LIMITE else {}
+    return {"limite_peca_s": None}
 
 
 # ---------- modelos gerados no próprio teste ----------
@@ -170,8 +165,6 @@ def _regra_de_ouro(r):
 
 
 # ---------- P1 a P3, P7, P9 a P12: exigem o processo ----------
-@requer_a
-@requer_processo
 @pytest.mark.parametrize("modelo, tri, produtos", [("m600", 7200, 600), ("m3000", 36000, 3000)])
 def test_p1_numeros_da_t05_pelo_processo(modelo, tri, produtos, request):
     _, r, car = _carregar(request.getfixturevalue(modelo))
@@ -180,8 +173,6 @@ def test_p1_numeros_da_t05_pelo_processo(modelo, tri, produtos, request):
     assert car.aguardar(timeout=5.0)
 
 
-@requer_a
-@requer_processo
 def test_p2_diagnostico_do_filho(mapeadas1, monkeypatch):
     caminho, [(_, guid)] = mapeadas1
     _lentas(monkeypatch, (guid, 6))  # mantém o filho vivo para ser inspecionado
@@ -206,8 +197,6 @@ def test_p2_diagnostico_do_filho(mapeadas1, monkeypatch):
     assert saida.stdout.strip().splitlines()[-1] == '[false, "."]'
 
 
-@requer_a
-@requer_processo
 def test_p3_janela_responsiva_com_peca_de_3s(app, mapeadas1, monkeypatch, capsys, record_property):
     caminho, [(_, guid)] = mapeadas1
     _lentas(monkeypatch, (guid, 3))
@@ -221,8 +210,6 @@ def test_p3_janela_responsiva_com_peca_de_3s(app, mapeadas1, monkeypatch, capsys
     assert _triangulos(lista)[mapeadas1[1][0][0]] == 12 and sum(len(x.indices) // 3 for x in lista) == 13 * 12
 
 
-@requer_a
-@requer_processo
 def test_p7_cancelar_durante_peca_de_30s(mapeadas1, monkeypatch):
     caminho, [(_, guid)] = mapeadas1
     _lentas(monkeypatch, (guid, 30))
@@ -238,8 +225,6 @@ def test_p7_cancelar_durante_peca_de_30s(mapeadas1, monkeypatch):
     assert multiprocessing.active_children() == []
 
 
-@requer_a
-@requer_processo
 def test_p9_consumidor_parado(m3000):
     car = CarregadorMalhas(str(m3000), tamanho_bloco=200, fila_max=2)
     car.iniciar()
@@ -251,8 +236,6 @@ def test_p9_consumidor_parado(m3000):
     assert r.estado == "concluido" and r.triangulos == 36000
 
 
-@requer_a
-@requer_processo
 def test_p10_adaptador_cancela_peca_de_30s(app, mapeadas1, monkeypatch):
     from viewport_qrhi.adaptador import AdaptadorCarga
     caminho, [(_, guid)] = mapeadas1
@@ -266,13 +249,10 @@ def test_p10_adaptador_cancela_peca_de_30s(app, mapeadas1, monkeypatch):
     assert time.perf_counter() - t < 1.0
 
 
-@requer_a
-@requer_processo
 def test_p11_medicao_de_memoria():
     from viewport_qrhi.medir import pico_memoria_mb
     assert pico_memoria_mb() > 0
-    if not inspect.signature(pico_memoria_mb).parameters:
-        pytest.skip("aguarda S03-T08-C (pico de memória de um processo filho)")
+    assert inspect.signature(pico_memoria_mb).parameters, "pico_memoria_mb sem parâmetro (S03-T08-C: pico de um processo filho)"
     filho = multiprocessing.get_context("spawn").Process(target=time.sleep, args=(5,), daemon=True)
     filho.start()
     try:
@@ -284,9 +264,6 @@ def test_p11_medicao_de_memoria():
         filho.join(5)
 
 
-@requer_a
-@requer_processo
-@requer_divisao
 def test_p12_peca_maior_que_o_lote(grade):
     caminho, id_grade = grade
     lotes, r, _ = _carregar(caminho, max_bytes_lote=64 * 1024)
@@ -311,8 +288,6 @@ def _caixa_de(lotes, i):
     return mn, mx
 
 
-@requer_a
-@requer_limite
 def test_p4_peca_lenta_vira_caixa(mapeadas1, monkeypatch, tmp_path):
     caminho, [(id_l, guid)] = mapeadas1
     ref_lotes, ref, _ = _tempo_carga(caminho)  # sem injeção
@@ -333,8 +308,6 @@ def test_p4_peca_lenta_vira_caixa(mapeadas1, monkeypatch, tmp_path):
     _regra_de_ouro(r)
 
 
-@requer_a
-@requer_limite
 def test_p5_copias_da_mesma_familia(mapeadas1, mapeadas2, monkeypatch):
     (c1, [(_, g1)]), (c2, lentas2) = mapeadas1, mapeadas2
     _lentas(monkeypatch, (g1, 5))
@@ -348,8 +321,6 @@ def test_p5_copias_da_mesma_familia(mapeadas1, mapeadas2, monkeypatch):
     _regra_de_ouro(r2)
 
 
-@requer_a
-@requer_limite
 def test_p6_lentidao_real_na_grade(grade):
     _lento_ou_pular()
     caminho, id_grade = grade
@@ -359,8 +330,6 @@ def test_p6_lentidao_real_na_grade(grade):
     assert r.estado == "concluido" and r.triangulos == 28800 and r.simplificadas == []
 
 
-@requer_a
-@requer_limite
 def test_p8_filho_que_cai(mapeadas1, monkeypatch):
     caminho, [(id_l, guid)] = mapeadas1
     ref_lotes, _, _ = _tempo_carga(caminho)
@@ -404,8 +373,6 @@ def copias12(tmp_path_factory):
     return _gerar_mapeadas(tmp_path_factory.mktemp("cop12") / "cop12.ifc", normais=0, lentas=12)
 
 
-@requer_a
-@requer_limite
 def test_p13_copias_da_mesma_familia_em_blocos_diferentes(copias1, copias12, monkeypatch):
     (c1, [(_, g1)]), (c12, lentas12) = copias1, copias12
     _lentas(monkeypatch, (g1, 5))
@@ -441,8 +408,6 @@ def _gerar_sem_geometria(caminho):
     return caminho, ruim.id(), (lenta.id(), lenta.GlobalId)
 
 
-@requer_a
-@requer_limite
 def test_p14_produto_sem_geometria_nao_e_acusado(tmp_path, monkeypatch):
     caminho, id_ruim, (id_l, guid) = _gerar_sem_geometria(tmp_path / "semgeo.ifc")
     _lentas(monkeypatch, (guid, 5))
@@ -482,8 +447,6 @@ def _gerar_retangulares(caminho):
     return caminho, [(a.id(), a.GlobalId), (b.id(), b.GlobalId)]
 
 
-@requer_a
-@requer_limite
 @pytest.mark.parametrize("modelo", ["paredes_e_aberturas", "perfil_retangular", "posicao_vazia"])
 def test_p15_caixa_do_solido_extrudado_dentro_de_1cm(modelo, mab, tmp_path, monkeypatch):
     if modelo == "paredes_e_aberturas":  # paredes de perfil IfcArbitraryClosedProfileDef com IfcIndexedPolyCurve
@@ -506,8 +469,6 @@ def test_p15_caixa_do_solido_extrudado_dentro_de_1cm(modelo, mab, tmp_path, monk
     _regra_de_ouro(r)
 
 
-@requer_a
-@requer_limite
 @pytest.mark.parametrize("modelo", [
     "com_reinicio", "so_caixa"])
 def test_p16_deslocamento_nao_gravavel_em_todo_lote(modelo, mapeadas1, copias1, monkeypatch):
@@ -522,8 +483,6 @@ def test_p16_deslocamento_nao_gravavel_em_todo_lote(modelo, mapeadas1, copias1, 
         lotes[-1].deslocamento[0] = 1.0
 
 
-@requer_a
-@requer_limite
 def test_p18_filho_da_caixa_que_falha(mapeadas1, monkeypatch):
     caminho, [(id_l, guid)] = mapeadas1
     ref_lotes, _, _ = _tempo_carga(caminho)

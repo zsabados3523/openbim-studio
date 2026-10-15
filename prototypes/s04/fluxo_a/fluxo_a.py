@@ -61,6 +61,7 @@ class FluxoA:
         self.trava, self.historico, self._refazer = threading.Lock(), [], []
         self.ultimo, self.sequencias, self._cache, self._passos, self._painel, self._g = {"criados": [], "alterados": [], "apagados": [], "geometria": []}, [], {}, {}, "(nada selecionado)", 0
         self.cena = self.janela_principal = self._ponte = self._app = self._rhi = self.selecionado = self._ult_guid = self._arquivo_ifc = None
+        self._desl = None  # deslocamento da cena (float64, metros): o centro da caixa do 1o lote com geometria, igual para a sessão toda (RG-07)
         self._relogio = lambda: time.perf_counter() * 1000  # sem janela; com janela, o relógio do núcleo (o mesmo de Cena.relogio())
         if janela:
             self._criar_janela()
@@ -201,7 +202,7 @@ class FluxoA:
         self._refazer.clear()
         return guids
 
-    def _lote(self, guids):  # malhas do núcleo -> LoteMalha (sombreado chapado: 3 vértices por triângulo, normal da face; deslocamento 0)
+    def _lote(self, guids):  # malhas do núcleo -> LoteMalha (sombreado chapado: 3 vértices por triângulo, normal da face; posições relativas ao deslocamento da cena)
         import obimcore
         from viewport_qrhi.carregador import DTYPE_OBJETO, DTYPE_VERTICE, LoteMalha
         mal = obimcore.malhas(self.ifc, list(guids))
@@ -209,6 +210,10 @@ class FluxoA:
         if not gs:
             return None
         pos = [np.asarray(mal[g]["posicoes"], np.float64).reshape(-1, 3)[np.asarray(mal[g]["indices"], np.int64).reshape(-1, 3)].reshape(-1, 3) for g in gs]
+        if self._desl is None:  # coordenada UTM (Y ~ 7,4 milhões de m) não cabe em float32: o 1o lote fixa o centro da cena, arredondado ao metro (como a S03)
+            caixa = np.concatenate(pos)
+            self._desl = np.rint((caixa.min(0) + caixa.max(0)) / 2.0)
+        pos = [p - self._desl for p in pos]  # em float64; só depois vira float32
         n = np.array([len(p) for p in pos])
         ini, todos = np.cumsum(n) - n, np.concatenate(pos)
         t = todos.reshape(-1, 3, 3)
@@ -219,7 +224,7 @@ class FluxoA:
         for j, g in enumerate(gs):  # um índice por vértice (0, 1, 2, ... no lote todo)
             o[j] = (0, g.encode("ascii"),  # id STEP 0: o núcleo não precisa dele (tabela do núcleo, `id_step`)
                  ini[j], n[j], ini[j], n[j], pos[j].min(0), pos[j].max(0))
-        return LoteMalha(len(self.sequencias), v, np.arange(len(todos), dtype=np.uint32), o, np.zeros(3), len(gs), len(gs))
+        return LoteMalha(len(self.sequencias), v, np.arange(len(todos), dtype=np.uint32), o, self._desl.copy(), len(gs), len(gs))
 
     def _produto(self, alvo, erro=True):  # elemento pelo GlobalId (ou "ultimo"); sem `erro`, None se não existe
         g = self._ult_guid if alvo == "ultimo" else alvo
@@ -259,15 +264,17 @@ class FluxoA:
         pavs = self.ifc.by_type("IfcBuildingStorey")
         if tipo is None or min(comp, alt, esp) <= 0 or not pavs or n < 1:
             raise ValueError(f"parede inválida (tipo {c['tipo']!r} inexistente, medida <= 0 ou modelo sem pavimento)")
-        ws = []
+        ws, conj = [], E.get_material(tipo, should_inherit=False)  # conjunto de camadas do tipo: cada parede ganha o seu IfcMaterialLayerSetUsage (T11c)
         for k in range(n):
             g, w = self._g + k, api("root.create_entity", self.ifc, ifc_class="IfcWall", name="Parede")
             self._representacoes(w, comp, alt, esp)
             m = np.eye(4)
             m[:2, 3] = (g % 50) * 5.0, (g // 50) * 4.0
             api("geometry.edit_object_placement", self.ifc, product=w, matrix=m)
+            if conj is not None and conj.is_a("IfcMaterialLayerSet"):  # tipo sem conjunto de camadas: parede sem material (nada a atribuir)
+                api("material.assign_material", self.ifc, products=[w], type="IfcMaterialLayerSetUsage", material=conj)
             ws.append(w)
-        api("type.assign_type", self.ifc, related_objects=ws, relating_type=tipo)
+        api("type.assign_type", self.ifc, related_objects=ws, relating_type=tipo, should_map_representations=False)  # uma chamada só para o lote: evita custo quadrático (lote Opus 23 A1)
         api("spatial.assign_container", self.ifc, products=ws, relating_structure=min(pavs, key=lambda s: s.Name or ""))
         u["criados"], u["geometria"] = [w.GlobalId for w in ws], [w.GlobalId for w in ws]
         u["dg"] = n
@@ -368,9 +375,14 @@ class FluxoA:
         met, chaves = CAMERA[c["cmd"]]
         return [] if self.cena is None else getattr(self.cena, met)(*(float(c[k]) for k in chaves.split())) or []
 
-    def _c_camera(self, c, u):
+    def _c_camera(self, c, u):  # `alvo` vem em coordenadas do MUNDO; a cena está em mundo menos o deslocamento (RG-07)
         if self.cena is not None:
-            self.cena.definir_camera(**{k: ([float(a) for a in c[k]] if k == "alvo" else float(c[k])) for k in ("alvo", "distancia", "azimute", "elevacao") if k in c})
+            a = {k: ([float(x) for x in c[k]] if k == "alvo" else float(c[k])) for k in ("alvo", "distancia", "azimute", "elevacao") if k in c}
+            if "alvo" in a:
+                if self._desl is None:  # câmera antes de qualquer malha: o deslocamento da cena nasce do alvo (o 1º lote o usa)
+                    self._desl = np.rint(np.asarray(a["alvo"], np.float64))
+                a["alvo"] = [float(x) for x in np.asarray(a["alvo"], np.float64) - self._desl]
+            self.cena.definir_camera(**a)
         return []
 
     _c_esperar = lambda self, c, u: self._bombear(lambda: False, float(c["ms"])) or []  # noqa: E731  (bombeia eventos até passar o tempo)

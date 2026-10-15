@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from obrigatorio import pular as pular_chave
 
 PROTO = Path(__file__).resolve().parent.parent / "prototypes" / "viewport_qrhi"
 
@@ -46,8 +47,8 @@ def tem_pt_br():
     if sys.platform == "win32":
         pytest.skip("\n!!! T26b: caso de localidade pt_BR só roda no Linux; NAO FOI EXECUTADO !!!\n")
     if _py(CODIGO_VIRGULA) != ",":
-        pytest.skip("\n!!! SEM LOCALIDADE pt_BR NESTA MAQUINA: teste da T26b NAO FOI EXECUTADO "
-                    "(Linux: locale-gen pt_BR.UTF-8) !!!\n")
+        pular_chave("\n!!! SEM LOCALIDADE pt_BR NESTA MAQUINA: teste da T26b NAO FOI EXECUTADO "
+              "(Linux: locale-gen pt_BR.UTF-8) !!!\n", "OBIM_LOCALIDADE_OBRIGATORIA")
 
 
 def test_prototipo_deixa_ponto_decimal_depois_do_qapplication(tem_pt_br):

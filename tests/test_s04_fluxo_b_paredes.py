@@ -4,8 +4,8 @@ GUARDA: pula enquanto o módulo nanobind `fluxo_b_paredes` não puder ser import
 A "saída igual" é conferida PASSO A PASSO: o mesmo roteiro curto vai ao fluxo A (Python, FluxoA sem janela) e à biblioteca C++, ambos gravam e reabrem o IFC depois de cada passo, e a
 assinatura (classes, nomes, camadas, posição, representações, psets, triângulos/caixa/volume por create_shape, relações, desfazer/refazer) tem de ser igual a 1e-6 m. GlobalIds diferem.
 Suposições do oráculo (o Opus confere): (1) classes de geometria de apoio (ponto, direção, eixo, lista de pontos, curva, perfil) NÃO são contadas, mas qualquer entidade sem referência
-(órfã) reprova; as demais classes, inclusive relações, batem em número com A (1 relação de tipo e 1 de pavimento, compartilhadas), EXCETO uso de camadas e relação de material: o
-fluxo A compartilha 1 de cada entre as paredes de um lote (desvio da T11, achado desta tarefa); B tem 1 uso por parede e 1 relação por parede e por tipo, conferido sozinho;
+(órfã) reprova; as demais classes, inclusive relações, batem em número com A (1 relação de tipo e 1 de pavimento, compartilhadas; 1 IfcMaterialLayerSetUsage e 1 relação de material por parede, SEM
+exceção desde a T11c: A e B têm a mesma contagem de TODA classe e cada um confere sozinho 1 uso por parede e 1 relação por parede e por tipo);
 (2) o gancho `definir_falha(k)` conta TODA mutação do modelo (criar instância, alterar atributo, remover instância) feita pelo comando; (3) tipo e parede são achados pelo nome e pela posição.
 Sentinelas sem o módulo: contrato, `validate` com regras EXPRESS, e o roteiro curto no próprio fluxo A (prova que o oráculo é satisfazível)."""
 import functools
@@ -27,6 +27,7 @@ import ifcopenshell.util.element as E
 import ifcopenshell.util.placement as P
 import pytest
 import s04_fluxo_b_aux as aux
+from obrigatorio import pular as pular_chave
 from s04_fluxo_b_aux import CAMADAS, FIRE, PAR, FluxoAd, FluxoBd, alfabeto_ok, assinatura, igual, roteiro, validar
 
 OBRIGATORIO = os.environ.get("OBIM_S04_T13_OBRIGATORIO") == "1"
@@ -101,6 +102,19 @@ def test_sentinela_o_proprio_fluxo_a_cumpre_o_esperado_do_roteiro_curto(tmp_path
     sig = assinatura(p)
     assert esperado_curto(sig) == [] and not sig["orfas"] and not validar(p) and not aux.guids_ruins(p) and sig["esquema"] == "IFC4"
 
+def test_sentinela_t11c_fluxo_a_tem_1_uso_e_1_relacao_de_material_por_parede_inclusive_no_lote(tmp_path):  # sem a exceção antiga: A tem de ter a contagem de B (1 uso por parede, 1 relação por parede e por tipo)
+    a = FluxoAd(tmp_path)
+    for nome, kw in roteiro():
+        if nome.startswith("#"):
+            continue
+        a.rodar(nome, **kw)
+        if nome == "criar_paredes_lote":
+            break
+    sig = assinatura(a.gravar())
+    nw, nt = len(sig["paredes"]), len(sig["tipos"])
+    assert nw >= 80 and sig["materiais"] == {"IfcMaterialLayerSetUsage": nw, "IfcRelAssociatesMaterial": nw + nt}, (nw, nt, sig["materiais"])
+
+# ---------- saída igual ----------
 def test_roteiro_curto_saida_igual_passo_a_passo(rodada):
     out, _ = rodada
     ate = next(i for i, (r, _) in enumerate(out) if r == "curto")
@@ -256,7 +270,7 @@ def roteirinho(b):
 
 def test_gravar_com_localidade_pt_br_nao_poe_virgula_decimal(mod, tmp_path):  # armadilha 3 da etapa 3 (T26): o fluxo B não tem o garantir_numerico_c do Python
     nome = next((n for n in ("pt_BR.UTF-8", "pt_BR.utf8", "Portuguese_Brazil.1252", "pt_BR") if _tem(n)), None)
-    nome or pytest.skip("\n!!! SEM LOCALIDADE pt_BR NESTA MÁQUINA: o caso da vírgula decimal NÃO FOI EXECUTADO !!!\n")
+    nome or pular_chave("\n!!! SEM LOCALIDADE pt_BR NESTA MÁQUINA: o caso da vírgula decimal NÃO FOI EXECUTADO !!!\n", "OBIM_LOCALIDADE_OBRIGATORIA")
     b = mod.Paredes()
     roteirinho(b)
     b.gravar(str(tmp_path / "c.ifc"))
@@ -617,7 +631,7 @@ def filho(*args):
 def test_item1_localidade_por_thread_gravacoes_simultaneas_com_virgula_no_processo(mod14, tmp_path, t, n):
     r = filho("localidade", t, n, tmp_path)
     if r["localidade"] is None:
-        pytest.skip("\n!!! SEM LOCALIDADE pt_BR NESTA MÁQUINA: o caso da vírgula decimal NÃO FOI EXECUTADO !!!\n")
+        pular_chave("\n!!! SEM LOCALIDADE pt_BR NESTA MÁQUINA: o caso da vírgula decimal NÃO FOI EXECUTADO !!!\n", "OBIM_LOCALIDADE_OBRIGATORIA")
     s = r["sondas"]
     assert not r["erros"] and r["virgula_no_processo"] is True and s["total"] > 100, r
     assert s["dentro_de_gravacao"] >= 20, f"quase nenhuma sonda caiu DENTRO de uma gravação: a ponte tem de soltar o GIL em comandos e gravar (nb::gil_scoped_release); senão nada roda em paralelo e o caso não prova nada ({s})"
@@ -638,3 +652,34 @@ def test_item4_segundo_escritor_com_espera_zero_falha_ocupado_e_a_leitura_espera
         assert x["maior_tentativa_ms"] < 200, f"{i}: com espera=0 o 2o escritor tem de falhar NA HORA, não esperar o lote ({x})"
         assert x["lido_durante"] == x["esperado"] == x["paredes_final"], f"{i}: a leitura viu o lote pela metade ({x})"
         assert x["retorno"] == 15000 and x["pode_desfazer"] == 3 and x["total"] == x["total_ref"], f"{i}: o escritor barrado tocou no modelo ou o lote saiu diferente do lote sozinho ({x})"
+
+# Construção concorrente (achado da T14c): várias threads criando o PRIMEIRO `Paredes` do processo ao mesmo tempo derrubam-no (SIGSEGV; 'malloc(): unaligned tcache chunk'); o aquecimento
+# (um modelo criado antes, na thread principal) cura. A causa está na 1a construção (estáticos preguiçosos do IfcOpenShell). Um filho NOVO por rodada: cada processo só tem UMA 1a construção.
+RODADAS_FRIO = 15
+def test_item_frio_a_ponte_aguenta_threads_criando_o_primeiro_paredes_ao_mesmo_tempo(mod14):  # pela ponte: HOJE passa, porque o construtor nanobind segura o GIL e serializa as construções
+    for i in range(RODADAS_FRIO):  # (guarda de regressão: vira falha se a ponte passar a soltar o GIL no construtor sem a biblioteca ser segura)
+        r = filho("frio", 4)
+        assert not r["erros"] and r["vivas"] == 0 and len(r["saidas"]) == 4, f"rodada {i}: {r}"
+        assert all(s[1] == [20, 20, 2] for s in r["saidas"]), f"rodada {i}: {r}"
+
+def _exe_frio():
+    pastas = [Path(os.environ["OBIM_S04_FLUXO_B_DIR"])] if os.environ.get("OBIM_S04_FLUXO_B_DIR") else []
+    pastas += [Path(x) for x in os.environ.get("PYTHONPATH", "").split(os.pathsep) if x] + [Path(sys.modules["fluxo_b_paredes"].__file__).parent]
+    for d in pastas:
+        for nome in ("fluxo_b_frio", "fluxo_b_frio.exe", "Release/fluxo_b_frio.exe"):
+            if (d / nome).is_file():
+                return d / nome
+    return None
+
+@pytest.mark.parametrize("t", [2, 4, 8])
+def test_item_frio_construcao_concorrente_de_paredes_e_segura(mod14, t):  # C++ puro (frio_teste.cpp, alvo `fluxo_b_frio` do CMakeLists): é onde o defeito aparece; a ponte segura o GIL
+    exe = _exe_frio()
+    if exe is None:
+        pular14("executável fluxo_b_frio ausente (alvo do CMakeLists.txt de prototypes/s04/fluxo_b/; build.sh o gera ao lado do módulo)")
+    for i in range(RODADAS_FRIO):  # cada rodada = processo novo = construção a frio
+        try:
+            p = subprocess.run([str(exe), str(t), "20"], capture_output=True, text=True, timeout=120)
+        except subprocess.TimeoutExpired:
+            pytest.fail(f"rodada {i} ({t} threads): o processo TRAVOU na construção concorrente")
+        assert p.returncode == 0 and f"FRIO ok {t}" in p.stdout, f"rodada {i} ({t} threads): o processo CAIU (código {p.returncode}; negativo = sinal, ex.: -11 = SIGSEGV):\n{p.stdout[-300:]}\n{p.stderr[-600:]}"
+

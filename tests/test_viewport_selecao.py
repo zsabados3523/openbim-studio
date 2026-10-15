@@ -10,6 +10,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from obrigatorio import pular_sem_tela
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "prototypes"))
 
@@ -137,7 +138,7 @@ def _clique(w, x, y):
 
 def test_clique_no_cubo_seleciona_e_fora_da_none(app):
     if os.environ.get("QT_QPA_PLATFORM", "offscreen") == "offscreen":
-        pytest.skip("precisa de tela: rode com QT_QPA_PLATFORM=xcb")
+        pular_sem_tela("precisa de tela: rode com QT_QPA_PLATFORM=xcb")
     w = CuboViewport(girar=False)
     w.definir_angulo(35.0)
     w.resize(400, 300)
@@ -279,7 +280,7 @@ def test_pior_caso_no_modelo_grande_real():
 def test_viewport_em_lotes_pick_so_com_caixas(app):
     """Com tela: lotes liberados após o envio (sem triângulos) e o clique ainda acha o objeto."""
     if os.environ.get("QT_QPA_PLATFORM", "offscreen") == "offscreen":
-        pytest.skip("precisa de tela: rode com QT_QPA_PLATFORM=xcb")
+        pular_sem_tela("precisa de tela: rode com QT_QPA_PLATFORM=xcb")
     w = CuboViewport(girar=False)
     w.limpar()
     lote = _lote([(42, "Z" * 22, *_caixa_em((0, 0, 0), 1.0))], desl=(0, 0, 0))

@@ -1,61 +1,42 @@
 # Quadro da F0
 
-> Atualizado: 2026-10-10 (sessão 2). Fonte: `v2/03_fase0_especificacao.md`. Legenda de status: PRONTA · EM_ANDAMENTO · BLOQUEADA (aguarda dependência) · AGUARDA_PO · AGUARDA_OPUS · FEITA · CONTÍNUA.
+> Atualizado: 2026-10-15 (cartão F0-RG-17). Só o que está **aberto**. Visão da máquina; o PO lê `docs/PAINEL_DO_PROJETO.md`. Fonte: `v2/03_fase0_especificacao.md`. Status de uma palavra: PRONTA · EM_ANDAMENTO · PAUSADA · BLOQUEADA · AGUARDA_PO · AGUARDA_OPUS · ABERTA · NAO_INICIADA · CONTINUA. Fatias e cartões fechados, com a história de cada um (lotes, reprovações, PRs): `arquivo/BOARD-historico-2026-10-15.md` e `LOG.md`.
 
 ## Fatias
-| Fatia | Nome | Tam. | Depende de | Status | Cartões | Observação |
-|---|---|---|---|---|---|---|
-| F0-S01 | Repositório, licenças e pesquisa | P | — | FEITA (2026-10-11; aprovada no lote Opus 2) | S01-T01 a T12 | Abertos sem bloquear: termos conda-forge, Qt Shader Tools, ReportLab, SINAPI; espelho Codeberg depois |
-| F0-S02 | CI Windows+Linux e app esqueleto | M→G (tratada como G) | S01 | CONCLUÍDA (aceite do PO em 2026-10-11, Windows e Linux) | S02-T01 a T16 | S02-T01 pode começar quando S01-T01 estiver feita |
-| F0-S03 | Protótipo de viewport (Qt RHI) | M | S02; S08 contínuo | CONCLUÍDA (2026-10-12; PO aprovou o portão: atingido no Linux, Windows em software, placa real no Windows é risco para a S10)| T01 a T08 e T25 a T27 feitas (ver LOG). Restam, sem bloquear: T08-G (T3 pequeno), T27 (P17 no CI), T23 (antes do primeiro release). Relatório: reports/F0-S03.md.| T01 a T04, T06, T25 e T02 feitas e no main; **T05 (T3) em 3 partes, REPROVADA no lote Opus 5 (2 defeitos reais, correções curtas): cartões T05-P0b (oráculo) e T05-C1 (código); PRs 16, 18 e 19 aguardam correção, re-revisão e ok do PO**; metas da T05 medidas na máquina do PO (o portão da S03 só se decide na T07) (abrir 13,5 s, 833 MB, atraso 118 ms, 60 FPS placa real); T07 (benchmark e relatório da fatia) depende da T05 |
-| F0-S04 | Ponte Python↔C++ (híbrido vs C++ puro) | G, crítica | S02 | EM_ANDAMENTO (especificada no lote 9; 19 cartões F0-S04-T01 a T19; etapa 1 = T01 a T04 com parada cedo)| Cartões em docs/state/cards/F0-S04-T*.md; relatório: reports/LOTE_OPUS_9.md. T08-G entra como S04-T16.| Contém T3 (ponte, threads) |
-| F0-S05 | Oplog, undo e merge | M | S04 | NÃO INICIADA | — | Contém T3 (transações, gravação do par). Precisa de formato mínimo provisório do `.obim` antes do ADR-003 |
-| F0-S06 | Planta e corte (HLR) + vista no `.obim` | G, crítica | S02; S08 contínuo | NÃO INICIADA | — | Contém T3 (HLR, arquivo lateral) |
-| F0-S07 | Tipo paramétrico por script | P | S04 | NÃO INICIADA | — | |
-| F0-S08 | Corpus e gabaritos | P, contínuo | — (pasta `corpus/` nasce na S01-T03) | CONTÍNUA (não iniciada) | — | Downloads só com ok do PO. Corpus do PO entra depois, sem bloquear |
-| F0-S09 | UX com o PO (wireframes) | M | — (paralelo) | NÃO INICIADA | — | Precisa de 1 h de entrevista com o PO |
-| F0-S10 | Calibração e portão | P | S03, S04, S05, S06, S07 | NÃO INICIADA | — | Mede cota; avalia gatilho de plano |
-| F1-PRE-T01 | Comportamento básico de janela e navegação (testes de regressão) | M | S04 (T12) | NÃO INICIADA | docs/state/cards/F1-PRE-T01.md; antes da Fase 1; pedido do PO 2026-10-13 | T2 (viewport em lote opus) |
-| Portão F0 | Go/no-go | — | S10 e S09 | — | — | Regras em `03` §5 |
+| Fatia | Nome | Tam. | Status | Nota |
+|---|---|---|---|---|
+| F0-S01 | Repositório, licenças e pesquisa | P | FECHADA | Aceita pelo PO (2026-10-15). Abertos sem bloquear: termos do conda-forge, SINAPI (requisito da F5) |
+| F0-S02 | CI Windows+Linux e app esqueleto | G | FECHADA | Aceita pelo PO (2026-10-15). Resta o cartão F0-S02-T23 (antes do primeiro release) |
+| F0-S03 | Protótipo de viewport (Qt RHI) | M | FECHADA | Portão aprovado pelo PO. Restam T27 e T28 (abaixo). Relatório: `reports/F0-S03.md` |
+| F0-S04 | Ponte Python↔C++ (híbrido vs C++ puro) | G, crítica | PAUSADA | Pausa D1 (2026-10-14). Retomada = cartão F0-RG-02; decisão da arquitetura = ADR-004 (rascunho) e ADR-001 |
+| F0-S05 | Oplog, undo e merge | M | NAO_INICIADA | Depende da S04. Requisitos de gravação: `cards/F0-S05/F0-S05-T00-requisitos-gravacao.md` |
+| F0-S06 | Planta e corte (HLR) + vista no `.obim` | G, crítica | NAO_INICIADA | Contém T3 |
+| F0-S07 | Tipo paramétrico por script | P | NAO_INICIADA | Depende da S04 |
+| F0-S08 | Corpus e gabaritos | P | CONTINUA | Downloads só com ok do PO |
+| F0-S09 | UX com o PO (wireframes) | M | AGUARDA_PO | Entrevista feita; falta aceite do resumo (pergunta A13 em `PO.md`) |
+| F0-S10 | Calibração e portão | P | NAO_INICIADA | Depende de S03 a S07 |
+| F1-PRE-T01 | Comportamento básico de janela e navegação | M | NAO_INICIADA | Antes da F1; cartão `cards/F1-PRE-T01.md` |
+| Portão F0 | Go/no-go | — | NAO_INICIADA | Depende de S10 e S09 (`v2/03` §5) |
 
-## Cartões de S01 e S02
-| Cartão | Título | Classe | Implementa | Revisa | Depende de | Status |
-|---|---|---|---|---|---|---|
-| F0-S01-T01 | Git local e repositórios remotos | T0 | líder (sonnet) + PO | PO | — | FEITA (push em 2026-10-10; espelho Codeberg adiado) |
-| F0-S01-T02 | Arquivo LICENSE (AGPL v3, texto oficial) | T0 | haiku | líder confere hash | — | FEITA |
-| F0-S01-T03 | Esqueleto do repositório e modelo de ficha | T0 | haiku | líder | — | FEITA |
-| F0-S01-T04 | README e CONTRIBUTING em pt-BR | T1 | sonnet | sonnet | T03 | FEITA |
-| F0-S01-T05 | README e CONTRIBUTING em inglês | T0 | haiku | líder | T04 | FEITA |
-| F0-S01-T06 | Fichas de licença A: núcleo BIM e geometria | T2 | sonnet | opus (lote) | T03 | FEITA (revisão no lote opus) |
-| F0-S01-T07 | Fichas de licença B: interface, ponte e PDF | T2 | sonnet | opus (lote) | T03 | FEITA (revisão no lote opus) |
-| F0-S01-T08 | Fichas de licença C: formatos e solver | T2 | sonnet | opus (lote) | T03 | FEITA (revisão no lote opus) |
-| F0-S01-T09 | Fichas de licença D: distribuição e empacotamento | T2 | sonnet | opus (lote) | T03 | FEITA (revisão no lote opus) |
-| F0-S01-T10 | Ficha de pesquisa: termos do SINAPI | T1 | sonnet | sonnet | T03 | FEITA (termos não verificados: site inacessível) |
-| F0-S01-T11 | Tabela mestre de licenças e THIRD_PARTY.md | T2 | sonnet | **opus (lote, exigido pelo aceite)** | T06–T09 | FEITA (aprovada no lote Opus 2, 2026-10-11; 4 observações aplicadas) |
-| F0-S01-T12 | ADR-009: licenças e política de conteúdo | TA | opus (lote) | PO (resumo) | T11 | FEITA (aceito pelo PO) |
-| F0-S02-T01 | Ficha: dependências no conda-forge/vcpkg/wheels | T2 | sonnet | opus (insumo do ADR-005) | S01-T01 | FEITA (revisão no lote opus) |
-| F0-S02-T02 | Esboço do ADR-005 (dependências e build) | TA | opus (lote) | PO (resumo) | S02-T01, S01-T09 | FEITA (esboço aprovado pelo PO; decisão final na T15) |
-| F0-S02-T03 | Ambiente de desenvolvimento reproduzível | T2 | sonnet | sonnet; amostra opus | S02-T01 | FEITA (amostra opus: não sorteada) |
-| F0-S02-T04 | App esqueleto: janela, menu, arrastar-e-soltar | T1 | sonnet | sonnet | S02-T03, S01-T03 | FEITA |
-| F0-S02-T05 | Abrir IFC e mostrar contagem de elementos | T2 | sonnet | sonnet; amostra opus | S02-T04 | FEITA |
-| F0-S02-T06 | CI Linux (build, teste, artefato, REUSE) | T2 | sonnet | sonnet; amostra opus | S02-T05, S01-T01 | FEITA (verde em 2026-10-10, run 38078371976; linux ~60 s) |
-| F0-S02-T07 | CI Windows | T2 | sonnet | sonnet; amostra opus | S02-T06 | FEITA (verde; windows ~15 min com ambiente limpo e instalador; run 38110728020) |
-| F0-S02-T08 | CI macOS melhor esforço | T1 | sonnet | sonnet | S02-T06 | FEITA (verde; macos ~90 s, não bloqueia) |
-| F0-S02-T09 | Bloquear merge sem Windows+Linux verdes | T0 | PO (líder guia) | PO | S02-T07 | FEITA em 2026-10-10 (regra no GitHub: `linux` e `windows` obrigatórios; trabalho vai por ramo + PR) |
-| F0-S02-T10 | Pacote Linux (AppImage) | T2 | sonnet | **opus, obrigatória** | S02-T06, S02-T02 | REPROVADA no lote Opus 2 (7 defeitos, nenhum pede refazer a montagem); correções no cartão S02-T17; APROVADA no lote opus 3 (7 de 7); 389 MB no CI |
-| F0-S02-T11 | Instalador Windows (NSIS) | T2 | sonnet | **opus, obrigatória** | S02-T07, S02-T02 | REPROVADA no lote Opus 2 (4 defeitos); correções no cartão S02-T18; APROVADA no lote opus 3 (4 de 4; defeito novo N1 no cartão T21); 309 MB no CI |
-| F0-S02-T12 | Teste de gravação de vídeo headless | T2 | sonnet | sonnet | S02-T04 | FEITA no plano B (capturas e GIF); MP4 aguarda ok do PO |
-| F0-S02-T13 | Medir metas de build e tamanho | T1 | sonnet | sonnet | S02-T10, S02-T11, S02-T16 | FEITA (relatório F0-S02-metricas.md; build incremental do Windows aceito pelo PO, revisão na S04) |
-| F0-S02-T14 | Roteiro de aceite do PO e relatório da S02 | T1 | sonnet | PO | S02-T10, S02-T11 | FEITA (PO executou o roteiro nos dois sistemas: tudo ok, 2026-10-11) |
-| F0-S02-T15 | ADR-005 final (decisão com testes) | TA | opus (lote) | PO (resumo) | S02-T13, S02-T02 | FEITA (lote opus 3; PO aprovou: ADR-005 aceito, 2026-10-11) |
-| F0-S02-T21 | Instalador não apaga arquivos do usuário (N1) | T2 | sonnet | sonnet | S02-T18 | FEITA no ramo, aguarda CI |
-| F0-S02-T22 | Inventário: parênteses e lista (D1 e ajustes) | T2 | sonnet | sonnet | S02-T20 | FEITA no ramo, aguarda CI |
-| F0-S02-T23 | Antes do primeiro release | T2 | sonnet | opus (lote) | T17, T18, T22 | NÃO INICIADA (bloqueia release público) |
-| F0-S02-T24 | Seletor de arquivos nativo no AppImage (portal do desktop) | T2 | sonnet | sonnet | S02-T17 | FEITA no ramo (AppRun ativa o portal do desktop quando há D-Bus; teste no CI; o PO confere no passo 15 do roteiro) |
-| F0-S02-T16 | Sonda C++ mínima (pacote IfcOpenShell e módulo nanobind) | T2 | sonnet | sonnet; amostra opus | S02-T03 | FEITA (amostra aprovada no lote Opus 2; testes 2 e 3 do ADR-005 fecham só no Linux; ver S02-T19) |
-| F0-S02-T17 | Correções do AppImage (lote opus 2, defeitos 1 a 7) | T2 | sonnet | **opus, em lote (diff)** | S02-T10 | FEITA no CI (verde, 389 MB, testes de licença e troca de .so); falta conferência opus (lote 3); runtime do appimagetool pendente |
-| F0-S02-T18 | Correções do instalador Windows (defeitos 1 a 4 e riscos 5 a 7) | T2 | sonnet | **opus, em lote (diff)** | S02-T11, S02-T17 | FEITA no CI (verde, 309 MB sem MKL, testes de reinstalação, DLL trocada e arquivo do usuário); falta conferência opus (lote 3) |
-| F0-S02-T19 | Teste 2 no Windows e sonda 3b (cabeçalhos pesados) | T2 | sonnet | sonnet; amostra opus | S02-T16 | FEITA (teste 2 fechado nos dois sistemas; sonda 3b passou: Linux 4,8 s, Windows 19,4 s; PR 5; amostra opus no lote 3) |
-| F0-S02-T20 | Lista de licenças permitidas no inventário (teste 9 do ADR-005) | T2 | sonnet | sonnet; amostra opus | S02-T06 | FEITA (CI verde, 24 testes; achou MKL e runtimes da Microsoft no Windows; amostra opus no lote 3) |
+## Cartões abertos
+| Cartão | Título | Classe | Status | Nota |
+|---|---|---|---|---|
+| F0-S02-T23 | Antes do primeiro release | T2 | NAO_INICIADA | Bloqueia release público |
+| F0-S03-T27 | Teste da reabertura (P17) no CI | T1 | ABERTA | Sem bloquear |
+| F0-S03-T28 | Medir o viewport num Windows físico | T1 | NAO_INICIADA | Aprovada pelo PO; dono: PO; antes da entrega final |
+| F0-S04-T04b | Registro local de mensagens e fim do mutex | T3 | PAUSADA | D1 |
+| F0-S04-T14c | Fluxo B: executável com janela Qt Widgets | T3 | PAUSADA | D1; ramo pronto, 501 linhas |
+| F0-S04-T15 | Threads e bloqueio do interpretador | T3 | PAUSADA | D1; cartão é esqueleto, reescrever antes de abrir |
+| F0-S04-T17 | Módulo no AppImage e instalador | T2 | NAO_INICIADA | Esqueleto; depende da T15 |
+| F0-S04-T18 | Tempos de build e relatório da fatia | T1 | NAO_INICIADA | Esqueleto |
+| F0-S04-T19 | ADR-001 e ADR-004 com números | TA | NAO_INICIADA | Decisão do PO; esqueleto |
+| F0-S04-T20 | Memória final do viewport abaixo de 6,0 GB | T3 | PAUSADA | Cartão escrito; PO: nada por enquanto |
 
-Nenhum cartão de S01 ou S02 é T3 (ver LOG.md). A prova do R1 (ponte C++/Python) é T3 e fica na S04.
+## Revisão geral da F0 (2026-10-15)
+Cartões F0-RG-01 a RG-25 (relatório `reports/F0-REVISAO-GERAL-2026-10-15.md`, Parte D). Andamento de cada um: `LOG.md` e os PRs no GitHub.
+
+## Feito (resumo; detalhes no histórico)
+- S01: T01 a T12, R1 a R3. S02: T01 a T22, T24, T25 (PR 98), R1 a R3. S03: T01 a T08 (todas as partes), T25, T26 e emendas, R1 a R3. F0-PLANO-T01.
+- S04: T01 a T04c, T05, T06 a T06c, T07 a T08, T09, T10, T10c, T11 a T11c, T12 (PR 83), T13, T14, T14a/b, T16, T16b.
+
+Os cartões não têm campo de status; este quadro é a fonte. Ao mudar o status de um cartão, mudar aqui e no `LOG.md`.

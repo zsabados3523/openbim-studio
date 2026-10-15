@@ -13,6 +13,20 @@ passo "autoteste do AppImage montado"
 out="$("$IMG" --appimage-extract-and-run --selftest 2>&1 | tail -n 1)"
 [ "$out" = "OK" ] || falha "selftest nao imprimiu OK ($out)"
 
+passo "montado de verdade (FUSE), sem extrair: e o que o usuario faz ao dar duplo clique"
+out="$(env -u APPIMAGE_EXTRACT_AND_RUN "$IMG" --selftest 2>&1 | tail -n 1)"
+if [ "$out" = "OK" ]; then
+  echo "   montado: OK"
+elif [ -n "${OBIM_EXIGIR_FUSE:-}" ]; then
+  falha "montado (sem extrair) nao abriu ($out); sem libfuse2 o usuario veria o mesmo"
+else
+  echo "   AVISO: montagem nao testada aqui ($out); precisa de libfuse2 (OBIM_EXIGIR_FUSE=1 torna isto obrigatorio)"
+fi
+
+passo "ambiente sujo: PYTHONPATH e PYTHONHOME do usuario nao podem atrapalhar (modo isolado, F0-RG-13)"
+out="$(PYTHONPATH=/nao/existe PYTHONHOME=/nao/existe PYTHONUSERBASE=/nao/existe QT_QPA_PLATFORM=offscreen "$IMG" --appimage-extract-and-run --selftest 2>&1 | tail -n 1)"
+[ "$out" = "OK" ] || falha "com PYTHONPATH/PYTHONHOME do usuario o programa nao abriu ($out)"
+
 passo "extrair (direito de trocar bibliotecas: LGPL-COMO-TROCAR.md passo 1)"
 ( cd "$W" && "$IMG" --appimage-extract >/dev/null ) || falha "--appimage-extract falhou"
 R="$W/squashfs-root"

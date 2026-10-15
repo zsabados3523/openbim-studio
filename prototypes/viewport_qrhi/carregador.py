@@ -1,13 +1,14 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Carregador de malhas do IFC (S03-T05 parte A; processo separado na S03-T08-B1). Python puro, sem Qt.
 
-Especificação: docs/state/reports/LOTE_OPUS_4.md §1.2 e §1.3 e LOTE_OPUS_6.md §2.2 D3. Quem abre o IFC e gera
+Especificação: docs/state/arquivo/lotes-1-a-28/LOTE_OPUS_4/resultado.md §1.2 e §1.3 e arquivo/lotes-1-a-28/LOTE_OPUS_6/resultado.md §2.2 D3. Quem abre o IFC e gera
 os triângulos (`ifcopenshell.geom.iterator`, um iterador por bloco) é um processo filho (`processo_malhas.py`);
 a thread interna só lê as mensagens, vigia o filho e entrega `LoteMalha` (só numpy) por uma fila limitada.
 Durante a carga o pai não abre o arquivo (`manter_arquivo=True` abre depois que o filho terminou).
 """
 from __future__ import annotations
 
+import logging
 import multiprocessing
 import os
 import queue
@@ -24,6 +25,7 @@ DTYPE_OBJETO = np.dtype([
     ("primeiro_indice", "<u4"), ("n_indices", "<u4"), ("primeiro_vertice", "<u4"), ("n_vertices", "<u4"),
     ("caixa_min", "<f4", (3,)), ("caixa_max", "<f4", (3,)),
 ])
+log = logging.getLogger("openbim.viewport")
 MAX_BYTES_LOTE = 8 * 1024 * 1024
 CINZA = (204, 204, 204, 255)
 ORANGE = (255, 140, 0, 255)  # caixa substituta (D4)
@@ -342,7 +344,8 @@ class CarregadorMalhas:
             fam = self._produtos[culpada][3]
             irmas = [i for i in sorted(self._produtos) if i != culpada and i not in est["resolvidos"]
                      and fam is not None and self._produtos[i][3] == fam]  # o arquivo inteiro, não só o bloco
-            lim = f"passou do limite de {self.limite_peca_s:g} s" if falha["motivo"] == "limite" else "o conversor caiu nesta peça"
+            lim = (f"passou do limite de {self.limite_peca_s:g} s" if falha["motivo"] == "limite"
+                   else "o conversor caiu nesta peça" + _texto_saida(falha.get("codigo")))
             lote = [(culpada, lim, falha["seg"])] + [
                 (i, "mesma peça-base de uma que passou do limite" if falha["motivo"] == "limite"
                  else "mesma peça-base de uma em que o conversor caiu", 0.0) for i in irmas]
@@ -372,7 +375,8 @@ class CarregadorMalhas:
         if r is None:
             return None
         if self._fase != "convertendo":  # falha ao abrir/listar: não há como isolar peça
-            raise RuntimeError(f"o conversor falhou ao abrir o arquivo ({r['motivo']}, {r['seg']:.0f} s)")
+            raise RuntimeError(f"o conversor falhou ao abrir o arquivo ({r['motivo']}, {r['seg']:.0f} s"
+                               f"{_texto_saida(r.get('codigo'))})")
         todos = ids if ids is not None else sorted(self._produtos)
         tb = self.tamanho_bloco if self.tamanho_bloco > 0 and not isolado else max(len(todos), 1)
         r["bloco"] = todos[max(self._conv - 1, 0) * tb:self._conv * tb]
@@ -402,7 +406,10 @@ class CarregadorMalhas:
                     tipo, dados = rx.recv()
                 except (EOFError, OSError):
                     filho.join(2)
-                    return {"motivo": "queda", "seg": time.perf_counter() - ultimo}
+                    codigo = filho.exitcode
+                    log.warning("O processo de geometria caiu (código de saída %s) %.1f s depois da última mensagem",
+                                codigo, time.perf_counter() - ultimo)
+                    return {"motivo": "queda", "seg": time.perf_counter() - ultimo, "codigo": codigo}
                 if ao_receber(tipo, dados):
                     return None
                 ultimo = time.perf_counter()  # o tempo gasto na fila cheia (contrapressão) não conta contra o filho
@@ -451,10 +458,12 @@ class CarregadorMalhas:
         self._fase = None
         params = {"caminho": self.caminho, "ids": [i for i, _, _ in itens]}
         try:
-            self._executar(est, pm.entrada_caixa, params, receber,
-                           lambda: pm.LIMITE_CAIXA_S + 1.0 if self._fase == "caixa" else self.limite_abrir_s)
-        except RuntimeError:
-            pass  # o que faltar vai para sem_malha
+            r = self._executar(est, pm.entrada_caixa, params, receber,
+                               lambda: pm.LIMITE_CAIXA_S + 1.0 if self._fase == "caixa" else self.limite_abrir_s)
+            if r is not None:
+                log.warning("O processo da caixa substituta não terminou: %s%s", r["motivo"], _texto_saida(r.get("codigo")))
+        except RuntimeError as exc:  # o que faltar vai para sem_malha; o motivo fica no registro
+            log.warning("O processo da caixa substituta falhou: %s", exc)
         for i, motivo, seg in itens:
             g, c, n, _f = self._produtos[i]
             if i not in achados:  # regra de ouro: nada some; sem a posição certa não se desenha cubo na origem
@@ -510,6 +519,8 @@ class CarregadorMalhas:
         elif tipo == "sem_malha":
             est["sem"].extend(dados)
             est["resolvidos"].update(d[0] for d in dados)
+        elif tipo == "nota":  # o filho explica por que vai cair (ele não tem registro próprio)
+            log.warning("Processo de geometria: %s", dados)
         elif tipo == "erro":
             raise RuntimeError(dados)
         elif tipo == "fim":
@@ -519,6 +530,11 @@ class CarregadorMalhas:
             est["pico_filho"] = max(est["pico_filho"], dados["pico_memoria_mb"])
             return True
         return False
+
+
+def _texto_saida(codigo):
+    """Sufixo com o código de saída do filho, para as mensagens de queda (vazio se não houver)."""
+    return "" if codigo is None else f", código de saída {codigo}"
 
 
 def _malha_caixa(mn, mx):

@@ -8,26 +8,29 @@ CONTRATO DA FERRAMENTA (`python prototypes/s04/medir_s04.py`; o oráculo troca o
  JSON do --a/--b: {"estrito", "metas": {M2, M2b, M3, M4: {n, mediana_ms, p95_ms, max_ms, limite_ms, ok}, M5: {janelas, maior_intervalo_ms, maior_intervalo_parado_ms, ok}}, "erros": [texto "Mx: ..."],
   "m6": null sem --b ou {"razoes": {M2, M2b, M3, M4}, "folga_minima", "pesa"}, "saida_igual": null sem --b ou {"ok", "diferencas": [texto]}, "aprovado"}.
  Metas (§2.2, §2.3): SEMPRE dos tempos brutos de A (nunca do campo `metas` gravado). Passos: M2 = passo 3; M2b = 4b; M3 = 4a até t_painel_ms; M4 = 5b; M5 = 5b contra o passo 4c (parado); tempo = t_quadro_ms - t0_ms; percentil linear (numpy).
- Régua do CI virtual (sem --estrito): mediana < limite e nenhum valor >= 3 x limite (M2, M2b, M3); M4 < 20 s; M5: toda janela de 1 s com >= 20 quadros, maior intervalo < 100 ms e <= 3 x o do parado. Com --estrito: p95 < limite
+ Régua do CI virtual (sem --estrito): mediana < limite e nenhum valor >= max(3 x limite, 250 ms) (M2, M2b, M3); M4 < 20 s; M5: toda janela de 1 s com >= 20 quadros, maior intervalo < 100 ms e <= 3 x o do parado. Com --estrito: p95 < limite
  (200, 200, 50 ms), M4 < 20 s e maior intervalo < 200 ms. É a mesma régua de s04_fluxo_aux.veredito. `erros` lista cada violação; `ok` de cada meta = sem erro com o nome dela; aprovado = sem erros e (sem --b ou saída igual).
  M6 (informativo, nunca reprova): razoes = mediana de A / mediana de B em M2, M2b, M3 e M4 (um valor). folga_minima = menor entre 200/p95(M2), 200/p95(M2b), 50/p95(M3), 20000/max(M4), 200/maior_intervalo(M5);
  pesa = folga_minima < 2 (decisão do PO: só pesa se alguma meta absoluta ficar com menos de 2x de folga). As 3 rodadas alternadas do §2.2 ficam para a rodada oficial (a ferramenta lê um par A/B por vez).
  Entrada inválida (código 2; LOTE_OPUS_23 §B): a mensagem em stderr começa com "ENTRADA INVÁLIDA:", cita `passo <id>` quando o problema é de um passo e NUNCA é traceback nos casos abaixo (LOTE_OPUS_24 B). Casos:
  (i) tempo que não é número finito (NaN, infinito, texto, inteiro gigante como 10**400: `_num` trata OverflowError como "não é número"; vale para TODO campo numérico, inclusive os do relógio, `sequencia` e `base.produtos`); fora de ordem em qualquer repetição: `t0_ms <= t_comando_ms <= t_quadro_ms` (e `t_painel_ms >= t0_ms` no 4a); relógio (4c e 5b) com tempo não finito ou REPETIDO (dois quadros no mesmo instante: relógio duplicado esconde parada e infla a contagem por janela).
- A ferramenta ORDENA os tempos do relógio antes de medir os intervalos (relógio fora de ordem dá o mesmo resultado do ordenado). (ii) número de repetições diferente do `n` de `fluxo_a/roteiro_r.json` (200) nos passos 3, 4a e 4b: regra `len(reps) != n`, MENOS OU MAIS (201 e 500 também: repetições extras baratas puxariam a mediana e o p95), ou `len(criados)` do 5b
+ A ferramenta ORDENA os tempos do relógio antes de medir os intervalos (relógio fora de ordem dá o mesmo resultado do ordenado).
+ JANELA DO RELÓGIO (LOTE_OPUS_27 A2): todo quadro do `relogio` (4c e 5b) tem de estar em [t0_ms, t_quadro_ms] DA PRÓPRIA REPETIÇÃO (limites inclusivos, como o filtro de fluxo_a.py); qualquer entrada fora da janela (antes de t0 ou depois de t_quadro) é entrada inválida, código 2, citando `passo <id>`. A ferramenta REJEITA, não filtra: quadros de fora esconderiam parada (lote de 0,9 s com 9 quadros dentro e 9 logo depois) ou mascarariam o intervalo do parado (um quadro em -5000 ms),
+ e `primeiro_quadro` não pode achar o lote antes de t0. O FLUXO B (T14), ao gravar `relogio`, deve filtrar igual ao A (`u["t0_ms"] <= t <= tq`); quem gerar o `medicao.json` de B é responsável por isso. (ii) número de repetições diferente do `n` de `fluxo_a/roteiro_r.json` em TODOS os passos medidos (3, 4a, 4b, 4c e 5b; LOTE_OPUS_27 A1): regra `len(reps) != n`, MENOS OU MAIS (201 e 500 também: repetições extras baratas puxariam a mediana e o p95), com `n` = 200 nos passos 3, 4a e 4b e PADRÃO 1 onde o roteiro não define `n` (4c e 5b: o fluxo A executa `int(p.get("n", 1))`); `_m5` só lê `reps[0]`, então uma 2ª repetição de 4c/5b nunca pode passar calada. Também `len(criados)` do 5b
  diferente da `quantidade` do roteiro (1000) ou ausente (o oráculo lê os dois valores do roteiro; mesma regra para B). (iii) passo sem `id`, sem `reps` ou com `reps` que não é lista; repetição sem os campos de tempo do passo; IFC do passo 7 ilegível (A ou B).
  (iv) 5b sem `sequencia`, com `sequencia` que não é inteiro >= 1 (0, negativa e 3,5 tornam o primeiro quadro trivial), com `criados` de GlobalIds repetidos (`len(set(criados))` tem de ser o lote), ou `primeiro_quadro(relogio, sequencia)` None ou maior que `t_quadro_ms` (o lote nunca apareceu num quadro). (v) régua estrita (--estrito ou OBIM_S04_ESTRITO=1) com `base.produtos` ausente ou < 3000: não é o modelo oficial.
  Também código 2: arquivo ausente, passos de B diferentes dos de A (ids ou número de repetições), `base.produtos` diferente (os dois têm de ter medido o mesmo modelo).
  Rede de segurança de `main` (erro de programação: KeyError, TypeError, IndexError, AttributeError fora do formato): código 2, primeira linha de stderr "ENTRADA INVÁLIDA: ..." e, DEPOIS dela, o `traceback.format_exc()` (o implementador precisa ver onde quebrou). `main(argv)` chama `avaliar(pasta_a, pasta_b, estrito)`.
  LIMITE CONHECIDO (LOTE_OPUS_24 B5): duração zero (`t_quadro_ms == t0_ms`) é aceita e passa nas metas; não há caso de oráculo para isso (exigir `t_quadro_ms > t0_ms` é opcional).
- Saída igual (§2.2): IFC inteiro, como gravado (comprimentos na unidade do próprio IFC, convertidos para metros: um IFC em mm e outro em m com as mesmas medidas são iguais) (GlobalIds e ids de linha podem diferir): mesmas contagens por classe (fora geometria de apoio e relações de material, que A compartilha e B não); para cada parede mesmo tipo, pavimento,
+ Saída igual (§2.2): IFC inteiro, como gravado (comprimentos na unidade do próprio IFC, convertidos para metros: um IFC em mm e outro em m com as mesmas medidas são iguais) (GlobalIds e ids de linha podem diferir): mesmas contagens por classe (fora só a geometria de apoio; IfcMaterialLayerSetUsage e IfcRelAssociatesMaterial CONTAM: sem exceção desde a T11c, LOTE_OPUS_24 B item 6); para cada parede mesmo tipo, pavimento,
  espessuras de camada, nome, FireRating, triângulos, caixa e volume a 1e-6 (ifcopenshell.geom, em metros); os dois passam em `ifcopenshell.validate(express_rules=True)` (nível "error" em minúsculas). Parede de A sem par em B = diferença.
  `primeiro_quadro(relogio, seq)`: tempo do primeiro quadro com sequência >= seq, ou None (LOTE_OPUS_15: a sequência cai a 0 no reenvio da cena).
  `contar_linhas`: arquivos .py .cpp .h .hpp .cc, fora de pastas `build`, `__pycache__` e as que começam com ".". Python: sem docstrings, `ast.unparse` (some comentário e linha vazia; uma instrução por linha) e cada linha vale ceil(largura/100).
  C/C++: sem comentário (// e /* */, respeitando textos entre aspas), sem linha vazia, cada linha vale ceil(largura/100).
 M2b informativo (LOTE_OPUS_15 achado 1): roteiro R com `corpus/modelo-grande-1m.ifc`; só imprime; pula se o arquivo não existir (também com OBRIGATORIO: ele é gerado à mão, ~60 s, e fica fora do git).
-TODO(T12, depois da T11c): a exceção de material (`MATERIAL` aqui e em medir_s04.py) sai quando a T11c for mesclada (LOTE_OPUS_23 §B item 3); este oráculo passa a exigir as mesmas contagens de IfcMaterialLayerSetUsage e IfcRelAssociatesMaterial em A e B.
+(A exceção de material saiu na T12, depois da T11c: A e B têm as mesmas contagens de IfcMaterialLayerSetUsage e IfcRelAssociatesMaterial; relação a menos ou uso compartilhado em B = saída diferente.)
 Fora do escopo do oráculo: M1 (T02/T04), nota do ADR-001 e compactar `lotes_` (núcleo)."""
+import copy
 import importlib.util
 import json
 import os
@@ -104,9 +107,10 @@ def ferramenta(tmp_path_factory):  # o esqueleto levanta NotImplementedError: o 
 # ---------- tabela de casos: (nome, parâmetros de A, passa na régua virtual, passa na estrita, erro esperado) ----------
 CASOS = [("bom", {}, True, True, None), ("m2 mediana alta", {"m2": 250.0}, False, False, "M2"), ("m2 10% dos valores em 210 (virtual passa, p95 reprova)", {"m2": topo(100.0, 210.0)}, True, False, "M2"),
          ("m2 um valor em 650 (teto reprova, p95 passa)", {"m2": topo(100.0, 650.0, 1)}, False, True, "M2"), ("m2b mediana alta", {"m2b": 300.0}, False, False, "M2b"),
-         ("m3 mediana alta", {"m3": 60.0}, False, False, "M3"), ("m3 10% dos valores em 55", {"m3": topo(20.0, 55.0)}, True, False, "M3"), ("m4 lote lento", {"m4": 25000.0}, False, False, "M4"),
+         ("m3 mediana alta", {"m3": 60.0}, False, False, "M3"), ("m3 um valor em 187 (RG-09: pausa isolada abaixo do teto de 250 ms)", {"m3": topo(20.0, 187.0, 1)}, True, True, None),
+         ("m3 um valor em 300 (acima do teto de 250 ms)", {"m3": topo(20.0, 300.0, 1)}, False, True, "M3"), ("m3 10% dos valores em 55", {"m3": topo(20.0, 55.0)}, True, False, "M3"), ("m4 lote lento", {"m4": 25000.0}, False, False, "M4"),
          ("m5 10 quadros por segundo", {"quadros": [[100.0 * i, i] for i in range(1, 31)]}, False, False, "M5"),
-         ("m5 parada de 330 ms", {"quadros": [[16.0 * i, i] for i in range(1, 100)] + [[1900.0 + 16.0 * i, 100 + i] for i in range(70)]}, False, False, "M5")]
+         ("m5 parada de 330 ms", {"quadros": [[16.0 * i, i] for i in range(1, 100)] + [[1900.0 + 16.0 * i, 100 + i] for i in range(68)]}, False, False, "M5")]
 IDS = [c[0] for c in CASOS]
 
 def test_a_tabela_de_casos_confere_com_a_regua_do_fluxo_a(monkeypatch):  # sentinela que roda hoje: a tabela e a conta de s04_fluxo_aux concordam
@@ -156,6 +160,15 @@ def para_mm(g):  # o mesmo modelo, gravado em milímetros: pontos, listas de pon
         if u.UnitType in ("LENGTHUNIT", "AREAUNIT", "VOLUMEUNIT"):
             u.Prefix = "MILLI"
 
+def uso_compartilhado(g):  # B que compartilha UM IfcMaterialLayerSetUsage entre duas paredes (o que a T11c eliminou): a 2ª parede passa a apontar para o uso da 1ª; o uso e a relação antigos da 2ª somem
+    ws = g.by_type("IfcWall")
+    rels = [r for w in ws[:2] for r in w.HasAssociations if r.is_a("IfcRelAssociatesMaterial") and r.RelatingMaterial.is_a("IfcMaterialLayerSetUsage")]
+    assert len(rels) == 2 and rels[0].RelatingMaterial != rels[1].RelatingMaterial, "a base do oráculo tem de ter 1 uso por parede"
+    antigo = rels[1].RelatingMaterial
+    rels[0].RelatedObjects = tuple(rels[0].RelatedObjects) + tuple(rels[1].RelatedObjects)
+    g.remove(rels[1])
+    g.remove(antigo)
+
 @pytest.fixture(scope="module")
 def ifcs(tmp_path_factory):
     if not (aux.PASTA / "fluxo_a.py").is_file():
@@ -178,6 +191,8 @@ def ifcs(tmp_path_factory):
           "fogo": lambda g: setattr(next(p for p in g.by_type("IfcPropertySingleValue") if p.Name == "FireRating"), "NominalValue", g.createIfcLabel("R90")),
           "nome": lambda g: setattr(g.by_type("IfcWall")[0], "Name", "Outro nome"), "tipo": lambda g: setattr(g.by_type("IfcWallType")[0], "Name", "PAR20"),
           "pavimento": lambda g: setattr(g.by_type("IfcBuildingStorey")[0], "Name", "Pavimento 2"),
+          "sem_rel_material": lambda g: ifcopenshell.api.run("material.unassign_material", g, products=[g.by_type("IfcWall")[-1]]),  # uma relação (e o uso dela) a menos
+          "uso_compartilhado": uso_compartilhado,  # 1 uso e 1 relação a menos
           "invalido": lambda g: setattr(g.by_type("IfcMaterialLayer")[0], "LayerThickness", -0.02)}  # só o validate acusa (a geometria segue calculável)
     out = {"base": pasta / "base.ifc"}
     for nome, fn in ed.items():
@@ -192,16 +207,26 @@ def ifcs(tmp_path_factory):
     return out
 
 def test_ifcs_sinteticos_da_sentinela_sao_validos_ou_nao_como_o_oraculo_supoe(ifcs):
-    assert all(not bx.validar(ifcs[k]) for k in ("base", "guids", "sem_parede", "camada", "altura", "mm", "mm_camada", "fogo", "nome", "tipo", "pavimento")), "os IFCs de controle têm de passar no validate"
+    assert all(not bx.validar(ifcs[k]) for k in ("base", "guids", "sem_parede", "camada", "altura", "mm", "mm_camada", "fogo", "nome", "tipo", "pavimento", "sem_rel_material", "uso_compartilhado")), "os IFCs de controle têm de passar no validate"
     f, g = (bx.formas(__import__("ifcopenshell").open(str(ifcs[k]))) for k in ("base", "mm"))  # o IFC em mm tem a mesma geometria, em metros, que o IFC em m
     assert len(f) == len(g) == 4 and bx.igual([f[k] for k in sorted(f)], [g[k] for k in sorted(g)]) == [], "para_mm tem de preservar a geometria"
     assert bx.validar(ifcs["invalido"]) and bx.validar(ifcs["invalido_guids"]), "o IFC de controle inválido tem de reprovar no validate"
 
+def test_uso_compartilhado_difere_so_nas_contagens_de_material_a_parede_e_igual(ifcs):  # isola a causa: sem este caso, a exceção de material (T11c) voltaria sem ninguém notar
+    import ifcopenshell
+    ca, cb = (assin(ifcs[k]) for k in ("base", "uso_compartilhado"))
+    assert bx.igual(ca["paredes"], cb["paredes"]) == [], "cada parede tem de manter tipo, camadas, geometria e propriedades"
+    dif = {c for c in ca["classes"].keys() | cb["classes"].keys() if ca["classes"].get(c) != cb["classes"].get(c)}
+    assert dif == {"IfcMaterialLayerSetUsage", "IfcRelAssociatesMaterial"}, dif
+    f = ifcopenshell.open(str(ifcs["uso_compartilhado"]))
+    assert len(f.by_type("IfcMaterialLayerSetUsage")) == 3 and len(f.by_type("IfcRelAssociatesMaterial")) == 4  # 4 paredes: 3 usos, 3 relações de parede + 1 do tipo
+
 @pytest.mark.parametrize("a,b,ok", [("base", "guids", True), ("base", "sem_parede", False), ("base", "camada", False), ("base", "altura", False), ("invalido", "invalido_guids", False),
                                     ("base", "mm", True), ("mm", "base", True), ("camada", "mm_camada", True), ("base", "mm_camada", False), ("base", "fogo", False), ("base", "nome", False), ("base", "tipo", False),
-                                    ("base", "pavimento", False)],
+                                    ("base", "pavimento", False), ("base", "sem_rel_material", False), ("sem_rel_material", "base", False), ("base", "uso_compartilhado", False), ("uso_compartilhado", "base", False)],
                          ids=["globalids diferentes", "uma parede a menos", "espessura de camada", "altura da parede", "iguais mas inválidos", "A em m, B em mm", "A em mm, B em m", "0,12 m x 120 mm",
-                              "camada 0,11 m x 120 mm", "FireRating diferente", "nome da parede diferente", "tipo com outro nome", "pavimento com outro nome"])
+                              "camada 0,11 m x 120 mm", "FireRating diferente", "nome da parede diferente", "tipo com outro nome", "pavimento com outro nome",
+                              "uma relação de material a menos em B", "uma relação de material a menos em A", "um uso compartilhado em B (so as contagens de material)", "um uso compartilhado em A"])
 def test_saida_igual_aceita_globalids_diferentes_e_acusa_cada_diferenca(ferramenta, tmp_path, ifcs, a, b, ok):
     rc, js, p = avaliar(tmp_path, med(), med("B"), ifc_a=ifcs[a], ifc_b=ifcs[b])
     assert js is not None and js["saida_igual"]["ok"] is ok and (not ok) == bool(js["saida_igual"]["diferencas"]), (js, p.stderr[-800:])
@@ -296,6 +321,51 @@ def test_controle_sem_duplicar_o_relogio_a_meta_que_falha_continua_codigo_1(ferr
     assert rc == 1 and js["aprovado"] is False and any(e.startswith("M5:") for e in js["erros"]), (rc, js and js["erros"], p.stderr[-400:])
     assert avaliar(tmp_path, med(parado=[[60.0 * i, i] for i in range(1, 51)]), nome="p")[0] == 0, "relógio parado distinto e mais lento (60 ms) continua válido"
 
+# ---------- LOTE_OPUS_27 A1 e A2: `len(reps) != n` em todos os passos medidos; quadros do relógio fora de [t0_ms, t_quadro_ms] ----------
+dois = lambda i, **c: lambda m: passo(m, i)["reps"].append(dict(copy.deepcopy(passo(m, i)["reps"][0]), **c))  # noqa: E731  (2ª repetição do passo i: cópia da 1ª, com ajustes)
+lento10 = [[100.0 * i, i] for i in range(1, 31)]  # 10 quadros por segundo: o lote honesto reprova no M5 (rc 1)
+r5_fora = lambda **c: lambda m: passo(m, "5b")["reps"][0].update(c)  # noqa: E731
+dentro9, depois9 = [[90.0 * i, i] for i in range(1, 10)], [[905.0 + 10.0 * k, 10 + k] for k in range(9)]  # lote de 0,9 s: 9 quadros dentro (810 ms o último) e 9 logo depois do fim; maior intervalo 95 ms
+buraco_parado = lambda extra: [list(x) for x in extra] + [[16.0 * i, i] for i in range(1, 188)]  # noqa: E731  (parado honesto de 16 ms mais quadros extras)
+FORA = [  # (nome, parâmetros de A, mutação, estrita, token do passo no stderr)
+    ("5b com 2 repetições (a 2ª a 10 quadros/s)", {}, dois("5b", relogio=lento10), False, "passo 5b"), ("5b com 2 repetições iguais, as duas boas", {}, dois("5b"), False, "passo 5b"),
+    ("5b com 2 repetições na estrita", {}, dois("5b", relogio=lento10), True, "passo 5b"), ("4c com 2 repetições (a 1ª com buraco de 2,9 s)", {"parado": [[16.0 * i, i] for i in range(1, 30)] + [[2950.0 + 16.0 * i, 30 + i] for i in range(3)]}, dois("4c", relogio=[[16.0 * i, i] for i in range(1, 188)]), True, "passo 4c"),
+    ("4c com 2 repetições na régua virtual", {}, dois("4c"), False, "passo 4c"),
+    ("lote de 0,9 s: 9 quadros dentro e 9 logo depois do fim", {"m4": 900.0, "quadros": dentro9 + depois9}, None, False, "passo 5b"),
+    ("lote de 0,9 s: 9 quadros dentro e 9 logo depois do fim (estrita)", {"m4": 900.0, "quadros": dentro9 + depois9}, None, True, "passo 5b"),
+    ("lote com 1 quadro 5 ms depois do t_quadro_ms", {}, lambda m: passo(m, "5b")["reps"][0]["relogio"].append([3005.0, 190]), False, "passo 5b"),
+    ("lote com 1 quadro 1 ms antes do t0_ms (t0 = 1000)", {}, r5_fora(t0_ms=1000.0, t_comando_ms=1001.0, t_quadro_ms=4000.0, relogio=[[999.0, 2]] + [[1000.0 + 16.0 * i, 2 + i] for i in range(1, 188)]), False, "passo 5b"),
+    ("primeiro_quadro antes de t0 (a sequência pedida só aparece em quadro anterior ao t0)", {}, r5_fora(t0_ms=1000.0, t_comando_ms=1001.0, t_quadro_ms=4000.0, relogio=[[990.0, 3]] + [[1000.0 + 16.0 * i, 3 + i] for i in range(1, 188)]), False, "passo 5b"),
+    ("primeiro_quadro antes de t0 (estrita)", {}, r5_fora(t0_ms=1000.0, t_comando_ms=1001.0, t_quadro_ms=4000.0, relogio=[[990.0, 3]] + [[1000.0 + 16.0 * i, 3 + i] for i in range(1, 188)]), True, "passo 5b"),
+    ("estrita: 1 quadro em -5000 ms no parado + buraco de 150 ms no lote", {"quadros": buraco(150.0), "parado": buraco_parado([[-5000.0, 0]])}, None, True, "passo 4c"),
+    ("virtual: 1 quadro em -5000 ms no parado + buraco de 150 ms no lote", {"quadros": buraco(150.0), "parado": buraco_parado([[-5000.0, 0]])}, None, False, "passo 4c"),
+    ("estrita: 1 quadro em 8000 ms (depois do t_quadro) no parado + buraco de 150 ms no lote", {"quadros": buraco(150.0), "parado": buraco_parado([[8000.0, 300]])}, None, True, "passo 4c"),
+    ("parado honesto com 1 quadro 1 ms antes do t0 (parado = [-1, ...])", {"parado": buraco_parado([[-1.0, 0]])}, None, False, "passo 4c")]
+
+@pytest.mark.parametrize("c", FORA, ids=[c[0] for c in FORA])
+def test_lote_27_reps_diferente_de_n_em_todos_os_passos_e_quadro_fora_da_janela_do_relogio_sao_entrada_invalida(ferramenta, tmp_path, c):
+    nome, kw, mut, estrito, token = c
+    m = med(**kw)
+    mut and mut(m)
+    rc, js, p = avaliar(tmp_path, m, estrito=estrito)
+    assert rc == 2 and p.stderr.startswith("ENTRADA INVÁLIDA:") and "Traceback" not in p.stderr and token in p.stderr, (nome, rc, js and js["erros"], p.stderr[-600:])
+    assert js is None or not js.get("aprovado"), "entrada inválida nunca aprova"
+
+CONTROLES = [  # relógios honestos que a validação nova NÃO pode transformar em rc 2: (nome, parâmetros, mutação, estrita, rc esperado)
+    ("lote de 0,9 s só com os 9 quadros de dentro (honesto, reprova no M5)", {"m4": 900.0, "quadros": dentro9}, None, False, 1),
+    ("lote de 0,9 s só com os 9 quadros de dentro (estrita)", {"m4": 900.0, "quadros": dentro9}, None, True, 1),
+    ("estrita: o mesmo buraco de 150 ms com o parado honesto de 16 ms (reprova na regra do 3x)", {"quadros": buraco(150.0), "parado": buraco_parado([])}, None, True, 1),
+    ("quadros exatamente em t0_ms e em t_quadro_ms (janela inclusiva)", {"quadros": [[0.0, 2]] + [[16.0 * i, 2 + i] for i in range(1, 188)] + [[3000.0, 190]], "parado": [[0.0, 0]] + buraco_parado([]) + [[3000.0, 300]]}, None, False, 0),
+    ("lote com t0 = 1000 e todos os quadros dentro de [1000, 4000]", {}, r5_fora(t0_ms=1000.0, t_comando_ms=1001.0, t_quadro_ms=4000.0, relogio=[[1000.0 + 16.0 * i, 2 + i] for i in range(1, 188)] + [[4000.0, 300]]), False, 0)]
+
+@pytest.mark.parametrize("c", CONTROLES, ids=[c[0] for c in CONTROLES])
+def test_lote_27_controles_honestos_nao_viram_entrada_invalida(ferramenta, tmp_path, c):
+    nome, kw, mut, estrito, rc_esp = c
+    m = med(**kw)
+    mut and mut(m)
+    rc, js, p = avaliar(tmp_path, m, estrito=estrito)
+    assert rc == rc_esp and js is not None and js["aprovado"] is (rc_esp == 0), (nome, rc, js and js["erros"], p.stderr[-600:])
+
 def test_inteiro_gigante_em_base_produtos_da_estrita_e_entrada_invalida(ferramenta, tmp_path):
     rc, js, p = avaliar(tmp_path, med(produtos=GIG), estrito=True)
     assert rc == 2 and p.stderr.startswith("ENTRADA INVÁLIDA:") and "Traceback" not in p.stderr, (rc, p.stderr[-600:])
@@ -316,6 +386,7 @@ def test_rede_de_seguranca_de_main_imprime_a_linha_e_depois_o_traceback(ferramen
 
 def test_o_roteiro_r_ainda_diz_200_repeticoes_e_lote_de_1000():  # os números do contrato vêm de fluxo_a/roteiro_r.json
     assert (ROT["3"]["n"], ROT["4a"]["n"], ROT["4b"]["n"], ROT["5b"]["quantidade"]) == (200, 200, 200, 1000)
+    assert (int(ROT["4c"].get("n", 1)), int(ROT["5b"].get("n", 1))) == (1, 1), "4c e 5b não definem `n`: padrão 1 (LOTE_OPUS_27 A1)"
 
 def test_relogio_fora_de_ordem_da_o_mesmo_resultado_do_ordenado(ferramenta, tmp_path):  # a ferramenta ordena t antes do np.diff
     bom = avaliar(tmp_path, med(), nome="o")[1]
@@ -422,7 +493,7 @@ def assin(caminho):  # assinatura do oráculo, sem GlobalId e sem achar parede p
         us, tri, lo, hi, vol = E.get_material(w, should_inherit=False), *fm[w.id()]
         return [w.Name or "", nome(E.get_type(w)), nome(E.get_container(w)), aux.fire(w) or "", [c.LayerThickness for c in us.ForLayerSet.MaterialLayers] if us else [], tri, *lo, *hi, vol]
     ps = sorted((parede(w) for w in f.by_type("IfcWall")), key=lambda p: (*p[:4], tuple(round(x, 3) for x in p[6:])))
-    return {"classes": dict(Counter(e.is_a() for e in f if e.is_a() not in bx.LIVRES | bx.MATERIAL)), "paredes": ps}
+    return {"classes": dict(Counter(e.is_a() for e in f if e.is_a() not in bx.LIVRES)), "paredes": ps}
 
 def test_a_real_sentinela_a_contra_ele_mesmo_com_globalids_novos_tem_saida_igual(saida_a, tmp_path, ferramenta):
     import ifcopenshell

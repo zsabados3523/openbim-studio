@@ -15,15 +15,17 @@ from pathlib import Path
 import numpy as np
 
 LIMITES = {"M2": 200.0, "M2b": 200.0, "M3": 50.0}  # ms; p95 na régua estrita, mediana na virtual
-TETO, M4_MS, M5_VIRTUAL_MS, M5_ESTRITO_MS = 3.0, 20000.0, 100.0, 200.0
+TETO, TETO_MIN_MS, M4_MS, M5_VIRTUAL_MS, M5_ESTRITO_MS = 3.0, 250.0, 20000.0, 100.0, 200.0
+
+
+def _teto_ms(lim):  # teto rígido de um valor só (RG-09); mesma conta de tests/s04_fluxo_aux.teto_ms
+    return max(TETO * lim, TETO_MIN_MS)
 OFICIAL = 3000  # paredes do modelo oficial (régua estrita)
 TOL = 1e-6
 SUFIXOS = {".py", ".cpp", ".h", ".hpp", ".cc"}
-# Geometria de apoio (montagem livre no contrato) e relações de material (A compartilha, B não): ficam fora da contagem por classe.
+# Geometria de apoio (montagem livre no contrato): fica fora da contagem por classe.
 LIVRES = {"IfcCartesianPoint", "IfcDirection", "IfcAxis2Placement2D", "IfcAxis2Placement3D", "IfcCartesianPointList2D", "IfcCartesianPointList3D", "IfcIndexedPolyCurve",
           "IfcPolyline", "IfcArbitraryClosedProfileDef", "IfcRectangleProfileDef"}
-# TODO: sai depois que a T11c for mesclada (a exceção de material some: A e B passam a gravar as mesmas relações; ver LOTE_OPUS_24 B6).
-MATERIAL = {"IfcMaterialLayerSetUsage", "IfcRelAssociatesMaterial"}
 FIRE = ("Pset_WallCommon", "FireRating")
 MAX_DIFERENCAS = 20
 
@@ -171,7 +173,7 @@ def _num(x):
 def _roteiro():  # {"n": {passo: repetições}, "lote": tamanho do lote do 5b}: os números do roteiro R, nunca fixos aqui
     try:
         ps = {p["id"]: p for p in json.loads(ROTEIRO.read_text(encoding="utf-8"))["passos"]}
-        return {"n": {i: int(ps[i]["n"]) for i in ("3", "4a", "4b")}, "lote": int(ps["5b"]["quantidade"])}
+        return {"n": {i: int(ps[i].get("n", 1)) for i in MEDIDOS}, "lote": int(ps["5b"]["quantidade"])}
     except (OSError, ValueError, KeyError, TypeError) as e:
         raise ValueError(f"não consegui ler os números do roteiro R em {ROTEIRO}: {e!r}")
 
@@ -188,13 +190,15 @@ def _tempos(pid, k, r, painel):  # t0 <= t_comando <= t_quadro (e t_painel >= t0
         raise ValueError(f"passo {pid}, repetição {k}: t_painel_ms {r['t_painel_ms']!r} antes de t0_ms {r['t0_ms']!r}")
 
 
-def _relogio(pid, r):  # [[t_ms, seq], ...] ordenado por tempo (a ferramenta nunca confia na ordem gravada)
+def _relogio(pid, r):  # [[t_ms, seq], ...] ordenado por tempo (a ferramenta nunca confia na ordem gravada); r já passou por _tempos
     rel = r.get("relogio")
     if not isinstance(rel, list):
         raise ValueError(f"passo {pid}: `relogio` ausente ou não é lista")
     for k, x in enumerate(rel):
         if not (isinstance(x, (list, tuple)) and len(x) == 2 and _num(x[0]) and _num(x[1])):
             raise ValueError(f"passo {pid}: entrada {k} do relógio inválida ({x!r})")
+        if not r["t0_ms"] <= x[0] <= r["t_quadro_ms"]:  # janela inclusiva da própria repetição: rejeita, não filtra
+            raise ValueError(f"passo {pid}: quadro do relógio em {x[0]!r} ms fora da janela [{r['t0_ms']!r}, {r['t_quadro_ms']!r}] da repetição")
     r = sorted(([float(x[0]), x[1]] for x in rel), key=lambda x: x[0])
     if len({x[0] for x in r}) != len(r):
         raise ValueError(f"passo {pid}: relógio com tempo repetido")
@@ -218,8 +222,8 @@ def _validar_medicao(m, rotulo):
         if pid not in por_id:
             raise ValueError(f"{rotulo}: passo {pid} ausente")
         reps = por_id[pid]["reps"]
-        if pid in ro["n"] and len(reps) != ro["n"][pid] or pid not in ro["n"] and not reps:  # o roteiro fixa N: nem a menos nem a mais
-            raise ValueError(f"{rotulo}: passo {pid} com {len(reps)} repetições (o roteiro pede {ro['n'].get(pid, 'ao menos 1')})")
+        if len(reps) != ro["n"][pid]:  # o roteiro fixa N (padrão 1 onde não define; o fluxo A faz int(p.get("n", 1))): nem a menos nem a mais
+            raise ValueError(f"{rotulo}: passo {pid} com {len(reps)} repetições (o roteiro pede {ro['n'][pid]})")
         for k, r in enumerate(reps):
             _tempos(pid, k, r, pid == "4a")
             if pid in ("4c", "5b"):
@@ -284,8 +288,8 @@ def _erros(c, estrito):  # a mesma régua de s04_fluxo_aux.veredito
             e.append(f"{k}: p95 {r['p95_ms']:.0f} ms >= {lim:.0f}")
         if not estrito and r["mediana_ms"] >= lim:
             e.append(f"{k}: mediana {r['mediana_ms']:.0f} ms >= {lim:.0f}")
-        if not estrito and r["max_ms"] >= TETO * lim:
-            e.append(f"{k}: máximo {r['max_ms']:.0f} ms >= {TETO * lim:.0f}")
+        if not estrito and r["max_ms"] >= _teto_ms(lim):
+            e.append(f"{k}: máximo {r['max_ms']:.0f} ms >= {_teto_ms(lim):.0f}")
     if c["M4"]["max_ms"] >= M4_MS:
         e.append(f"M4: {c['M4']['max_ms']:.0f} ms >= {M4_MS:.0f}")
     q, lim5 = c["M5"], M5_ESTRITO_MS if estrito else M5_VIRTUAL_MS
@@ -386,7 +390,7 @@ def _ler_modelo(caminho):
     fm, nome = _formas(f), lambda x: x.Name if x is not None else ""  # noqa: E731
     classes, grupos = {}, {}
     for e in f:
-        if e.is_a() not in LIVRES | MATERIAL:
+        if e.is_a() not in LIVRES:
             classes[e.is_a()] = classes.get(e.is_a(), 0) + 1
     for w in f.by_type("IfcWall"):
         tipo = E.get_type(w)

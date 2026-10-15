@@ -43,3 +43,7 @@ set_target_properties(fluxo_b_janela PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<1:${
 if(WIN32)
   target_link_libraries(fluxo_b_janela PRIVATE psapi)
 endif()
+# Oráculo da S04-T14a: T threads C++ criam o 1o `Paredes` do processo juntas (frio_teste.cpp; o implementador não o edita). Sai ao lado do módulo.
+add_executable(fluxo_b_frio frio_teste.cpp)
+target_link_libraries(fluxo_b_frio PRIVATE paredes)
+set_target_properties(fluxo_b_frio PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<1:${OBIM_SAIDA}>")

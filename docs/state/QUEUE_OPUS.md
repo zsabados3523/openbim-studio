@@ -1,39 +1,21 @@
 # Fila do lote Opus
 
-> Regras (`v2/04` §3.1 e §7): lote = 1 sessão opus com 2–4 itens do mesmo módulo; contexto fechado (especificação, diffs, resultados, sem ler o repositório); saída fixa = aprovado ou reprovado com lista numerada. Nunca abrir com menos de 25% da cota semanal restante. Item esperando >7 dias conta para o gatilho de plano. Lotes 1 e 2 executados (2026-10-10 e 2026-10-11). Lote 1 pronto em 2026-10-10: pedido em `docs/state/LOTE_OPUS_1.md`.**
+> Atualizado: 2026-10-14. Esta fila guarda só o que **aguarda** lote. Lotes feitos ficam no `LOG.md` e em `arquivo/lotes-1-a-28/LOTE_OPUS_N/resultado.md` (lotes 1 a 28; pedido ao lado, em `pedido.md`). Lotes novos ficam em `lotes/LOTE_OPUS_N/` (`pedido.md` e `resultado.md` juntos).
+> Regras: lote = 1 sessão Opus com 2–4 itens do mesmo módulo, contexto fechado, saída "aprovado ou reprovado" com lista numerada. Abrir só com semanal acima de 25% restante e janela de 5 h abaixo de 70% (D9, 2026-10-14; a exceção de cota de 13/10 acabou). Item esperando mais de 7 dias conta para o gatilho de plano (QUOTA.md).
+> Nesta etapa de revisão da F0 nenhuma sessão Opus foi aberta: só cartões escritos e registro aqui.
 
-## Lote 1: licenças e dependências (módulo único)
-| # | Item | Origem | Pré-requisito | Entrou em | Prioridade |
+## Aguardando lote
+| # | Item | Origem | Entrou em | Pré-requisito | Prioridade |
 |---|---|---|---|---|---|
-| 1 | Revisar a tabela mestre de licenças (aceite da S01 exige o papel Arquiteto). Pontos já conhecidos: OCCT é LGPL-2.1-only (05 §3 cobre só "2.1+/3"); libdxfrw com licença disputada; condições de relink do LGPL no empacotamento | S01-T11 | T06 a T09 feitas (prontas em 2026-10-10) | 2026-10-10 | Alta |
-| 2 | Escrever o ADR-009 (licenças e política de conteúdo) a partir da tabela revisada, com resumo de 5 linhas em pt-BR para o PO | S01-T12 | Item 1 aprovado | 2026-10-10 | Alta |
-| 3 | Esboçar o ADR-005 (conda-forge vs vcpkg vs híbrido): critérios, opções, plano de testes. Não é decisão; a decisão final vem depois dos testes de build (S02-T15) | S02-T02 | S02-T01 e S01-T09 feitas (prontas em 2026-10-10) | 2026-10-10 | Alta |
-| 4 | Conferir a classificação T0–T3 dos 27 cartões de S01 e S02 (nenhum T3) e o limite de 400 linhas | Cartões | — | 2026-10-10 | Baixa (só se sobrar cota) |
+| 2 | (feito) Revisão da fatia S02: lote 30 em 2026-10-15, 1 aprovado e 4 reprovados por texto, correções aplicadas; relatório `lotes/LOTE_OPUS_30/resultado.md` | PROPOSTA_REVISAO_F0 §3.2 | 2026-10-14 | Concluído; sai da fila | — |
+| 3 | (feito) Revisão da fatia S03: lote 31 em 2026-10-15, 5 itens reprovados por texto, correções aplicadas; relatório `lotes/LOTE_OPUS_31/resultado.md` | PROPOSTA_REVISAO_F0 §3.3 | 2026-10-14 | Concluído; sai da fila | — |
+| 4 | T14c (Fluxo B, janela Qt Widgets; ramo `s04-t14c`, 501 linhas, exceção aceita) | LOG 2026-10-14 | 2026-10-14 | **Pausada pela D1** até S01 a S03 revisadas e D1 a D8 respondidas | Baixa até a D1 acabar |
+| 5 | T15, T17, T18, T19 (cartões esqueleto; T19 é ADR, decisão do PO) | BOARD | 2026-10-14 | Pausadas pela D1; reescrever cartões antes | Baixa até a D1 acabar |
 
-Itens 1 a 3 formam o lote mínimo; o item 4 entra só se a cota permitir. O líder prepara o pedido de lote (pacote de contexto) e avisa "lote opus pronto".
+## Já despachado (resumo; detalhes no LOG)
+- **Lote 29 (S01), 2026-10-15: APROVADO 6 de 6** (`lotes/LOTE_OPUS_29/resultado.md`). Aberto pelo líder com a exceção de cota do PO.
+- Lotes 1 a 28 executados entre 2026-10-10 e 2026-10-14. O último, lote 28, **aprovou a T12** (PR 83; mescla quando `linux` e `windows` ficarem verdes).
+- Opcionais do Opus que ficaram sem cartão (do relatório do dia 14/10): T14b (visibilidade hidden, guarda NOMINMAX), duração zero do juiz de metas (limite conhecido), lote 24 de T16b (estado morto, `sem_malha` por peça, medir modo uma-peça no arquivo real do PO). Viram cartão quando a D1 acabar.
 
-## Já despachados
-- Lote 1 (2026-10-10): itens 1 a 4 executados. Resultado em `docs/state/reports/LOTE_OPUS_1.md`. T11 reprovada (12 defeitos); ADR-009 e esboço do ADR-005 entregues.
-
-## Lote 2 (pedido pronto em `docs/state/LOTE_OPUS_2.md`, 2026-10-10; itens abaixo + revisão do AppImage e sonda C++)
-| # | Item | Origem | Entrou em | Prioridade |
-|---|---|---|---|---|
-| 1 | Conferir o diff da correção da tabela mestre (v2) e os arquivos que ficaram fora do lote 1: `THIRD_PARTY.md`, `docs/state/reports/F0-S01.md` e a lista de componentes de `v2/03` S01 | S01-T11 | 2026-10-10 | Média |
-| 2 | (se o PO confirmar) revisar o texto novo de `v2/05` §3 proposto pelo líder | v2/05 | 2026-10-10 | Baixa |
-| 3 | Amostra de revisão (1 em 3 das T2): sonda C++ S02-T16 (`prototypes/cpp_probe/`, `docs/research/2026-10-10-sonda-cpp.md`). Pergunta: a conclusão "IfcOpenShell 0.9 usa `ifcopenshell::file` e libs `libifcopenshell.*` compartilhadas" fecha o teste 2 do ADR-005 e muda o teste 5 (R1)? | S02-T16 | 2026-10-10 | Média |
-| 4 | **Revisão obrigatória** do AppImage P1 (S02-T10): `packaging/linux/` (AppRun com PYTHONHOME fixo, build_appimage.sh), `docs/research/2026-10-10-appimage-p1.md`. Checar as obrigações do ADR-009 §5.3 (bibliotecas separadas, sem trava contra troca, licenses/, LGPL-COMO-TROCAR.md, FONTES.md) e a poda de vtk/viskores se o PO aprovar | S02-T10 | 2026-10-10 | Alta |
-
-## Já despachado: lote 2 (2026-10-11)
-Resultado em `docs/state/reports/LOTE_OPUS_2.md`. Tabela mestre APROVADA; v2/05 APROVADO; AppImage e instalador REPROVADOS (7 e 4 defeitos, só correções curtas); sonda C++ amostra aprovada; CI com 1 defeito (lista de licenças permitidas). Próximo lote (lote 3): conferir os diffs dos cartões S02-T17 e S02-T18, amostra de S02-T19 e S02-T20, ADR-005 final (S02-T15).
-
-## Lote 3 (pedido pronto em `docs/state/LOTE_OPUS_3.md`, 2026-10-11)
-T17/T18 (correções do lote 2), amostra de T19/T20 e ADR-005 final (T15). Cota semanal usada: 12%. Aguarda o ok do PO.
-
-## Lote 6: FEITO (2026-10-12), resultado em `reports/LOTE_OPUS_6.md`
-Lote 7 (a abrir): revisão do oráculo T08-0, de T08-A/B1/B2 e da T26 (oráculo e código). Cada cartão T3 espera o lote; nada entra no `main` sem aprovado.
-
-## Lote 9 (a preparar): especificação da S04 (ponte Python↔C++, híbrido vs C++ puro; TA + T3)
-Itens: especificar os dois fluxos (A híbrido e B C++ puro), o corpus, o oráculo das metas de v2/03 (compartilhar o modelo sem cópia, 200 ms p95 por parede, GIL, 1.000 paredes em 20 s), ADR-001 e ADR-004 (threads); dividir em cartões ≤400 linhas. Incluir os pontos do lote 8 §2.3 (iterador por peça, orçamento de peças lentas) e a seleção por triângulo. Aguarda o PO.
-- 2026-10-12 | Conferência curta do lote 10 (PR 55: T02b + T04c, linux e windows verdes) + revisão T05 e T16 | Espera a janela de 5 h renovar (79% em uso, regra: abaixo de 60%; renova 02:30Z de 13/10). Semanal 41% (59% restante, ok).
-
-- 2026-10-13: **Lote 23** (T11c, PR 82 + T12, PR 83; CI verde nos dois): aguarda a renovação semanal (2026-10-14 09:00Z). Pontos: T11c diff de 1 linha; T12 regra M7 proposta (ast.unparse, ceil(largura/100)), `primeiro_quadro`, régua virtual/estrita, saída igual com base. Depois: T14a (quando houver oráculo) e T14b/T14c.
+## Pedido do PO (2026-10-15): revisão completa
+Revisão Opus de **tudo** (código, arquitetura, documentos), depois da implementação. Se feita antes da S10, cobre todo o projeto implementado até então. Recomendo no fim da S04, antes do portão da F0. Ainda sem lote nem data; abrir só com o uso conferido (regra D9) ou com ok do PO por evento.

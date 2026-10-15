@@ -43,12 +43,32 @@ def erros_ifc(g):  # erros do validador (esquema + regras EXPRESS). O nível vem
     V.validate(g, lg, express_rules=True)
     return [s for s in lg.statements if str(s.get("level", "")).lower() == "error"]
 
+def materiais(f):  # T11c: usos de camadas e relações de material, vistos de fora pelo ifcopenshell
+    return {c: len(f.by_type(c, include_subtypes=False)) for c in ("IfcMaterialLayerSetUsage", "IfcRelAssociatesMaterial", "IfcMaterialLayerSet", "IfcMaterialLayer", "IfcMaterial")}
+
+def confere_uma_camada_por_parede(f, n, tipos=1):  # n paredes -> n usos e n relações de material (+1 relação por tipo); cada uso/relação é só da sua parede
+    import ifcopenshell.util.element as E
+    ws = f.by_type("IfcWall")
+    assert len(ws) == n, f"{len(ws)} paredes, esperado {n}"
+    m = materiais(f)
+    assert m["IfcMaterialLayerSetUsage"] == n, f"{m['IfcMaterialLayerSetUsage']} IfcMaterialLayerSetUsage para {n} paredes (cada parede precisa do seu): {m}"
+    assert m["IfcRelAssociatesMaterial"] == n + tipos, f"{m['IfcRelAssociatesMaterial']} IfcRelAssociatesMaterial para {n} paredes e {tipos} tipo(s), esperado {n + tipos}: {m}"
+    assert m["IfcMaterialLayerSet"] == tipos, "o conjunto de camadas continua sendo o do tipo (1 por tipo)"
+    usos = [E.get_material(w, should_inherit=False) for w in ws]
+    assert all(u is not None and u.is_a("IfcMaterialLayerSetUsage") for u in usos) and len({u.id() for u in usos}) == n, "dois usos iguais numa mesma entidade (compartilhado)"
+    for w, u in zip(ws, usos):
+        rels = [r for r in f.by_type("IfcRelAssociatesMaterial") if w in r.RelatedObjects]
+        assert len(rels) == 1 and list(rels[0].RelatedObjects) == [w] and rels[0].RelatingMaterial == u, "a relação de material de cada parede tem só ela e o seu uso"
+        assert u.ForLayerSet == E.get_type(w).HasAssociations[0].RelatingMaterial, "o uso aponta para o conjunto de camadas do tipo"
+
 def estado(f):  # assinatura do modelo: contagem por classe e, por parede, nome, resistência ao fogo e forma
     return Counter(e.is_a() for e in f), {w.GlobalId: (w.Name, fire(w), forma(w) if w.Representation else None) for w in f.by_type("IfcWall")}
 
 # ---------- conta das metas a partir dos tempos brutos ----------
 ESTRITO = os.environ.get("OBIM_S04_ESTRITO") == "1"
-LIM, TETO, M4_MS = {"M2": 200.0, "M2b": 200.0, "M3": 50.0}, 3.0, 20000.0
+LIM, TETO, TETO_MIN_MS, M4_MS = {"M2": 200.0, "M2b": 200.0, "M3": 50.0}, 3.0, 250.0, 20000.0
+def teto_ms(lim):  # teto rígido de um valor só (RG-09): TETO x limite, nunca abaixo de 250 ms (uma pausa do coletor de lixo ou do runner não reprova; mesma regra de medir_s04.py)
+    return max(TETO * lim, TETO_MIN_MS)
 def serie(med, passo, fim="t_quadro_ms"):
     return [r[fim] - r["t0_ms"] for p in med["passos"] if p["id"] == passo for r in p["reps"]]
 
@@ -76,7 +96,7 @@ def veredito(m):  # lista de erros da régua do CI virtual (ou do p95, em ESTRIT
         r = m[k]
         e += [f"{k}: p95 {r['p95_ms']:.0f} ms >= {lim}"] * (ESTRITO and r["p95_ms"] >= lim)
         e += [f"{k}: mediana {r['mediana_ms']:.0f} ms >= {lim}"] * (not ESTRITO and r["mediana_ms"] >= lim)
-        e += [f"{k}: máximo {r['max_ms']:.0f} ms >= {TETO * lim:.0f}"] * (not ESTRITO and r["max_ms"] >= TETO * lim)
+        e += [f"{k}: máximo {r['max_ms']:.0f} ms >= {teto_ms(lim):.0f}"] * (not ESTRITO and r["max_ms"] >= teto_ms(lim))
     e += [f"M4: {m['M4']['max_ms']:.0f} ms >= {M4_MS:.0f}"] * (m["M4"]["max_ms"] >= M4_MS)
     c = m["M5"]
     e += [f"M5: janela de 1 s com {n} quadros (< 20): {c['janelas']}" for n in c["janelas"] if n < 20]

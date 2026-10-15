@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Oráculo da S03-T05 (Parte 0), V1 a V5: o viewport recebe lotes e desenha (V1 a V4 precisam de tela).
 
-Transcrição de docs/state/reports/LOTE_OPUS_4.md §1.5. Congelado: não afrouxar número nem remover caso.
+Transcrição de docs/state/arquivo/lotes-1-a-28/LOTE_OPUS_4/resultado.md §1.5. Congelado: não afrouxar número nem remover caso.
 Sem os métodos novos (S03-T05 parte B) ou sem tela, V1 a V4 pulam com mensagem. V5 sempre roda.
 """
 import os
@@ -11,6 +11,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from obrigatorio import pular_sem_tela
 from PySide6.QtCore import QCoreApplication, QElapsedTimer
 from PySide6.QtWidgets import QApplication
 
@@ -18,13 +19,11 @@ RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(RAIZ / "prototypes"))
 
-from test_viewport_carregador import CarregadorMalhas, _carregar, m600, requer_a  # noqa: E402,F401
+from test_viewport_carregador import CarregadorMalhas, _carregar, m600  # noqa: E402,F401
 from viewport_qrhi.cubo_rhi import CuboViewport  # noqa: E402
 
 NOVOS = ("limpar", "adicionar_lote", "enquadrar", "estatisticas")
-requer_b = pytest.mark.skipif(
-    not all(hasattr(CuboViewport, n) for n in NOVOS), reason="aguarda S03-T05 parte B (métodos novos do Viewport)"
-)
+assert all(hasattr(CuboViewport, n) for n in NOVOS), "CuboViewport sem os métodos da S03-T05 parte B"
 
 
 @pytest.fixture(scope="module")
@@ -61,7 +60,7 @@ def tela(app):
         QCoreApplication.processEvents()
     if w.rhi() is None or not t.quadros:
         w.close()
-        pytest.skip(
+        pular_sem_tela(
             "sem contexto gráfico (QT_QPA_PLATFORM=%s): V1 a V4 precisam de tela real" % os.environ.get("QT_QPA_PLATFORM", "?")
         )
     yield t
@@ -72,8 +71,6 @@ def _pixels(img, passo=2):
     return [img.pixel(x, y) for x in range(0, img.width(), passo) for y in range(0, img.height(), passo)]
 
 
-@requer_a
-@requer_b
 def test_v1_desenho_m600(tela, m600, tmp_path):
     w = tela.w
     w.limpar()
@@ -91,8 +88,6 @@ def test_v1_desenho_m600(tela, m600, tmp_path):
     assert 0.05 <= fracao <= 0.95, f"{fracao:.1%} dos pixels fora do fundo"
 
 
-@requer_a
-@requer_b
 def test_v2_envio_incremental(tela, m600):
     w = tela.w
     w.limpar()
@@ -110,8 +105,6 @@ def test_v2_envio_incremental(tela, m600):
     assert w.estatisticas()["buffers_criados"] == 2 * len(lotes) and w.estatisticas()["bytes_gpu"] == ant_bytes
 
 
-@requer_a
-@requer_b
 def test_v3_limpar(tela, m600):
     w = tela.w
     lotes, _, _ = _carregar(m600)
@@ -125,8 +118,6 @@ def test_v3_limpar(tela, m600):
     assert len(set(_pixels(tela.desenhar(2)))) == 1, "depois de limpar() só a cor de fundo"
 
 
-@requer_a
-@requer_b
 def test_v4_profundidade(tela, m600):
     w = tela.w
     w.limpar()
@@ -146,8 +137,6 @@ def test_v5_legado_passa_sem_alteracao():
     assert r.returncode == 0, r.stdout[-2000:] + r.stderr[-1000:]
 
 
-@requer_a
-@requer_b
 def test_v4_cena_cabe_depois_de_arrastar(tela, m600):
     """P0b-4: depois de enquadrar() e de arrastar (mover), nenhum canto da caixa da cena fica além de
     camera.longe nem (fora da caixa) aquém de camera.perto. Longe: distância à câmera; perto: profundidade na direção da câmera."""

@@ -29,7 +29,7 @@ RAIZ = ESTE.parent.parent
 OBRIGATORIO = os.environ.get("OBIM_S04_OBRIGATORIO") == "1" and os.environ.get("OBIM_S04_VIEWPORT_OBRIGATORIO") == "1"
 METODOS = ("viewport_ptr", "iniciar", "parar", "viva", "adicionar_lote", "limpar", "relogio", "capturar", "camera",
            "definir_camera", "estatisticas", "perder_contexto")
-RODADAS, FUNDO = 5, (30, 30, 40)
+RODADAS, FUNDO = 7, (30, 30, 40)  # 7 rodadas medidas, depois de 1 rodada de aquecimento descartada (RG-09 parte 2)
 CORES = ((240, 30, 30, 255), (30, 220, 30, 255), (30, 50, 240, 255))
 CAM = dict(alvo=(0.0, 0.0, 0.0), distancia=20.0, azimute=-90.0, elevacao=20.0)
 CAM2 = dict(alvo=(1.0, 0.0, 0.5), distancia=16.0, azimute=-70.0, elevacao=25.0)
@@ -78,16 +78,20 @@ def veredito(fases):  # critério do LOTE_OPUS_11: {fase: [{"max": ms}, ...]} ->
     mx = {k: [r["max"] for r in v] for k, v in fases.items()}
     erros, med = [f"fase {k}: {len(v)} rodadas (exige {RODADAS})" for k, v in mx.items() if len(v) != RODADAS], {k: statistics.median(v) for k, v in mx.items() if v}
     for k, v in mx.items():
-        erros += [f"fase {k}: intervalo >= {200 if max(v) >= 200 else 100} ms ({max(v):.0f})"] * (max(v) >= 100)  # >= 200: reprova na hora
+        altos = sum(x > 200 for x in v)  # RG-09 parte 2: um pico isolado de máquina passa; um travamento de verdade aparece em todas as rodadas
+        erros += [f"fase {k}: mediana dos maiores {med[k]:.1f} ms >= 100"] * (med[k] >= 100)  # regra aprovada pelo PO (E3)
+        erros += [f"fase {k}: {altos} rodadas com intervalo > 200 ms (no máximo 1)"] * (altos >= 2)
         erros += [f"fase {k}: mediana dos maiores {med[k]:.1f} ms >= 50"] * (med[k] >= 50)
         erros += [f"fase {k}: razão lote/parado {med[k] / med['A']:.1f} > 3"] * (k != "A" and med[k] > 3 * med["A"])
     return erros
 
 def test_criterio_de_repeticao_do_oraculo():  # roda hoje, sem o módulo: a régua tem de aprovar o T05 e reprovar o F9
     f = lambda *m: {k: [{"max": x} for x in v] for k, v in zip("ABCD", m)}  # noqa: E731
-    ok = [29.7, 30.1, 31.0, 29.9, 31.5]
-    assert not veredito(f(ok, [31.9] * 5, [46.5, 31, 33, 32, 30], ok))
-    assert all(veredito(f(ok, ok, c, ok)) for c in ([46.5, 31, 210, 32, 30], [120, 31, 33, 32, 30], [60] * 5, [30] * 4, [95] * 5))
+    ok = [29.7, 30.1, 31.0, 29.9, 31.5, 30.4, 30.8]
+    assert not veredito(f(ok, [31.9] * 7, [46.5, 31, 33, 32, 30, 31, 32], ok))
+    assert not veredito(f(ok, ok, [46.5, 31, 210, 32, 30, 31, 32], ok)), "um pico isolado de 210 ms em 7 rodadas passa (RG-09 parte 2)"
+    assert not veredito(f(ok, ok, [120, 31, 33, 32, 30, 31, 32], ok))
+    assert all(veredito(f(ok, ok, c, ok)) for c in ([46.5, 31, 210, 32, 210, 31, 32], [60] * 7, [30] * 6, [95] * 7, [100] * 7))
 
 def test_viewport_dentro_de_janela_pyside6_com_as_cores_esperadas(viewport):  # reaproveita S03-T03 (quadro não uniforme)
     r = caso("imagem")
@@ -238,6 +242,7 @@ def c_imagem(res, ordem=""):  # `ordem`: já importada pelo __main__ (R1-e nas d
                cls=classificar(a), cores=len({tuple(p) for p in a[::4, ::4].reshape(-1, 4)}), placa=st["triangulos_na_placa"], tri=st["triangulos"],
                cantos=[a[y, x, :3].tolist() for y in (2, -3) for x in (2, -3)])
     res["info"] = c.info() if hasattr(c, "info") else None  # qual desenho foi usado (OpenGL ou D3D11)
+    res["software"] = [c.desenho_por_software(), c.aviso()] if hasattr(c, "aviso") else None  # F0-RG-13: aviso quando sem placa de vídeo
     c.limpar()
     yield from esperar(lambda: c.estatisticas()["triangulos"] == 0)
     yield 500
@@ -285,7 +290,7 @@ def c_intervalo(res):
         while th.is_alive():
             yield 20
     for fase in "ABCD":
-        for _ in range(RODADAS):
+        for rodada in range(RODADAS + 1):  # a rodada 0 é o aquecimento: roda, mas não entra na medida
             t0, p0 = agora(), time.perf_counter() * 1000
             if fase == "A":
                 yield 1500
@@ -299,6 +304,8 @@ def c_intervalo(res):
                         segurar(0.75)  # na thread principal: a janela PySide6 inteira para
                     yield 300
             t1, p1 = agora(), time.perf_counter() * 1000
+            if rodada == 0:
+                continue
             ts = [t for t, _ in quadros(c, t0) if t <= t1]
             g = sorted(b - a for a, b in zip(ts, ts[1:])) or [1e9]
             res["fases"][fase].append(dict(max=g[-1], p99=g[int(0.99 * (len(g) - 1))], lentos=sum(x > 33 for x in g), quadros=len(ts)))

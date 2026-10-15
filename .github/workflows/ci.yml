@@ -219,6 +219,14 @@ jobs:
           done
           echo "::notice title=desenho do cubo no Windows::${r}"
           echo "Desenho do cubo (Windows): ${r}" >> "$GITHUB_STEP_SUMMARY"
+          # T27: reabertura da janela 3D (P17) no Windows, no mesmo modo gráfico em que o laço acima parou. Informativo: o resultado vai ao aviso e ao resumo, nunca bloqueia.
+          OBIM_TELA_OBRIGATORIA=1 QT_QPA_PLATFORM=windows QSG_RHI_BACKEND=d3d11 \
+            pytest -q -s -rs tests/test_viewport_adaptador.py > out/desenho/pytest-reabertura.log 2>&1
+          rc=$?
+          cat out/desenho/pytest-reabertura.log
+          if [ $rc -eq 0 ]; then r2="PASSOU no modo $modo"; else r2="FALHOU (código $rc, modo $modo): $(tail -n 3 out/desenho/pytest-reabertura.log | tr '\n' ' ' | cut -c1-300)"; fi
+          echo "::notice title=reabertura da janela 3D no Windows::${r2}"
+          echo "Reabertura da janela 3D, P17 (Windows): ${r2}" >> "$GITHUB_STEP_SUMMARY"
           exit 0
       - name: Inventário de licenças e canal
         shell: bash -elo pipefail {0}

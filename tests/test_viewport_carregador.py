@@ -10,6 +10,7 @@ import os
 import sys
 import threading
 import time
+import types
 from functools import lru_cache
 from pathlib import Path
 
@@ -340,6 +341,59 @@ def test_o8_arquivo_invalido(tmp_path, modo, excecoes_em_thread):
     assert lotes == [] and r.estado == "erro" and r.erro
     assert car.aguardar(timeout=5.0)  # a thread terminou...
     assert excecoes_em_thread == [], f"...mas com exceção: {excecoes_em_thread}"  # ...sem exceção
+
+
+def test_foto_do_arquivo_detecta_tamanho_data_e_conteudo(tmp_path):
+    """F0-RG-04: a foto (tamanho, data, soma) acusa qualquer mudança no arquivo e diz o que mudou."""
+    from viewport_qrhi import foto_arquivo as fa
+    c = tmp_path / "a.ifc"
+    c.write_bytes(b"abcdef")
+    foto = fa.tirar(c)
+    assert foto["tamanho"] == 6 and len(foto["soma"]) == 32 and fa.mudou(c, foto, com_soma=True) is None
+    os.utime(c, ns=(foto["data_ns"] + 10**9, foto["data_ns"] + 10**9))
+    assert "data de modificação" in fa.mudou(c, foto)
+    c.write_bytes(b"abcdefg")
+    assert "tamanho 6 -> 7" in fa.mudou(c, foto)
+    c.write_bytes(b"abcdeX")
+    os.utime(c, ns=(foto["data_ns"], foto["data_ns"]))  # mesmo tamanho e data: só a soma pega
+    assert fa.mudou(c, foto) is None and "conteúdo" in fa.mudou(c, foto, com_soma=True)
+    assert fa.tirar(tmp_path / "nao_existe.ifc") is None and fa.mudou(tmp_path / "x", None) is None
+
+
+def test_arquivo_trocado_durante_a_carga_para_com_mensagem_clara(tmp_path, monkeypatch, excecoes_em_thread):
+    """O filho recebe a foto tirada pelo pai; se o arquivo já não bate, a carga termina em erro (não mistura versões)."""
+    from viewport_qrhi import carregador as cr
+    c = _gerar_cor(tmp_path / "cor.ifc")
+    boa = cr.foto_arquivo.tirar(c)
+    monkeypatch.setattr(cr.foto_arquivo, "tirar", lambda caminho, com_soma=True: {**boa, "tamanho": boa["tamanho"] + 1})
+    lotes, r, car = _carregar(c)
+    assert lotes == [] and r.estado == "erro" and "mudou durante a carga" in r.erro
+    assert car.aguardar(timeout=5.0) and excecoes_em_thread == []
+
+
+def test_manter_arquivo_recusa_arquivo_com_conteudo_trocado(tmp_path, monkeypatch):
+    """Mesmo tamanho e data, conteúdo diferente: a carga conclui, mas o arquivo NÃO é mantido aberto e a mensagem diz por quê."""
+    from viewport_qrhi import carregador as cr
+    c = _gerar_cor(tmp_path / "cor.ifc")
+    real = cr.foto_arquivo
+    boa = real.tirar(c)
+    assert boa["soma"]
+    falsa = types.SimpleNamespace(tirar=lambda caminho, com_soma=True: {**boa, "soma": "0" * 32}, mudou=real.mudou)
+    monkeypatch.setattr(cr, "foto_arquivo", falsa)  # só o carregador vê a foto com a soma errada; mudou() relê a soma de verdade
+    lotes, r, car = _carregar(c, manter_arquivo=True)
+    assert r.estado == "concluido" and lotes
+    assert any("não foi possível manter o arquivo aberto: o arquivo mudou durante a carga (o conteúdo mudou)" in m for m in r.mensagens)
+    assert car.arquivo is None
+
+
+def test_soma_so_com_manter_arquivo(tmp_path, monkeypatch):
+    """Sem manter_arquivo a carga não lê o arquivo inteiro só para a soma (não dá para cancelar essa leitura)."""
+    from viewport_qrhi import carregador as cr
+    pedidos = []
+    original = cr.foto_arquivo.tirar
+    monkeypatch.setattr(cr.foto_arquivo, "tirar", lambda caminho, com_soma=True: pedidos.append(com_soma) or original(caminho, com_soma))
+    _carregar(_gerar_cor(tmp_path / "cor.ifc"))
+    assert pedidos == [False]
 
 
 def test_o8_produto_defeituoso(tmp_path):

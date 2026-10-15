@@ -126,9 +126,16 @@ class _Fake(OSError):
         self.winerror, self.strerror = winerror, strerror
 
 
+class _Travado(PermissionError):
+    """Imita o erro real do Windows para arquivo em uso: PermissionError com winerror 32 ou 33."""
+    def __init__(self, winerror):
+        super().__init__(13, "em uso")
+        self.winerror = winerror
+
+
 @pytest.mark.parametrize("exc, trecho", [
-    (_Fake(32), "aberto em outro programa"),
-    (_Fake(33), "aberto em outro programa"),
+    (_Travado(32), "aberto em outro programa"),
+    (_Travado(33), "aberto em outro programa"),
     (_Fake(389), "OneDrive"),
     (PermissionError(13, "negado"), "sem permissão"),
     (OSError(5, "erro de E/S"), "o sistema recusou o acesso"),
@@ -139,15 +146,17 @@ def test_mensagem_de_erro_do_sistema(exc, trecho):
 
 
 def test_arquivo_travado_e_diferente_de_ifc_invalido(monkeypatch, tmp_path):
+    registro.iniciar()
     arq = tmp_path / "Residência João.ifc"
     arq.write_text("ISO-10303-21;")
 
     def abrir(*a, **k):
-        raise _Fake(32)
+        raise _Travado(32)
 
     monkeypatch.setattr(ifc_summary, "open", abrir, raising=False)
     with pytest.raises(IfcSummaryError, match="aberto em outro programa"):
         count_by_class(arq)
+    assert "Leitura recusada" in _texto_log()
 
 
 def test_falta_de_memoria_ao_abrir_e_ao_ler(monkeypatch, tmp_path):

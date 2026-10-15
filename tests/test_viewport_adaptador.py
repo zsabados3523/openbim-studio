@@ -80,7 +80,7 @@ def _trocar_de_janela(tmp_path):
     _esperar(app, lambda: quadros, 5.0)
     if w.rhi() is None or not quadros:
         a.close()
-        pytest.skip("P17 precisa de tela virtual com contexto gráfico (rode com xvfb e QT_QPA_PLATFORM=xcb)")
+        pular_sem_tela("P17 precisa de tela virtual com contexto gráfico (rode com xvfb e QT_QPA_PLATFORM=xcb)")
     ad = AdaptadorCarga(w)
     ad.terminou.connect(fins.append)
     ad.abrir(caminho)

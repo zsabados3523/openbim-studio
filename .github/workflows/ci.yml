@@ -64,17 +64,24 @@ jobs:
             if diff <(grep -v '^#' "environment.${PLAT}.lock" | tr -d '\r') <(grep -v '^#' "out/environment.${PLAT}.lock" | tr -d '\r') >/dev/null; then r="igual à do repositório"; else r="DIFERENTE da do repositório (atualizar)"; fi
           else r="ainda não existe no repositório (trazer o artefato)"; fi
           echo "::notice title=trava ${PLAT}::${r}"
-      - name: Localidade pt_BR na máquina descartável (T26; informativo, não bloqueia)
-        continue-on-error: true
+      - name: Localidade pt_BR na máquina descartável (T26; bloqueia o merge)
         run: |
-          if sudo locale-gen pt_BR.UTF-8 >/dev/null 2>&1 && sudo update-locale >/dev/null 2>&1 && locale -a | grep -qi '^pt_BR\.utf-\?8$'; then r="criada"; else r="NÃO criada (os testes da T26 vão pular)"; fi
-          echo "::notice title=localidade pt_BR::${r}"
+          # RG-03: sem a localidade os testes da T26 pulariam sem avisar; agora o passo falha e a chave liga o "pulo vira falha".
+          sudo locale-gen pt_BR.UTF-8 >/dev/null 2>&1 || true
+          sudo update-locale >/dev/null 2>&1 || true
+          if locale -a | grep -qi '^pt_BR\.utf-\?8$'; then
+            echo "OBIM_LOCALIDADE_OBRIGATORIA=1" >> "$GITHUB_ENV"
+            echo "::notice title=localidade pt_BR::criada"
+          else
+            echo "::error title=localidade pt_BR::não foi criada; os testes da T26 e do fluxo B não podem rodar"
+            exit 1
+          fi
       - name: Testes
         shell: bash -el {0}
         run: |
           # Em caso de falha, as últimas linhas viram anotação pública (o log completo exige login no GitHub).
           set +e
-          QT_QPA_PLATFORM=offscreen pytest -q tests > pytest.log 2>&1
+          QT_QPA_PLATFORM=offscreen pytest -q -rs tests > pytest.log 2>&1
           rc=$?
           cat pytest.log
           if [ $rc -ne 0 ]; then
@@ -82,23 +89,18 @@ jobs:
             echo "::error title=pytest falhou::$msg"
           fi
           exit $rc
-      - name: Desenho do cubo com tela virtual e Mesa por software (T25; informativo, não bloqueia)
+      - name: Testes de tela da S03 e desenho do cubo (tela virtual e Mesa por software; bloqueia o merge)
         shell: bash -el {0}
-        continue-on-error: true
+        timeout-minutes: 20
         run: |
+          # RG-03: estes testes pulavam sem tela (offscreen). Aqui rodam com Xvfb e Mesa (llvmpipe), e pulo vira falha (OBIM_TELA_OBRIGATORIA=1).
           mkdir -p out/desenho
-          # Xvfb e Mesa (llvmpipe) vêm do próprio runner Ubuntu; se faltar, instala só no runner.
+          # Xvfb e Mesa vêm do próprio runner Ubuntu; se faltar, instala só no runner.
           command -v xvfb-run >/dev/null || sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0
-          set +e
-          OBIM_EXIGIR_DESENHO=1 OBIM_PNG_SAIDA=out/desenho LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe \
+          OBIM_TELA_OBRIGATORIA=1 OBIM_EXIGIR_DESENHO=1 OBIM_PNG_SAIDA=out/desenho LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe \
             QT_QPA_PLATFORM=xcb xvfb-run -a -s "-screen 0 1280x1024x24" \
-            pytest -q -s -rs tests/test_viewport_qrhi.py > out/desenho/pytest-desenho.log 2>&1
-          rc=$?
-          cat out/desenho/pytest-desenho.log
-          if [ $rc -eq 0 ] && [ -f out/desenho/cubo.png ]; then r="DESENHA ($(grep 'RHI backend' out/desenho/pytest-desenho.log | head -n 1))"; else r="NÃO DESENHA (código $rc): $(tail -n 3 out/desenho/pytest-desenho.log | tr '\n' ' ' | cut -c1-300)"; fi
-          echo "::notice title=desenho do cubo no Linux::${r}"
-          echo "Desenho do cubo (Linux): ${r}" >> "$GITHUB_STEP_SUMMARY"
-          exit 0
+            pytest -q -rs tests/test_viewport_qrhi.py tests/test_viewport_camera.py tests/test_viewport_malha.py tests/test_viewport_adaptador.py tests/test_viewport_responsivo.py tests/test_viewport_selecao.py
+          test -f out/desenho/cubo.png
       - name: Inventário de licenças e canal
         shell: bash -el {0}
         run: |
@@ -204,7 +206,7 @@ jobs:
         run: |
           # Em caso de falha, as últimas linhas viram anotação pública (o log completo exige login no GitHub).
           set +e
-          QT_QPA_PLATFORM=offscreen pytest -q tests > pytest.log 2>&1
+          QT_QPA_PLATFORM=offscreen pytest -q -rs tests > pytest.log 2>&1
           rc=$?
           cat pytest.log
           if [ $rc -ne 0 ]; then
@@ -578,7 +580,7 @@ jobs:
         run: |
           # Em caso de falha, as últimas linhas viram anotação pública (o log completo exige login no GitHub).
           set +e
-          QT_QPA_PLATFORM=offscreen pytest -q tests > pytest.log 2>&1
+          QT_QPA_PLATFORM=offscreen pytest -q -rs tests > pytest.log 2>&1
           rc=$?
           cat pytest.log
           if [ $rc -ne 0 ]; then

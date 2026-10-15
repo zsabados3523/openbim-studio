@@ -238,6 +238,7 @@ def c_imagem(res, ordem=""):  # `ordem`: já importada pelo __main__ (R1-e nas d
                cls=classificar(a), cores=len({tuple(p) for p in a[::4, ::4].reshape(-1, 4)}), placa=st["triangulos_na_placa"], tri=st["triangulos"],
                cantos=[a[y, x, :3].tolist() for y in (2, -3) for x in (2, -3)])
     res["info"] = c.info() if hasattr(c, "info") else None  # qual desenho foi usado (OpenGL ou D3D11)
+    res["software"] = [c.desenho_por_software(), c.aviso()] if hasattr(c, "aviso") else None  # F0-RG-13: aviso quando sem placa de vídeo
     c.limpar()
     yield from esperar(lambda: c.estatisticas()["triangulos"] == 0)
     yield 500

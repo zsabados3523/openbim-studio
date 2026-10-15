@@ -123,5 +123,6 @@ void registrar_viewport(nb::module_& m) {
         r["superficies_soltas"] = s.superficies_soltas; r["solturas_atrasadas"] = s.solturas_atrasadas;
         return r;
       })
-      .def("perder_contexto", &Viewport::perder_contexto).def("info", &Viewport::info);
+      .def("perder_contexto", &Viewport::perder_contexto).def("info", &Viewport::info)
+      .def("desenho_por_software", &Viewport::desenho_por_software).def("aviso", &Viewport::aviso);
 }

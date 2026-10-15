@@ -40,7 +40,7 @@ Revisão final da noite: `reports/F0-RG-25-revisao-final.md`. Cartões novos que
 |---|---|---|---|---|
 | F0-RG-26 | Duas travas a mais na régua do intervalo máximo | T3 | PRONTA | Aprovado pelo PO; revisão Opus de outra sessão |
 | F0-RG-27 | Seleção devolveu objeto já removido (teste concorrente) | T3 | PRONTA | Aprovado pelo PO; fase 1 é diagnóstico |
-| F0-RG-28 | CLAUDE.md: pasta dos relatórios Opus e guarda dos oráculos | TA | AGUARDA_PO | PO aprova o texto exato |
+| F0-RG-28 | CLAUDE.md: pasta dos relatórios Opus e guarda dos oráculos | TA | AGUARDA_PO | Texto aprovado (2026-10-15); PO mescla o PR |
 
 ## Feito (resumo; detalhes no histórico)
 - S01: T01 a T12, R1 a R3. S02: T01 a T22, T24, T25 (PR 98), R1 a R3. S03: T01 a T08 (todas as partes), T25, T26 e emendas, R1 a R3. F0-PLANO-T01.

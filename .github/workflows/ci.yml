@@ -675,11 +675,13 @@ jobs:
             echo "::error title=AppImage falhou::$msg"
             exit $rc
           fi
+      - name: libfuse2 (o AppImage montado de verdade precisa dela; sem ela o usuário vê o programa não abrir)
+        run: sudo apt-get install -y libfuse2t64
       - name: Testar o AppImage (licenças, extração, troca de biblioteca, tamanho)
         run: |
           set +e
           IMG="$RUNNER_TEMP/ai/OpenBIM-Studio-x86_64.AppImage"
-          QT_QPA_PLATFORM=offscreen timeout 900 bash packaging/linux/test_appimage.sh "$IMG" > teste-ai.log 2>&1
+          OBIM_EXIGIR_FUSE=1 QT_QPA_PLATFORM=offscreen timeout 900 bash packaging/linux/test_appimage.sh "$IMG" > teste-ai.log 2>&1
           rc=$?
           cat teste-ai.log
           if [ $rc -ne 0 ]; then

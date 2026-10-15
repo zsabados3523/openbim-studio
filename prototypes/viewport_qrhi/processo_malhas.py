@@ -265,6 +265,7 @@ def _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar, entrega
             del it
     except Exception as e:
         if entregar and len(porid) > 1:  # não dá para dizer qual peça deu erro: cai, e o pai confirma uma a uma
+            enviar("nota", f"erro em um bloco de {len(porid)} peças ({type(e).__name__}: {e}); o filho cai para o pai testar uma a uma")
             os._exit(3)
         falhou([i for i in porid if i not in achados], f"o conversor falhou nesta peça: {type(e).__name__}: {e}")
     else:

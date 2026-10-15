@@ -10,7 +10,7 @@ O PO é arquiteto e fez todos os projetos da faculdade no Revit (conhece o Archi
 Frases fortes: "evita retrabalho e ficar caçando dimensões ausentes" (cota que acompanha o desenho); "a mão no mouse o tempo todo é fundamental em BIM"; "automatização de cortes, vistas e detalhes, completamente essencial"; "tag consome mais tempo porque tenho que criar uma família nova para cada atributo".
 
 ## 2. Fluxos
-1. **Começar um projeto:** terreno/envoltório (CAD) → volumetria → níveis → eixos → paredes presas aos eixos → estrutura, aberturas, pisos, revestimentos, coberturas.
+1. **Começar um projeto:** terreno/envoltório (CAD) → volumetria → níveis → eixos → estrutura e paredes (as paredes podem ou não ficar presas aos eixos) → aberturas, pisos, revestimentos, coberturas. A ordem é o fluxo habitual do PO, não uma regra; o programa não deve obrigá-la (ajuste do PO em 2026-10-15).
 2. **Colocar elemento:** escolher o tipo → clicar → prévia do corte/posição → clicar para confirmar (digitar medida quando tem certeza).
 3. **Editar:** atalho de duas letras (mover, copiar, girar, espelhar, alinhar, aparar) com a mão no mouse; botões para o que usa menos.
 4. **Documentar:** vistas geradas → arrastar vistas para a folha criada a partir de um modelo de folha (tamanho, carimbo, campos) → cotas e tags na própria vista (não na prancha) → textos e linhas só quando precisa.

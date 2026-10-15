@@ -26,8 +26,10 @@
 | A9 | Confirmar que as exceções de ausência acabaram | Sim |
 | A10 | Passar os números do `/usage` de 13 e 14/10 para `QUOTA.md` | Informar janela e semana, antes e depois |
 | A11 | D5: nomes dos colegas de estágio para testar e momento | Sem prazo; combinar antes da F1 |
-| A13 | Aceite do resumo da entrevista S09 (`docs/research/2026-10-13-entrevista-s09-resumo.md`) | Ler e aceitar antes dos wireframes |
 | A15 | SINAPI: o PO informou (2026-10-15) que o uso gratuito é permitido, mas software que automatiza processos ou buscas precisa de autorização da CAIXA. Confirmar o texto e pedir a autorização formal | Consulta formal à CAIXA como requisito da F5; texto fica em `docs/research/2026-10-10-sinapi-termos.md` |
+
+- **Entrevista S09 (A13), aceita pelo PO em 2026-10-15,** com um ajuste: depois dos eixos vem a estrutura, e as paredes não precisam ficar presas a eixos; a ordem do fluxo é hábito, não obrigação. Wireframes podem começar quando o PO mandar as imagens.
+- **IFC real do PO (D4), 2026-10-15:** o PO quer usar um IFC real dele nos testes. Fica fora do repositório (`../openbim-studio-referencia/`); só abrir quando o PO listar o arquivo no chat.
 
 ## Histórico
 Todas as respostas e decisões anteriores do PO (2026-10-10 a 2026-10-15) estão em `arquivo/PO-historico.md`. Resposta nova: registrar aqui só se virar regra em vigor ou pergunta aberta; o resto vai para o histórico.

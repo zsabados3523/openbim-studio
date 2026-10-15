@@ -1,14 +1,14 @@
 # Quadro da F0
 
-> Atualizado: 2026-10-10 (sessão 2). Fonte: `v2/03_fase0_especificacao.md`. Legenda de status: PRONTA · EM_ANDAMENTO · BLOQUEADA (aguarda dependência) · AGUARDA_PO · AGUARDA_OPUS · FEITA · CONTÍNUA.
+> Atualizado: 2026-10-14 (correção do inventário). Visão da máquina; o PO lê `docs/PAINEL_DO_PROJETO.md`. Fonte: `v2/03_fase0_especificacao.md`. Legenda de status: PRONTA · EM_ANDAMENTO · BLOQUEADA (aguarda dependência) · AGUARDA_PO · AGUARDA_OPUS · FEITA · CONTÍNUA.
 
 ## Fatias
 | Fatia | Nome | Tam. | Depende de | Status | Cartões | Observação |
 |---|---|---|---|---|---|---|
 | F0-S01 | Repositório, licenças e pesquisa | P | — | FEITA (2026-10-11; aprovada no lote Opus 2) | S01-T01 a T12 | Abertos sem bloquear: termos conda-forge, Qt Shader Tools, ReportLab, SINAPI; espelho Codeberg depois |
 | F0-S02 | CI Windows+Linux e app esqueleto | M→G (tratada como G) | S01 | CONCLUÍDA (aceite do PO em 2026-10-11, Windows e Linux) | S02-T01 a T16 | S02-T01 pode começar quando S01-T01 estiver feita |
-| F0-S03 | Protótipo de viewport (Qt RHI) | M | S02; S08 contínuo | CONCLUÍDA (2026-10-12; PO aprovou o portão: atingido no Linux, Windows em software, placa real no Windows é risco para a S10)| T01 a T08 e T25 a T27 feitas (ver LOG). Restam, sem bloquear: T08-G (T3 pequeno), T27 (P17 no CI), T23 (antes do primeiro release). Relatório: reports/F0-S03.md.| T01 a T04, T06, T25 e T02 feitas e no main; **T05 (T3) em 3 partes, REPROVADA no lote Opus 5 (2 defeitos reais, correções curtas): cartões T05-P0b (oráculo) e T05-C1 (código); PRs 16, 18 e 19 aguardam correção, re-revisão e ok do PO**; metas da T05 medidas na máquina do PO (o portão da S03 só se decide na T07) (abrir 13,5 s, 833 MB, atraso 118 ms, 60 FPS placa real); T07 (benchmark e relatório da fatia) depende da T05 |
-| F0-S04 | Ponte Python↔C++ (híbrido vs C++ puro) | G, crítica | S02 | EM_ANDAMENTO (especificada no lote 9; 19 cartões F0-S04-T01 a T19; etapa 1 = T01 a T04 com parada cedo)| Cartões em docs/state/cards/F0-S04-T*.md; relatório: reports/LOTE_OPUS_9.md. T08-G entra como S04-T16.| Contém T3 (ponte, threads) |
+| F0-S03 | Protótipo de viewport (Qt RHI) | M | S02; S08 contínuo | CONCLUÍDA (2026-10-12; PO aprovou o portão: atingido no Linux, Windows em software; placa real no Windows é risco para a S10) | S03-T01 a T08, T25 a T27 (tabela abaixo) | Abertos, sem bloquear: T08-G (T3 pequeno), T27 (P17 no CI), T23 (antes do primeiro release). Relatório: reports/F0-S03.md. Metas medidas na máquina do PO; memória somada 6,8 GB contra meta de 6 GB, aceita "na prática" (ver PO.md) |
+| F0-S04 | Ponte Python↔C++ (híbrido vs C++ puro) | G, crítica | S02 | PAUSADA nas T3 que faltam (D1, 2026-10-14); só terminam PR 83 (T12) | 19 cartões e sufixos (tabela abaixo); relatório: reports/LOTE_OPUS_9.md | Etapa 1 (T01 a T04c) e etapa 2 até T14b feitas. Nenhuma meta medida oficialmente (medições M1 a M6 só na máquina do PO). Contém T3 (ponte, threads) |
 | F0-S05 | Oplog, undo e merge | M | S04 | NÃO INICIADA | — | Contém T3 (transações, gravação do par). Precisa de formato mínimo provisório do `.obim` antes do ADR-003 |
 | F0-S06 | Planta e corte (HLR) + vista no `.obim` | G, crítica | S02; S08 contínuo | NÃO INICIADA | — | Contém T3 (HLR, arquivo lateral) |
 | F0-S07 | Tipo paramétrico por script | P | S04 | NÃO INICIADA | — | |
@@ -58,4 +58,49 @@
 | F0-S02-T19 | Teste 2 no Windows e sonda 3b (cabeçalhos pesados) | T2 | sonnet | sonnet; amostra opus | S02-T16 | FEITA (teste 2 fechado nos dois sistemas; sonda 3b passou: Linux 4,8 s, Windows 19,4 s; PR 5; amostra opus no lote 3) |
 | F0-S02-T20 | Lista de licenças permitidas no inventário (teste 9 do ADR-005) | T2 | sonnet | sonnet; amostra opus | S02-T06 | FEITA (CI verde, 24 testes; achou MKL e runtimes da Microsoft no Windows; amostra opus no lote 3) |
 
+
+| F0-S01-R1 | Revisão S01: aceite contra o plano e cobertura | T2 | sonnet | opus (lote) | PR 93 | NÃO INICIADA |
+| F0-S01-R2 | Revisão S01: pendências de licença (SINAPI, Qt Shader Tools, conda-forge, ReportLab) | T2 | sonnet | opus (lote) | R1 | NÃO INICIADA |
+| F0-S01-R3 | Revisão S01: coerência, testes e relatório para o lote Opus | T2 | sonnet | opus (lote) | R1, R2 | NÃO INICIADA |
+
 Nenhum cartão de S01 ou S02 é T3 (ver LOG.md). A prova do R1 (ponte C++/Python) é T3 e fica na S04.
+
+## Cartões da S03 (estado conferido no `LOG.md`, 2026-10-14)
+| Cartão | Título | Classe | Status |
+|---|---|---|---|
+| F0-S03-T01 | Ficha: viewport com QRhi | T1 | FEITA |
+| F0-S03-T02 | Modelo grande para o benchmark | T1 | FEITA |
+| F0-S03-T03 | Janela 3D mínima (QRhiWidget) | T2 | FEITA (amostra Opus aprovada) |
+| F0-S03-T04 | Câmera | T2 | FEITA (amostra Opus aprovada) |
+| F0-S03-T05 (+P0b, C1) | Malhas do IFC em threads, lotes ao viewport | T3 | FEITA (reprovada no lote 5, corrigida) |
+| F0-S03-T06, T06b | Seleção por clique | T2 | FEITA (teste de tempo: 16→100 ms, exceção; ver revisão da S03) |
+| F0-S03-T07 | Benchmark e relatório da fatia | T1 | FEITA (reports/F0-S03.md) |
+| F0-S03-T08-0, 0b, A, B1, B2, C, D, E | Processo separado, limite por peça, memória | T3 | FEITA (D medida na tela real) |
+| F0-S03-T08-G | Duas correções pequenas e guardas | T3 | ABERTA (sem bloquear) |
+| F0-S03-T25, T25-C1 | Desenho 3D no CI | T2 | FEITA (S03 concluída) |
+| F0-S03-T26, T26b | Localidade numérica na gravação do IFC | T3 / T1 | FEITA |
+| F0-S03-T27 | Teste da reabertura (P17) no CI | T1 | ABERTA (sem bloquear) |
+
+## Cartões da S04 (estado conferido no `LOG.md`, 2026-10-14)
+| Cartão | Título | Classe | Status |
+|---|---|---|---|
+| F0-S04-T01 | Ambiente de compilação travado | T2 | FEITA |
+| F0-S04-T02, T02b | Oráculo R1 (e correções) | T3 | FEITA (lote 10b) |
+| F0-S04-T03, T04, T04c | Módulo `obimcore`, malha por elemento, ajustes | T3 | FEITA (lote 10b); etapa 1 fechada |
+| F0-S04-T04b | Registro local de mensagens e fim do mutex | T3 | ADIADA (D1) |
+| F0-S04-T05 | Sonda da thread de desenho | T3 | FEITA (lote 11) |
+| F0-S04-T06, T06b, T06c | Oráculo da viewport, relógio e cena | T3 | FEITA (lotes 12 a 15) |
+| F0-S04-T07, T07b, T08 | Viewport C++ (janela, cena, fila, relógio) | T3 | FEITA (lotes 12 a 14) |
+| F0-S04-T09, T10, T10c | Câmera, seleção por triângulo, memória | T3 | FEITA (lotes 15 a 17) |
+| F0-S04-T11, T11b, T11c | Fluxo A (PySide6 + ifcopenshell.api) | T3 | FEITA (lotes 18, 19 e 25; PR 82) |
+| F0-S04-T12 | Oráculo das metas e da saída igual | T3 | EM_ANDAMENTO (PR 83; Opus aprovou no lote 28; aguarda CI verde) |
+| F0-S04-T13 | Fluxo B, paredes em C++ | T3 | FEITA (lote 22, PR 79) |
+| F0-S04-T14 (a, b) | Fluxo B: biblioteca abre a base; núcleo C++ puro | T3 | FEITA (PR 87 e PR 90) |
+| F0-S04-T14c | Fluxo B: executável com janela Qt Widgets | T3 | PAUSADA (D1); ramo pronto, 501 linhas |
+| F0-S04-T15 | Threads e bloqueio do interpretador | T3 | PAUSADA (D1); cartão é esqueleto, reescrever antes de abrir |
+| F0-S04-T16, T16b | Abertura: peças lentas e modo isolado | T3 | FEITA (lote 21, PR 78) |
+| F0-S04-T17 | Módulo no AppImage e instalador | T2 | NÃO INICIADA (esqueleto; depende da T15) |
+| F0-S04-T18 | Tempos de build e relatório da fatia | T1 | NÃO INICIADA (esqueleto) |
+| F0-S04-T19 | ADR-001 e ADR-004 com números | TA | NÃO INICIADA (decisão do PO; esqueleto) |
+
+Observação: os cartões não têm campo de status; este quadro é a fonte (achado 3 do inventário). Nova regra: ao mudar o status de um cartão, mudar aqui e no `LOG.md`.

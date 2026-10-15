@@ -235,10 +235,11 @@ def c_threads(res):  # (g) selecionar em outra thread enquanto o laço principal
         ks = [i for i, (t, _) in enumerate(marcas) if t <= t0]
         if ks and t0 < marcas[-1][0] and r not in {gs[ks[-1]], gs[ks[-1] + 1]}:
             ruins.append(("troca", ks[-1], r))
-    for add, ini, ret, fim, g in fases:
-        ruins += [("removido", g, r) for t0, t1, r in log if ret < t0 < fim and r is not None]  # depois de limpar() voltar: só None
+    for i, (add, ini, ret, fim, g) in enumerate(fases):  # RG-27: julga a chamada INTEIRA (t0 a t1), como "sumiu"
+        prox = fases[i + 1][4] if i + 1 < len(fases) else None  # o objeto k+1 só existe depois de `fim` (gravado antes de adicioná-lo)
+        ruins += [("removido", g, r) for t0, t1, r in log if ret < t0 < fim and r is not None and not (r == prox and t1 > fim)]  # depois de limpar() voltar: None (ou k+1, se a chamada passou de `fim`)
         ruins += [("sumiu", g, r) for t0, t1, r in log if add < t0 and t1 < ini and r != g]  # antes de limpar: o objeto adicionado
-    res["ruins"], res["n_apos_limpar"] = ruins[:6], sum(1 for *_, ret, fim, _g in fases for t0, _, _ in log if ret < t0 < fim)
+    res["ruins"], res["n_apos_limpar"] = ruins[:6], sum(1 for *_, ret, fim, _g in fases for t0, t1, _ in log if ret < t0 and t1 < fim)  # só chamadas que TÊM de dar None
     c.parar()
 
 def c_caixas(res):  # (h) a tabela mente (caixa menor, deslocada); vale a caixa dos triângulos, no preparar e depois de atualizar (sem)

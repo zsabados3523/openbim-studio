@@ -67,9 +67,9 @@
 | F0-S02-R3 | Revisão S02: coerência, testes e relatório para o lote Opus | T2 | sonnet | opus (lote) | S02-R1, S02-R2 | FEITA (2026-10-15); lote Opus 30 feito, correções aplicadas |
 | F0-S02-T25 | Reduzir o tempo do job `windows` do CI (incremental) | T2 | sonnet | sonnet; amostra opus | S02 revisada | NÃO INICIADA (pedido do PO, 2026-10-15) |
 | F0-PLANO-T01 | T23 no plano (`v2/03`) | TA | opus/sonnet | PO (resumo) | — | FEITA (2026-10-15; PO aprovou) |
-| F0-S03-R1 | Revisão S03: aceite e exceções com a meta original | T2 | sonnet | opus (lote) | S02-R3 | FEITA (2026-10-15); lote 31 aguarda |
-| F0-S03-R2 | Revisão S03: pendências, risco do Windows, teste de tempo | T2 | sonnet | opus (lote) | S03-R1 | FEITA (2026-10-15); lote 31 aguarda |
-| F0-S03-R3 | Revisão S03: coerência, testes e relatório para o lote Opus | T2 | sonnet | opus (lote) | S03-R1, S03-R2 | FEITA (2026-10-15); lote 31 aguarda |
+| F0-S03-R1 | Revisão S03: aceite e exceções com a meta original | T2 | sonnet | opus (lote) | S02-R3 | FEITA (2026-10-15); lote Opus 31 feito, correções aplicadas |
+| F0-S03-R2 | Revisão S03: pendências, risco do Windows, teste de tempo | T2 | sonnet | opus (lote) | S03-R1 | FEITA (2026-10-15); lote Opus 31 feito, correções aplicadas |
+| F0-S03-R3 | Revisão S03: coerência, testes e relatório para o lote Opus | T2 | sonnet | opus (lote) | S03-R1, S03-R2 | FEITA (2026-10-15); lote Opus 31 feito, correções aplicadas |
 
 Nenhum cartão de S01 ou S02 é T3 (ver LOG.md). A prova do R1 (ponte C++/Python) é T3 e fica na S04.
 
@@ -88,7 +88,7 @@ Nenhum cartão de S01 ou S02 é T3 (ver LOG.md). A prova do R1 (ponte C++/Python
 | F0-S03-T25, T25-C1 | Desenho 3D no CI | T2 | FEITA (S03 concluída) |
 | F0-S03-T26, T26b | Localidade numérica na gravação do IFC | T3 / T1 | FEITA |
 | F0-S03-T27 | Teste da reabertura (P17) no CI | T1 | ABERTA (sem bloquear) |
-| F0-S03-T28 | Medir o viewport num Windows físico (placa real e Intel) | T1 | NÃO INICIADA (antes da S10; criada na revisão da S03) |
+| F0-S03-T28 | Medir o viewport num Windows físico (placa real e Intel) | T1 | NÃO INICIADA (PO aceitou em 2026-10-15 deixar para antes da entrega final; dono: PO; prazo original: antes do portão da F0, S10; criada na revisão da S03; texto reforçado no lote Opus 31) |
 
 ## Cartões da S04 (estado conferido no `LOG.md`, 2026-10-14)
 | Cartão | Título | Classe | Status |

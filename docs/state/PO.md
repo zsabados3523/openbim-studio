@@ -168,3 +168,5 @@ O teste do instalador (~10 min por PR) passa a rodar só em push no `main`/tag o
 7. **D7:** arquivo de entrega fica para o ADR-003 (S05).
 8. **D8:** sim. Toda exceção de portão registra a meta original e o motivo; o portão F0 (S10) é reavaliado com as metas originais.
 9. **D9:** abrir Opus só com semanal >25% restante e janela de 5 h **<70%** (mantido). A exceção de cota de 13/10 está encerrada.
+
+- **2026-10-15, S03 (Rafael):** "aceito o plano", mas a memória abaixo de 6,0 GB precisa ser tratada (cartão da S04 a definir). O teste no Windows com placa de vídeo (T28) pode esperar até antes da entrega final; o PO não tem Windows instalado na máquina. Sem resposta explícita sobre a E3 (limite 100 ms) e sobre a regra da mediana: seguem como pergunta.

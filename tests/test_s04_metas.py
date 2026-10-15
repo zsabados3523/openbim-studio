@@ -107,7 +107,8 @@ def ferramenta(tmp_path_factory):  # o esqueleto levanta NotImplementedError: o 
 # ---------- tabela de casos: (nome, parâmetros de A, passa na régua virtual, passa na estrita, erro esperado) ----------
 CASOS = [("bom", {}, True, True, None), ("m2 mediana alta", {"m2": 250.0}, False, False, "M2"), ("m2 10% dos valores em 210 (virtual passa, p95 reprova)", {"m2": topo(100.0, 210.0)}, True, False, "M2"),
          ("m2 um valor em 650 (teto reprova, p95 passa)", {"m2": topo(100.0, 650.0, 1)}, False, True, "M2"), ("m2b mediana alta", {"m2b": 300.0}, False, False, "M2b"),
-         ("m3 mediana alta", {"m3": 60.0}, False, False, "M3"), ("m3 10% dos valores em 55", {"m3": topo(20.0, 55.0)}, True, False, "M3"), ("m4 lote lento", {"m4": 25000.0}, False, False, "M4"),
+         ("m3 mediana alta", {"m3": 60.0}, False, False, "M3"), ("m3 um valor em 187 (RG-09: pausa isolada abaixo do teto de 250 ms)", {"m3": topo(20.0, 187.0, 1)}, True, True, None),
+         ("m3 um valor em 300 (acima do teto de 250 ms)", {"m3": topo(20.0, 300.0, 1)}, False, True, "M3"), ("m3 10% dos valores em 55", {"m3": topo(20.0, 55.0)}, True, False, "M3"), ("m4 lote lento", {"m4": 25000.0}, False, False, "M4"),
          ("m5 10 quadros por segundo", {"quadros": [[100.0 * i, i] for i in range(1, 31)]}, False, False, "M5"),
          ("m5 parada de 330 ms", {"quadros": [[16.0 * i, i] for i in range(1, 100)] + [[1900.0 + 16.0 * i, 100 + i] for i in range(68)]}, False, False, "M5")]
 IDS = [c[0] for c in CASOS]

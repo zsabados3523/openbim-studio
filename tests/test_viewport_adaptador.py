@@ -12,6 +12,7 @@ from gerar_modelo_grande import gerar  # noqa: E402
 from PySide6.QtCore import QCoreApplication  # noqa: E402
 from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget  # noqa: E402
 import pytest  # noqa: E402
+from obrigatorio import pular_sem_tela  # noqa: E402
 
 from viewport_qrhi.adaptador import AdaptadorCarga  # noqa: E402
 from viewport_qrhi.cubo_rhi import CuboViewport  # noqa: E402

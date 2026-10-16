@@ -51,6 +51,7 @@ class Paredes {
     void definir_falha(int k) { falha_ = k; }
     void abrir(const std::string& arquivo);  // troca o modelo pelo IFC4 dado (std::invalid_argument se não abre; o anterior fica intacto) e zera pilhas, ultimo, grade e gancho
     int produtos_base() const { return produtos_base_; }  // IfcProduct com representação logo depois do abrir
+    ifcopenshell::file* arquivo() { return f_.get(); }  // T14c: a janela lê o modelo (malha e painel) com a trava do chamador; vale até o próximo `abrir`
     Lista copiar_atributo(unsigned destino, unsigned origem, const std::string& atributo);  // gancho de teste: um comando que passa por `ler`
     std::mutex& trava() { return trava_; }
     std::unique_lock<std::mutex> pegar(bool esperar);  // espera a trava ou, sem esperar, lança ModeloOcupado na hora

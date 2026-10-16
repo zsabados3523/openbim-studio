@@ -458,7 +458,8 @@ def _metas(passos):  # M2, M2b, M3, M4 e M5 do lote 9 §2.2 e §2.3, dos tempos 
     por = {p["id"]: p["reps"] for p in passos}
     meta = lambda pid, f, lim: (lambda v: {"passo": pid, "n": len(v), "mediana_ms": float(np.median(v)), "p95_ms": float(np.percentile(v, 95)), "max_ms": float(v.max()), "limite_ms": lim,  # noqa: E731
                                            "ok": bool(np.percentile(v, 95) < lim)} if len(v) else None)(np.array([f(r) for r in por.get(pid, [])], float))
-    m = {"M2": meta("3", lambda r: r["ms_total"], 200), "M2b": meta("4b", lambda r: r["ms_total"], 200), "M3": meta("4a", lambda r: r["t_painel_ms"] - r["t0_ms"], 50),
+    m = {"M2": meta("3", lambda r: r["ms_total"], 200), "M2b": meta("4b", lambda r: r["ms_total"], 200), "M3": meta("4a", lambda r: r["t_painel_ms"] - r["t0_ms"], 50) if all("t_painel_ms" in r for r in por.get("4a", [])) else  # T15e: sem o tempo do painel em qualquer repetição, M3 é "não medida", nunca aprovada
+         {"passo": "4a", "n": len(por["4a"]), "limite_ms": 50, "medida": False, "ok": False, "motivo": "o tempo do painel (t_painel_ms) não foi medido em todas as repetições do passo 4a; M3 não medida"},
          "M4": meta("5b", lambda r: r["ms_total"], 20000), "M5": None, "M1": None, "M6": None}
     if por.get("5b") and por.get("4c"):
         lote, parado = por["5b"][0], por["4c"][0]

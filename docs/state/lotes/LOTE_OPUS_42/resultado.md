@@ -1,0 +1,11 @@
+# LOTE_OPUS_42: resultado (S04-T15e): APROVADO
+Revisor: Opus independente. Ramo `s04-t15e`, commits b7b554b e 2cf14fb. Problemas bloqueantes: nenhum.
+
+1. **Oráculo.** A cópia congelada `metas_hoje` é idêntica ao `_metas` do main. Com o `fluxo_a.py` do main, 4 dos 13 falham (como o cartão prevê); com a correção, 13 de 13 em 3 de 3 execuções (`OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1`, `xvfb-run -a`), 0 pulos. Coerente com o lote 9 §2.2.
+2. **M3 "não medida".** `medida: False`, `ok: False`, única chave de tempo `limite_ms`; nunca `None`, serializa sem NaN. A regra usa `all`; sem passo 4a continua `None`. Com todas as repetições presentes, resultado idêntico ao de hoje. O juiz (`medir_s04.py:316`) recalcula dos tempos brutos.
+3. **Intactos.** M2, M2b, M4, M5 e `executar_roteiro`; `medir_s04.py`, `fluxo_b` e testes antigos sem diff. Regressão: 211 passaram, 2 pulos previstos, 0 falhas; t15b 12/12.
+4. **CI e tamanho.** `ci.yml` só acrescenta 1 linha em linux e 1 em windows; `CONTRATO.md` 1 linha. 281 inserções e 2 remoções (<400). Windows não roda aqui: o job `windows` verde com `OBRIGATORIO=1` cumpre o critério 4 do cartão.
+5. **Instabilidade da t15b.** Os 8 erros eram os 8 testes que dependem da preparação compartilhada `med`: uma falha só do subprocesso `c_lote`. Não reproduzida (8 de 8 verdes, também com carga leve e 2 sessões juntas). Caminho possível: em `lote.py` §(e), `f._bombear(cond, 5000)` devolve `False` sem avisar ao esgotar o tempo (`fluxo_a.py:108-109`), `m[2]` fica `None` e `resumo()` levanta TypeError. Não bloqueia este PR. Recomendação: anotar no LOG e abrir cartão T1/T2 pequeno só se repetir (faria `lote.medir` falhar com mensagem clara).
+6. **Mutantes** (7 rodados, todos reprovados pelo oráculo): `enche` 1 falha, `subconj` 4, `none` 4, `okTrue` 4, `tempo` 4, `any` no lugar de `all` 3, `guarda` 1. `enche` e `guarda` só são pegos pelo teste com janela em subprocesso, que o `OBRIGATORIO=1` garante no CI.
+
+Opcionais: (a) a checagem "sem tempo" olha só chaves terminadas em `_ms`, como o cartão define; (b) extrair o objeto "não medida" numa variável quando alguém mexer ali de novo; (c) `lote.py` §(e): o resultado de `poster.join(5)` também não é conferido (para o cartão do item 5).

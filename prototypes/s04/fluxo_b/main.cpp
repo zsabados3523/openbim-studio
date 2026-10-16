@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Executável do fluxo B (S04-T14c; CONTRATO.md, Parte 2): roteiro R na janela Qt Widgets sobre `Paredes` e o núcleo C++ puro, `medicao.json` igual ao do fluxo A, autotestes sem janela. Sem Python.
 // Só `criar_paredes_lote` roda numa std::thread (do comando); os outros comandos, o painel e a pintura ficam na thread da janela, que segue tratando eventos durante o lote.
+#include "autotestes.h"
 #include "janela.h"
 #include <QJsonArray>
 #include <algorithm>
@@ -263,6 +264,7 @@ int main(int argc, char** argv) {
     std::map<std::string, std::string> o;
     for (size_t i = 0; i + 1 < a.size(); ++i) if (a[i].rfind("--", 0) == 0) o[a[i]] = a[i + 1];
     try {
+        if (autoteste(a)) return 0;  // `--versao` e `--autoteste ...`: sem janela
         return roteiro(argc, argv, o);
     } catch (const std::exception& e) { std::cerr << "erro: " << e.what() << std::endl; return 1;
     } catch (...) { std::cerr << "erro: exceção desconhecida" << std::endl; return 1; }

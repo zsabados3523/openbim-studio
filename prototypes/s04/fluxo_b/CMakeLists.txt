@@ -37,9 +37,12 @@ endif()
 find_package(Qt6 COMPONENTS Core Gui Widgets GuiPrivate REQUIRED)  # antes do add_subdirectory: os alvos importados têm de valer também aqui
 find_package(OpenCASCADE CONFIG REQUIRED)
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../obimcore" obimcore_nucleo EXCLUDE_FROM_ALL)
-add_executable(fluxo_b_janela main.cpp)
+add_executable(fluxo_b_janela main.cpp autotestes.cpp)
 target_link_libraries(fluxo_b_janela PRIVATE paredes obimcore_nucleo)
 set_target_properties(fluxo_b_janela PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<1:${OBIM_SAIDA}>")  # saída plana, ao lado do módulo
+if(WIN32)
+  target_link_libraries(fluxo_b_janela PRIVATE psapi)  # autotestes: memória e lista de DLLs
+endif()
 # Oráculo da S04-T14a: T threads C++ criam o 1o `Paredes` do processo juntas (frio_teste.cpp; o implementador não o edita). Sai ao lado do módulo.
 add_executable(fluxo_b_frio frio_teste.cpp)
 target_link_libraries(fluxo_b_frio PRIVATE paredes)

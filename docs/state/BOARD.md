@@ -27,6 +27,7 @@
 | F0-S04-T04b | Registro local de mensagens e fim do mutex | T3 | PAUSADA | D1 |
 | F0-S04-T14c | Fluxo B: executável com janela Qt Widgets | T3 | PAUSADA | D1; ramo pronto, 501 linhas |
 | F0-S04-T15 | Threads e bloqueio do interpretador | T3 | PAUSADA | D1; cartão é esqueleto, reescrever antes de abrir |
+| F0-S04-T15f | Instabilidade do caso lote (queda por corrupção de memória, janela sem quadros) | T3 | CARTAO_PRONTO | Achado no CI de 2026-10-16; diagnóstico antes de corrigir |
 | F0-S04-T17 | Módulo no AppImage e instalador | T2 | NAO_INICIADA | Esqueleto; depende da T15 |
 | F0-S04-T18 | Tempos de build e relatório da fatia | T1 | NAO_INICIADA | Esqueleto |
 | F0-S04-T19 | ADR-001 e ADR-004 com números | TA | NAO_INICIADA | Decisão do PO; esqueleto |

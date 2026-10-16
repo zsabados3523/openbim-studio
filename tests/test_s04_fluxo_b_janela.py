@@ -98,6 +98,8 @@ def test_sem_python_no_processo_e_esquema_ifc4_registrado_por_codigo(exe):  # it
     import s04_aux
     for k, padrao in s04_aux.NUCLEOS.items():
         assert len({x for x in libs if re.search(padrao, x, re.I)}) == 1, f"{k}: esperado 1 cópia em {libs}"
+    # LOTE_OPUS_35: o OCCT só entra pelo plugin do núcleo de geometria (carregado na 1a malha); sem ele, a régua acima não vê o OCCT da geometria
+    assert len({x for x in libs if re.search(r"geometry_kernel_opencascade", x, re.I)}) == 1, f"o --versao tem de listar as bibliotecas DEPOIS de uma malha real (1 cópia do plugin do OCCT): {libs}"
 
 def test_ler_cobre_todo_tipo_de_atributo_no_desfazer_e_refazer(exe):  # item 2: o desfazer de INT, LOGICAL, ENUMERATION, listas... não pode apagar em silêncio
     r = autoteste(exe, "--autoteste", "ler")

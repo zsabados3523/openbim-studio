@@ -1,0 +1,5 @@
+# Lote Opus 33: pedido (resumo)
+Revisão independente T3, contexto fechado, da S04-T14c (fluxo B em C++ com janela Qt), ramo `s04-t14c-retomada` (merge de origin/main + correção a58b12b; sem push).
+Ler: cartões F0-S04-T14c e T14, LOTE_OPUS_26, `git diff origin/main`, `main.cpp`, `janela.h`, CMake, CONTRATO, diferença do ci.yml, oráculo (`tests/test_s04_fluxo_b_janela.py`, `tests/s04_fluxo_b_janela_aux.py`).
+Julgar: (1) espera de 2 quadros no `selecionar` depois de comando de câmera (justa para A × B? M6? impasse?); (2) destruição da Tela/Viewport antes da QApplication, saída por exceção, threads e ordem de mutex; (3) `relogio` e formato do medicao.json iguais ao A, rc 0/1/2; (4) oráculo intacto, ci.yml só acrescenta o passo com OBIM_CI=1 e OBIM_S04_T14_OBRIGATORIO=1 (linux e windows-fluxo-b); (5) parecer sobre a exceção do limite de 400 linhas (decisão do PO); (6) rodar o oráculo 3 vezes com `xvfb-run`.
+Saída: APROVADO ou REPROVADO com lista numerada (gravidade, arquivo:linha) em `resultado.md`.

@@ -1,0 +1,4 @@
+# LOTE_OPUS_40: pedido (S04-T15c)
+Revisão independente (T3, contexto fechado) do ramo `s04-t15c`: commit 195e64b (cartão F0-S04-T15c + oráculo `tests/test_s04_t15c_conferencias.py`, 7 casos, de outro Opus, ainda não revisado) e ae9f58e (Sonnet: `prototypes/s04/fluxo_a/conferencias.py` 269, `CONTRATO.md` +6, `ci.yml` +1 por job).
+Julgar: (1) oráculo determinístico, firme, coerente com o cartão e o lote 9 §2.3 ("3 de 3" = 3 execuções); (2) a implementação responde (i), (ii), (iii) e a forma 3; (3) medidas honestas, sem tocar `_cont`; (4) `ci.yml`, testes antigos intocados, tamanho por PR; (5) coerência das sondas do implementador e o que o PO precisa para o ADR-004; (6) 2 mutantes e 1 execução do oráculo com `OBIM_S04_T15_OBRIGATORIO=1` em `xvfb-run`.
+Saída: aprovado ou reprovado com lista numerada; sem corrigir; sem push.

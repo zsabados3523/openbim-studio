@@ -1,0 +1,10 @@
+# LOTE_OPUS_47: resultado (S04-T15g, implementação 145de1b): APROVADO
+1. Regra 1 ok: dispositivo e 30.001 `QMouseEvent` nascem na thread da janela, depois da fase parada e antes de t0; `lote-mouse` só posta; controle sem eventos nem postador. Oráculo 7 de 7.
+2. Pausa de construção fora de toda janela medida. Medido (base 300, 1.000 paredes): entre o fim da fase parada e t0 143,8 a 208,0 ms com mouse (o "~120 ms" subestimava), 0,2 a 1,2 ms no controle; do último quadro parado ao 1º depois de t0 171,7 a 220,9 ms (antiga: 14,1 a 17,1 ms), buraco fora de toda janela; t0 até o 1º quadro 1,0 a 15,5 ms; maior intervalo do M5 16,8 a 19,9 ms (antiga 16,7 a 21,5). Sem efeito depois de t0.
+3. Regras 2 e 3 ok: três casos levantam `RuntimeError` clara; filtro e pulso limpos antes do erro; `resumo` nunca recebe `None`. 1 a 2 coletas de lixo por rodada (50 a 70 ms), igual à versão antiga.
+4. `faulthandler` é chamada real (ligado em 4 de 4 chamadas; mutante só com comentário: desligado, mas o oráculo o aprova 7 de 7 — recomendação 1 do lote 46, não bloqueia).
+5. Escopo ok: tudo dentro de `medir`, hash passou, nenhuma constante mudou, `medir_s04.py`/fluxo B/outros testes intactos; `ci.yml` +2 linhas (depois da T15e); diff 344 acréscimos e 3 remoções.
+6. Execuções: caso `lote` 18 de 18 com código 0 (63,3 a 64,6 s) + 12 do Sonnet = 30 de 30; oráculo 7 de 7; T15b 12 de 12. Ressalva: 0 quedas em 30 não separa correção de defeito (~0,2% por execução no ritmo real); quem distingue são o espião, o teste de queda acelerado e o mutante m1.
+7. Mutantes: m1 (constrói no postador) reprova 3 testes; m3 (constrói depois de t0) reprova a regra 1; m2 (`faulthandler` em comentário) passa no oráculo.
+Observações: (a) se o postador segue vivo após `join(5)`, o erro sai com o filtro já removido e eventos podem ser destruídos na thread `lote-mouse` (só numa rodada já falha); (b) conferir `faulthandler.is_enabled()` em `c_espiao` fecharia a brecha do m2.
+Condição de merge fora deste julgamento: CI do Windows verde em 3 ou mais rodadas, com números no pedido; risco: `QCursor.setPos` pode não mexer o ponteiro no runner do Windows.

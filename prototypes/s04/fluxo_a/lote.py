@@ -112,6 +112,8 @@ def _forma_2(f, cmd):  # o comando na thread da janela, com embrulhos (só duran
 
 
 def medir(f, forma, quantidade=1000, cmd=None, mouse=True):  # uma rodada; não desfaz nada; mouse=False = controle (só o pulso, sem a thread que posta o mouse)
+    import faulthandler
+    faulthandler.enable()  # no início, antes do 1o QEventLoop(): uma queda deixa a pilha das threads em vez de só o código de saída
     import obimcore
     from PySide6.QtCore import QCoreApplication, QEvent, QEventLoop, QObject, QPointF, Qt, QTimer
     from PySide6.QtGui import QMouseEvent, QPointingDevice
@@ -125,6 +127,8 @@ def medir(f, forma, quantidade=1000, cmd=None, mouse=True):  # uma rodada; não 
     loop.exec()
     p1 = agora()
     parado = {"t0_ms": p0, "t1_ms": p1, "quadros": [float(t) for t, _ in f.cena.relogio() if p0 <= t <= p1]}
+    # eventos de mouse: todos construídos aqui, na thread da janela e antes de t0 (T15g); a thread lote-mouse só os posta. 30001 x 20 ms = 10 min
+    eventos = [QMouseEvent(QEvent.MouseMove, QPointF(k, Y_MOUSE), QPointF(k, Y_MOUSE), Qt.NoButton, Qt.NoButton, Qt.NoModifier, dispositivo) for k in range(30001)] if mouse else []
     # (b) t0 e sondas
     t0, pulsos, lista, est = agora(), [], [], {"t1": None}
     pulso = QTimer()
@@ -153,10 +157,12 @@ def medir(f, forma, quantidade=1000, cmd=None, mouse=True):  # uma rodada; não 
                     time.sleep(min(max((ag - agora()) / 1000, 0.0002), 0.005))
                 if est["t1"] is not None and ag > est["t1"]:
                     return
+                if k >= len(eventos):  # nunca recicla nem para calado: medir acusa (abaixo)
+                    est["acabaram"] = k
+                    return
                 lista.append([ag, ag, None])
-                ev = QMouseEvent(QEvent.MouseMove, QPointF(k, Y_MOUSE), QPointF(k, Y_MOUSE), Qt.NoButton, Qt.NoButton, Qt.NoModifier, dispositivo)
                 lista[k][1] = agora()  # postado = logo antes de entrar na fila
-                QCoreApplication.postEvent(janela, ev)
+                QCoreApplication.postEvent(janela, eventos[k])
                 k += 1
         poster = threading.Thread(target=posta, name="lote-mouse", daemon=True)
         poster.start()
@@ -166,14 +172,22 @@ def medir(f, forma, quantidade=1000, cmd=None, mouse=True):  # uma rodada; não 
     t1 = f._quadro(det["sequencia"], det["t0_ms"], det["t_comando_ms"]) if det.get("sequencia") is not None else det["t_comando_ms"]
     est["t1"] = t1
     # (e) desliga as sondas e espera todo evento agendado até t1 ser tratado
+    erro = None
     if poster is not None:
         poster.join(5)
         mouse_ev = [m for m in lista if m[0] <= t1]
-        f._bombear(lambda: all(m[2] is not None for m in mouse_ev), 5000)
+        if poster.is_alive():
+            erro = "a thread lote-mouse seguia viva 5 s depois de t1: a medição do mouse não vale"
+        elif "acabaram" in est:
+            erro = f"os {est['acabaram']} eventos de mouse pré-construídos acabaram antes de t1 (a thread lote-mouse parou): a medição não vale"
+        elif not f._bombear(lambda: all(m[2] is not None for m in mouse_ev), 5000):
+            erro = "f._bombear não viu todo evento de mouse agendado ser tratado em 5 s: a medição não vale"
         janela.removeEventFilter(filtro)
     else:
         mouse_ev = []
     pulso.stop()
+    if erro:
+        raise RuntimeError(erro)
     r = {"forma": forma, "quantidade": quantidade, "parado": parado, "thread_janela": thread_janela, "thread_lote": thread_lote, "t0_ms": t0, "t1_ms": t1,
          "quadros": [float(t) for t, _ in f.cena.relogio() if t0 <= t <= t1], "pulsos": [float(t) for t in pulsos if t0 <= t <= t1],
          "mouse": [[float(a), float(b), None if c is None else float(c)] for a, b, c in mouse_ev], "criados": len(det["criados"])}

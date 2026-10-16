@@ -1,0 +1,4 @@
+# LOTE_OPUS_39: pedido (S04-T15b)
+Revisão independente (T3, contexto fechado) do ramo `s04-t15b`: commit 52acda8 (cartão F0-S04-T15b + oráculo `tests/test_s04_t15b_formas.py`, de outro Opus, ainda não revisado) e 3696b8a (Sonnet: `prototypes/s04/fluxo_a/lote.py`, `CONTRATO.md` +7, `ci.yml` +2).
+Julgar: (1) oráculo determinístico, firme e coerente com o cartão (por que as sentinelas passam); (2) `lote.py`: formas 1 e 2, M5, M5b do agendado, controle sem o postador, `resumo` pura, importação limpa, nada desfeito além do cartão; (3) medidas honestas e a parada (janela surda > 1 s nas duas formas, no controle) fiel ao aprovado pelo PO; (4) `ci.yml`, tamanho por PR, testes antigos intocados; (5) onde tratar a lacuna do `t_painel_ms` (LOTE_OPUS_38 nota 3); (6) 2 mutantes (M5b do postado; forma 2 sem ceder) e 1 execução do oráculo com `OBIM_S04_T15_OBRIGATORIO=1` em `xvfb-run`.
+Saída: aprovado ou reprovado com lista numerada; sem corrigir; sem push.

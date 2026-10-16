@@ -61,6 +61,7 @@ class FluxoA:
         self.trava, self.historico, self._refazer = threading.Lock(), [], []
         self.ultimo, self.sequencias, self._cache, self._passos, self._painel, self._g = {"criados": [], "alterados": [], "apagados": [], "geometria": []}, [], {}, {}, "(nada selecionado)", 0
         self.cena = self.janela_principal = self._ponte = self._app = self._rhi = self.selecionado = self._ult_guid = self._arquivo_ifc = None
+        self._tam = (640, 480)  # tamanho lógico do contêiner, guardado pela thread da janela (as outras threads nunca chamam `_cont`)
         self._t_cam = 0.0  # instante (relógio do núcleo) do último comando de câmera, tomado depois de a Cena voltar; `selecionar` espera 2 quadros depois dele
         self._desl = None  # deslocamento da cena (float64, metros): o centro da caixa do 1o lote com geometria, igual para a sessão toda (RG-07)
         self._relogio = lambda: time.perf_counter() * 1000  # sem janela; com janela, o relógio do núcleo (o mesmo de Cena.relogio())
@@ -97,14 +98,19 @@ class FluxoA:
             raise RuntimeError("a viewport não apresentou o primeiro quadro em 10 s")
 
     def _bombear(self, cond=None, ms=0):  # processa eventos da janela (só na thread dela); com `cond`, espera até ela valer
-        gui, fim = self._app is not None and threading.current_thread() is threading.main_thread(), time.perf_counter() + ms / 1000
+        gui, fim = self._na_janela(), time.perf_counter() + ms / 1000
         while True:
-            gui and self._app.processEvents()
+            if gui:
+                self._app.processEvents()
+                self._tam = (self._cont.width(), self._cont.height())
             if cond is None or cond():
                 return True
             if time.perf_counter() >= fim:
                 return False
             time.sleep(0.0005)
+
+    def _na_janela(self):  # esta é a thread da janela (a principal, com janela)?
+        return self._app is not None and threading.current_thread() is threading.main_thread()
 
     def fechar(self):
         if self.cena is not None:
@@ -142,6 +148,11 @@ class FluxoA:
         self._painel = texto
         self._ponte is not None and self._ponte.texto.emit(texto)
 
+    def _publicar_ultimo(self, det, guids):  # quem chama segura a trava; `ultimo` é um dict NOVO, `_ult_guid` só troca se o comando devolveu GlobalIds
+        self.ultimo = pub = dict(det)
+        guids and setattr(self, "_ult_guid", guids[-1])
+        return pub
+
     def executar(self, cmd, espera=None):
         return self.executar_detalhado(cmd, espera)[0]
 
@@ -152,26 +163,36 @@ class FluxoA:
             raise ValueError(f"comando desconhecido: {nome!r}")
         t0 = self._relogio()
         u = {"criados": [], "alterados": [], "apagados": [], "geometria": [], "sequencia": None, "painel": None}
+        pub = det = None
+
+        def detalhe():  # tempo do comando tomado ANTES de soltar a trava; o detalhe é deste comando
+            u["t_comando_ms"] = self._relogio()
+            return {k: (list(v) if isinstance(v, list) else v) for k, v in u.items() if k in ("criados", "alterados", "apagados", "geometria", "sequencia", "t_comando_ms", "t_painel_ms")} | {"t0_ms": t0}
         if nome in LIVRES:
             guids = fn(cmd, u)
+            det = detalhe()
+            if self.trava.acquire(blocking=False):  # trava ocupada por outro escritor: não publica e nunca espera
+                try:
+                    pub = self._publicar_ultimo(det, guids)
+                finally:
+                    self.trava.release()
         else:
             if not (self.trava.acquire(blocking=False) if espera == 0 else self.trava.acquire(timeout=-1 if espera is None else espera)):
                 raise ModeloOcupado("o modelo está ocupado por outro comando")
             try:  # a Cena.atualizar roda dentro de `_transacao` e de `_desfaz_ou_refaz`, ainda com a trava
                 guids = self._transacao(fn, cmd, u) if nome in TRANSACAO else fn(cmd, u)
+                det = detalhe()
+                pub = self._publicar_ultimo(det, guids)  # `ultimo` e `_ult_guid` antes de soltar: o próximo escritor resolve "ultimo" certo
             finally:
                 self.trava.release()  # só depois de Cena.atualizar (ou do erro)
-        u["t_comando_ms"] = self._relogio()
         if u["painel"] is not None:
             self._publicar(u["painel"])
-            if nome == "editar_propriedades":
+            if nome == "editar_propriedades" and (self._app is None or self._na_janela()):  # fora da thread da janela não há pintura para medir: nada de número falso
                 self._bombear()
-                u["t_painel_ms"] = self._relogio()
+                det["t_painel_ms"] = self._relogio()
+                pub is None or pub.update(t_painel_ms=det["t_painel_ms"])  # só no dict deste comando
         elif nome == "selecionar":
             self._publicar(self.painel_texto())
-        det = {k: (list(v) if isinstance(v, list) else v) for k, v in u.items() if k in ("criados", "alterados", "apagados", "geometria", "sequencia", "t_comando_ms", "t_painel_ms")} | {"t0_ms": t0}
-        self.ultimo = dict(det)  # cópia, só para quem roda numa thread só
-        guids and setattr(self, "_ult_guid", guids[-1])
         return guids, det
 
     def _enviar(self, u, remover):  # a malha só do que mudou + UMA Cena.atualizar (sem janela: nada); sequência anotada só se a cena aceitou
@@ -367,7 +388,9 @@ class FluxoA:
     def _c_selecionar(self, c, u):
         if self.cena is None:
             return []
-        x, y = ((self._cont.width() if k == "x" else self._cont.height()) / 2 if c[k] == "centro" else float(c[k]) for k in "xy")
+        if self._na_janela():
+            self._tam = (self._cont.width(), self._cont.height())  # fora da thread da janela, nenhum método do contêiner: vale o tamanho guardado por ela
+        x, y = ((self._tam[0] if k == "x" else self._tam[1]) / 2 if c[k] == "centro" else float(c[k]) for k in "xy")
         if self._t_cam > 0 and not self._bombear(lambda: sum(t >= self._t_cam for t, _ in self.cena.relogio()) >= 2, 10000):  # a câmera só vale depois que a thread de desenho a aplica; o 1o quadro ainda pode ser da câmera antiga, o 2o já a tem
             raise TimeoutError("nenhum quadro com a câmera nova em 10 s")
         g = self.cena.selecionar(x, y)  # pixels lógicos (os do mouse do Qt)
@@ -402,7 +425,9 @@ class FluxoA:
 
     def executar_roteiro(self, caminho_json):
         roteiro = json.loads(Path(caminho_json).read_text(encoding="utf-8"))
-        self._passos, passos, base = {}, [], sum(1 for p in self.ifc.by_type("IfcProduct") if p.Representation)  # produtos com geometria antes do roteiro
+        with self.trava:  # a contagem lê o modelo: com a trava presa, solta antes do 1º comando
+            base = sum(1 for p in self.ifc.by_type("IfcProduct") if p.Representation)  # produtos com geometria antes do roteiro
+        self._passos, passos = {}, []
         for p in roteiro["passos"]:
             args, reps = {k: v for k, v in p.items() if k not in ("id", "n")}, []
             for r in range(int(p.get("n", 1))):

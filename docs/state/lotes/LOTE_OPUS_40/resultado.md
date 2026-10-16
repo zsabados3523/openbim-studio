@@ -23,3 +23,10 @@ Revisor: Opus, contexto fechado, não escreveu nada da tarefa. Ramo `s04-t15c`: 
 
 ## Para o PO
 Esperar eventos na janela libera o Python (sim). O desenho 3D em C++ segue liso mesmo com a janela presa 0,8 s (pausa máxima 17 ms). A tela 3D antiga em Python para de 0,35 a 1,4 s durante o lote: confirma a escolha do desenho em C++. Gravar o IFC prende o Python o tempo todo (~0,5 s para 10 mil paredes); abrir não prende. A causa das pausas do Python ainda não está fechada: não é o coletor de lixo nem uma função longa. Falta corrigir uma linha que inflava um número em ~10%.
+
+## Releitura (Opus, 2026-10-16): APROVADO
+1. Conserto c11069e: diff de 1 linha (`int(SEG * 1100)` -> `int(SEG * 1000)`); em (i) `join`, `exec` e `ocupada` agora usam só `SEG` (1,0 s); nenhum outro 1100/1,1 no arquivo.
+2. Testes intactos: `git diff origin/main --stat -- tests` traz só o oráculo da T15c (195e64b, 147 linhas).
+3. Oráculo com a chave, `xvfb-run`, obimcore do scratchpad: 7/7, 0 pulos, 36 s (uma execução; o "3 de 3" do item 14 fica para o CI).
+4. `conferencias.py` direto em `xvfb-run`: (i) razão exec 1,048 (< 1,05), ocupada 0,48 -> sim. (i) sozinha 3 vezes: 1,00; 0,96; 0,96 (o 1,048 é ruído, não viés).
+5. Tamanhos: PR 1 = 195e64b (178 linhas); PR 2 = ae9f58e (277) + lote 40 (29 + 6) + conserto (2) + esta releitura (7) = 321. Ambos ≤ 400.

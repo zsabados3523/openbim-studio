@@ -53,7 +53,7 @@ def conferencia_i():
 
     def em_exec():
         loop = QEventLoop()
-        QTimer.singleShot(int(SEG * 1100), loop.quit)
+        QTimer.singleShot(int(SEG * 1000), loop.quit)
         loop.exec()
 
     def ocupada():  # controle positivo: a principal trabalha em Python

@@ -2,6 +2,7 @@
 // Autotestes do executável do fluxo B (S04-T14c; CONTRATO.md, Parte 2): código movido do main.cpp, sem mudança de comportamento.
 #include "autotestes.h"
 #include "janela.h"
+#include "malha.h"
 #include <ifcparse/schemas/Ifc4.h>
 #include <QJsonArray>
 #include <algorithm>
@@ -164,8 +165,13 @@ J t_memoria(int N) {  // N edições de nome com desfazer a cada 10 (o históric
 }
 }  // namespace
 bool fluxo_b::autoteste(const std::vector<std::string>& a) {
-    if (!a.empty() && a[0] == "--versao") {  // antes de qualquer modelo: o esquema IFC4 registrado por código, sem depender de ligação especial nem de Python
+    if (!a.empty() && a[0] == "--versao") {  // o esquema IFC4 registrado por código vem ANTES de qualquer modelo (sem ligação especial nem Python); as bibliotecas só DEPOIS de uma malha real: o OCCT entra pelo plugin da geometria, carregado na 1a malha (um TKernel só por ligação sem uso não prova nada)
         const bool reg = ifcopenshell::schema_by_name("IFC4") == &Ifc4::get_schema();
+        Paredes p;
+        p.criar_tipo("PAR", {0.02, 0.11, 0.02});
+        const Lista g = p.criar_parede("PAR", 4, 2.8, 0.15);
+        const auto m = obim::malhas_do_arquivo(p.arquivo(), g);
+        if (m.empty() || std::any_of(m.begin(), m.end(), [](const auto& kv) { return kv.second.idx.empty(); })) throw std::runtime_error("--versao: a parede de prova não gerou malha");
         QJsonArray libs;
         for (auto& l : bibliotecas()) libs.append(QString::fromStdString(l));
         resultado(J{{"ifcopenshell", OBIM_IFC_VERSAO}, {"qt", QT_VERSION_STR}, {"registro_ifc4", reg}, {"bibliotecas", libs}});

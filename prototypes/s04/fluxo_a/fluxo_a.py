@@ -61,6 +61,7 @@ class FluxoA:
         self.trava, self.historico, self._refazer = threading.Lock(), [], []
         self.ultimo, self.sequencias, self._cache, self._passos, self._painel, self._g = {"criados": [], "alterados": [], "apagados": [], "geometria": []}, [], {}, {}, "(nada selecionado)", 0
         self.cena = self.janela_principal = self._ponte = self._app = self._rhi = self.selecionado = self._ult_guid = self._arquivo_ifc = None
+        self._t_cam = 0.0  # instante (relógio do núcleo) do último comando de câmera, tomado depois de a Cena voltar; `selecionar` espera 2 quadros depois dele
         self._desl = None  # deslocamento da cena (float64, metros): o centro da caixa do 1o lote com geometria, igual para a sessão toda (RG-07)
         self._relogio = lambda: time.perf_counter() * 1000  # sem janela; com janela, o relógio do núcleo (o mesmo de Cena.relogio())
         if janela:
@@ -367,13 +368,18 @@ class FluxoA:
         if self.cena is None:
             return []
         x, y = ((self._cont.width() if k == "x" else self._cont.height()) / 2 if c[k] == "centro" else float(c[k]) for k in "xy")
+        if self._t_cam > 0 and not self._bombear(lambda: sum(t >= self._t_cam for t, _ in self.cena.relogio()) >= 2, 10000):  # a câmera só vale depois que a thread de desenho a aplica; o 1o quadro ainda pode ser da câmera antiga, o 2o já a tem
+            raise TimeoutError("nenhum quadro com a câmera nova em 10 s")
         g = self.cena.selecionar(x, y)  # pixels lógicos (os do mouse do Qt)
         self.selecionado = g
         return [g] if g else []
 
     def _camera(self, c, u):  # orbitar, camera_mover, aproximar, enquadrar, animar_orbita, parar_animacao: um método da Cena com os argumentos do cartão
         met, chaves = CAMERA[c["cmd"]]
-        return [] if self.cena is None else getattr(self.cena, met)(*(float(c[k]) for k in chaves.split())) or []
+        r = [] if self.cena is None else getattr(self.cena, met)(*(float(c[k]) for k in chaves.split())) or []
+        if self.cena is not None and c["cmd"] in ("enquadrar", "orbitar", "camera_mover", "aproximar"):
+            self._t_cam = self._relogio()  # depois de a Cena voltar (antes, o 1o quadro pode ser da câmera velha)
+        return r
 
     def _c_camera(self, c, u):  # `alvo` vem em coordenadas do MUNDO; a cena está em mundo menos o deslocamento (RG-07)
         if self.cena is not None:
@@ -383,6 +389,7 @@ class FluxoA:
                     self._desl = np.rint(np.asarray(a["alvo"], np.float64))
                 a["alvo"] = [float(x) for x in np.asarray(a["alvo"], np.float64) - self._desl]
             self.cena.definir_camera(**a)
+            self._t_cam = self._relogio()
         return []
 
     _c_esperar = lambda self, c, u: self._bombear(lambda: False, float(c["ms"])) or []  # noqa: E731  (bombeia eventos até passar o tempo)

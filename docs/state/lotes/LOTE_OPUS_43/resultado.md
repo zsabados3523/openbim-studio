@@ -1,0 +1,24 @@
+# LOTE_OPUS_43: resultado (S04-T15f, diagnóstico): REPROVADO
+Revisor: Opus independente. Ramo `s04-t15f-diagnostico`, commits 8cfc361 e 5fdc90e. Sondas do revisor no scratchpad `l43/` (sondas `sonda_estado`, `sonda_dispositivo`, `sonda_corrida`, `_del`, `_pre`, `_mt`, `sonda2`).
+
+## Problemas
+1. **Item 3, H1: o descarte está errado.** Uma sonda pequena, só com Qt/PySide (sem obimcore), reproduz no Linux corrupção de heap com o padrão do `lote.py` `posta()` (linhas 146-160): uma thread Python constrói um `QMouseEvent` e chama `postEvent` na janela, enquanto a thread da janela roda um `QEventLoop` com filtro Python. A glibc acusa "malloc(): unaligned tcache chunk detected" (abort) ou falha de segmentação (139): mesma classe do 0xC0000374 do Windows, **sem estar provado que seja o mesmo evento**. Com o ponteiro do X se mexendo (`QCursor.setPos` a cada 1 ms), 20 s, 1 postador a ~5.000 eventos/s:
+   - evento construído na thread do postador, dispositivo primário: 3 de 3 quedas; com depuração de memória: 3 de 3; com `del ev` logo após `postEvent`: 3 de 3; com `QPointingDevice` próprio: 3 de 3;
+   - **eventos construídos antes, na thread da janela; o postador só chama `postEvent`: 0 de 3** (~114 mil postados);
+   - construir e postar na própria thread da janela: 0 de 3 (2,2 milhões de eventos).
+   Sem o ponteiro se mexendo é mais raro (1 de 6 com 1 postador; 2 de 3 com 2). O que liga e desliga o sintoma é **construir o `QMouseEvent` fora da thread da janela**. O construtor lê e escreve estado guardado no dispositivo (o 2º evento herda o `globalLastPosition` do 1º). Mecanismo exato dentro do Qt/PySide não achado (sem gdb).
+2. **Item 5: o estresse do relatório não exercitava o perigo.** Postava em rajada (pausa de 0,5 ms a cada 50 eventos), formando fila grande; a sonda do revisor com esse ritmo também deu 0 de 3. O perigo aparece quando a janela entrega em dia, como no `lote.py` (1 evento a cada 20 ms). "900.000 eventos, 0 erro" não prova nada sobre a H1; `ownedByPython` está correto mas não tem a ver (o risco é na construção).
+3. **Item 1: duas frases dizem mais que as medições** ("nada indica corrupção…" e o resumo da seção 4, que põe a suspeita "numa peça específica do Windows"). Incoerência "696 rodadas" x "684 rodadas" na seção 2: explicitar a origem de cada número. Dizer "mecanismo reproduzível e compatível com a queda", não "causa provada" (a sonda posta ~100 vezes mais rápido que o `lote.py`; ~0,2% de queda por execução é compatível com 0 em 58); só o CI do Windows confirma.
+4. **Item 4: a proposta deixou de ser a menor medida útil.** A correção principal é tirar a construção do evento da thread do postador; marcadores e `faulthandler` passam a secundários.
+5. **Item 3, H4 e tentativa 1:** "0 quadros em 1 s" pode ser efeito precoce do mesmo defeito, não só lentidão do runner. Registrar como possibilidade aberta.
+
+## Correto
+Item 2 (leitura dos logs do CI): tentativa 1, "rodada 0" da forma 2 é a 1ª rodada com postador (a régua recebe `formas` antes de `controle`); tentativa 2, código 3221226356 depois da única linha "forma 1 controle", que sai após `desfazer` e `esperar 300 ms`: a queda foi na rodada 2 (forma 1 com postador) ou no `desfazer` dela. H2 e H3 bem descartadas; `poster.join` e retorno de `_bombear` não conferidos continuam defeito de robustez real.
+
+## Recomendações para o cartão de correção (T15g; T3; oráculo e implementação em agentes diferentes; revisão Opus em lote)
+1. Regressão primeiro: transformar `sonda_corrida.py` (1 postador, ponteiro mexendo, 20 s) em teste que hoje falha no Linux sob `xvfb-run -a` (no Windows só no CI), escrito pelo agente do oráculo, sem afrouxar M5 nem limites.
+2. Correção mínima em `lote.py` (`medir`, bloco do postador): construir os `QMouseEvent` na thread da janela antes de t0 (pré-alocar com folga; falhar com mensagem clara se acabarem); o postador só chama `postEvent(janela, eventos[k])` no instante agendado (continua 3ª thread; atraso contado do AGENDADO). Trocar o dispositivo ou apagar a referência NÃO basta. Alternativa (postador pede à thread da janela, por fila do Qt, que construa e poste) muda o que se mede: exige aval do oráculo.
+3. Junto: conferir `poster.join(5)` com `is_alive()` e o retorno de `_bombear(...)`, falhando com mensagem clara.
+4. `faulthandler.enable()` no `__main__` do subprocesso do oráculo (se pega o 0xC0000374 no Windows é incógnita); marcadores de passo com flush opcionais.
+5. Aceite: 0 quedas em 10+ execuções no Linux com a correção e falha reproduzível sem ela (mutante = voltar a construir no postador); repetir as 30+ execuções do `lote`; no CI do Windows, várias rodadas verdes seguidas, com números, nunca "estável".
+6. Achado lateral: procurar outros lugares (testes e protótipos) que construam `QMouseEvent`/`QPointerEvent` fora da thread da janela.

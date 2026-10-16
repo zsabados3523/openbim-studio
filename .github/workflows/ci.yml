@@ -131,6 +131,7 @@ jobs:
           OBIM_CI=1 pytest -q -rsP tests/test_s04_viewport.py tests/test_s04_viewport_b.py tests/test_s04_cena.py tests/test_s04_selecao.py tests/test_s04_selecao_c.py tests/test_s04_profundidade.py tests/test_s04_fluxo_a.py tests/test_s04_fluxo_a_camera_selecao.py tests/test_s04_metas.py tests/test_s04_abertura.py
           OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15a_threads_fluxo_a.py
           OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15b_formas.py
+          OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15e_painel_ausente.py
           OBIM_CI=1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe pytest -q -rsP tests/test_s04_viewport_software.py  # aviso de desenho por software (F0-RG-13)
       - name: Fluxo B, paredes em C++ (S04-T13; bloqueia o merge)
         shell: bash -elo pipefail {0}
@@ -302,6 +303,7 @@ jobs:
           OBIM_CI=1 pytest -q -rsP --durations=10 tests/test_s04_fluxo_a.py tests/test_s04_fluxo_a_camera_selecao.py tests/test_s04_profundidade.py tests/test_s04_viewport_b.py
           OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15a_threads_fluxo_a.py
           OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15b_formas.py
+          OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15e_painel_ausente.py
       - name: Pacote do que o job gerou
         if: always()
         shell: bash

@@ -1,0 +1,4 @@
+# LOTE_OPUS_38: pedido (S04-T15a, ramo `s04-t15a`; revisão independente T3, contexto fechado)
+
+Revisar a implementação (Sonnet, commit a919488) do cartão `F0-S04-T15a` contra o oráculo `tests/test_s04_t15a_threads_fluxo_a.py` (outro Opus). Base: LOTE_OPUS_18 achado 8, LOTE_OPUS_19 item 5, `CONTRATO.md`.
+Julgar: (1) os 4 pontos (`ultimo`/`_ult_guid` com a trava; `_cont` só na thread da janela via `_tam`; sem `t_painel_ms` falso; contagem da base com a trava); (2) sem deadlock (Lock não reentrante, `_bombear`, espera de 2 quadros da T14d); (3) as 2 mudanças declaradas (`t_comando_ms` antes de soltar; `t_painel_ms` no dict do próprio comando) contra M1..M6, `medicao.json` e `medir_s04.py`; (4) nenhum teste antigo editado, `ci.yml` só +1 linha por job; (5) diff ≤400; (6) 2+ mutantes reprovados, oráculo 2x e regressão 1x (xvfb-run). Saída: APROVADO ou REPROVADO com lista numerada.

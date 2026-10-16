@@ -1,13 +1,14 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Oráculo da F0-S04-T15d: elemento pesado durante a edição (LOTE_OPUS_9 §5.2, decisão do PO depois do lote 4) e o relatório da T15 (cartão F0-S04-T15d).
-`lote.py <saida.json> --base N --pesada 150 --rodadas R` mede SÓ a parede pesada: a base do gerador mais 1 parede de 60 m com 150 aberturas (o MAB do lote 4);
-`malha_ms` = uma chamada de `obimcore.malhas` só dela (com a trava do modelo); depois `mover` dela (dx 0,01 m, alternando o sinal) nas formas 1 e 2 do T15b,
+`lote.main_pesada([saida.json, "--base", N, "--aberturas", 150, "--rodadas", R])` (função NOVA: `main` e o `__main__` do lote.py ficam como estão, trava
+da T15g) mede SÓ a parede pesada: a base do gerador mais 1 parede de 60 m com 150 aberturas (o MAB do lote 4);
+`malha_ms` = mediana de 3 chamadas de `obimcore.malhas` só dela (com a trava do modelo); depois `mover` dela (dx 0,01 m, alternando o sinal) nas formas 1 e 2 do T15b,
 com M5 e M5b iguais aos do T15b (mouse agendado a cada 20 ms desde t0, conferido como no T15b). O `mover` medido refez a malha DA PAREDE PESADA (lote 48):
 em cada rodada das duas formas t1 - t0 >= 0,5 x `malha_ms`; na forma 2, mediana da maior fatia entre 0,75 e 2 x `malha_ms`, com a maior operação `obimcore.malhas`.
 Portão = regra de parada (b), APROVADA PELO PO em 2026-10-16: a parede com 150 aberturas não pode parar a janela mais da metade do tempo do cálculo do desenho;
 com a malha feita FORA do bloqueio (forma 1), mediana (das rodadas) do maior atraso de M5b na forma 1 < metade de `malha_ms`. Reprovado = parar e levar ao PO.
 O relatório `docs/state/reports/F0-S04-threads.md` existe e responde cada item do lote 9 §2.3 e §5.2 (cada título conferido como LINHA INTEIRA).
-GUARDA: SUBPROCESSO sob `xvfb-run` (nunca na tela real; Windows só no CI ou com OBIM_S04_TELA_VIRTUAL=1); pula sem lote.py com `base_pesada` ou sem obimcore;
+GUARDA: SUBPROCESSO sob `xvfb-run` (nunca na tela real; Windows só no CI ou com OBIM_S04_TELA_VIRTUAL=1); pula sem lote.py com `base_pesada` e `main_pesada` ou sem obimcore;
 com OBIM_S04_T15_OBRIGATORIO=1 todo pulo vira falha."""
 import importlib.util
 import json
@@ -38,15 +39,16 @@ def pular(msg):
 def c_pesada(res, base, aberturas, rodadas):
     import lote
     saida = Path(tempfile.mkdtemp()) / "pesada.json"
-    res["ret"] = lote.main([str(saida), "--base", str(base), "--pesada", str(aberturas), "--rodadas", str(rodadas)])
+    res["ret"] = lote.main_pesada([str(saida), "--base", str(base), "--aberturas", str(aberturas), "--rodadas", str(rodadas)])
     res["arquivo"] = json.loads(saida.read_text(encoding="utf-8"))
     return res
 
 
 @pytest.fixture(scope="module")
 def pes():
-    if not (aux.PASTA / "lote.py").is_file() or "def base_pesada" not in (aux.PASTA / "lote.py").read_text(encoding="utf-8"):
-        pular("prototypes/s04/fluxo_a/lote.py sem base_pesada")
+    texto = (aux.PASTA / "lote.py").read_text(encoding="utf-8") if (aux.PASTA / "lote.py").is_file() else ""
+    if "def base_pesada" not in texto or "def main_pesada" not in texto:
+        pular("prototypes/s04/fluxo_a/lote.py sem base_pesada e main_pesada")
     if importlib.util.find_spec("obimcore") is None:
         pular("módulo obimcore ausente")
     if not (os.environ.get("CI") or os.environ.get("OBIM_S04_TELA_VIRTUAL") == "1") if sys.platform == "win32" else not shutil.which("xvfb-run"):

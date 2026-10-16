@@ -1,0 +1,21 @@
+# Lote Opus 34: divisão da S04-T14c em ramos (releitura curta, T3, contexto fechado)
+
+## Veredito: APROVADO
+Cobre exatamente `s04-t14c-1-janela` (2f9af6c) e `s04-t14c-2-autotestes` (d9239a8), mesclados nesta ordem. Merge da parte 3 só com `linux` e `windows-fluxo-b` verdes (aqui só rodei Linux; o caminho d3d11/WARP não foi visto). Qualquer mudança nova em `main.cpp`, `janela.h`, `autotestes.cpp` ou no oráculo volta ao Opus.
+
+1. **Diferença do aprovado (lote 33, a58b12b) para o ramo final: só o previsto.** `git diff s04-t14c-retomada s04-t14c-2-autotestes -- prototypes .github tests`: 5 arquivos, todos em prototypes/s04/fluxo_b; `.github` e `tests` sem diferença (oráculo idêntico ao do main, ao do 33 e nos dois ramos). Bloco movido: main.cpp:262-398 do aprovado contra autotestes.cpp:29-165, `diff` vazio (byte a byte). `resultado()` foi junto (autotestes.cpp:28, igual ao main.cpp:32 antigo). O despacho `--versao`/`--autoteste` (autotestes.cpp:166-181) é o mesmo código com `return 0` trocado por `return true`; main.cpp:267 chama `autoteste(a)` no mesmo lugar (antes do `roteiro`, logo antes da QApplication). Includes: `Ifc4.h` e `psapi.h` saíram do main e foram para autotestes.cpp; `<cstdlib>` entrou para o `_Exit`. CMake: `autotestes.cpp` no alvo e `psapi` no Windows (CMakeLists.txt:40, 44). Nenhuma lógica nova além de O2, O3, O4 e O6.
+2. **Melhorias: corretas, sem impasse, sem mexer em travas, na espera do `selecionar` nem nos tempos.**
+   - O2 (main.cpp:115-118): limite de 10 min no `aguardar` do lote; estourou -> mensagem em stderr e `std::_Exit(1)` SEM `join`. Correto (o `join` de uma thread travada penduraria, que é o que se quer evitar; o lote 33 sugeria `join` antes, mas aí não sairia). No caminho normal nada muda: mesmo laço `processEvents` + 0,5 ms, `join` e relançar como antes. Sai com código 1 e sem `medicao.json`, coerente com "comando que falha".
+   - O3 (main.cpp:270): `catch (...)` -> mensagem e código 1. Só pega o que antes ia a `terminate`.
+   - O4 (main.cpp:172): lista vazia vira `null` (como o A); com o roteiro R nunca é vazia, então M2, M2b, M3 e M4 saem iguais; M5 não usa `meta`.
+   - O6 (janela.h:65-68): `vp.parar()` antes do `throw` no construtor. `parar` é idempotente (motor.h:83) e o `~Viewport` volta a chamá-lo depois sem dano. Não toca na ordem Motor -> DadosCena.
+   - A espera de 2 quadros do `selecionar` (main.cpp:146, t_cam, 10 s) está intacta.
+3. **ci.yml:** `git diff origin/main s04-t14c-2-autotestes -- .github/workflows/ci.yml` só acrescenta (2 blocos, +17, 0 removidas): linux ~141 e windows-fluxo-b ~377 (com `OBIM_S04_TELA_VIRTUAL=1`), ambos `OBIM_CI=1 OBIM_S04_T14_OBRIGATORIO=1`, pipefail, 40 min. Igual ao aprovado no 33. A parte 2 não mexe no ci.yml.
+4. **Tamanho:** parte 2 contra origin/main = 360 linhas (main.cpp 269, janela.h 83, CMake 7, paredes.h 1); parte 3 contra a parte 2 = 241 linhas (com os 28 do lote 33) + 26 deste lote, abaixo de 400. Ok.
+5. **Rodadas (Linux, `xvfb-run -a`, build limpo no scratchpad):** ramo final, `OBIM_CI=1 OBIM_S04_T14_OBRIGATORIO=1 pytest tests/test_s04_fluxo_b_janela.py` 2 vezes: **20 passaram, 0 falharam, 0 pulados** em cada (~64 s). Parte 2 sozinha com OBRIGATORIO: 14 passaram, 6 falharam (versao, ler, localidade, corrida, memoria: "código 2, roteiro ausente"), como esperado. Sem OBRIGATORIO e sem executável: pula.
+   **A parte 2 pode entrar sozinha no main:** nenhum passo do ci.yml da parte 2 roda esse oráculo depois de construir o executável (linux: os passos com o build rodam só `test_s04_fluxo_b_paredes.py` e listas fixas de arquivos; o passo "Testes" que roda `tests` inteiro vem antes de qualquer build, então pula; windows-fluxo-b idem). E `OBIM_CI=1` não liga a chave da T14 (`OBIM_S04_T14_OBRIGATORIO` não está em `CHAVES_S04`, tests/obrigatorio.py:23-28). O CI da parte 2 fica verde.
+
+## Observações (não bloqueiam)
+- N1 (baixa): entre o merge da parte 2 e o da parte 3, quem rodar o oráculo localmente com o executável construído vê 6 falhas, não pulos. Mesclar a parte 3 logo em seguida.
+- N2 (baixa, autotestes.h:2 e autotestes.cpp:2): "sem mudança" vale para o corpo; o despacho trocou `return 0` por `return true`. Só texto.
+- O1 e O5 do lote 33 continuam em aberto (fora do escopo desta divisão).

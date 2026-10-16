@@ -1,0 +1,5 @@
+# Lote Opus 34: pedido (resumo)
+Releitura curta, independente (T3, contexto fechado) da divisão da S04-T14c em ramos, depois da aprovação do lote 33 (a58b12b, ramo `s04-t14c-retomada`).
+Ramos: `s04-t14c-1-janela` (2f9af6c, base = parte 1 do oráculo já no main) e `s04-t14c-2-autotestes` (d9239a8). O implementador aplicou as melhorias O2, O3, O4 e O6 do lote 33 (main.cpp e janela.h).
+Conferir: (1) `git diff s04-t14c-retomada s04-t14c-2-autotestes -- prototypes .github tests` só tem autotestes movidos (código idêntico), CMake (autotestes.cpp, psapi), O2, O3, O4, O6; (2) cada melhoria correta, sem impasse, sem mudar a ordem de travas, a espera do `selecionar` nem os tempos M2 a M5; (3) ci.yml só acrescenta o passo da T14c (linux e windows-fluxo-b); (4) cada ramo com até 400 linhas; (5) rodar o oráculo `OBIM_CI=1 OBIM_S04_T14_OBRIGATORIO=1 pytest tests/test_s04_fluxo_b_janela.py` 2 vezes no ramo final e dizer se a parte 2 pode entrar sozinha no main (CI sem OBRIGATORIO nela).
+Só leitura e builds/rodadas no scratchpad (xvfb-run -a), sem push, sem instalar. Saída: APROVADO ou REPROVADO com lista numerada em `resultado.md`.

@@ -28,7 +28,7 @@ def rodar(exe, args, grafico=False, env=None, timeout=900):  # grafico: tela vir
         e["QT_QPA_PLATFORM"] = "offscreen"
     e.update(env or {})
     pre = ["xvfb-run", "-a", "-s", "-screen 0 1280x800x24"] if grafico and sys.platform != "win32" else []
-    return subprocess.run([*pre, str(exe), *map(str, args)], env=e, capture_output=True, text=True, timeout=timeout)
+    return subprocess.run([*pre, str(exe), *map(str, args)], env=e, capture_output=True, encoding="utf-8", errors="replace", timeout=timeout)  # LOTE_OPUS_35: o executável escreve UTF-8; não a codificação da localidade (cp1252 no Windows)
 
 def resultado(p, rotulo):  # JSON da linha `RESULTADO`; queda ou DLL/plugin Qt ausente aparecem com o código de saída e a saída unida (sob xvfb-run o stderr vem junto do stdout)
     linhas = [x for x in p.stdout.splitlines() if x.startswith("RESULTADO ")]

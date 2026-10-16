@@ -138,6 +138,14 @@ jobs:
           bash prototypes/s04/fluxo_b/build.sh out/s04
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           OBIM_CI=1 pytest -q -rsP tests/test_s04_fluxo_b_paredes.py
+      - name: Fluxo B, executável com janela (S04-T14c; bloqueia o merge)
+        shell: bash -elo pipefail {0}
+        timeout-minutes: 40
+        run: |
+          # O build.sh do passo anterior já gerou fluxo_b_janela ao lado do módulo. Tela virtual (xvfb-run no Linux; WARP no Windows), nada na tela real.
+          # O oráculo roda o fluxo A de referência (roteiro R) e o executável de B com a mesma base; autotestes de localidade, `ler`, corrida e memória sem janela.
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          OBIM_CI=1 OBIM_S04_T14_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_fluxo_b_janela.py
       - name: Sonda da thread de desenho (S04-T05; informativo, não bloqueia)
         shell: bash -elo pipefail {0}
         continue-on-error: true
@@ -366,6 +374,15 @@ jobs:
           bash prototypes/s04/fluxo_b/build.sh out/s04
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           OBIM_CI=1 pytest -q -rsP tests/test_s04_fluxo_b_paredes.py
+      - name: Fluxo B, executável com janela (S04-T14c; bloqueia o merge)
+        shell: bash -elo pipefail {0}
+        timeout-minutes: 40
+        run: |
+          # O build.sh do passo anterior já gerou fluxo_b_janela ao lado do módulo. Tela virtual (xvfb-run no Linux; WARP no Windows), nada na tela real.
+          # O oráculo roda o fluxo A de referência (roteiro R) e o executável de B com a mesma base; autotestes de localidade, `ler`, corrida e memória sem janela.
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          export OBIM_S04_TELA_VIRTUAL=1  # WARP, como no passo do viewport
+          OBIM_CI=1 OBIM_S04_T14_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_fluxo_b_janela.py
       - name: Pacote do que o job gerou
         if: always()
         shell: bash

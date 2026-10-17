@@ -188,6 +188,12 @@ jobs:
           echo "::notice title=sonda da thread de desenho no ${RUNNER_OS}::$(python -c "import json; r=json.load(open('out/s04_sonda/sonda.json')); print('rc=$rc meta_atingida=%s' % r.get('meta_atingida'), {k:v.get('maior_intervalo_ms') for k,v in r['fases'].items() if isinstance(v,dict)})" || echo sem resultado)"
           echo "Sonda da thread de desenho (${RUNNER_OS}): código $rc, relatório em out/s04_sonda/sonda.json" >> "$GITHUB_STEP_SUMMARY"
           true
+      - name: Autoteste do oráculo do instalador Windows (T17b; só bash e Python, sem Windows; bloqueia o merge)
+        shell: bash -elo pipefail {0}
+        run: |
+          out="$(bash packaging/windows/test_instalador_ponte.sh --autoteste)"
+          echo "$out"
+          [ "$(echo "$out" | tail -n 1)" = ok ] || { echo "::error title=autoteste do oráculo do instalador::a última linha não é 'ok'"; exit 1; }
       - name: REUSE (ferramenta só no CI, ambiente separado)
         shell: bash -elo pipefail {0}
         run: |

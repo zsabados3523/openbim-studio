@@ -241,6 +241,72 @@ def main(argv=None):
     return dados
 
 
+def base_pesada(caminho, paredes=300, aberturas=150):  # T15d: base do gerador + 1 parede de 60 m com `aberturas` aberturas (o MAB do lote 4); devolve o GlobalId dela
+    _caminhos()
+    import gerar_modelo_grande
+    import ifcopenshell
+    gerar_modelo_grande.gerar(str(caminho), paredes=paredes)
+    m = ifcopenshell.open(str(caminho))
+    api = fluxo_a.api
+    corpo = next(c for c in m.by_type("IfcGeometricRepresentationSubContext") if c.ContextIdentifier == "Body")
+
+    def caixa(cls, pos, c, a, e):
+        p = api("root.create_entity", m, ifc_class=cls, name=cls)
+        rep = api("geometry.add_wall_representation", m, context=corpo, length=c, height=a, thickness=e)
+        api("geometry.assign_representation", m, product=p, representation=rep)
+        t = np.eye(4)
+        t[:3, 3] = pos
+        api("geometry.edit_object_placement", m, product=p, matrix=t)
+        return p
+    w = caixa("IfcWall", (0.0, -10.0, 0.0), 60.0, 3.0, 0.3)
+    api("spatial.assign_container", m, products=[w], relating_structure=m.by_type("IfcBuildingStorey")[0])
+    for k in range(aberturas):
+        a = caixa("IfcOpeningElement", (1 + (k % 50) * 1.1, -10.3, 0.4 + (k // 50) * 0.8), 0.3, 0.3, 0.9)
+        api("feature.add_feature", m, feature=a, element=w)
+    m.write(str(caminho))
+    return w.GlobalId
+
+
+def medir_pesada(f, guid, rodadas=3):
+    import obimcore
+    ts = []
+    with f.trava:
+        for _ in range(3):  # mediana de 3 chamadas (lote 49)
+            t = time.perf_counter()
+            mal = obimcore.malhas(f.ifc, [guid])
+            ts.append((time.perf_counter() - t) * 1000)
+    ms = sorted(ts)[1]
+    out = {"guid": guid, "malha_ms": ms, "triangulos": len(mal[guid]["indices"]), "formas": {"1": [], "2": []}}
+    n = 0
+    for forma in (1, 2):
+        for _ in range(rodadas):
+            dx = 0.01 if n % 2 == 0 else -0.01
+            n += 1
+            out["formas"][str(forma)].append(medir(f, forma, cmd={"cmd": "mover", "alvo": guid, "dx": dx, "dy": 0, "dz": 0}))
+            f.executar({"cmd": "esperar", "ms": 300})
+    return out
+
+
+def main_pesada(argv=None):  # T15d: SÓ a parede pesada; `main` e `__main__` não mudam (trava da T15g)
+    ap = argparse.ArgumentParser(description="T15d: parede com aberturas durante a edição; grava pesada.json")
+    ap.add_argument("saida")
+    ap.add_argument("--base", type=int, default=300)
+    ap.add_argument("--aberturas", type=int, default=150)
+    ap.add_argument("--rodadas", type=int, default=3)
+    a = ap.parse_args(argv)
+    _caminhos()
+    tmp = Path(tempfile.mkdtemp(prefix="pesada_"))
+    guid = base_pesada(tmp / "base.ifc", a.base, a.aberturas)
+    f = preparar(str(tmp / "base.ifc"), tmp / "saida")
+    dados = {"versao": 1, "plataforma": sys.platform, "rhi": f._rhi, "base": a.base, "aberturas": a.aberturas, "rodadas": a.rodadas, "pesada": medir_pesada(f, guid, a.rodadas)}
+    f.fechar()
+    dados = json.loads(json.dumps(dados))
+    Path(a.saida).write_text(json.dumps(dados, ensure_ascii=False, indent=1), encoding="utf-8")
+    p = dados["pesada"]
+    print("pesada", round(p["malha_ms"]), p["triangulos"], [[round(r["resumo"]["M5b"]["max_ms"]) for r in p["formas"][k]] for k in "12"], flush=True)
+    return dados
+
+
 if __name__ == "__main__":
     import ifcopenshell  # noqa: F401  (antes do obimcore)
     main()

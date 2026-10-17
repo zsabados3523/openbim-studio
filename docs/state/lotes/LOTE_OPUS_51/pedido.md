@@ -1,0 +1,2 @@
+# LOTE_OPUS_51: pedido (S04-T15d, releitura)
+Releitura do ramo `s04-t15d` depois do lote 50 (8 pontos). Julgar a resolução no texto/código, os números contra os JSON brutos, a honestidade da recomendação, o escopo (só `lote.py` 1 linha e o relatório) e o oráculo 4/4. Saída: aprovado ou reprovado com lista numerada. Segunda leitura (só texto) pelo mesmo revisor, sem lote novo, depois da reescrita do cartão (escalonamento de 2 reprovações).

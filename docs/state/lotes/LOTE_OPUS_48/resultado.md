@@ -1,0 +1,13 @@
+# LOTE_OPUS_48: resultado (S04-T15d, oráculo): REPROVADO
+Revisor: Opus independente. Ramo `s04-t15d` @ 4382dda. Cópias e mutantes no scratchpad `l48/`.
+
+## Problemas
+1. **(bloqueia) O portão pode passar sem medir nada.** O oráculo só prova que a parede é pesada numa chamada separada (`malha_ms`); não prova que o `mover` medido nas formas 1 e 2 refez a malha dela. Dois mutantes passam 4 de 4: m1 (`mover` de parede simples da base, com `malha_ms` e `triangulos` ainda da pesada) e m3 (forma 1 com a pesada, forma 2 com a simples). Proposta testada: em cada rodada das duas formas, `t1_ms - t0_ms >= 0,5 * malha_ms`; na forma 2, mediana de `fatias.maior_ms` entre 0,5 e 2 vezes `malha_ms`, com `maior_op == "obimcore.malhas"` (cruza `malha_ms` com valor medido por outro caminho). Com isso a referência passa 3 de 3, m1 e m3 reprovam, m2 segue reprovando no portão.
+2. **O cartão não basta ao implementador.** Falta a regra do lote 40, item 9 ("o relatório não pode culpar uma função pelas paradas do F7"); lote 40 fora de "Ler antes"; lotes 4 e 9 sem o caminho real (`docs/state/arquivo/lotes-1-a-28/`). Acrescentar uma linha nas Armadilhas, o lote 40 em "Ler antes" e os caminhos.
+3. **Texto velho.** Três lugares chamam o portão de "PROPOSTA DO OPUS, aguarda o PO" (critério 1 do cartão, descrição no topo do oráculo, mensagem do teste do portão); o PO aprovou em 2026-10-16. A mensagem de `malha_ms >= 100` manda "aumentar as aberturas", e o cartão proíbe ("voltar ao líder").
+
+## Verificações corretas
+Regra (b) bate com o oráculo (mediana do maior atraso de M5b na forma 1 < 0,5 × `malha_ms`); medir com o postador de mouse é mais severo que o controle. m2 (malha dentro do bloqueio) reprova no portão (204–241 ms contra ~110 ms). Relatório: títulos, SPDX e ≤150 linhas sem conclusão fixa: correto. Hoje: sem a chave 4 pulados; com a chave 1 falha e 3 erros. Referência mínima do revisor (~60 linhas): oráculo original 3 de 3, ~18 s cada; 1004 triângulos; `malha_ms` 214 a 251 ms; forma 1 maior atraso de M5b 1 a 27 ms contra portão ~107 a 125 ms; forma 2 200 a 222 ms com maior fatia `obimcore.malhas`; maior intervalo entre quadros 16 a 17 ms. PR do oráculo 133 linhas; implementação ~60 linhas + relatório (≤150) + 2 de `ci.yml`.
+
+## Recomendações
+a. "3 de 3" → "3 execuções seguidas do oráculo, cada uma com 3 rodadas". b. Conferir cada título do relatório como linha inteira. c. Trazer do T15b a conferência do agendamento do mouse (contagem e 20 ms a partir de t0). d. Windows não rodado: folga de `malha_ms` sobre o piso de 100 ms desconhecida; se cair abaixo, voltar ao líder. e. Cabeçalho do cartão diz ramo `s04-t15`; é `s04-t15d`.

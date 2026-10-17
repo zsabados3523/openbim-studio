@@ -276,7 +276,7 @@ def medir_pesada(f, guid, rodadas=3):
             mal = obimcore.malhas(f.ifc, [guid])
             ts.append((time.perf_counter() - t) * 1000)
     ms = sorted(ts)[1]
-    out = {"guid": guid, "malha_ms": ms, "triangulos": len(mal[guid]["indices"]) // 3, "formas": {"1": [], "2": []}}
+    out = {"guid": guid, "malha_ms": ms, "triangulos": len(mal[guid]["indices"]), "formas": {"1": [], "2": []}}
     n = 0
     for forma in (1, 2):
         for _ in range(rodadas):

@@ -58,8 +58,22 @@ s_licencas() { local l
 
 # Python do pacote em -I, como o atalho. PATH e PYTHONPATH o auxiliar monta como o lancador; o PATH sujo da maquina fica atras (vazamento aparece).
 # OBIM_DEV_PREFIXES (separados por |, formato Windows) = prefixos do ambiente de DESENVOLVIMENTO: o que for carregado dali reprova (ver auditar_dlls).
-DEVP=""; [ -n "${CONDA_PREFIX:-}" ] && DEVP="$(wp "$(up "$CONDA_PREFIX")")"
-[ -n "${OBIM_PYTEST_SITE:-}" ] && DEVP="$DEVP|$(wp "$(dirname "$(dirname "$(up "$OBIM_PYTEST_SITE")")")")"
+raiz_amb() {  # raiz_amb CAMINHO(unix): sobe ate achar conda-meta e imprime essa raiz em formato Windows
+  local d="$1"; while [ -n "$d" ] && [ "$d" != / ] && [ "$d" != . ]; do [ -d "$d/conda-meta" ] && { wp "$d"; return 0; }; d="$(dirname "$d")"; done; return 1
+}
+DEVP=""   # o CI roda sem CONDA_PREFIX: as raizes vem de CONDA, CONDA_EXE, python/conda do PATH e do OBIM_PYTEST_SITE (cada uma sobe ate a pasta com conda-meta)
+for c in "${CONDA_PREFIX:-}" "${CONDA:-}" "$(dirname "$(dirname "${CONDA_EXE:-.}")")" "$(command -v python 2>/dev/null)" "$(command -v conda 2>/dev/null)" "${OBIM_PYTEST_SITE:-}"; do
+  [ -n "$c" ] && [ "$c" != . ] || continue
+  r="$(raiz_amb "$(up "$c")")" && case "|$DEVP|" in *"|$r|"*) ;; *) DEVP="$DEVP|$r" ;; esac
+done
+DEVP="${DEVP#|}"
+s_prefixos() {
+  echo "prefixos do ambiente de DESENVOLVIMENTO (modulo carregado dali reprova): ${DEVP:-<vazio>}"
+  [ "$SIM" = 1 ] && return 0
+  [ -n "$DEVP" ] || falha "nenhum prefixo do ambiente de desenvolvimento achado (CONDA_PREFIX, CONDA, CONDA_EXE, python/conda no PATH, OBIM_PYTEST_SITE): a prova de vazamento ficaria desligada"
+  local p ps; IFS='|' read -ra ps <<< "$DEVP"
+  for p in "${ps[@]}"; do case "$p" in [A-Za-z]:|[A-Za-z]:\\) falha "prefixo so com a letra do disco: $p" ;; esac; done
+}
 no_pacote() {  # no_pacote INTERPRETADOR ARGS...
   local py="$1" rc; shift
   timeout 1500 env -u PYTHONHOME -u PYTHONSTARTUP -u PYTHONUSERBASE -u PYTHONSAFEPATH -u PYTHONPATH -u CONDA_PREFIX -u CONDA_DEFAULT_ENV -u VIRTUAL_ENV \
@@ -103,6 +117,7 @@ etapa modulo "app/obimcore com __init__.py e um modulo compilado; Python do paco
 etapa libbin "env/Library/bin existe" s_libbin
 etapa sem_pytest "sem pytest dentro do pacote" s_sem_pytest
 etapa licencas "nanobind (BSD-3-Clause) e tsl::robin_map (MIT) no pacote, texto igual ao do repositorio" s_licencas
+etapa prefixos "prefixos do ambiente de desenvolvimento achados (a prova de vazamento depende deles)" s_prefixos
 etapa freeze "multiprocessing.freeze_support() em app/openbim_app/main.py e em app/OpenBIM-Studio.pyw (arvore sintatica)" s_freeze
 if [ "$SIM" = 0 ]; then
   etapa vcrt "prova 7 (ADR-005): runtime do Visual C++ do pacote >= o do compilador do .pyd" s_vcrt modulo

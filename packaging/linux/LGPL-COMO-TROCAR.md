@@ -10,7 +10,7 @@ Dentro do pacote, na pasta `env/` (um ambiente conda completo):
 - Bibliotecas do programa (Qt, OCCT, IfcOpenShell e outras): `env/lib/*.so*` (ex.: `env/lib/libQt6Core.so.6`, `env/lib/libTKernel.so*`)
 - Módulos Python (PySide6, ifcopenshell): `env/lib/python3.12/site-packages/`
 - Plugins do Qt: `env/lib/qt6/plugins/`
-- O código do programa: `app/openbim_app/`
+- O código do programa: `app/openbim_app/` e o módulo em C++ `app/obimcore/` (compilado a partir do código-fonte do projeto)
 
 ## Passo a passo
 1. Abra um terminal na pasta do arquivo `.AppImage` e extraia: `./OpenBIM-Studio-x86_64.AppImage --appimage-extract` (cria a pasta `squashfs-root/`).

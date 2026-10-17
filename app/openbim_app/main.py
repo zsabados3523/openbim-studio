@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Ponto de entrada do aplicativo."""
+import multiprocessing
 import sys
 
 from . import registro
@@ -8,6 +9,7 @@ from .main_window import MainWindow
 
 
 def main(argv=None) -> int:
+    multiprocessing.freeze_support()  # primeira coisa: o processo filho (spawn) dos pacotes reimporta o programa e não pode abrir outra janela
     argv = sys.argv if argv is None else argv
     selftest = "--selftest" in argv
     registro.iniciar(dialogo=not selftest)

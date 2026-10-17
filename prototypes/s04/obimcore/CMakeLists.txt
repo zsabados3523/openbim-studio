@@ -72,4 +72,10 @@ if(WIN32)
 elseif(UNIX AND NOT APPLE)
   # As bibliotecas dos esquemas se registram ao carregar; sem isto o ligador as descarta.
   target_link_options(obimcore_nucleo INTERFACE -Wl,--no-as-needed)
+  # T17a: o MESMO binário roda no pacote (AppImage) e no ambiente de desenvolvimento. Só um caminho relativo ao próprio arquivo:
+  # no pacote, app/obimcore -> ../../env/lib (bibliotecas do pacote). Fora dele esse caminho não existe e o carregador cai no RPATH do
+  # executável do Python do conda ($ORIGIN/../lib = bibliotecas do ambiente ativo). RPATH, não RUNPATH: só o RPATH do executável vale de reserva.
+  # O compilador do conda ainda acrescenta o caminho absoluto do ambiente; o build.sh o tira depois da ligação.
+  set_target_properties(_obimcore PROPERTIES BUILD_WITH_INSTALL_RPATH ON INSTALL_RPATH "$ORIGIN/../../env/lib")
+  target_link_options(_obimcore PRIVATE -Wl,--disable-new-dtags)
 endif()

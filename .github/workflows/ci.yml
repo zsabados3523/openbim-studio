@@ -310,6 +310,40 @@ jobs:
           OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15d_parede_pesada.py
           OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15e_painel_ausente.py
           OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15g_postador.py
+      - name: Medições das threads, números do Windows (S04-T15h; informativo, não bloqueia)
+        shell: bash -elo pipefail {0}
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          # Só mede e guarda os números (relatório docs/state/reports/F0-S04-threads.md). Desenho por software (WARP): NÃO substitui o oficial com placa de vídeo real.
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          export OBIM_S04_TELA_VIRTUAL=1 QSG_RHI_BACKEND=d3d11 QSG_RHI_PREFER_SOFTWARE_RENDERER=1 QT_QPA_PLATFORM=windows RHI=d3d11 LC_ALL=C  # as do passo anterior e as do subprocesso dos testes
+          SAIDA="$(python -c 'import os; print(os.path.abspath("out/threads-ci"))')"
+          mkdir -p "$SAIDA"
+          COMPACTO='import json,sys; print(json.dumps(json.load(open(sys.argv[1], encoding="utf-8")), separators=(",", ":")))'
+          CAIRAM=""
+          medir() {  # medir ARQUIVO.json comando...: roda na pasta do fluxo A, imprime o JSON compacto no log e uma linha no resumo; se cair, segue para a próxima
+            local arq="$1"; shift
+            local t=$(date +%s) rc=0
+            echo "::group::medição $arq"
+            (cd prototypes/s04/fluxo_a && "$@") || rc=$?
+            echo "::endgroup::"
+            if [ $rc -eq 0 ] && [ -s "$SAIDA/$arq" ]; then
+              echo "JSON_COMPACTO $arq $(python -c "$COMPACTO" "$SAIDA/$arq")"
+              echo "- \`$arq\`: ok, $(wc -c < "$SAIDA/$arq" | tr -d ' ') bytes, $(( $(date +%s) - t )) s (WARP, ${RUNNER_OS})" >> "$GITHUB_STEP_SUMMARY"
+            else
+              CAIRAM="$CAIRAM $arq(código $rc)"
+              echo "- \`$arq\`: CAIU (código $rc) em $(( $(date +%s) - t )) s" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          }
+          echo "### Medições das threads no ${RUNNER_OS} (informativo; WARP, não é placa de vídeo real)" >> "$GITHUB_STEP_SUMMARY"
+          medir threads.json python lote.py "$SAIDA/threads.json" --base 300 --quantidade 1000 --rodadas 3
+          medir conferencias.json python conferencias.py "$SAIDA/conferencias.json" --base 300 --quantidade 1000 --rodadas 3
+          medir pesada.json python -c 'import sys, ifcopenshell, lote; lote.main_pesada([sys.argv[1], "--base", "300", "--aberturas", "150", "--rodadas", "3"])' "$SAIDA/pesada.json"
+          if [ -n "$CAIRAM" ]; then
+            echo "::error title=medições das threads::caíram:$CAIRAM (as outras seguiram; passo informativo, não bloqueia)"
+            exit 1
+          fi
       - name: Pacote do que o job gerou
         if: always()
         shell: bash

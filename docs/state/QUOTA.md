@@ -36,3 +36,4 @@ Regra de abertura do Opus em vigor: semanal acima de 25% restante e janela abaix
 |---|---|---|---|
 | 1 (10 a 14/10) | 1 dia com pausa por limite (14/10, janela em 90%); sem medida nos demais | Não calculável: faltam antes/depois de 13 e 14/10 | 0 (a fila Opus só tinha itens pausados pela D1) |
 - 2026-10-13 (fim da tarde): janela 67%, semanal 75% (25% restante, no limite). Opus pausado até a renovação; sem novos subagentes em paralelo (janela >60%).
+- 2026-10-16/17 (sessão longa do líder, sonnet + opus lotes 32 a 51): semanal 55% → 76%; janela de 5 h passou de 100% duas vezes (renovou 14:30Z e 00:30Z). Opus por lotes com autorização do PO acima de 70% da janela. Piso de 25% semanal restante atingido: sem novo lote Opus até a renovação semanal em 2026-10-21 09:00Z.

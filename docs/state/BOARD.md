@@ -1,6 +1,6 @@
 # Quadro da F0
 
-> Atualizado: 2026-10-15 (cartão F0-RG-17). Só o que está **aberto**. Visão da máquina; o PO lê `docs/PAINEL_DO_PROJETO.md`. Fonte: `v2/03_fase0_especificacao.md`. Status de uma palavra: PRONTA · EM_ANDAMENTO · PAUSADA · BLOQUEADA · AGUARDA_PO · AGUARDA_OPUS · ABERTA · NAO_INICIADA · CONTINUA. Fatias e cartões fechados, com a história de cada um (lotes, reprovações, PRs): `arquivo/BOARD-historico-2026-10-15.md` e `LOG.md`.
+> Atualizado: 2026-10-17. Só o que está **aberto**. Visão da máquina; o PO lê `docs/PAINEL_DO_PROJETO.md`. Fonte: `v2/03_fase0_especificacao.md`. Status de uma palavra: PRONTA · EM_ANDAMENTO · PAUSADA · BLOQUEADA · AGUARDA_PO · AGUARDA_OPUS · ABERTA · NAO_INICIADA · CONTINUA. Fatias e cartões fechados, com a história de cada um (lotes, reprovações, PRs): `arquivo/BOARD-historico-2026-10-15.md` e `LOG.md`.
 
 ## Fatias
 | Fatia | Nome | Tam. | Status | Nota |
@@ -8,7 +8,7 @@
 | F0-S01 | Repositório, licenças e pesquisa | P | FECHADA | Aceita pelo PO (2026-10-15). Abertos sem bloquear: termos do conda-forge, SINAPI (requisito da F5) |
 | F0-S02 | CI Windows+Linux e app esqueleto | G | FECHADA | Aceita pelo PO (2026-10-15). Resta o cartão F0-S02-T23 (antes do primeiro release) |
 | F0-S03 | Protótipo de viewport (Qt RHI) | M | FECHADA | Portão aprovado pelo PO. Restam T27 e T28 (abaixo). Relatório: `reports/F0-S03.md` |
-| F0-S04 | Ponte Python↔C++ (híbrido vs C++ puro) | G, crítica | PAUSADA | Pausa D1 (2026-10-14). Retomada = cartão F0-RG-02; decisão da arquitetura = ADR-004 (rascunho) e ADR-001 |
+| F0-S04 | Ponte Python↔C++ (híbrido vs C++ puro) | G, crítica | EM_ANDAMENTO | Retomada em 2026-10-16 (D1 encerrada). Falta T17, T18 e a decisão do PO (T19: ADR-001 e ADR-004); relatório das threads em `reports/F0-S04-threads.md` |
 | F0-S05 | Oplog, undo e merge | M | NAO_INICIADA | Depende da S04. Requisitos de gravação: `cards/F0-S05/F0-S05-T00-requisitos-gravacao.md` |
 | F0-S06 | Planta e corte (HLR) + vista no `.obim` | G, crítica | NAO_INICIADA | Contém T3 |
 | F0-S07 | Tipo paramétrico por script | P | NAO_INICIADA | Depende da S04 |
@@ -25,10 +25,8 @@
 | F0-S03-T27 | Teste da reabertura (P17) no CI | T1 | ABERTA | Sem bloquear; cartão em `cards/F0-S03/` |
 | F0-S03-T28 | Medir o viewport num Windows físico | T1 | NAO_INICIADA | Aprovada pelo PO; dono: PO; antes da entrega final |
 | F0-S04-T04b | Registro local de mensagens e fim do mutex | T3 | PAUSADA | D1 |
-| F0-S04-T14c | Fluxo B: executável com janela Qt Widgets | T3 | PAUSADA | D1; ramo pronto, 501 linhas |
-| F0-S04-T15 | Threads e bloqueio do interpretador | T3 | PAUSADA | D1; cartão é esqueleto, reescrever antes de abrir |
-| F0-S04-T15f | Instabilidade do caso lote (queda por corrupção de memória, janela sem quadros) | T3 | CARTAO_PRONTO | Achado no CI de 2026-10-16; diagnóstico antes de corrigir |
-| F0-S04-T17 | Módulo no AppImage e instalador | T2 | NAO_INICIADA | Esqueleto; depende da T15 |
+| F0-S04-T15f/g | Instabilidade do caso lote (queda por corrupção de memória) | T3 | FEITA | T15g mesclada (pedido 145); falta confirmar 3 rodadas verdes seguidas do Windows no CI |
+| F0-S04-T17 | Módulo no AppImage e instalador | T2 | NAO_INICIADA | Cartão esqueleto; revisão Opus obrigatória (aguarda cota semanal: renova em 21/10) |
 | F0-S04-T18 | Tempos de build e relatório da fatia | T1 | NAO_INICIADA | Esqueleto |
 | F0-S04-T19 | ADR-001 e ADR-004 com números | TA | NAO_INICIADA | Decisão do PO; esqueleto |
 | F0-S04-T20 | Memória final do viewport abaixo de 6,0 GB | T3 | PAUSADA | Cartão escrito; PO: nada por enquanto |
@@ -45,6 +43,6 @@ Revisão final da noite: `reports/F0-RG-25-revisao-final.md`. Cartões novos que
 
 ## Feito (resumo; detalhes no histórico)
 - S01: T01 a T12, R1 a R3. S02: T01 a T22, T24, T25 (PR 98), R1 a R3. S03: T01 a T08 (todas as partes), T25, T26 e emendas, R1 a R3. F0-PLANO-T01.
-- S04: T01 a T04c, T05, T06 a T06c, T07 a T08, T09, T10, T10c, T11 a T11c, T12 (PR 83), T13, T14, T14a/b, T16, T16b.
+- S04: T01 a T04c, T05, T06 a T06c, T07 a T08, T09, T10, T10c, T11 a T11c, T12 (PR 83), T13, T14, T14a/b/c/d, T15 (a a g, inclui o relatório das threads), T16, T16b.
 
 Os cartões não têm campo de status; este quadro é a fonte. Ao mudar o status de um cartão, mudar aqui e no `LOG.md`.

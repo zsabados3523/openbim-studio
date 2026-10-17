@@ -31,5 +31,10 @@
 - **Entrevista S09 (A13), aceita pelo PO em 2026-10-15,** com um ajuste: depois dos eixos vem a estrutura, e as paredes não precisam ficar presas a eixos; a ordem do fluxo é hábito, não obrigação. Wireframes podem começar quando o PO mandar as imagens.
 - **IFC real do PO (D4), 2026-10-15:** o PO quer usar um IFC real dele nos testes. Fica fora do repositório (`../openbim-studio-referencia/`); só abrir quando o PO listar o arquivo no chat.
 
+- **Regras de parada da T15 (2026-10-16):** (a) janela surda por mais de 1 s no lote de 1.000 paredes nas duas formas (medida no controle) e (b) parede com 150 aberturas parando a janela mais da metade do tempo do cálculo do desenho = parar e levar ao PO. Resultado da T15d: nenhuma disparou; a escolha entre as formas é apertada (relatório `reports/F0-S04-threads.md`).
+- **Atribuição nos commits e pedidos (2026-10-16):** manter `Co-Authored-By` do Claude nos commits; pedidos sem "Generated with Claude Code". Títulos de pedido: `F0-S04-T15c: o que faz`.
+- **Entrevista com o PO (grill-me) para toda feature nova ou dúvida de comportamento (2026-10-15/16),** não para correções internas.
+- **Rodada oficial na tela real do Linux (A1):** só com ok e horário do PO, depois da T15d (feita). Pendente.
+
 ## Histórico
 Todas as respostas e decisões anteriores do PO (2026-10-10 a 2026-10-15) estão em `arquivo/PO-historico.md`. Resposta nova: registrar aqui só se virar regra em vigor ou pergunta aberta; o resto vai para o histórico.

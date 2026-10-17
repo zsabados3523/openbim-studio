@@ -71,12 +71,14 @@ cp "$HERE/openbim-studio.svg" "$APPDIR/openbim-studio.svg"
 # 3. Licencas, como trocar, fontes
 # Textos verbatim guardados no repositorio (packaging/licenses-texts/); a montagem FALHA se faltar algum.
 cp "$REPO/LICENSES/AGPL-3.0-or-later.txt" "$APPDIR/licenses/"
-for f in LGPL-3.0 LGPL-2.1 GPL-3.0 OCCT-exception-1.0; do
+for f in LGPL-3.0 LGPL-2.1 GPL-3.0 OCCT-exception-1.0 nanobind-BSD-3-Clause; do
   [ -f "$REPO/packaging/licenses-texts/$f.txt" ] || { echo "falta packaging/licenses-texts/$f.txt" >&2; exit 1; }
   cp "$REPO/packaging/licenses-texts/$f.txt" "$APPDIR/licenses/"
 done
 CONDA_PREFIX="$ENV_DIR" python3 "$REPO/scripts/license_inventory.py" "$APPDIR/licenses/INVENTARIO.md" "--removidos=$OUT/removidos.txt" > "$OUT/inventario.log" || { sed -n '/## Não conda-forge/,$p' "$OUT/inventario.log"; echo "INVENTÁRIO DE LICENÇAS REPROVOU (ver acima)" >&2; exit 1; }
 printf '\n> Nota: os pacotes listados em REMOVIDOS.md aparecem acima mas foram **removidos na montagem**.\n' >> "$APPDIR/licenses/INVENTARIO.md"
+# nanobind (BSD-3-Clause) esta ligado ESTATICAMENTE ao modulo obimcore (T17a); nao e pacote do ambiente de runtime, entao o inventario nao o lista.
+printf '\n> Nota: o modulo `app/obimcore` (codigo do projeto) leva o **nanobind 3.1.0 (BSD-3-Clause)** ligado estaticamente; o aviso de copyright esta em `nanobind-BSD-3-Clause.txt` (esta pasta).\n' >> "$APPDIR/licenses/INVENTARIO.md"
 # arquivos de licenca que cada pacote conda traz (info/licenses do cache do conda)
 python3 "$REPO/scripts/collect_package_licenses.py" "$ENV_DIR" "$APPDIR/licenses/pacotes" | tee "$OUT/licencas-coletadas.txt"
 cp "$HERE/LGPL-COMO-TROCAR.md" "$APPDIR/"

@@ -16,9 +16,12 @@
 #   "OK SIMULADO"; recusado no Windows. REVISOR, no log do CI do Windows, conferir: as versoes impressas (ligador x runtime), o filho pythonw, os
 #   9 casos, e se o R1-e passa (os filhos nao herdam add_dll_directory; "DLL load failed" no filho do s04_aux r1e = levar ao lider, nao afrouxar o teste).
 # MUDANCA DO ORACULO (a ser julgada pelo Opus): a auditoria de DLLs carregadas reprovava QUALQUER modulo fora do pacote e do Windows, mas o antivirus do
-#   runner (Windows Defender, provedor AMSI MpOav.dll) e injetado no processo. A regra agora preserva o proposito sem lista de excecoes por nome: reprova se o
-#   modulo de fora (a) esta sob o prefixo do ambiente de desenvolvimento, (b) tem o mesmo nome de DLL/PYD que o pacote tem, ou (c) e um nucleo (Qt6, TK*,
-#   ifcopenshell, ifcgeom, pyside, shiboken, obimcore, python3, runtime do VC); o resto vira linha "AVISO: modulo de terceiros fora do pacote" e nao reprova.
+#   runner (Windows Defender, provedor AMSI MpOav.dll) e injetado no processo. A regra vigente (classificar() no auxiliar) preserva o proposito, sem lista
+#   de excecoes por nome. Modulo de fora do pacote e do Windows REPROVA se: esta sob o prefixo do ambiente de desenvolvimento (OBIM_DEV_PREFIXES, montado
+#   aqui e impresso no log; vazio reprova); esta numa pasta do PATH herdado (entrou por busca de nome); tem o mesmo nome de DLL/PYD do pacote; e importado
+#   por algum PE do pacote (tabela de imports); e um nucleo (Qt6, TK*, ifcopenshell, ifcgeom, pyside, shiboken, obimcore, python3, runtime do VC);
+#   ou tem nome curto 8.3 que nao se resolveu. Modulo do Windows reprova se for nucleo. Qualquer outro (terceiros, como o antivirus) vira a linha
+#   "AVISO: modulo de terceiros fora do pacote" e nao reprova.
 # Todas as etapas rodam mesmo se uma falhar; o fim lista as que reprovaram e as "NAO EXECUTADA por causa de X" (codigo 1).
 set -u
 export MSYS2_ARG_CONV_EXCL="*"   # o bash do Git for Windows nao pode reescrever os argumentos

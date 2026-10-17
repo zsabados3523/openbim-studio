@@ -21,6 +21,8 @@ Para quem vai mexer no código. O PO não precisa fazer isto: o líder técnico 
 - Windows: o ambiente é montado pelo CI (ver seção CI) e na VM do PO. A trava do Windows é `environment.win-64.lock`.
 - Para compilar contra o IfcOpenShell (sonda 3b e o módulo `obimcore`), o ambiente traz `zlib`, `libxml2-devel` e `libboost-devel` (versões em `environment.yml`; o `ifcopenshell` tem o build travado nas travas, porque trocar o build é trocar de ABI). Nenhum script instala pacote na hora: `prototypes/cpp_probe_3b/run.sh` só confere se os arquivos existem e para com erro se faltar algum.
 
+- O módulo `obimcore` (Linux) sai com um único RPATH, relativo ao pacote (`$ORIGIN/../../env/lib`); o `build.sh` tira o caminho absoluto que o compilador do conda acrescenta. No ambiente de desenvolvimento esse caminho não existe e o carregador cai no RPATH do próprio Python do conda (`$ORIGIN/../lib`). Por isso o módulo só deve ser carregado pelo Python do ambiente `openbim`; com o Python do sistema ele acharia as bibliotecas do sistema.
+
 ## Travas do ambiente (T01 da S04)
 - Cada sistema gera a própria trava no CI (`conda list --explicit --md5`, sem ferramenta nova) no passo "Trava do ambiente" e a anexa ao artefato `openbim-ci-linux` / `openbim-ci-windows` (`out/environment.<sistema>.lock`). O passo é só informativo: diz se a trava gerada é igual à do repositório.
 - O líder baixa o artefato e guarda `environment.linux-64.lock` e `environment.win-64.lock` na raiz. Enquanto o arquivo de um sistema não existir, o CI cria o ambiente pelo `environment.yml`; quando existir, cria pela trava (`conda create --file`), e a mudança em `environment.yml` ou na trava invalida o cache de pacotes.

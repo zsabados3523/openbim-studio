@@ -766,7 +766,7 @@ jobs:
           test "$size" -le 600000000 || { echo "::error::AppImage acima de 600 MB"; exit 1; }
           echo "::notice title=AppImage::$((size/1000000)) MB, testes de licença e troca de biblioteca OK"
           echo "AppImage (T17a, com obimcore): $size bytes; o módulo soma $(cat "$RUNNER_TEMP"/obimcore_pacote/* | wc -c) bytes sem compressão. Para comparar com o tamanho de antes (sem o módulo), ver o resumo da última execução no main." >> "$GITHUB_STEP_SUMMARY"
-      - name: R1-j, o módulo dentro do AppImage (T17a; não bloqueia o merge, como o resto do job)
+      - name: R1-j, o módulo dentro do AppImage (T17a; bloqueia o merge porque o job appimage é obrigatório na regra proteger-main)
         run: |
           set +e
           IMG="$RUNNER_TEMP/ai/OpenBIM-Studio-x86_64.AppImage"

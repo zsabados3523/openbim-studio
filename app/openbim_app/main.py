@@ -9,7 +9,9 @@ from .main_window import MainWindow
 
 
 def main(argv=None) -> int:
-    multiprocessing.freeze_support()  # primeira coisa: o processo filho (spawn) dos pacotes reimporta o programa e não pode abrir outra janela
+    # Exigido pelo cartão F0-S04-T17 (lote 7): protege a abertura em pacote congelado (Windows). No Linux e no Python comum não faz nada.
+    # Quem evita a segunda janela no filho spawn é a regra do multiprocessing de não reexecutar módulos `*.__main__`.
+    multiprocessing.freeze_support()
     argv = sys.argv if argv is None else argv
     selftest = "--selftest" in argv
     registro.iniciar(dialogo=not selftest)

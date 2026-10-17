@@ -15,6 +15,7 @@ if [ -z "${QT_QPA_PLATFORMTHEME:-}" ] && [ -z "${OPENBIM_SEM_PORTAL:-}" ] && [ -
 fi
 # Modo isolado do Python (-I = -E -s, o mesmo do atalho do Windows): ignora PYTHONPATH, PYTHONHOME e o site do usuario,
 # entao uma instalacao de Python ou um PYTHONPATH do usuario nao misturam bibliotecas com as do pacote (F0-RG-13).
-# freeze_support() antes do run_module: ponto de entrada de pacote que pode criar processos filhos (spawn) (cartao F0-S04-T17).
+# freeze_support() antes do run_module: exigido pelo cartao F0-S04-T17 (pacote congelado/Windows); no Linux nao faz nada.
+# A segunda janela no filho spawn e evitada pela regra do multiprocessing de nao reexecutar modulos `*.__main__` (este comando roda openbim_app.__main__).
 # O Python acha o proprio ambiente pelo caminho do executavel; app/ entra no caminho aqui.
 exec "$HERE/env/bin/python" -I -c 'import multiprocessing, runpy, sys; multiprocessing.freeze_support(); sys.path.insert(0, sys.argv.pop(1)); runpy.run_module("openbim_app", run_name="__main__", alter_sys=True)' "$HERE/app" "$@"

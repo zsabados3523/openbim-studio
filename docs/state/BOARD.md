@@ -26,7 +26,7 @@
 | F0-S03-T28 | Medir o viewport num Windows físico | T1 | NAO_INICIADA | Aprovada pelo PO; dono: PO; antes da entrega final |
 | F0-S04-T04b | Registro local de mensagens e fim do mutex | T3 | PAUSADA | D1 |
 | F0-S04-T15f/g | Instabilidade do caso lote (queda por corrupção de memória) | T3 | FEITA | T15g mesclada (pedido 145); falta confirmar 3 rodadas verdes seguidas do Windows no CI |
-| F0-S04-T17 | Módulo no AppImage e instalador | T2 | NAO_INICIADA | Cartão esqueleto; revisão Opus obrigatória (aguarda cota semanal: renova em 21/10) |
+| F0-S04-T17 | Módulo no AppImage e instalador | T2 | NAO_INICIADA | Cartão reescrito em 2026-10-17; divide em T17a (Linux) e T17b (Windows); próximo: oráculo do T17a; revisão Opus obrigatória |
 | F0-S04-T18 | Tempos de build e relatório da fatia | T1 | NAO_INICIADA | Esqueleto |
 | F0-S04-T19 | ADR-001 e ADR-004 com números | TA | NAO_INICIADA | Decisão do PO; esqueleto |
 | F0-S04-T20 | Memória final do viewport abaixo de 6,0 GB | T3 | PAUSADA | Cartão escrito; PO: nada por enquanto |

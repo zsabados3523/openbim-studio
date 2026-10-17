@@ -66,8 +66,8 @@ no_pacote() {  # no_pacote INTERPRETADOR ARGS...
 }
 prova() {  # prova DESCRICAO INTERPRETADOR ARGS...
   local desc="$1" out; shift
-  out="$(no_pacote "$@")" && { echo "$out" | tail -n 4; return 0; }
-  echo "$out" | tail -n 60; falha "$desc"
+  out="$(no_pacote "$@")" && { echo "$out" | tail -n 15; return 0; }
+  echo "$out" | tail -n 250; falha "$desc"
 }
 
 passo "multiprocessing.freeze_support() em app/openbim_app/main.py e no lancador app/OpenBIM-Studio.pyw (arvore sintatica)"

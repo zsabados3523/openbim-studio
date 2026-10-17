@@ -13,7 +13,9 @@ import multiprocessing
 import os
 import re
 import struct
+import subprocess
 import sys
+import traceback
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "linux"))  # no fim: o pacote vence
 from ponte_no_pacote import GRUPOS, Contador, freeze_em_main  # noqa: E402  (mesma regra de main.py e mesma contagem de casos do Linux)
@@ -159,6 +161,41 @@ def auditar_dlls(raiz, exigir):
               if not any(re.search(rx, os.path.basename(c), re.I) and dentro(c, raiz) for c in mods)]
     return erros
 
+def usar_nucleos():  # o processo USA geometria (OCCT) e o módulo C++ antes de listar: no Windows o TKernel só carrega quando a geometria roda
+    import ifcopenshell.api
+    import ifcopenshell.geom
+    import obimcore
+    api = ifcopenshell.api.run
+    f = api("project.create_file", version="IFC4")
+    api("root.create_entity", f, ifc_class="IfcProject")
+    api("unit.assign_unit", f)
+    corpo = api("context.add_context", f, context_type="Model", context_identifier="Body", target_view="MODEL_VIEW", parent=api("context.add_context", f, context_type="Model"))
+    w = api("root.create_entity", f, ifc_class="IfcWall", name="W")
+    api("geometry.assign_representation", f, product=w, representation=api("geometry.add_wall_representation", f, context=corpo, length=3.0, height=2.5, thickness=0.2))
+    cfg = ifcopenshell.geom.settings()
+    cfg.set("use-world-coords", True)
+    forma = ifcopenshell.geom.create_shape(cfg, w, geometry_library="hybrid-cgal-simple-opencascade").geometry
+    m = obimcore.malhas(f, [w.GlobalId])
+    return [] if len(forma.verts) > 0 and len(m) == 1 else [f"a geometria mínima não deu resultado (vértices {len(forma.verts)}, malhas {len(m)})"]
+
+
+def nucleos_do_modulo(raiz):  # o que o R1-e conta: obimcore.bibliotecas_carregadas() tem uma cópia de cada núcleo e ela é do pacote
+    import obimcore
+    lib, erros = obimcore.bibliotecas_carregadas(), []
+    dizer("   obimcore.bibliotecas_carregadas():", *map(str, lib))
+    for nome, rx in (("TKernel", "tkernel"), ("Qt6Core", "qt6core")):
+        achadas = sorted({norm(c) for c in lib if rx in os.path.basename(c).lower()})
+        erros += [f"{nome}: {len(achadas)} cópia(s) em bibliotecas_carregadas() (esperava 1): {achadas}"] * (len(achadas) != 1)
+    erros += [f"bibliotecas_carregadas() lista um módulo de fora do pacote: {c}" for c in lib if not dentro(c, raiz)]
+    return erros
+
+
+def diagnostico(raiz):  # na falha: tudo o que o processo carregou, para não gastar outra rodada do CI
+    mods, windir = modulos_carregados()
+    dizer("--- módulos sob env\\ do pacote ---", *[f"\n   {c}" for c in sorted(mods) if dentro(c, raiz)])
+    dizer("--- módulos de FORA do pacote ---", *[f"\n   {c}" + ("  (Windows)" if dentro(c, windir) else "  (OUTRO)") for c in sorted(mods) if not dentro(c, raiz)])
+
+
 def cmd_dlls(raiz):
     preparar(raiz)
     import ifcopenshell  # noqa: F401  (ifcopenshell antes do obimcore, como o __init__ dele)
@@ -166,8 +203,15 @@ def cmd_dlls(raiz):
     import PySide6.QtCore  # noqa: F401
     import obimcore  # noqa: F401
     lig, erros = ligador_do_pyd(raiz)
+    try:
+        erros += usar_nucleos() + nucleos_do_modulo(raiz)
+    except Exception:  # noqa: BLE001 - qualquer falha ao USAR os núcleos vira diagnóstico, nunca passa calada
+        erros.append("falhou ao usar a geometria/o módulo C++ dentro do pacote:\n" + traceback.format_exc())
     carregadas = [c for c in modulos_carregados()[0] if RT.fullmatch(os.path.basename(c))]  # prova 7, parte 2: vale o que o processo usa de fato
-    return erros + modulos_do_pacote(raiz) + auditar_dlls(raiz, EXIGIDAS) + (runtime_vs_ligador(carregadas, lig, "carregada") if lig else [])
+    erros += modulos_do_pacote(raiz) + auditar_dlls(raiz, EXIGIDAS_FIM) + (runtime_vs_ligador(carregadas, lig, "carregada") if lig else [])
+    if erros:
+        diagnostico(raiz)
+    return erros
 
 def freeze_no_pyw(texto):
     """True se `import multiprocessing` (nível do módulo) e freeze_support() vêm antes de o lançador abrir o app: antes de chamar iniciar(), ou no começo de iniciar()."""
@@ -197,9 +241,12 @@ def cmd_freeze(raiz):
     return erros
 
 def dobro(x, fila):  # alvo do filho; o spawn reimporta este arquivo (por isso o guarda `__main__` no fim). No Windows, obimcore ANTES do ifcopenshell:
-    import obimcore  # o __init__ dele mostra ao carregador onde estão as DLLs do env\; um filho não herda add_dll_directory do pai
-    import ifcopenshell  # noqa: F401
-    fila.put({"valor": 2 * x, "isolado": sys.flags.isolated, "exe": sys.executable, "modulo": obimcore.__file__})
+    try:  # pythonw não tem saída de erro: o erro do filho volta pela fila
+        import obimcore  # o __init__ dele mostra ao carregador onde estão as DLLs do env\; um filho não herda add_dll_directory do pai
+        import ifcopenshell  # noqa: F401
+        fila.put({"valor": 2 * x, "isolado": sys.flags.isolated, "exe": sys.executable, "modulo": obimcore.__file__})
+    except BaseException:  # noqa: BLE001
+        fila.put({"erro": traceback.format_exc(), "exe": sys.executable, "isolado": sys.flags.isolated})
 
 def cmd_spawn(raiz, saida):
     global SAIDA
@@ -216,6 +263,8 @@ def cmd_spawn(raiz, saida):
     if filho.exitcode != 0:
         return [f"o filho spawn caiu com código {filho.exitcode}"]
     r = fila.get(timeout=10)
+    if "erro" in r:
+        return [f"o filho spawn não importou o obimcore (exe={r['exe']}, isolado={r['isolado']}, PATH começa por {os.environ['PATH'][:300]}):\n{r['erro']}"]
     dizer(f"filho spawn: valor={r['valor']} isolado={r['isolado']} exe={r['exe']} obimcore={r['modulo']}")
     return ([f"o filho devolveu {r['valor']}, não 42"] * (r["valor"] != 42) + ["o filho não está em modo isolado (-I)"] * (r["isolado"] != 1) +
             [f"o filho não é o Python do pacote: {r['exe']}"] * (not dentro(r["exe"], raiz)) +
@@ -230,6 +279,16 @@ class PytestDeFora:  # no FIM do meta_path: só o que o pacote não tem e só os
         if caminho is None and nome in PYTEST_MODULOS:
             return importlib.machinery.PathFinder.find_spec(nome, [self.site])
 
+def filhos_sem_i(raiz):  # como o R1-e: o mesmo python, SEM -I, só com PATH e PYTHONPATH herdados, nas três ordens de importação
+    erros = []
+    for ordem in ("PySide6.QtCore,ifcopenshell,obimcore", "ifcopenshell,obimcore,PySide6.QtCore", "ifcopenshell,PySide6.QtCore,obimcore"):
+        p = subprocess.run([sys.executable, "-c", "import importlib,sys\nfor n in sys.argv[1].split(','): importlib.import_module(n)\nprint('ok')", ordem],
+                           capture_output=True, text=True, errors="replace", timeout=300)
+        dizer(f"   filho sem -I ({ordem}): código {p.returncode} {p.stdout.strip()[-60:]}")
+        erros += [f"filho sem -I ({ordem}) falhou, código {p.returncode}:\n{p.stderr[-1500:]}"] * (p.returncode != 0)
+    return erros
+
+
 def cmd_pytest(raiz, testes, site, pasta):
     preparar(raiz)
     os.environ.update(PYTEST_DISABLE_PLUGIN_AUTOLOAD="1", OBIM_S04_OBRIGATORIO="1")
@@ -237,17 +296,20 @@ def cmd_pytest(raiz, testes, site, pasta):
     sys.meta_path.append(PytestDeFora(site))
     import pytest
     open(os.path.join(pasta, "pytest.ini"), "w").close()
-    c = Contador()
+    c, erros = Contador(), filhos_sem_i(raiz)  # primeiro o diagnóstico dos filhos do R1-e (rodam sem -I): o erro de DLL aparece inteiro aqui
     rc = pytest.main(["-q", "-rsfE", "--noconftest", "-p", "no:cacheprovider", "-c", os.path.join(pasta, "pytest.ini"),
                       "--rootdir", testes, "--basetemp", os.path.join(pasta, "pytest_tmp"), "-k", "test_r1a_ or test_r1d_ or test_r1e_ or test_r1i_",
                       os.path.join(testes, "test_s04_ponte.py")], plugins=[c])
-    erros = [f"pytest terminou com código {rc}"] * (rc != 0)
+    erros += [f"pytest terminou com código {rc}"] * (rc != 0)
     for prefixo, minimo in GRUPOS.items():
         casos = {n: f for n, f in c.res.items() if n.split("::")[-1].startswith(prefixo)}
         ruins = [n for n, f in casos.items() if [f.get(k) for k in ("setup", "call", "teardown")] != ["passed"] * 3]
         erros += [f"{prefixo}*: só {len(casos)} caso(s) rodaram, esperava {minimo} ou mais (não rodou)"] * (len(casos) < minimo)
         erros += [f"não passou (pulado, reprovado ou com erro): {n} {c.res[n]}" for n in ruins]
-    return erros + modulos_do_pacote(raiz) + ([] if SIM else auditar_dlls(raiz, EXIGIDAS_FIM))  # de novo no fim: agora a geometria já rodou
+    erros += modulos_do_pacote(raiz) + ([] if SIM else auditar_dlls(raiz, EXIGIDAS_FIM))  # de novo no fim: agora a geometria já rodou
+    if erros and not SIM:
+        diagnostico(raiz)
+    return erros
 
 def pe_falso(ligador=(14, 44), versao=None):  # PE mínimo fabricado: MZ, PE\0\0, cabeçalho opcional com a versão do ligador e (opcional) um VS_FIXEDFILEINFO
     b = bytearray(b"MZ" + b"\0" * 0x3A + struct.pack("<I", 0x40) + b"PE\0\0" + b"\0" * 20 + b"\x0b\x02" + bytes(ligador) + b"\0" * 200)

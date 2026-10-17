@@ -122,6 +122,26 @@ jobs:
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_CI=1  # liga todas as chaves de obrigatório (pulo vira falha; tests/conftest.py) (T04c entregou versao()["registro_ifc4"])
           QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_ponte.py
+      - name: Entregar o módulo obimcore e o pytest ao job appimage (T17a; usa a ação de cache que já está fixada)
+        shell: bash -elo pipefail {0}
+        run: |
+          # O pytest é só Python puro: vai ao passo de teste do pacote, nunca para dentro dele. Cópia, para não depender do ambiente deste job.
+          site="$(python -c 'import _pytest, os; print(os.path.dirname(os.path.dirname(_pytest.__file__)))')"
+          mkdir -p "$RUNNER_TEMP/pytest_site" "$RUNNER_TEMP/obimcore_pacote"
+          for n in pytest _pytest pluggy iniconfig pygments py.py; do [ -e "$site/$n" ] && cp -a "$site/$n" "$RUNNER_TEMP/pytest_site/"; done
+          # Só os dois arquivos do módulo, como estão AGORA (o cache grava no fim do job, depois dos passos que vêm a seguir), e com o RPATH conferido.
+          cp out/s04/obimcore/__init__.py out/s04/obimcore/_obimcore*.so "$RUNNER_TEMP/obimcore_pacote/"
+          rp="$(LC_ALL=C readelf -d "$RUNNER_TEMP"/obimcore_pacote/_obimcore*.so | sed -n 's/.*\(RPATH\|RUNPATH\)[^[]*\[\(.*\)\]/\2/p')"
+          [ "$rp" = '$ORIGIN/../../env/lib' ] || { echo "::error title=RPATH do obimcore::esperava só \$ORIGIN/../../env/lib e achei '$rp'"; exit 1; }
+          ls "$RUNNER_TEMP/obimcore_pacote" "$RUNNER_TEMP/pytest_site"
+      - name: Guardar obimcore e pytest para o job appimage (a gravação acontece no fim do job, se tudo passar)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ runner.temp }}/obimcore_pacote
+            ${{ runner.temp }}/pytest_site
+          key: obimcore-${{ github.run_id }}
+          lookup-only: true
       - name: Viewport C++ (S04-T06/T07; bloqueia o merge)
         shell: bash -elo pipefail {0}
         timeout-minutes: 30
@@ -668,6 +688,7 @@ jobs:
   # Gera o AppImage (pacote Linux) a cada alteração. Não bloqueia o merge; o nome do job não é usado na regra.
   appimage:
     runs-on: ubuntu-latest
+    needs: linux  # T17a: o módulo obimcore é compilado no job linux e entra no pacote pronto (o pacote não tem compilador)
     timeout-minutes: 45
     steps:
       - name: Início (relógio)
@@ -702,6 +723,14 @@ jobs:
           conda list -n openbim-runtime --explicit --md5 > "out/runtime-environment.${PLAT}.lock"
           if [ -f "$LOCK" ] && diff <(grep -v '^#' "$LOCK" | tr -d '\r') <(grep -v '^#' "out/runtime-environment.${PLAT}.lock" | tr -d '\r') >/dev/null; then echo "::notice title=trava do runtime ${PLAT}::igual à do repositório"
           else echo "::notice title=trava do runtime ${PLAT}::ausente ou DIFERENTE da do repositório (atualizar com o conteúdo abaixo)"; echo "=====INICIO-TRAVA-RUNTIME-${PLAT}====="; tr -d '\r' < "out/runtime-environment.${PLAT}.lock"; echo "=====FIM-TRAVA-RUNTIME-${PLAT}====="; fi
+      - name: Módulo obimcore e pytest vindos do job linux (T17a; falha se não vierem)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ runner.temp }}/obimcore_pacote
+            ${{ runner.temp }}/pytest_site
+          key: obimcore-${{ github.run_id }}
+          fail-on-cache-miss: true
       - name: Ferramenta appimagetool (versão fixa 1.9.1, sha256 conferido)
         run: |
           curl -fsSL -o appimagetool.AppImage https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
@@ -711,7 +740,7 @@ jobs:
         shell: bash -elo pipefail {0}
         run: |
           set +e
-          RUNTIME_ENV="$CONDA_PREFIX" bash packaging/linux/build_appimage.sh "$RUNNER_TEMP/ai" "$PWD/appimagetool.AppImage" > ai.log 2>&1
+          OBIMCORE_DIR="$RUNNER_TEMP/obimcore_pacote" RUNTIME_ENV="$CONDA_PREFIX" bash packaging/linux/build_appimage.sh "$RUNNER_TEMP/ai" "$PWD/appimagetool.AppImage" > ai.log 2>&1
           rc=$?
           tail -n 20 ai.log
           if [ $rc -ne 0 ]; then
@@ -736,6 +765,20 @@ jobs:
           size=$(stat -c %s "$IMG"); echo "AppImage: $((size/1000000)) MB"
           test "$size" -le 600000000 || { echo "::error::AppImage acima de 600 MB"; exit 1; }
           echo "::notice title=AppImage::$((size/1000000)) MB, testes de licença e troca de biblioteca OK"
+          echo "AppImage (T17a, com obimcore): $size bytes; o módulo soma $(cat "$RUNNER_TEMP"/obimcore_pacote/* | wc -c) bytes sem compressão. Para comparar com o tamanho de antes (sem o módulo), ver o resumo da última execução no main." >> "$GITHUB_STEP_SUMMARY"
+      - name: R1-j, o módulo dentro do AppImage (T17a; não bloqueia o merge, como o resto do job)
+        run: |
+          set +e
+          IMG="$RUNNER_TEMP/ai/OpenBIM-Studio-x86_64.AppImage"
+          OBIM_PYTEST_SITE="$RUNNER_TEMP/pytest_site" QT_QPA_PLATFORM=offscreen timeout 1500 bash packaging/linux/test_appimage_ponte.sh "$IMG" > ponte-ai.log 2>&1
+          rc=$?
+          cat ponte-ai.log
+          if [ $rc -ne 0 ]; then
+            msg=$(tail -n 45 ponte-ai.log | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=R1-j no AppImage falhou::$msg"
+            exit $rc
+          fi
+          echo "::notice title=R1-j::obimcore dentro do AppImage, R1-a, R1-d, R1-e e R1-i verdes"
       - name: Empacotar (tar.gz mantém a permissão de executar)
         run: |
           mkdir -p out
@@ -747,4 +790,6 @@ jobs:
           retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
       - name: Tempo total
         if: always()
-        run: echo "::notice title=tempo do job appimage::$(( $(date +%s) - T0 )) s"
+        run: |
+          echo "::notice title=tempo do job appimage::$(( $(date +%s) - T0 )) s"
+          echo "Tempo do job appimage: $(( $(date +%s) - T0 )) s (inclui montar, testar e o R1-j; não inclui a espera pelo job linux)" >> "$GITHUB_STEP_SUMMARY"

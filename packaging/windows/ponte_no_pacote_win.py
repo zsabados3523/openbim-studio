@@ -25,7 +25,7 @@ SAIDA = None
 PYTEST_MODULOS = {"pytest", "_pytest", "pluggy", "iniconfig", "pygments", "packaging", "colorama", "py"}  # só estes vêm de fora (passo de teste)
 PERMITIDOS = PYTEST_MODULOS | {"test_s04_ponte", "s04_aux", "gerar_modelo_grande", "ponte_no_pacote", "__main__", "__mp_main__"}
 # Estes NUNCA podem vir do Windows: têm de ser os do pacote (um Qt, OCCT ou runtime do sistema passaria despercebido).
-NUCLEO = re.compile(r"^(qt6|pyside6|shiboken|tk[a-z0-9]+\.dll|.*ifcopenshell|_obimcore|python3|vcruntime140|msvcp140|boost_|libopenblas)", re.I)
+NUCLEO = re.compile(r"^(qt6|pyside|shiboken|tk[a-z0-9]+\.dll|.*ifcopenshell|.*ifcgeom|.*obimcore|python3|vcruntime140|msvcp140|boost_|libopenblas)", re.I)
 EXIGIDAS = {"ifcopenshell": r"_ifcopenshell_wrapper", "Qt6Core": r"^Qt6Core\.dll", "PySide6 QtCore": r"^QtCore\.(pyd|abi3\.pyd|cp\d+)",
             "obimcore": r"^_obimcore", "TKernel": r"^TKernel\.dll", "vcruntime140": r"^vcruntime140\.dll", "python": r"^python3\d*\.dll"}
 EXIGIDAS_FIM = {**EXIGIDAS, "OCCT da geometria": r"^TK(BRep|Geom|Prim|Mesh|BO)"}  # só carregam quando a geometria roda
@@ -150,16 +150,35 @@ def modulos_carregados():  # ([caminhos dos módulos do processo], pasta do Wind
     k.GetWindowsDirectoryW(win, 1024)
     return [buf.value for m in lista[:preciso.value // ctypes.sizeof(ptr)] if m and k.K32GetModuleFileNameExW(h, m, buf, 32768)], win.value
 
+def nomes_do_pacote(raiz):  # nomes (minúsculos) de toda DLL/PYD que o pacote tem
+    return {n.lower() for _, _, ns in os.walk(raiz) for n in ns if n.lower().endswith((".dll", ".pyd"))}
+
+
 def auditar_dlls(raiz, exigir):
+    """Módulo carregado de fora do pacote: do Windows só se não for núcleo. Fora do pacote E do Windows (ex.: MpOav.dll, provedor AMSI do Defender,
+    injetado no processo pelo antivírus do runner) REPROVA se (a) está sob o prefixo do ambiente de desenvolvimento (OBIM_DEV_PREFIXES, separados por |),
+    (b) tem o mesmo nome de uma DLL/PYD do pacote ou (c) é um núcleo (NUCLEO); qualquer outro vira AVISO e não reprova (o propósito é: nenhuma 2ª cópia
+    de núcleo e nenhum vazamento do ambiente de desenvolvimento, sem lista de exceções por nome)."""
     mods, windir = modulos_carregados()
-    erros = []
+    devs, nomes, erros = [p for p in os.environ.get("OBIM_DEV_PREFIXES", "").split("|") if p], nomes_do_pacote(raiz), []
     for c in mods:
-        if dentro(c, raiz) or (dentro(c, windir) and not NUCLEO.search(os.path.basename(c))):
+        base = os.path.basename(c)
+        if dentro(c, raiz):
             continue
-        erros.append(("do Windows, devia ser a do pacote: " if dentro(c, windir) else "carregada de FORA do pacote e do Windows: ") + c)
+        if dentro(c, windir):
+            erros += ["do Windows, devia ser a do pacote: " + c] * bool(NUCLEO.search(base))
+        elif any(dentro(c, p) for p in devs):
+            erros.append("carregada do ambiente de DESENVOLVIMENTO (vazamento): " + c)
+        elif base.lower() in nomes:
+            erros.append(f"carregada de fora do pacote, mas o pacote tem uma {base} (2ª cópia): {c}")
+        elif NUCLEO.search(base):
+            erros.append("núcleo carregado de FORA do pacote e do Windows: " + c)
+        else:
+            dizer("AVISO: módulo de terceiros fora do pacote (não reprova):", c)
     erros += [f"nenhum módulo '{nome}' do pacote aparece carregado (a prova não viu o que devia ver)" for nome, rx in exigir.items()
               if not any(re.search(rx, os.path.basename(c), re.I) and dentro(c, raiz) for c in mods)]
     return erros
+
 
 def usar_nucleos():  # o processo USA geometria (OCCT) e o módulo C++ antes de listar: no Windows o TKernel só carrega quando a geometria roda
     import ifcopenshell.api

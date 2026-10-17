@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Os nomes dos jobs linux e windows são usados na regra de bloqueio de merge. Não renomear.
+  # Os nomes dos jobs linux, windows, appimage e instalador-windows são usados na regra de bloqueio de merge (proteger-main). Não renomear.
   # (macos não bloqueia.)
   linux:
     runs-on: ubuntu-latest
@@ -685,7 +685,7 @@ jobs:
           echo "::warning title=macOS::job macOS falhou; melhor esforço, não bloqueia merge. Registrar o motivo em docs/state/LOG.md."
           echo "AVISO: o job macOS falhou (não bloqueia merge)." >> "$GITHUB_STEP_SUMMARY"
 
-  # Gera o AppImage (pacote Linux) a cada alteração. Não bloqueia o merge; o nome do job não é usado na regra.
+  # Gera o AppImage (pacote Linux) a cada alteração. Bloqueia o merge: o job `appimage` é obrigatório na regra proteger-main. Não renomear.
   appimage:
     runs-on: ubuntu-latest
     needs: linux  # T17a: o módulo obimcore é compilado no job linux e entra no pacote pronto (o pacote não tem compilador)

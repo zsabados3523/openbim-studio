@@ -8,7 +8,7 @@
 | F0-S01 | Repositório, licenças e pesquisa | P | FECHADA | Aceita pelo PO (2026-10-15). Abertos sem bloquear: termos do conda-forge, SINAPI (requisito da F5) |
 | F0-S02 | CI Windows+Linux e app esqueleto | G | FECHADA | Aceita pelo PO (2026-10-15). Resta o cartão F0-S02-T23 (antes do primeiro release) |
 | F0-S03 | Protótipo de viewport (Qt RHI) | M | FECHADA | Portão aprovado pelo PO. Restam T27 e T28 (abaixo). Relatório: `reports/F0-S03.md` |
-| F0-S04 | Ponte Python↔C++ (híbrido vs C++ puro) | G, crítica | EM_ANDAMENTO | Retomada em 2026-10-16 (D1 encerrada). Falta T17, T18 e a decisão do PO (T19: ADR-001 e ADR-004); relatório das threads em `reports/F0-S04-threads.md` |
+| F0-S04 | Ponte Python↔C++ (híbrido vs C++ puro) | G, crítica | EM_ANDAMENTO | Retomada em 2026-10-16 (D1 encerrada). T17a feita; falta T17b (Windows), T18 e a decisão do PO (T19: ADR-001 e ADR-004); relatório das threads em `reports/F0-S04-threads.md` |
 | F0-S05 | Oplog, undo e merge | M | NAO_INICIADA | Depende da S04. Requisitos de gravação: `cards/F0-S05/F0-S05-T00-requisitos-gravacao.md` |
 | F0-S06 | Planta e corte (HLR) + vista no `.obim` | G, crítica | NAO_INICIADA | Contém T3 |
 | F0-S07 | Tipo paramétrico por script | P | NAO_INICIADA | Depende da S04 |
@@ -26,7 +26,7 @@
 | F0-S03-T28 | Medir o viewport num Windows físico | T1 | NAO_INICIADA | Aprovada pelo PO; dono: PO; antes da entrega final |
 | F0-S04-T04b | Registro local de mensagens e fim do mutex | T3 | PAUSADA | D1 |
 | F0-S04-T15f/g | Instabilidade do caso lote (queda por corrupção de memória) | T3 | FEITA | T15g mesclada (pedido 145); falta confirmar 3 rodadas verdes seguidas do Windows no CI |
-| F0-S04-T17 | Módulo no AppImage e instalador | T2 | NAO_INICIADA | Cartão reescrito em 2026-10-17; divide em T17a (Linux) e T17b (Windows); próximo: oráculo do T17a; revisão Opus obrigatória |
+| F0-S04-T17 | Módulo no AppImage e instalador | T2 | EM_ANDAMENTO | T17a (Linux) FEITA e mesclada (pedidos 151 e 152; Opus lote 53 aprovou). T17b (Windows) NAO_INICIADA; próximo passo: oráculo do T17b; revisão Opus obrigatória |
 | F0-S04-T18 | Tempos de build e relatório da fatia | T1 | NAO_INICIADA | Esqueleto |
 | F0-S04-T19 | ADR-001 e ADR-004 com números | TA | NAO_INICIADA | Decisão do PO; esqueleto |
 | F0-S04-T20 | Memória final do viewport abaixo de 6,0 GB | T3 | PAUSADA | Cartão escrito; PO: nada por enquanto |
@@ -43,6 +43,6 @@ Revisão final da noite: `reports/F0-RG-25-revisao-final.md`. Cartões novos que
 
 ## Feito (resumo; detalhes no histórico)
 - S01: T01 a T12, R1 a R3. S02: T01 a T22, T24, T25 (PR 98), R1 a R3. S03: T01 a T08 (todas as partes), T25, T26 e emendas, R1 a R3. F0-PLANO-T01.
-- S04: T01 a T04c, T05, T06 a T06c, T07 a T08, T09, T10, T10c, T11 a T11c, T12 (PR 83), T13, T14, T14a/b/c/d, T15 (a a g, inclui o relatório das threads), T16, T16b.
+- S04: T01 a T04c, T05, T06 a T06c, T07 a T08, T09, T10, T10c, T11 a T11c, T12 (PR 83), T13, T14, T14a/b/c/d, T15 (a a g, inclui o relatório das threads), T16, T16b, T17a (pedidos 151 e 152).
 
 Os cartões não têm campo de status; este quadro é a fonte. Ao mudar o status de um cartão, mudar aqui e no `LOG.md`.

@@ -14,8 +14,8 @@ O instalador e o AppImage levam centenas de pacotes de terceiros (Python, Qt, OC
 ### Compilado dentro do módulo `obimcore` ou usado só como cabeçalho (só nos pacotes)
 | Componente | Versão | Licença SPDX | Origem | Atribuição |
 |---|---|---|---|---|
-| nanobind | 3.1.0 | BSD-3-Clause | pacote conda-forge `nanobind` (só no ambiente de desenvolvimento) | Aviso de copyright em `licenses/nanobind-BSD-3-Clause.txt` (AppImage); texto em `packaging/licenses-texts/nanobind-BSD-3-Clause.txt`. Compilado dentro de `_obimcore`; não foi copiado para o repositório. |
-| tsl::robin_map (vem dentro do nanobind) | versão embutida no nanobind 3.1.0 | MIT | `nanobind/ext/robin_map` do pacote conda-forge `nanobind` | Aviso de copyright em `licenses/tsl-robin-map-MIT.txt` (AppImage); texto em `packaging/licenses-texts/tsl-robin-map-MIT.txt`. Compilado dentro de `_obimcore`. |
+| nanobind | 3.1.0 | BSD-3-Clause | pacote conda-forge `nanobind` (só no ambiente de desenvolvimento) | Aviso de copyright em `licenses/nanobind-BSD-3-Clause.txt` (AppImage e instalador); texto em `packaging/licenses-texts/nanobind-BSD-3-Clause.txt`. Compilado dentro de `_obimcore`; não foi copiado para o repositório. |
+| tsl::robin_map (vem dentro do nanobind) | versão embutida no nanobind 3.1.0 | MIT | `nanobind/ext/robin_map` do pacote conda-forge `nanobind` | Aviso de copyright em `licenses/tsl-robin-map-MIT.txt` (AppImage e instalador); texto em `packaging/licenses-texts/tsl-robin-map-MIT.txt`. Compilado dentro de `_obimcore`. |
 | Eigen, Boost (só cabeçalhos na compilação) | do ambiente de desenvolvimento | MPL-2.0, BSL-1.0 | pacotes conda-forge | Não vão no módulo como biblioteca; o Eigen consta em `licenses/INVENTARIO.md` e `licenses/pacotes/`. |
 
 ### Runtimes da Microsoft (somente no instalador Windows)

@@ -188,6 +188,12 @@ jobs:
           echo "::notice title=sonda da thread de desenho no ${RUNNER_OS}::$(python -c "import json; r=json.load(open('out/s04_sonda/sonda.json')); print('rc=$rc meta_atingida=%s' % r.get('meta_atingida'), {k:v.get('maior_intervalo_ms') for k,v in r['fases'].items() if isinstance(v,dict)})" || echo sem resultado)"
           echo "Sonda da thread de desenho (${RUNNER_OS}): código $rc, relatório em out/s04_sonda/sonda.json" >> "$GITHUB_STEP_SUMMARY"
           true
+      - name: Autoteste do oráculo do instalador Windows (T17b; só bash e Python, sem Windows; bloqueia o merge)
+        shell: bash -elo pipefail {0}
+        run: |
+          out="$(bash packaging/windows/test_instalador_ponte.sh --autoteste)"
+          echo "$out"
+          [ "$(echo "$out" | tail -n 1)" = ok ] || { echo "::error title=autoteste do oráculo do instalador::a última linha não é 'ok'"; exit 1; }
       - name: REUSE (ferramenta só no CI, ambiente separado)
         shell: bash -elo pipefail {0}
         run: |
@@ -316,6 +322,26 @@ jobs:
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_CI=1  # liga todas as chaves de obrigatório (pulo vira falha; tests/conftest.py) (T04c entregou versao()["registro_ifc4"])
           QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_ponte.py
+      - name: Entregar o módulo obimcore e o pytest ao job instalador-windows (T17b; usa a ação de cache que já está fixada)
+        shell: bash -elo pipefail {0}
+        run: |
+          # O pytest é só Python puro: vai ao passo de teste do pacote, nunca para dentro dele. Cópia, para não depender do ambiente deste job.
+          site="$(cygpath -u "$(python -c 'import _pytest, os; print(os.path.dirname(os.path.dirname(_pytest.__file__)))')")"
+          mkdir -p "$RUNNER_TEMP/pytest_site" "$RUNNER_TEMP/obimcore_pacote"
+          for n in pytest _pytest pluggy iniconfig pygments packaging colorama py.py; do [ -e "$site/$n" ] && cp -a "$site/$n" "$RUNNER_TEMP/pytest_site/"; done
+          # Só o __init__.py e o .pyd, como estão AGORA (o cache grava no fim do job, depois dos passos que vêm a seguir); exatamente um .pyd.
+          cp out/s04/obimcore/__init__.py out/s04/obimcore/_obimcore*.pyd "$RUNNER_TEMP/obimcore_pacote/"
+          n=$(ls "$RUNNER_TEMP"/obimcore_pacote/_obimcore*.pyd | wc -l)
+          [ "$n" = 1 ] || { echo "::error title=obimcore::esperava 1 _obimcore*.pyd e achei $n"; exit 1; }
+          ls -l "$RUNNER_TEMP/obimcore_pacote" "$RUNNER_TEMP/pytest_site"
+      - name: Guardar obimcore e pytest para o job instalador-windows (a gravação acontece no fim do job, se tudo passar)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ runner.temp }}/obimcore_pacote
+            ${{ runner.temp }}/pytest_site
+          key: obimcore-win-${{ github.run_id }}
+          lookup-only: true
       - name: Viewport C++ (parte A; S04-T06/T07; bloqueia o merge)
         shell: bash -elo pipefail {0}
         timeout-minutes: 30
@@ -530,9 +556,10 @@ jobs:
   # Instalador do Windows em job próprio: roda ao mesmo tempo que o job windows, em vez de depois dele.
   instalador-windows:
     runs-on: windows-latest
+    needs: windows-viewport-a  # T17b: o módulo obimcore é compilado no windows-viewport-a e entra no instalador pronto (o pacote não tem compilador)
     env:
       PLAT: win-64
-    timeout-minutes: 60
+    timeout-minutes: 75  # era 60; o R1-j acrescenta uma instalação e os 9 casos do pytest
     steps:
       - name: Início (relógio)
         shell: bash
@@ -545,15 +572,24 @@ jobs:
           EVENTO: ${{ github.event_name }}
           BASE: ${{ github.base_ref }}
         run: |
-          # push (main) e tag: sempre. Pull request: só se o diff contra a base toca o empacotamento. Na dúvida, true.
+          # push (main) e tag: sempre. Pull request: só se o diff contra a base toca o empacotamento, o módulo obimcore ou os testes que o instalador roda (T17b). Na dúvida, true.
           r=true; motivo="evento $EVENTO"
           if [ "$EVENTO" = "pull_request" ]; then
             if git fetch --no-tags --depth=1 origin "$BASE" 2>/dev/null && lista=$(git diff --name-only FETCH_HEAD HEAD); then
-              if grep -qE '^(packaging/|app/|environment[^/]*\.yml$|environment\.[^/]*\.lock$|pyproject[^/]*$|\.github/workflows/ci\.yml$|scripts/(prune_packages|license_inventory|collect_package_licenses)\.py$|LICENSES/)' <<<"$lista"; then motivo="o PR mexe no empacotamento"; else r=false; motivo="o PR não mexe no empacotamento"; fi
+              if grep -qE '^(packaging/|app/|prototypes/s04/obimcore/|tests/|environment[^/]*\.yml$|environment\.[^/]*\.lock$|pyproject[^/]*$|\.github/(workflows/ci\.yml|actions/)|scripts/(prune_packages|license_inventory|collect_package_licenses)\.py$|LICENSES/)' <<<"$lista"; then motivo="o PR mexe no empacotamento"; else r=false; motivo="o PR não mexe no empacotamento"; fi
             else motivo="não consegui comparar com a base"; fi
           fi
           echo "instalador=$r" >> "$GITHUB_OUTPUT"
           echo "::notice title=instalador::instalador=$r ($motivo)"
+      - name: Módulo obimcore e pytest vindos do job windows-viewport-a (T17b; falha se não vierem)
+        if: steps.detecta.outputs.instalador == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ runner.temp }}/obimcore_pacote
+            ${{ runner.temp }}/pytest_site
+          key: obimcore-win-${{ github.run_id }}
+          fail-on-cache-miss: true
       - name: Cache de pacotes do conda
         if: steps.detecta.outputs.instalador == 'true'
         id: cache_conda
@@ -595,9 +631,41 @@ jobs:
           conda create -n nsis -c conda-forge --override-channels nsis=3.12=h4c425fd_1 -y -q
           export MAKENSIS="$(find "$(conda info --base)/envs/nsis" -name makensis.exe | head -n 1)"
           echo "makensis: $MAKENSIS"
-          bash packaging/windows/build_installer.sh "$RUNNER_TEMP/rt" "$RUNNER_TEMP/inst-out" 2>&1 | tail -n 45 | tee -a "$GITHUB_STEP_SUMMARY"
+          OBIMCORE_DIR="$(cygpath -u "$RUNNER_TEMP")/obimcore_pacote" bash packaging/windows/build_installer.sh "$RUNNER_TEMP/rt" "$RUNNER_TEMP/inst-out" 2>&1 | tail -n 45 | tee -a "$GITHUB_STEP_SUMMARY"
           ls -l "$RUNNER_TEMP/inst-out/OpenBIM-Studio-Setup.exe" | tee -a "$GITHUB_STEP_SUMMARY"
+          size=$(stat -c %s "$RUNNER_TEMP/inst-out/OpenBIM-Studio-Setup.exe")
+          echo "Instalador (T17b, com obimcore): $size bytes; o módulo soma $(cat "$RUNNER_TEMP"/obimcore_pacote/_obimcore*.pyd "$RUNNER_TEMP"/obimcore_pacote/__init__.py | wc -c) bytes sem compressão. Para comparar com o tamanho de antes (sem o módulo), ver o resumo da última execução no main." | tee -a "$GITHUB_STEP_SUMMARY"
+          test "$size" -le 600000000 || { echo "::error::instalador acima de 600 MB (ADR-005 §9: não cortar em silêncio, levar ao PO)"; exit 1; }
           cp "$RUNNER_TEMP/inst-out/OpenBIM-Studio-Setup.exe" "$RUNNER_TEMP/inst-out/licencas-coletadas.txt" out/
+      - name: R1-j, o módulo dentro do instalador (T17b; instala em silêncio, roda o oráculo e desinstala; bloqueia o merge porque o job instalador-windows é obrigatório)
+        if: steps.detecta.outputs.instalador == 'true'
+        shell: bash  # sem login: um shell de login ativaria o ambiente conda e poria DLLs dele no PATH do oráculo
+        timeout-minutes: 30
+        run: |
+          set +e
+          export MSYS2_ARG_CONV_EXCL='*'  # o bash do Git for Windows não pode reescrever /S, /D= nem _?=
+          t0=$(date +%s)
+          DEST="$(cygpath -w "$RUNNER_TEMP")\\OpenBIM-ponte"  # sem espaços (o /D= do NSIS não aceita)
+          D="$(cygpath -u "$DEST")"
+          fim() {  # fim "mensagem": erro com o fim do log do passo
+            msg=$(tail -n 45 "$RUNNER_TEMP/ponte-inst.log" 2>/dev/null | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=R1-j no instalador falhou::$1 $msg"; exit 1
+          }
+          "$PWD/out/OpenBIM-Studio-Setup.exe" /S "/D=$DEST" & pid=$!; wait "$pid"; rc=$?  # como o test_installer.sh; o limite é o do passo (30 min)
+          [ "$rc" = 0 ] || fim "instalação em silêncio saiu com código $rc"
+          t1=$(date +%s)
+          OBIM_PYTEST_SITE="$RUNNER_TEMP/pytest_site" timeout 1500 bash packaging/windows/test_instalador_ponte.sh "$DEST" > "$RUNNER_TEMP/ponte-inst.log" 2>&1; rc=$?
+          cat "$RUNNER_TEMP/ponte-inst.log"
+          [ "$rc" = 0 ] || fim "oráculo reprovou (código $rc)"
+          t2=$(date +%s)
+          # desinstala para o test_installer.sh começar de uma pasta limpa; _?= faz o desinstalador esperar (sem isso ele devolve o controle logo)
+          timeout 300 "$D/Uninstall.exe" /S "_?=$DEST"; rc=$?
+          sleep 3; rm -f "$D/Uninstall.exe"
+          [ "$rc" = 0 ] || fim "desinstalador saiu com código $rc"
+          for x in env app licenses; do [ ! -e "$D/$x" ] || fim "sobrou $x depois de desinstalar"; done
+          rmdir "$D" 2>/dev/null
+          echo "R1-j no instalador: instalação $((t1-t0)) s, oráculo $((t2-t1)) s, desinstalação $(( $(date +%s)-t2 )) s" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=R1-j::obimcore dentro do instalador, R1-a, R1-d, R1-e e R1-i verdes; runtime do Visual C++ compatível (prova 7)"
       - name: Teste do instalador (instala, abre, desinstala)
         if: steps.detecta.outputs.instalador == 'true'
         shell: bash

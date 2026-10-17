@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Monta o instalador Windows (NSIS): pasta do ambiente conda de runtime + código de app/ + textos de licença.
-# Uso: build_installer.sh RUNTIME_ENV SAIDA_DIR   (rodar no bash do Git for Windows, com makensis no PATH)
+# Uso: OBIMCORE_DIR=pasta/obimcore build_installer.sh RUNTIME_ENV SAIDA_DIR   (rodar no bash do Git for Windows, com makensis no PATH)
 #   RUNTIME_ENV  ambiente criado com: conda env create -f packaging/runtime-environment.yml -p <pasta>
 #   SAIDA_DIR    pasta de trabalho/saída (fora do repositório); recebe pacote/ e OpenBIM-Studio-Setup.exe
+#   OBIMCORE_DIR (obrigatória, T17b): a pasta obimcore/ (com __init__.py e UM _obimcore*.pyd) que prototypes/s04/obimcore/build.sh gera.
+#   O pacote não tem compilador: o módulo vem pronto do ambiente de desenvolvimento e entra em app\obimcore\.
 set -euo pipefail
 export PYTHONUTF8=1
 
@@ -15,6 +17,23 @@ PKG="$OUT/pacote"
 EXE="$OUT/OpenBIM-Studio-Setup.exe"
 VERSAO="0.0.1-f0"
 START=$(date +%s)
+
+# O pacote sem o módulo C++ não é mais um pacote válido (cartão F0-S04-T17): falha com mensagem clara, antes de apagar ou copiar qualquer coisa.
+OBIMCORE_DIR="${OBIMCORE_DIR:-}"
+shopt -s nullglob; PYDS=("$OBIMCORE_DIR"/_obimcore*.pyd); shopt -u nullglob
+if [ ! -f "$OBIMCORE_DIR/__init__.py" ] || [ "${#PYDS[@]}" -ne 1 ]; then
+  echo "Falta o módulo obimcore: defina OBIMCORE_DIR com a pasta obimcore/ (__init__.py e exatamente um _obimcore*.pyd) gerada por prototypes/s04/obimcore/build.sh (valor atual: '${OBIMCORE_DIR}', .pyd achados: ${#PYDS[@]})" >&2
+  exit 1
+fi
+# R-ABI: o módulo foi compilado no ambiente de desenvolvimento; as travas dos dois ambientes (e o ambiente de runtime de verdade) têm de ter a MESMA
+# compilação destes pacotes. O ambiente real conta porque, numa montagem local, ele pode estar atrás da trava (lote opus 52, achado 10).
+for pkg in ifcopenshell occt pyside6 qt6-main; do
+  dev="$(tr -d '\r' < "$REPO/environment.win-64.lock" | grep -m1 -oE "/$pkg-[0-9][^/#]*" || true)"
+  run="$(tr -d '\r' < "$REPO/packaging/runtime-environment.win-64.lock" | grep -m1 -oE "/$pkg-[0-9][^/#]*" || true)"
+  [ -n "$dev" ] && [ "$dev" = "$run" ] || { echo "R-ABI: $pkg difere entre a trava de desenvolvimento ('$dev') e a de runtime ('$run'); o módulo obimcore não serve neste pacote" >&2; exit 1; }
+  nome="${dev#/}"; nome="${nome%.conda}"; nome="${nome%.tar.bz2}"
+  [ -f "$ENV_DIR/conda-meta/$nome.json" ] || { echo "R-ABI: o ambiente de runtime $ENV_DIR não tem $nome (a trava pede este build); refaça o ambiente pela trava" >&2; exit 1; }
+done
 
 rm -rf "$PKG"
 mkdir -p "$PKG/app" "$PKG/licenses"
@@ -50,14 +69,28 @@ find "$PKG/env" \( -name '*.lib' -o -name '*.pdb' -o -name '*.exp' \) -delete
 echo "Maiores pastas do ambiente (MB):"
 du -sm "$PKG"/env/* "$PKG"/env/Library/* "$PKG"/env/Lib/site-packages/* 2>/dev/null | sort -rn | head -14
 
-# 2. Código do app e lançador
+# 1d. Runtime do Visual C++ (T17b; prova 7 do ADR-005 §7.1). O python.exe procura o vcruntime140.dll primeiro na própria pasta (env\) e só depois
+# no Windows; sem a cópia aqui, o pacote usaria o do sistema (que pode ser mais velho que o do compilador do módulo, ou faltar em outra máquina).
+# Só usa o que o próprio pacote conda vc14_runtime já traz (fixado na trava): se estiver só em Library\bin, copia para env\.
+for f in "$PKG"/env/Library/bin/vcruntime140*.dll; do
+  if [ -f "$f" ] && [ ! -f "$PKG/env/$(basename "$f")" ]; then cp "$f" "$PKG/env/"; fi
+done
+[ -f "$PKG/env/vcruntime140.dll" ] || { echo "Prova 7: o ambiente de runtime não traz vcruntime140.dll (nem em env\\, nem em env\\Library\\bin); o vc14_runtime da trava deveria trazer" >&2; exit 1; }
+{ [ -f "$PKG/env/msvcp140.dll" ] || [ -f "$PKG/env/Library/bin/msvcp140.dll" ]; } || { echo "Prova 7: o ambiente de runtime não traz msvcp140.dll" >&2; exit 1; }
+echo "Runtime do Visual C++ no pacote:"; ls -l "$PKG"/env/vcruntime140*.dll "$PKG"/env/msvcp140*.dll "$PKG"/env/Library/bin/msvcp140*.dll "$PKG"/env/Library/bin/vcruntime140*.dll 2>/dev/null || true
+
+# 2. Código do app, módulo C++ e lançador
 cp -a "$REPO/app/openbim_app" "$PKG/app/"
 find "$PKG/app" -name __pycache__ -type d -prune -exec rm -rf {} +
+mkdir -p "$PKG/app/obimcore"  # só o __init__.py e o .pyd, nada do diretório de compilação
+cp "$OBIMCORE_DIR/__init__.py" "${PYDS[0]}" "$PKG/app/obimcore/"
 cp "$HERE/OpenBIM-Studio.pyw" "$PKG/app/"
+# Prova 7 já aqui (o oráculo test_instalador_ponte.sh repete depois de instalar): runtime do pacote >= ligador do .pyd. Falhar agora poupa montar 300 MB à toa.
+python -I "$HERE/ponte_no_pacote_win.py" vcrt "$(cygpath -w "$PKG")" || { echo "Prova 7 reprovou: runtime do Visual C++ do pacote mais velho que o compilador do obimcore (ver acima)" >&2; exit 1; }
 
 # 3. Licenças, como trocar, fontes
 cp "$REPO/LICENSES/AGPL-3.0-or-later.txt" "$PKG/licenses/"
-for f in LGPL-3.0 LGPL-2.1 GPL-3.0 OCCT-exception-1.0; do   # a montagem falha se faltar algum
+for f in LGPL-3.0 LGPL-2.1 GPL-3.0 OCCT-exception-1.0 nanobind-BSD-3-Clause tsl-robin-map-MIT; do   # a montagem falha se faltar algum
   [ -f "$REPO/packaging/licenses-texts/$f.txt" ] || { echo "falta packaging/licenses-texts/$f.txt" >&2; exit 1; }
   cp "$REPO/packaging/licenses-texts/$f.txt" "$PKG/licenses/"
 done
@@ -65,6 +98,9 @@ CONDA_PREFIX="$ENV_DIR" python "$REPO/scripts/license_inventory.py" "$PKG/licens
 printf '
 > Nota: os pacotes listados em REMOVIDOS.md aparecem acima mas foram **removidos na montagem**.
 ' >> "$PKG/licenses/INVENTARIO.md"
+# O módulo obimcore (T17b) leva código de terceiros que não é pacote do ambiente de runtime, então o inventário não o lista:
+# nanobind (BSD-3-Clause) e tsl::robin_map (MIT) vão compilados DENTRO do módulo (avisos nesta pasta); Eigen (MPL-2.0) e Boost (BSL-1.0) só como cabeçalhos na compilação.
+printf '\n> Nota: o módulo `app\\obimcore` (código do projeto) leva compilados dentro dele o **nanobind 3.1.0 (BSD-3-Clause)** e o **tsl::robin_map (MIT)**, com os avisos de copyright em `nanobind-BSD-3-Clause.txt` e `tsl-robin-map-MIT.txt` (esta pasta); usou cabeçalhos do Eigen (MPL-2.0) e do Boost (BSL-1.0) só na compilação; e usa IfcOpenShell, OCCT e Qt por bibliotecas dinâmicas (pasta `env\\`, LGPL-COMO-TROCAR.md).\n' >> "$PKG/licenses/INVENTARIO.md"
 python "$REPO/scripts/collect_package_licenses.py" "$ENV_DIR" "$PKG/licenses/pacotes" | tee "$OUT/licencas-coletadas.txt"
 cp "$HERE/LGPL-COMO-TROCAR.md" "$PKG/"
 SPDX_ID="SPDX-License-Identifier"  # montado assim para o reuse lint nao ler como etiqueta deste script

@@ -8,7 +8,7 @@
 | F0-S01 | Repositório, licenças e pesquisa | P | FECHADA | Aceita pelo PO (2026-10-15). Abertos sem bloquear: termos do conda-forge, SINAPI (requisito da F5) |
 | F0-S02 | CI Windows+Linux e app esqueleto | G | FECHADA | Aceita pelo PO (2026-10-15). Resta o cartão F0-S02-T23 (antes do primeiro release) |
 | F0-S03 | Protótipo de viewport (Qt RHI) | M | FECHADA | Portão aprovado pelo PO. Restam T27 e T28 (abaixo). Relatório: `reports/F0-S03.md` |
-| F0-S04 | Ponte Python↔C++ (híbrido vs C++ puro) | G, crítica | EM_ANDAMENTO | Retomada em 2026-10-16 (D1 encerrada). T17a feita; falta T17b (Windows), T18 e a decisão do PO (T19: ADR-001 e ADR-004); relatório das threads em `reports/F0-S04-threads.md` |
+| F0-S04 | Ponte Python↔C++ (híbrido vs C++ puro) | G, crítica | EM_ANDAMENTO | Retomada em 2026-10-16 (D1 encerrada). T17a feita; T17b (Windows) com a implementação no pedido 155 aguardando o CI; T18 com o roteiro pronto (falta a medição na tela real); falta a decisão do PO (T19: ADR-001 e ADR-004); relatório das threads em `reports/F0-S04-threads.md` |
 | F0-S05 | Oplog, undo e merge | M | NAO_INICIADA | Depende da S04. Requisitos de gravação: `cards/F0-S05/F0-S05-T00-requisitos-gravacao.md` |
 | F0-S06 | Planta e corte (HLR) + vista no `.obim` | G, crítica | NAO_INICIADA | Contém T3 |
 | F0-S07 | Tipo paramétrico por script | P | NAO_INICIADA | Depende da S04 |
@@ -26,8 +26,8 @@
 | F0-S03-T28 | Medir o viewport num Windows físico | T1 | NAO_INICIADA | Aprovada pelo PO; dono: PO; antes da entrega final |
 | F0-S04-T04b | Registro local de mensagens e fim do mutex | T3 | PAUSADA | D1 |
 | F0-S04-T15f/g | Instabilidade do caso lote (queda por corrupção de memória) | T3 | FEITA | T15g mesclada (pedido 145); falta confirmar 3 rodadas verdes seguidas do Windows no CI |
-| F0-S04-T17 | Módulo no AppImage e instalador | T2 | EM_ANDAMENTO | T17a (Linux) FEITA e mesclada (pedidos 151 e 152; Opus lote 53 aprovou). T17b (Windows) NAO_INICIADA; próximo passo: oráculo do T17b; revisão Opus obrigatória |
-| F0-S04-T18 | Tempos de build e relatório da fatia | T1 | NAO_INICIADA | Esqueleto |
+| F0-S04-T17 | Módulo no AppImage e instalador | T2 | EM_ANDAMENTO | T17a (Linux) FEITA e mesclada (pedidos 151 e 152; Opus lote 53 aprovou). T17b (Windows): oráculo mesclado (pedido 156); implementação no pedido 155, conteúdo aprovado pelo Opus (lote 56), AGUARDA o CI (`linux`, `windows`, `appimage`, `instalador-windows` verdes e leitura do log do R1-j antes do merge). Lições dos lotes 54 e 55 no cartão |
+| F0-S04-T18 | Tempos de build e relatório da fatia | T1 | EM_ANDAMENTO | Roteiro da medição oficial pronto e ensaiado em tela virtual (`docs/acceptance/S04-medicao-oficial.md`); medição na tela real do Linux depois do merge do 155, com ok e horário do PO (A1) |
 | F0-S04-T19 | ADR-001 e ADR-004 com números | TA | NAO_INICIADA | Decisão do PO; esqueleto |
 | F0-S04-T20 | Memória final do viewport abaixo de 6,0 GB | T3 | PAUSADA | Cartão escrito; PO: nada por enquanto |
 

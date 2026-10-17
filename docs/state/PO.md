@@ -22,7 +22,6 @@
 | A4 | Aplicar ao AppImage o mesmo critério do instalador (roda só quando o empacotamento muda) | Sim, depois de ver o PR 91 funcionando |
 | A5 | Se os testes de tempo do Windows continuarem a oscilar: dar folga aos limites (muda metas) | Preferir medir pela mediana de várias rodadas; folga só com a meta original registrada (D8) |
 | A6 | Quando e a quem enviar o convite de revisão externa; wireframes da S09; 8 testes no Revit | Decidir depois das revisões S01 a S03 |
-| A7 | Atualizar o ambiente local (`zlib`, `libxml2`) para compilar o fluxo B na máquina do PO (instalar pede ok) | Sim, quando a D1 acabar |
 | A9 | Confirmar que as exceções de ausência acabaram | Sim |
 | A10 | Passar os números do `/usage` de 13 e 14/10 para `QUOTA.md` | Informar janela e semana, antes e depois |
 | A11 | D5: nomes dos colegas de estágio para testar e momento | Sem prazo; combinar antes da F1 |
@@ -34,6 +33,8 @@
 - **Regras de parada da T15 (2026-10-16):** (a) janela surda por mais de 1 s no lote de 1.000 paredes nas duas formas (medida no controle) e (b) parede com 150 aberturas parando a janela mais da metade do tempo do cálculo do desenho = parar e levar ao PO. Resultado da T15d: nenhuma disparou; a escolha entre as formas é apertada (relatório `reports/F0-S04-threads.md`).
 - **Atribuição nos commits e pedidos (2026-10-16):** manter `Co-Authored-By` do Claude nos commits; pedidos sem "Generated with Claude Code". Títulos de pedido: `F0-S04-T15c: o que faz`.
 - **Entrevista com o PO (grill-me) para toda feature nova ou dúvida de comportamento (2026-10-15/16),** não para correções internas.
+- **A7 respondida (2026-10-17):** o PO deu o ok e o ambiente local ganhou `zlib` 1.3.2 e `libxml2-devel` 2.15.4 (versões da trava); a compilação do fluxo B na máquina do PO funciona. Pendência fechada.
+- **IFC do PO e carga pesada (2026-10-17):** o PO liberou os 3 IFC dele e o de 25 MB (fora do repositório, `../openbim-studio-referencia/`) para o ensaio da medição oficial e permitiu rodar a carga pesada. O ensaio rodou só em tela virtual; só números, nunca nomes de peças, entram nos relatórios.
 - **Rodada oficial na tela real do Linux (A1):** só com ok e horário do PO, depois da T15d (feita). Pendente.
 
 ## Histórico

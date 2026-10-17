@@ -5,14 +5,18 @@ Receitas de empacotamento e instalador para Windows e Linux.
 ## Linux (AppImage, montagem P1 do ADR-005)
 Pasta `linux/`:
 - (o ambiente de execução fica em `packaging/runtime-environment.yml` e na trava `runtime-environment.*.lock`, usados por Linux e Windows) ambiente conda só de execução (mesmas versões fixas do `environment.yml`, sem compiladores, cmake, ninja, nanobind e pytest).
-- `build_appimage.sh SAIDA_DIR APPIMAGETOOL`: monta o AppDir (pasta `env/` copiada, código de `app/`, `AppRun`, desktop, ícone, `licenses/`, `LGPL-COMO-TROCAR.md`, `FONTES.md`) e gera o `.AppImage`. Os arquivos grandes ficam em `SAIDA_DIR`, fora do repositório.
+- `build_appimage.sh SAIDA_DIR APPIMAGETOOL` (exige `OBIMCORE_DIR`, ver abaixo): monta o AppDir (pasta `env/` copiada, código de `app/` e o módulo C++ em `app/obimcore/`, `AppRun`, desktop, ícone, `licenses/`, `LGPL-COMO-TROCAR.md`, `FONTES.md`) e gera o `.AppImage`. Os arquivos grandes ficam em `SAIDA_DIR`, fora do repositório.
 - `AppRun`, `openbim-studio.desktop`, `openbim-studio.svg/.png` (ícone próprio), `LGPL-COMO-TROCAR.md`, `FONTES.md.in` (modelo).
 
 Passo a passo:
 1. `conda env create -f packaging/runtime-environment.yml -p ~/miniforge3/envs/openbim-runtime`
 2. Baixar o `appimagetool-x86_64.AppImage` (MIT, github.com/AppImage/appimagetool) e conferir o sha256 (ver `docs/research/2026-10-10-appimage-p1.md`).
-3. `packaging/linux/build_appimage.sh /caminho/saida /caminho/appimagetool-x86_64.AppImage`
-4. Teste rápido: `QT_QPA_PLATFORM=offscreen ./OpenBIM-Studio-x86_64.AppImage --selftest` imprime `OK`.
+3. Compilar o módulo C++ no ambiente de desenvolvimento (o pacote não tem compilador): `bash prototypes/s04/obimcore/build.sh out/s04`, que cria `out/s04/obimcore/`.
+4. `OBIMCORE_DIR=$PWD/out/s04/obimcore packaging/linux/build_appimage.sh /caminho/saida /caminho/appimagetool-x86_64.AppImage`. Sem `OBIMCORE_DIR` (ou sem os dois arquivos do módulo) a montagem falha de propósito, e também falha se `ifcopenshell`, `occt`, `pyside6` ou `qt6-main` forem de compilações diferentes nas duas travas (`environment.linux-64.lock` e `packaging/runtime-environment.linux-64.lock`).
+5. Teste rápido: `QT_QPA_PLATFORM=offscreen ./OpenBIM-Studio-x86_64.AppImage --selftest` imprime `OK`.
+6. O módulo dentro do pacote (R1-j): `OBIM_PYTEST_SITE=<pasta site-packages com pytest> QT_QPA_PLATFORM=offscreen bash packaging/linux/test_appimage_ponte.sh OpenBIM-Studio-x86_64.AppImage` (também aceita a pasta já extraída). Confere que o `RPATH` do módulo é só relativo e aponta para dentro do pacote, que `freeze_support()` está no programa e no `AppRun`, que um processo filho `spawn` abre dentro do pacote e que R1-a, R1-d, R1-e e R1-i do `tests/test_s04_ponte.py` passam com o Python e as bibliotecas do pacote. O pytest nunca entra no pacote.
+
+O módulo é código do projeto (AGPL v3, cabeçalho SPDX no `__init__.py` gerado); o texto da licença já vai em `licenses/AGPL-3.0-or-later.txt`, e o inventário de licenças só trata de pacotes conda, então segue coerente.
 
 ## Windows (NSIS, montagem P1 do ADR-005)
 Pasta `windows/`: `build_installer.sh RUNTIME_ENV SAIDA_DIR` (monta `pacote/` com `env/`, `app/`, `licenses/`, `LGPL-COMO-TROCAR.md`, `FONTES.md` e gera `OpenBIM-Studio-Setup.exe` com `openbim-studio.nsi`), `OpenBIM-Studio.pyw` (lançador), `LGPL-COMO-TROCAR.md`. O CI (job `instalador-windows`; o job `windows` só reúne os resultados dos testes do Windows) cria o ambiente de runtime, gera o instalador e testa instalar, abrir (`--selftest`) e desinstalar sem sobras. Instalação por usuário, sem administrador. Sem assinatura: o SmartScreen avisa (esperado até a v0.3).

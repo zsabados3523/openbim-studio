@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Monta o AppImage P1 (ADR-005 §5 item 6): pasta do ambiente conda de runtime + codigo de app/ + AppRun.
-# Uso: build_appimage.sh SAIDA_DIR APPIMAGETOOL
+# Uso: OBIMCORE_DIR=pasta/obimcore build_appimage.sh SAIDA_DIR APPIMAGETOOL
 #   SAIDA_DIR    pasta de trabalho/saida (fora do repositorio); recebe AppDir/ e o .AppImage
 #   APPIMAGETOOL caminho do appimagetool-x86_64.AppImage (MIT, baixado por quem roda)
-# Variavel: RUNTIME_ENV (padrao ~/miniforge3/envs/openbim-runtime), criado com
+# Variaveis: RUNTIME_ENV (padrao ~/miniforge3/envs/openbim-runtime), criado com
 #   conda env create -f packaging/runtime-environment.yml
+#   OBIMCORE_DIR (obrigatoria, T17a): a pasta obimcore/ (com __init__.py e _obimcore*.so) que o build.sh de prototypes/s04/obimcore gera.
+#   O pacote nao tem compilador: o modulo vem pronto do ambiente de desenvolvimento e entra em app/obimcore/.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -19,6 +21,43 @@ IMAGE="$OUT/OpenBIM-Studio-x86_64.AppImage"
 START=$(date +%s)
 
 [ -x "$ENV_DIR/bin/python" ] || { echo "Ambiente de runtime nao encontrado: $ENV_DIR" >&2; exit 1; }
+
+# O pacote sem o modulo C++ nao e mais um pacote valido (cartao F0-S04-T17): falha com mensagem clara.
+OBIMCORE_DIR="${OBIMCORE_DIR:-}"
+if [ ! -f "$OBIMCORE_DIR/__init__.py" ] || ! compgen -G "$OBIMCORE_DIR/_obimcore*.so" > /dev/null; then
+  echo "Falta o modulo obimcore: defina OBIMCORE_DIR com a pasta obimcore/ (__init__.py e _obimcore*.so) gerada por prototypes/s04/obimcore/build.sh (valor atual: '${OBIMCORE_DIR}')" >&2
+  exit 1
+fi
+# R-ABI: o modulo foi compilado no ambiente de desenvolvimento; as travas dos dois ambientes tem de ter a MESMA compilacao destes pacotes.
+for pkg in ifcopenshell occt pyside6 qt6-main; do
+  dev="$(grep -oE "/$pkg-[0-9][^/#]*" "$REPO/environment.linux-64.lock" | head -n 1)"
+  run="$(grep -oE "/$pkg-[0-9][^/#]*" "$REPO/packaging/runtime-environment.linux-64.lock" | head -n 1)"
+  [ -n "$dev" ] && [ "$dev" = "$run" ] || { echo "R-ABI: $pkg difere entre a trava de desenvolvimento ('$dev') e a de runtime ('$run'); o modulo obimcore nao serve neste pacote" >&2; exit 1; }
+done
+# RPATH do modulo: so o relativo ao pacote. Um modulo antigo (com o caminho do ambiente de desenvolvimento) faria o pacote carregar biblioteca de fora (R1-e).
+rpath_do_modulo() {  # imprime as entradas de RPATH/RUNPATH do .so, uma por linha (readelf se existir; senao Python puro)
+  if command -v readelf > /dev/null; then
+    LC_ALL=C readelf -d "$1" | sed -n 's/.*\(RPATH\|RUNPATH\)[^[]*\[\(.*\)\]/\2/p' | tr ':' '\n'
+  else
+    python3 - "$1" <<'PY'
+import struct, sys
+b = open(sys.argv[1], "rb").read()
+shoff, = struct.unpack_from("<Q", b, 0x28)
+tam, num = struct.unpack_from("<HH", b, 0x3A)
+sec = [struct.unpack_from("<IIQQQQII", b, shoff + i * tam) for i in range(num)]
+din = next(s for s in sec if s[1] == 6)
+txt = sec[din[6]][4]
+for o in range(din[4], din[4] + din[5], 16):
+    tag, val = struct.unpack_from("<qQ", b, o)
+    if tag in (15, 29):
+        print(b[txt + val:b.index(0, txt + val)].decode().replace(":", "\n"))
+PY
+  fi
+}
+for so in "$OBIMCORE_DIR"/_obimcore*.so; do
+  rp="$(rpath_do_modulo "$so")"
+  [ "$rp" = '$ORIGIN/../../env/lib' ] || { echo "RPATH do modulo $(basename "$so") deve ser so \$ORIGIN/../../env/lib e e '$rp'; recompile com prototypes/s04/obimcore/build.sh" >&2; exit 1; }
+done
 
 rm -rf "$APPDIR"
 mkdir -p "$APPDIR/licenses" "$APPDIR/app"
@@ -44,6 +83,9 @@ done
 
 # 2. Codigo do app, lancador, desktop e icone
 cp -a "$REPO/app/openbim_app" "$APPDIR/app/"
+# Modulo C++ (T17a): so o __init__.py e o .so, nada do diretorio de compilacao. O RPATH dele ($ORIGIN/../../env/lib) acha o env/ do pacote.
+mkdir -p "$APPDIR/app/obimcore"
+cp "$OBIMCORE_DIR/__init__.py" "$OBIMCORE_DIR"/_obimcore*.so "$APPDIR/app/obimcore/"
 find "$APPDIR/app" -name __pycache__ -type d -prune -exec rm -rf {} +
 install -m 755 "$HERE/AppRun" "$APPDIR/AppRun"
 cp "$HERE/openbim-studio.desktop" "$APPDIR/"
@@ -53,12 +95,15 @@ cp "$HERE/openbim-studio.svg" "$APPDIR/openbim-studio.svg"
 # 3. Licencas, como trocar, fontes
 # Textos verbatim guardados no repositorio (packaging/licenses-texts/); a montagem FALHA se faltar algum.
 cp "$REPO/LICENSES/AGPL-3.0-or-later.txt" "$APPDIR/licenses/"
-for f in LGPL-3.0 LGPL-2.1 GPL-3.0 OCCT-exception-1.0; do
+for f in LGPL-3.0 LGPL-2.1 GPL-3.0 OCCT-exception-1.0 nanobind-BSD-3-Clause tsl-robin-map-MIT; do
   [ -f "$REPO/packaging/licenses-texts/$f.txt" ] || { echo "falta packaging/licenses-texts/$f.txt" >&2; exit 1; }
   cp "$REPO/packaging/licenses-texts/$f.txt" "$APPDIR/licenses/"
 done
 CONDA_PREFIX="$ENV_DIR" python3 "$REPO/scripts/license_inventory.py" "$APPDIR/licenses/INVENTARIO.md" "--removidos=$OUT/removidos.txt" > "$OUT/inventario.log" || { sed -n '/## Não conda-forge/,$p' "$OUT/inventario.log"; echo "INVENTÁRIO DE LICENÇAS REPROVOU (ver acima)" >&2; exit 1; }
 printf '\n> Nota: os pacotes listados em REMOVIDOS.md aparecem acima mas foram **removidos na montagem**.\n' >> "$APPDIR/licenses/INVENTARIO.md"
+# O modulo obimcore (T17a) leva codigo de terceiros que nao e pacote do ambiente de runtime, entao o inventario nao o lista:
+# nanobind (BSD-3-Clause) e tsl::robin_map (MIT) vao compilados DENTRO do modulo (avisos nesta pasta); Eigen (MPL-2.0) e Boost (BSL-1.0) so como cabecalhos na compilacao.
+printf '\n> Nota: o modulo `app/obimcore` (codigo do projeto) leva compilados dentro dele o **nanobind 3.1.0 (BSD-3-Clause)** e o **tsl::robin_map (MIT)**, com os avisos de copyright em `nanobind-BSD-3-Clause.txt` e `tsl-robin-map-MIT.txt` (esta pasta); usou cabecalhos do Eigen (MPL-2.0) e do Boost (BSL-1.0) so na compilacao; e usa IfcOpenShell, OCCT e Qt por bibliotecas dinamicas (pasta `env/`, LGPL-COMO-TROCAR.md).\n' >> "$APPDIR/licenses/INVENTARIO.md"
 # arquivos de licenca que cada pacote conda traz (info/licenses do cache do conda)
 python3 "$REPO/scripts/collect_package_licenses.py" "$ENV_DIR" "$APPDIR/licenses/pacotes" | tee "$OUT/licencas-coletadas.txt"
 cp "$HERE/LGPL-COMO-TROCAR.md" "$APPDIR/"

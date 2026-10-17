@@ -566,11 +566,11 @@ jobs:
           EVENTO: ${{ github.event_name }}
           BASE: ${{ github.base_ref }}
         run: |
-          # push (main) e tag: sempre. Pull request: só se o diff contra a base toca o empacotamento. Na dúvida, true.
+          # push (main) e tag: sempre. Pull request: só se o diff contra a base toca o empacotamento, o módulo obimcore ou os testes que o instalador roda (T17b). Na dúvida, true.
           r=true; motivo="evento $EVENTO"
           if [ "$EVENTO" = "pull_request" ]; then
             if git fetch --no-tags --depth=1 origin "$BASE" 2>/dev/null && lista=$(git diff --name-only FETCH_HEAD HEAD); then
-              if grep -qE '^(packaging/|app/|environment[^/]*\.yml$|environment\.[^/]*\.lock$|pyproject[^/]*$|\.github/workflows/ci\.yml$|scripts/(prune_packages|license_inventory|collect_package_licenses)\.py$|LICENSES/)' <<<"$lista"; then motivo="o PR mexe no empacotamento"; else r=false; motivo="o PR não mexe no empacotamento"; fi
+              if grep -qE '^(packaging/|app/|prototypes/s04/obimcore/|tests/|environment[^/]*\.yml$|environment\.[^/]*\.lock$|pyproject[^/]*$|\.github/(workflows/ci\.yml|actions/)|scripts/(prune_packages|license_inventory|collect_package_licenses)\.py$|LICENSES/)' <<<"$lista"; then motivo="o PR mexe no empacotamento"; else r=false; motivo="o PR não mexe no empacotamento"; fi
             else motivo="não consegui comparar com a base"; fi
           fi
           echo "instalador=$r" >> "$GITHUB_OUTPUT"

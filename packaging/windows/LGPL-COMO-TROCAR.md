@@ -10,7 +10,7 @@ Na pasta de instalação (por padrão `%LOCALAPPDATA%\Programs\OpenBIM Studio`; 
 - Bibliotecas do Qt, OCCT, IfcOpenShell (arquivos `.dll`): `env\Library\bin\` (ex.: `Qt6Core.dll`, `TKernel.dll`)
 - Módulos Python (PySide6, ifcopenshell): `env\Lib\site-packages\`
 - Plugins do Qt: `env\Library\lib\qt6\plugins\` ou `env\Library\plugins\`
-- O código do programa: `app\openbim_app\`
+- O código do programa: `app\openbim_app\` e o módulo em C++ `app\obimcore\` (compilado a partir do código-fonte do projeto)
 
 ## Passo a passo
 1. Feche o OpenBIM Studio.

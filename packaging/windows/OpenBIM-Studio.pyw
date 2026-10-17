@@ -6,6 +6,7 @@ O atalho inicia o Python em modo isolado (`pythonw.exe -I`), que ignora PYTHONPA
 `pythonw.exe` não tem janela de texto: se algo falhar ao abrir, este arquivo grava o erro em `abertura.log` (mesma
 pasta do registro do app) e mostra uma mensagem, em vez de falhar calado (F0-RG-11).
 """
+import multiprocessing
 import os
 import sys
 import traceback
@@ -54,6 +55,10 @@ def iniciar():
 
 if __name__ == "__main__":
     try:
+        # Exigido pelo cartão F0-S04-T17 (lote 7). Com o python.exe do pacote (não congelado) esta chamada NÃO faz nada: ela só age em executável congelado.
+        # O que evita uma segunda janela no processo filho `spawn` é o `if __name__ == "__main__"` acima: no Windows o filho reexecuta este arquivo
+        # pelo caminho, como `__mp_main__`, e por isso nada que abre o app pode ficar fora desse bloco.
+        multiprocessing.freeze_support()
         codigo = iniciar()
     except Exception:  # noqa: BLE001 - qualquer falha na abertura vira registro e mensagem
         avisar_falha(traceback.format_exc())

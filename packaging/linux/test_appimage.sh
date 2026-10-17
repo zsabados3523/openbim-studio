@@ -31,7 +31,7 @@ passo "extrair (direito de trocar bibliotecas: LGPL-COMO-TROCAR.md passo 1)"
 ( cd "$W" && "$IMG" --appimage-extract >/dev/null ) || falha "--appimage-extract falhou"
 R="$W/squashfs-root"
 for f in licenses/AGPL-3.0-or-later.txt licenses/LGPL-3.0.txt licenses/LGPL-2.1.txt licenses/GPL-3.0.txt \
-         licenses/OCCT-exception-1.0.txt licenses/nanobind-BSD-3-Clause.txt licenses/INVENTARIO.md licenses/REMOVIDOS.md licenses/FONTES.md \
+         licenses/OCCT-exception-1.0.txt licenses/nanobind-BSD-3-Clause.txt licenses/tsl-robin-map-MIT.txt licenses/INVENTARIO.md licenses/REMOVIDOS.md licenses/FONTES.md \
          LGPL-COMO-TROCAR.md env/lib/libQt6Core.so.6; do
   [ -e "$R/$f" ] || falha "faltou $f"
 done

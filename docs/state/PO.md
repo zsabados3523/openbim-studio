@@ -1,6 +1,6 @@
 # Perguntas e decisões do PO
 
-> Duas partes: **Regras em vigor** (curta; o que vale hoje) e **Abertas** (o que espera o PO). O histórico de respostas está em `arquivo/PO-historico.md`. Cada pergunta traz a recomendação do líder. Sem resposta, vale a recomendação como decisão assumida, registrada aqui. Atualizado: 2026-10-15.
+> Duas partes: **Regras em vigor** (curta; o que vale hoje) e **Abertas** (o que espera o PO). O histórico de respostas está em `arquivo/PO-historico.md`. Cada pergunta traz a recomendação do líder. Sem resposta, vale a recomendação como decisão assumida, registrada aqui. Atualizado: 2026-10-17.
 
 ## Regras em vigor (2026-10-14)
 - **Opus:** abrir sessão só com semanal acima de 25% restante e janela de 5 h abaixo de 70% (D9). A exceção de cota de 13/10 **encerrou** em 14/10 09:00Z. Quem abre: o líder, como subagente, conforme o `CLAUDE.md` item 6. **Exceção de 2026-10-15 (PO):** lotes 29, 30 e 31 podem abrir sem checar o uso, só desta vez.
@@ -16,7 +16,7 @@
 ## Abertas (esperam o PO)
 | # | Pergunta | Recomendação do líder |
 |---|---|---|
-| A1 | Rodada única na tela real do Linux para os números oficiais da S04 (M1 a M6), quando PR 83 e T14c entrarem | Sim, depois que a D1 acabar |
+| A1 | (Feita em 2026-10-17: ver a decisão abaixo.) | — |
 | A2 | ADR-001 e ADR-004 com números (cartão T19) e a nota sobre a interface `atualizar(lote_novo, guids_remover)` | Decidir ao fim da S04, com a medição do critério de custo de manutenção (P6) |
 | A3 | Travar o ambiente do instalador (`packaging/runtime-environment.yml`) pela mesma trava `.lock` | Sim |
 | A4 | Aplicar ao AppImage o mesmo critério do instalador (roda só quando o empacotamento muda) | Sim, depois de ver o PR 91 funcionando |
@@ -25,6 +25,9 @@
 | A9 | Confirmar que as exceções de ausência acabaram | Sim |
 | A10 | Passar os números do `/usage` de 13 e 14/10 para `QUOTA.md` | Informar janela e semana, antes e depois |
 | A11 | D5: nomes dos colegas de estágio para testar e momento | Sem prazo; combinar antes da F1 |
+| A16 | Build incremental do Windows no CI: o módulo compila em 17 s, mas a cadeia (testes do viewport 22 min 40 s + instalador 11 min 25 s; execução inteira 34 min 12 s) segue acima da meta de 10 min do ADR-005 (gatilho do §10 item 7). Opções: (a) manter a meta e abrir cartão para encurtar (por exemplo dividir os testes do viewport do Windows em dois jobs em paralelo); (b) aceitar de novo, como em 2026-10-11, com o motivo registrado; (c) medir a meta só pelo módulo e pelo pacote (muda a meta; não recomendo) | (a), de acordo com o que você decidiu hoje sobre não afrouxar metas |
+| A17 | Retomar o T20 (memória do pesado, hoje pausado) com a etapa 1 `F0-S04-T21` (só medir onde a memória vai) e abrir o `F0-S04-T22` (só analisar o M2b em IFC real). Os dois são rascunhos. os 3 IFC e o de 25 MB já foram liberados em 2026-10-17 para a medição; ao começar cada cartão, confirmo no chat quais vou abrir (T21: o pesado; T22: o de 25 MB e o detalhado) | Sim aos dois; T21 primeiro |
+| A18 | Roteiro de aceite da S04 para você (cartão T18): o que você confere sozinho no AppImage e no instalador. Está pendente porque o desenho do programa depende do T19 | Escrever depois da sua decisão do T19 |
 | A15 | SINAPI: o PO informou (2026-10-15) que o uso gratuito é permitido, mas software que automatiza processos ou buscas precisa de autorização da CAIXA. Confirmar o texto e pedir a autorização formal | Consulta formal à CAIXA como requisito da F5; texto fica em `docs/research/2026-10-10-sinapi-termos.md` |
 
 - **Entrevista S09 (A13), aceita pelo PO em 2026-10-15,** com um ajuste: depois dos eixos vem a estrutura, e as paredes não precisam ficar presas a eixos; a ordem do fluxo é hábito, não obrigação. Wireframes podem começar quando o PO mandar as imagens.
@@ -35,7 +38,7 @@
 - **Entrevista com o PO (grill-me) para toda feature nova ou dúvida de comportamento (2026-10-15/16),** não para correções internas.
 - **A7 respondida (2026-10-17):** o PO deu o ok e o ambiente local ganhou `zlib` 1.3.2 e `libxml2-devel` 2.15.4 (versões da trava); a compilação do fluxo B na máquina do PO funciona. Pendência fechada.
 - **IFC do PO e carga pesada (2026-10-17):** o PO liberou os 3 IFC dele e o de 25 MB (fora do repositório, `../openbim-studio-referencia/`) para o ensaio da medição oficial e permitiu rodar a carga pesada. O ensaio rodou só em tela virtual; só números, nunca nomes de peças, entram nos relatórios.
-- **Rodada oficial na tela real do Linux (A1):** só com ok e horário do PO, depois da T15d (feita). Pendente.
+- **Rodada oficial na tela real do Linux (A1), feita em 2026-10-17** (18:25 a 19:04, RTX 3070): números em `reports/F0-S04.md`. Decisões do PO no chat, no mesmo dia: manter as metas e as réguas rigorosas, não afrouxar nada; (1) memória do arquivo pesado acima de 6,0 GB (6,84 GB): manter a meta, registrar o número e abrir cartão para reduzir (T21, etapa 1 do T20); (2) M2b em IFC real acima de 200 ms (399 ms e 6.749 ms): abrir cartão de análise do que pesa no quadro com modelos reais, antes de mexer em meta ou régua (T22); (3) forma 2 reprova a parede de 150 aberturas: reforça a forma 1 (thread à parte), decisão formal no T19 (ADR-001 e ADR-004); (4) sem capturas das threads e da parede, não refazer. Abertas: A16 a A18 e a decisão do T19.
 
 ## Histórico
 Todas as respostas e decisões anteriores do PO (2026-10-10 a 2026-10-15) estão em `arquivo/PO-historico.md`. Resposta nova: registrar aqui só se virar regra em vigor ou pergunta aberta; o resto vai para o histórico.

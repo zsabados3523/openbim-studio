@@ -41,3 +41,4 @@ Regra de abertura do Opus em vigor: semanal acima de 25% restante e janela abaix
 - 2026-10-17 (por volta das 20h): **o PO usou a redefinição de limite**. A semanal voltou a 0%; a próxima renovação semanal é em 2026-10-21 por volta das 09:00Z. Antes da redefinição a semanal estava em 84% a 87% (linha anterior).
 - 2026-10-17 a 2026-10-18: a janela de 5 h chegou a 69% e 71% (renovações às 23:30Z e 04:30Z).
 - 2026-10-18 (manhã): semanal em 14% e janela de 5 h em 0% quando o lote Opus 57 foi aberto (lote de planejamento: T20 fase 1 e T22). Aberto com semanal acima de 25% restante e janela abaixo de 70% (regra do `CLAUDE.md` item 6).
+- 2026-10-18 (lote Opus 58, planejamento TA, esforço médio): janela de 5 h em 61% e semanal em 28% antes de abrir; depois: a medir.

@@ -33,6 +33,7 @@
 | F0-S04-T21 | Onde vai a memória ao abrir o arquivo pesado | T2 | AGUARDA_PO | MESCLADO: relatório `reports/F0-S04-T21.md` no `main` (PR 163, 2026-10-18); sonda no PR 162 (mesclado). Medição: 36 aberturas, tela virtual. Aguarda decisão do PO sobre as opções (T20, fase 1: lote Opus 57) |
 | F0-S04-T22 | O que pesa no M2b com modelos reais | T2 | AGUARDA_PO | MESCLADO: relatório COMPLETO em `reports/F0-S04-T22.md` no `main` (PR 161, 2026-10-18): placa real 49 / 399 / 6.748 ms; cena inteira provavelmente reenviada a 2 MiB por quadro (hipótese 1, não provada); opções A a E com o PO |
 | F0-S04-T23 | Encurtar a cadeia de testes do Windows no CI | T2 | AGUARDA_PO | Rascunho (a escrever → rascunho para o PO): meta de 10 min do ADR-005 mantida pelo PO (A16, 2026-10-17); hoje 34 min 05 s; 4 tarefas T23a a T23d; piso estimado só com o CI de 15 a 17 min (o resto está em `packaging/`); sem ok do PO não começa |
+| F0-S04-T24 | Testes baratos da memória do arquivo pesado | T2 | EM_REVISAO | Medido em 2026-10-18 (tela virtual, 22 aberturas do pesado): 1-B padrão 6.511 MB (meta 6.000); 1-B com bloco 250 5.970 / 6.022 MB a 60,6 s; relatório `reports/F0-S04-T24.md`, sonda no PR 169. A escolha da opção é do PO |
 
 ## Revisão geral da F0 (2026-10-15)
 Cartões F0-RG-01 a RG-25 (relatório `reports/F0-REVISAO-GERAL-2026-10-15.md`, Parte D). Andamento de cada um: `LOG.md` e os PRs no GitHub.

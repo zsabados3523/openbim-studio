@@ -1,10 +1,11 @@
 # Perguntas e decisões do PO
 
-> Duas partes: **Regras em vigor** (curta; o que vale hoje) e **Abertas** (o que espera o PO). O histórico de respostas está em `arquivo/PO-historico.md`. Cada pergunta traz a recomendação do líder. Sem resposta, vale a recomendação como decisão assumida, registrada aqui. Atualizado: 2026-10-17.
+> Duas partes: **Regras em vigor** (curta; o que vale hoje) e **Abertas** (o que espera o PO). O histórico de respostas está em `arquivo/PO-historico.md`. Cada pergunta traz a recomendação do líder. Sem resposta, vale a recomendação como decisão assumida, registrada aqui. Atualizado: 2026-10-18.
 
 ## Regras em vigor (2026-10-14)
 - **Opus:** abrir sessão só com semanal acima de 25% restante e janela de 5 h abaixo de 70% (D9). A exceção de cota de 13/10 **encerrou** em 14/10 09:00Z. Quem abre: o líder, como subagente, conforme o `CLAUDE.md` item 6. **Exceção de 2026-10-15 (PO):** lotes 29, 30 e 31 podem abrir sem checar o uso, só desta vez.
-- **S04 pausada (D1):** nenhuma T3 nova na S04 (T14c, T15 em diante) até as revisões de S01, S02 e S03 e as respostas D1 a D8. Só terminam PR 83 (T12).
+- **S04 retomada (2026-10-15):** a pausa da D1 acabou; o PO mandou retomar a S04 no dia 2026-10-15 (confirmado por ele no chat em 2026-10-18).
+- **Cota (decisão do PO, 2026-10-18, no chat):** o PO usou a redefinição de limite em 2026-10-17 (~20h); a nota "piso de 25% atingido, sem lote Opus até 21/10" foi superada. Valem a regra de abertura do Opus (semanal acima de 25% restante, janela abaixo de 70%) e a autorização do PO. Números em `QUOTA.md`.
 - **Escopo da 1.0 (D3):** versão mínima **inclui detalhes 2D**. DXF e fachadas são candidatos a adiar na sessão de escopo. Prazo de 21 a 42 meses não é recalculado antes da medição da F0.
 - **Planos antigos (D2):** estão em `docs/arquivo/`; `CLAUDE.md` atualizado (F0-RG-24, aprovado pelo PO em 2026-10-15).
 - **Exceção de portão (D8):** toda exceção registra a meta original e o motivo; o portão F0 (S10) é reavaliado com as metas originais.

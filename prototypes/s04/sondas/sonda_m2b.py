@@ -1,15 +1,16 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Sonda da F0-S04-T22: onde o tempo do M2b (trocar a geometria de uma parede) vai, por fase, em IFC real.
 Só ENVOLVE o fluxo A (troca métodos e funções no processo; não edita fluxo_a.py, lote.py nem o núcleo). Uma execução = uma rodada, em processo próprio.
-Fases (mesmo relógio do núcleo): comando (API do ifcopenshell, com um item por caso de uso), commit, malha (obimcore.malhas), montagem (LoteMalha), atualizar (Cena.atualizar), quadro
+Fica em sondas/ (e não em fluxo_a/) para não entrar na contagem de linhas do M7. Fases (mesmo relógio do núcleo): comando (API do ifcopenshell, com um item por caso de uso), commit, malha (obimcore.malhas), montagem (LoteMalha), atualizar (Cena.atualizar), quadro
 (da volta do comando até o quadro apresentado), outros (o resto de ms_total). O JSON só leva números e o rótulo de tamanho: nada de nome de arquivo, GlobalId ou texto de erro.
-Uso: sonda_m2b.py rodada (--ifc ARQ | --sintetica N) --rotulo R --saida ARQ.json [--trocas 30] [--criar 200] [--perfil ARQ.json]
+Uso: sonda_m2b.py rodada (--ifc ARQ | --sintetica N) --rotulo R --saida ARQ.json [--trocas 30] [--criar 200] [--perfil ARQ.json] [--exigir-placa]
      sonda_m2b.py agregar PASTA ROTULO[,ROTULO...]   (lê PASTA/ROTULO_r*.json; tabela por fase: mediana das rodadas e pior valor)"""
 import argparse
 import cProfile
 import json
 import os
 import pstats
+import shutil
 import sys
 import tempfile
 import time
@@ -20,8 +21,9 @@ from pathlib import Path
 import numpy as np
 
 AQUI = Path(__file__).resolve().parent
-for p in (AQUI, AQUI.parents[2] / "scripts", AQUI.parents[1], AQUI.parents[2] / "app"):
+for p in (AQUI.parent / "fluxo_a", AQUI.parents[2] / "scripts", AQUI.parents[1], AQUI.parents[2] / "app"):  # só a pasta do fluxo A (não prototypes/s04: `fluxo_a/` viraria pacote)
     sys.path.insert(0, str(p))
+ROTULOS = ("sint3000", "sint42k", "m25", "m25perfil", "det")  # sintética 3.000, sintética 41.600, 25 MB (sem e com perfil), detalhado
 FASES = ("comando", "commit", "malha", "montagem", "atualizar", "quadro", "outros")
 TIPO = {"cmd": "criar_tipo", "nome": "PAR15", "camadas_m": [0.02, 0.11, 0.02]}
 PAREDE = {"cmd": "criar_parede", "tipo": "PAR15", "comprimento": 4.0, "altura": 2.8, "espessura": 0.15}
@@ -118,16 +120,20 @@ def rodada(a):
     import fluxo_a
     saida = {"versao": 1, "rotulo": a.rotulo, "trocas": a.trocas, "criar": a.criar, "criar_reps": [], "trocar_reps": [], "erro": None}
     passo = "abrir_ifc"
+    tmp = tempfile.mkdtemp(dir=os.environ.get("TMPDIR"))  # IFC sintético e pasta de saída do fluxo: apagados no fim
     try:
         if a.sintetica:
             import gerar_modelo_grande
-            ifc = str(Path(os.environ["TMPDIR"]) / f"base{a.sintetica}.ifc")
+            ifc = str(Path(tmp) / f"base{a.sintetica}.ifc")
             gerar_modelo_grande.gerar(ifc, paredes=a.sintetica)
         else:
             ifc = a.ifc
         t = time.perf_counter()
-        f = fluxo_a.FluxoA(ifc, janela=True, saida=tempfile.mkdtemp(dir=os.environ["TMPDIR"]))
+        f = fluxo_a.FluxoA(ifc, janela=True, saida=Path(tmp) / "saida")
         saida["abrir_ifc_s"] = time.perf_counter() - t
+        saida["desenho"] = {"info": str(f.cena.info()), "software": bool(f.cena.desenho_por_software())}  # prova de qual desenho esta rodada usou
+        if a.exigir_placa and saida["desenho"]["software"]:
+            raise RuntimeError("desenho por software")
         if f.ifc.schema != "IFC4":
             raise ValueError("esquema")
         saida["modelo"] = {"esquema": f.ifc.schema, "produtos_com_geometria": sum(1 for p in f.ifc.by_type("IfcProduct") if p.Representation), "relacoes": len(f.ifc.by_type("IfcRelationship")),
@@ -166,6 +172,7 @@ def rodada(a):
     except BaseException as e:  # só a classe, o passo e os nomes das funções da pilha: a mensagem pode ter dado do modelo
         saida["erro"] = {"classe": type(e).__name__, "passo": passo, "funcoes": [x.name for x in traceback.extract_tb(e.__traceback__)][-6:]}
     Path(a.saida).write_text(json.dumps(saida, ensure_ascii=False, indent=1), encoding="utf-8")
+    shutil.rmtree(tmp, ignore_errors=True)
     sys.stdout.flush()
     os._exit(0)  # sem desmontar o Qt nem o modelo grande
 
@@ -201,11 +208,12 @@ if __name__ == "__main__":
     g = r.add_mutually_exclusive_group(required=True)
     g.add_argument("--ifc")
     g.add_argument("--sintetica", type=int)
-    r.add_argument("--rotulo", required=True)
+    r.add_argument("--rotulo", required=True, choices=ROTULOS)  # só rótulos de tamanho: nunca nome de arquivo
     r.add_argument("--saida", required=True)
     r.add_argument("--trocas", type=int, default=30)
     r.add_argument("--criar", type=int, default=200)
     r.add_argument("--perfil")
+    r.add_argument("--exigir-placa", action="store_true", help="para a rodada se o desenho for por software")
     ag = sub.add_parser("agregar")
     ag.add_argument("pasta")
     ag.add_argument("rotulos")

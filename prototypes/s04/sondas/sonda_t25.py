@@ -12,7 +12,6 @@ import os
 import shutil
 import sys
 import tempfile
-import time
 import traceback
 from pathlib import Path
 
@@ -25,7 +24,6 @@ ROTULOS = {"sint3000": 3000, "sint10k": 10000, "sint20k": 20000, "sint42k": 4160
 TIPO = {"cmd": "criar_tipo", "nome": "PAR15", "camadas_m": [0.02, 0.11, 0.02]}
 PAREDE = {"cmd": "criar_parede", "tipo": "PAR15", "comprimento": 4.0, "altura": 2.8, "espessura": 0.15}
 CASOS = ("criar", "troca_recente", "reenvio_pos_recente", "troca_arquivo", "reenvio_pos_arquivo")  # cada reenvio forçado vem logo depois da troca e do mesmo estado da cena
-CHAVES = ("triangulos", "triangulos_na_placa", "fatias_enviadas", "contextos")
 
 
 def observar(f, agir, limite_ms=15000):  # um caso: `agir()` -> {"seq", "t0", "t_cmd", ["contexto"]}; amostra uma vez por quadro novo depois de o comando voltar

@@ -32,6 +32,7 @@
 | F0-S04-T20 | Memória final do viewport abaixo de 6,0 GB | T3 | PAUSADA | Cartão-mãe. Medido 6,84 GB (2026-10-17); PO manteve a meta e mandou abrir cartão; a retomada pede o ok do PO (A17) |
 | F0-S04-T21 | Onde vai a memória ao abrir o arquivo pesado | T2 | EM_REVISAO | Medição feita (36 aberturas, tela virtual); relatório `reports/F0-S04-T21.md`; sonda no pedido 162. Próximo: opus planeja as opções (T20, fase 1) |
 | F0-S04-T22 | O que pesa no M2b com modelos reais | T2 | EM_REVISAO | Relatório COMPLETO em `reports/F0-S04-T22.md` (PR 161): placa real 49 / 399 / 6.748 ms; cena inteira provavelmente reenviada a 2 MiB por quadro (hipótese 1, não provada); opções A a E com o PO |
+| F0-S04-T25 | Diagnóstico barato da troca de geometria (M2b), cenas sintéticas | T2 | EM_REVISAO | Teste T2-0 do lote Opus 57 feito (12 rodadas, tela virtual, sem arquivo do PO): hipótese 1 confirmada nos contadores (pedaços da troca = pedaços do reenvio completo em 468 de 468 pares; criar = 2 pedaços em 360 de 360). Relatório `reports/F0-S04-T25.md`; escolha entre 2-A e 2-G espera os lotes do arquivo real (PO) |
 | F0-S04-T23 | Encurtar a cadeia de testes do Windows no CI | T2 | AGUARDA_PO | Rascunho (a escrever → rascunho para o PO): meta de 10 min do ADR-005 mantida pelo PO (A16, 2026-10-17); hoje 34 min 05 s; 4 tarefas T23a a T23d; piso estimado só com o CI de 15 a 17 min (o resto está em `packaging/`); sem ok do PO não começa |
 
 ## Revisão geral da F0 (2026-10-15)

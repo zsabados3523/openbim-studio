@@ -255,13 +255,14 @@ def resumir(a):
             mx = lambda papel, i: max(_maximo(am, papel, i, x, y) for x, y in trechos)  # noqa: E731
             print(f"| {nome} | {trechos[0][0]:.1f} | {trechos[-1][1]:.1f} | {sum(max(0.0, y - x) for x, y in trechos):.1f} | "
                   f"{mx('f1', 0)} | {mx('f1', 1)} | {mx('pai', 0)} |")
-        print("\n| bloco | anônima ao começar | anônima máx no cálculo | anônima ao começar o seguinte | queda do pico até o seguinte | acima da base (após abrir) ao começar o seguinte | enviado ao pai MB |\n|---|---|---|---|---|---|---|")
+        print("\n| bloco | calcular s | enviar s | anônima ao começar | anônima máx do bloco (calcular + enviar) | instante do máx s | acima da base (após abrir) ao começar o seguinte | enviado ao pai MB |\n|---|---|---|---|---|---|---|---|")
         base = _em(am, "f1", 1, ini[0])  # anônima do filho depois de abrir e listar
         for k in range(len(conv)):
             ini_k, nxt = ini[k], ini[k + 1]
             env = sum(m[2] for m in mk if m[1] == "lote" and fim_calc[k] <= m[0] <= nxt) / 2**20
-            pico_k, depois = _maximo(am, "f1", 1, ini_k, nxt), _em(am, "f1", 1, nxt - 0.1)
-            print(f"| {k + 1} | {_em(am, 'f1', 1, ini_k)} | {_maximo(am, 'f1', 1, ini_k, fim_calc[k])} | {depois} | {pico_k - depois} | {depois - base} | {env:.0f} |")
+            sub = [s for s in am if ini_k <= s["t"] <= nxt and "f1" in s]
+            pico = max(sub, key=lambda s: s["f1"][1]) if sub else {"t": ini_k, "f1": [0, 0]}
+            print(f"| {k + 1} | {fim_calc[k] - ini_k:.1f} | {nxt - fim_calc[k]:.1f} | {_em(am, 'f1', 1, ini_k)} | {pico['f1'][1]} | {pico['t']:.1f} | {_em(am, 'f1', 1, nxt - 0.1) - base} | {env:.0f} |")
         print("\n| t s | pai residente | pai anônima | filho residente | filho anônima | filho privada (1 Hz) | soma residente |\n|---|---|---|---|---|---|---|")
         passo = max(1.0, round(t_morte / 20))
         for s in am[::max(1, int(passo * r["amostragem_hz"]))]:

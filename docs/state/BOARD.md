@@ -31,7 +31,7 @@
 | F0-S04-T19 | ADR-001 e ADR-004 com números | TA | NAO_INICIADA | Decisão do PO; números oficiais prontos em `reports/F0-S04.md` e `reports/F0-S04-threads.md` |
 | F0-S04-T20 | Memória final do viewport abaixo de 6,0 GB | T3 | PAUSADA | Cartão-mãe. Medido 6,84 GB (2026-10-17); PO manteve a meta e mandou abrir cartão; a retomada pede o ok do PO (A17) |
 | F0-S04-T21 | Onde vai a memória ao abrir o arquivo pesado | T2 | AGUARDA_PO | Rascunho (etapa 1 do T20, só medir); sem ok do PO não começa |
-| F0-S04-T22 | O que pesa no M2b com modelos reais | T2 | AGUARDA_PO | Rascunho (só análise; sem mexer em meta ou régua); sem ok do PO não começa |
+| F0-S04-T22 | O que pesa no M2b com modelos reais | T2 | em revisão | Sonda e relatório prontos (PR aberto); sintética e 25 MB medidas em tela virtual; detalhado parou no limite de 10 s em `abrir` (PRECISA_PO: opções a, b, c no relatório) |
 
 ## Revisão geral da F0 (2026-10-15)
 Cartões F0-RG-01 a RG-25 (relatório `reports/F0-REVISAO-GERAL-2026-10-15.md`, Parte D). Andamento de cada um: `LOG.md` e os PRs no GitHub.

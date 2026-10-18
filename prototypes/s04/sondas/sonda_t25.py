@@ -4,7 +4,7 @@ Só ENVOLVE o fluxo A (não edita fluxo_a.py, lote.py nem o núcleo); fica em so
 Por quadro novo (relógio da Cena) lê `estatisticas()` UMA vez (sem laço apertado: o mutex da cena é do desenho também) e guarda pedaços de lote enviados, triângulos na placa e contextos.
 Casos: criar (controle: só acrescenta um lote), trocar parede criada pelo roteiro (lote de 1 parede), trocar parede do arquivo aberto (lote de BLOCO paredes), reenvio completo forçado por
 `perder_contexto()` e cena parada. O JSON só leva números e o rótulo de tamanho.
-Uso: sonda_t25.py rodada --sintetica N --rotulo R --saida ARQ.json [--criar 30] [--trocas 30] [--trocas-arquivo 10]
+Uso: sonda_t25.py rodada (--sintetica N | --ifc ARQ) --rotulo R --saida ARQ.json [--criar 30] [--trocas 30] [--trocas-arquivo 10]
      sonda_t25.py agregar PASTA ROTULO[,ROTULO...]   (lê PASTA/ROTULO_r*.json; mediana das rodadas, pior valor e os critérios do cartão)"""
 import argparse
 import json
@@ -12,7 +12,6 @@ import os
 import shutil
 import sys
 import tempfile
-import time
 import traceback
 from pathlib import Path
 
@@ -21,11 +20,10 @@ import numpy as np
 AQUI = Path(__file__).resolve().parent
 for p in (AQUI.parent / "fluxo_a", AQUI.parents[2] / "scripts", AQUI.parents[1], AQUI.parents[2] / "app"):
     sys.path.insert(0, str(p))
-ROTULOS = {"sint3000": 3000, "sint10k": 10000, "sint20k": 20000, "sint42k": 41600}
+ROTULOS = {"sint3000": 3000, "sint10k": 10000, "sint20k": 20000, "sint42k": 41600, "m25": None}  # m25: arquivo real de 25 MB (--ifc); só o rótulo vai ao JSON, nunca o nome do arquivo
 TIPO = {"cmd": "criar_tipo", "nome": "PAR15", "camadas_m": [0.02, 0.11, 0.02]}
 PAREDE = {"cmd": "criar_parede", "tipo": "PAR15", "comprimento": 4.0, "altura": 2.8, "espessura": 0.15}
 CASOS = ("criar", "troca_recente", "reenvio_pos_recente", "troca_arquivo", "reenvio_pos_arquivo")  # cada reenvio forçado vem logo depois da troca e do mesmo estado da cena
-CHAVES = ("triangulos", "triangulos_na_placa", "fatias_enviadas", "contextos")
 
 
 def observar(f, agir, limite_ms=15000):  # um caso: `agir()` -> {"seq", "t0", "t_cmd", ["contexto"]}; amostra uma vez por quadro novo depois de o comando voltar
@@ -60,6 +58,13 @@ def observar(f, agir, limite_ms=15000):  # um caso: `agir()` -> {"seq", "t0", "t
             "sequencia_caiu": any(b < a_ for a_, b in zip(seqs, seqs[1:]))}, a
 
 
+def saida_fora_do_repositorio(caminho):  # mesma guarda da sonda_memoria.py (T24): dado de medição nunca dentro do repositório
+    p = Path(caminho).resolve()
+    if AQUI.parents[2] in p.parents:
+        raise SystemExit("a saída da sonda tem de ficar fora do repositório")
+    return p
+
+
 def comando(f, cmd):
     def agir():
         g, u = f.executar_detalhado(cmd)
@@ -87,7 +92,19 @@ def lotes_da_cena(f):  # bytes de vértices e índices de cada lote anotado em `
         b.append(nb) if nb else None
         vazios += nb == 0
     b = sorted(b)
-    return {"lotes": len(b), "vazios": vazios, "indisponiveis": indisp, "mediana_bytes": float(np.median(b)) if b else 0, "maior_bytes": b[-1] if b else 0, "menor_bytes": b[0] if b else 0, "soma_bytes": sum(b)}
+    return {"lotes": len(b), "vazios": vazios, "indisponiveis": indisp, "mediana_bytes": float(np.median(b)) if b else 0, "maior_bytes": b[-1] if b else 0, "menor_bytes": b[0] if b else 0, "soma_bytes": sum(b), "acima_de_2MiB": sum(x > (2 << 20) for x in b), "maiores_bytes": b[-5:]}
+
+
+def bytes_por_guid(f):  # bytes (vértices+índices) do lote que hoje contém cada GlobalId; só para saber o tamanho do lote tocado
+    r = {}
+    for s in f.sequencias:
+        try:
+            o = f.cena.objetos(s)
+        except Exception:
+            continue
+        nb = int(28 * o["n_vertices"].sum() + 4 * o["n_indices"].sum())
+        r.update({g: nb for g in o["guid"]})
+    return r
 
 
 def estat(f):
@@ -95,13 +112,17 @@ def estat(f):
     return {k: int(e[k]) for k in ("triangulos", "vertices", "lotes", "bytes_copia", "fatias_enviadas", "triangulos_na_placa", "contextos")}
 
 
-def uma_vez(f, saida, casos, nome, cmds, par=None):  # roda os comandos em sequência; com `par`, cada um é seguido de um reenvio forçado da MESMA cena (a troca reenvia a cena já trocada)
+def uma_vez(f, saida, casos, nome, cmds, par=None, tam=None, max_ok=None):  # roda os comandos em sequência; com `par`, cada um é seguido de um reenvio forçado da MESMA cena (a troca reenvia a cena já trocada)
     for cmd in cmds:
+        if max_ok and len(casos[nome]) >= max_ok:
+            break
         try:
             r, a = observar(f, cmd)
         except ValueError as e:  # só a classe: o texto pode ter dado do modelo
             saida.setdefault("erros_comando", []).append({"caso": nome, "classe": type(e).__name__})
             continue
+        if tam is not None:
+            r["bytes_lote_tocado"] = tam.get(a["guids"][0])
         casos[nome].append(r)
         f._bombear(lambda: False, 150)  # a cena assenta antes do próximo caso
         if par:
@@ -114,17 +135,23 @@ def rodada(a):
     import ifcopenshell  # noqa: F401  (antes do obimcore)
     import fluxo_a
     import gerar_modelo_grande
-    saida = {"versao": 1, "rotulo": a.rotulo, "paredes": ROTULOS[a.rotulo], "casos": {c: [] for c in CASOS}, "erro": None, "carga_antes": os.getloadavg(), "bloco_abrir": fluxo_a.BLOCO}
+    saida = {"versao": 1, "rotulo": a.rotulo, "paredes": ROTULOS[a.rotulo], "arquivo_real": bool(a.ifc), "casos": {c: [] for c in CASOS}, "erro": None, "carga_antes": os.getloadavg(), "bloco_abrir": fluxo_a.BLOCO}
     passo, tmp = "gerar", tempfile.mkdtemp(dir=os.environ.get("TMPDIR"))
     try:
-        ifc = str(Path(tmp) / f"base{ROTULOS[a.rotulo]}.ifc")
-        gerar_modelo_grande.gerar(ifc, paredes=ROTULOS[a.rotulo])
+        if a.ifc:
+            ifc = a.ifc
+        else:
+            ifc = str(Path(tmp) / f"base{ROTULOS[a.rotulo]}.ifc")
+            gerar_modelo_grande.gerar(ifc, paredes=ROTULOS[a.rotulo])
         passo = "abrir_ifc"
         f = fluxo_a.FluxoA(ifc, janela=True, saida=Path(tmp) / "saida")
         saida["desenho"] = {"info": str(f.cena.info()), "software": bool(f.cena.desenho_por_software())}
         if not (hasattr(f.cena, "perder_contexto") and "contextos" in f.cena.estatisticas()):
             raise RuntimeError("módulo sem perder_contexto ou contextos")
+        if a.ifc and f.ifc.schema != "IFC4":
+            raise ValueError("esquema")
         todos = [p.GlobalId for p in f.ifc.by_type("IfcProduct") if p.Representation]  # mesma ordem do `abrir`
+        paredes = [p.GlobalId for p in f.ifc.by_type("IfcWall") if p.Representation]
         passo = "abrir"
         _, u = f.executar_detalhado({"cmd": "abrir"})
         f._quadro(u["sequencia"], u["t0_ms"], u["t_comando_ms"])
@@ -136,12 +163,16 @@ def rodada(a):
         f.executar({"cmd": "enquadrar"})
         f._bombear(lambda: False, 500)
         saida["cena_antes_das_trocas"], saida["lotes_antes_das_trocas"] = estat(f), lotes_da_cena(f)
+        tam = bytes_por_guid(f)
         passo = "troca_recente"
-        list(uma_vez(f, saida, saida["casos"], "troca_recente", [comando(f, {"cmd": "mudar_comprimento", "alvo": g, "comprimento": 5.0}) for g in guids[:a.trocas]], "reenvio_pos_recente"))
+        list(uma_vez(f, saida, saida["casos"], "troca_recente", [comando(f, {"cmd": "mudar_comprimento", "alvo": g, "comprimento": 5.0}) for g in guids[:a.trocas]], "reenvio_pos_recente", tam))
         passo = "troca_arquivo"
-        nlotes = -(-len(todos) // fluxo_a.BLOCO)
-        alvos = [todos[k * fluxo_a.BLOCO + 7] for k in range(0, nlotes, max(1, nlotes // a.trocas_arquivo))][:a.trocas_arquivo]  # uma parede por lote do arquivo
-        list(uma_vez(f, saida, saida["casos"], "troca_arquivo", [comando(f, {"cmd": "mudar_comprimento", "alvo": g, "comprimento": 5.0}) for g in alvos], "reenvio_pos_arquivo"))
+        if a.ifc:  # arquivo real: paredes espalhadas pelo arquivo; as que não têm corpo extrudado dão ValueError (registrado) e a próxima entra; para em `trocas_arquivo` trocas feitas
+            alvos = [paredes[k] for k in np.linspace(0, len(paredes) - 1, min(len(paredes), 6 * a.trocas_arquivo)).astype(int)]
+        else:
+            nlotes = -(-len(todos) // fluxo_a.BLOCO)
+            alvos = [todos[k * fluxo_a.BLOCO + 7] for k in range(0, nlotes, max(1, nlotes // a.trocas_arquivo))][:a.trocas_arquivo]  # uma parede por lote do arquivo
+        list(uma_vez(f, saida, saida["casos"], "troca_arquivo", [comando(f, {"cmd": "mudar_comprimento", "alvo": g, "comprimento": 5.0}) for g in alvos], "reenvio_pos_arquivo", tam, a.trocas_arquivo))
         saida["cena_depois_das_trocas"] = estat(f)
         passo = "parado"
         e0, t0 = f.cena.estatisticas(), f._relogio()
@@ -173,6 +204,9 @@ def resumo_caso(rs, caso):  # rs: rodadas; por rodada a mediana do caso; devolve
     d["fatias_por_quadro"] = {"mediana": med(pf), "maior": max(pf), "quadros_observados": len(pf)}
     d["contextos_delta_maior"] = max(q["contextos_delta"] for e in ev for q in e)
     d["eventos"] = sum(len(e) for e in ev)
+    bt = [q["bytes_lote_tocado"] for e in ev for q in e if q.get("bytes_lote_tocado") is not None]
+    if bt:
+        d["bytes_lote_tocado"] = {"menor": min(bt), "mediana": med(bt), "maior": max(bt), "acima_de_2MiB": sum(x > (2 << 20) for x in bt), "eventos": len(bt)}
     d["tri_placa_min_abaixo_de_triangulos_menos_24"] = sum(q["tri_placa_min"] < q["triangulos_antes"] - 24 for e in ev for q in e)
     d["tri_placa_nunca_abaixo_do_anterior"] = sum(q["tri_placa_min"] >= q["tri_placa_antes"] for e in ev for q in e)
     d["tri_placa_final_igual_cena"] = sum(q["tri_placa_depois"] == q["triangulos_depois"] for e in ev for q in e)
@@ -209,7 +243,9 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="modo", required=True)
     r = sub.add_parser("rodada")
-    r.add_argument("--sintetica", type=int, required=True)
+    g = r.add_mutually_exclusive_group(required=True)
+    g.add_argument("--sintetica", type=int)
+    g.add_argument("--ifc")
     r.add_argument("--rotulo", required=True, choices=sorted(ROTULOS))
     r.add_argument("--saida", required=True)
     r.add_argument("--criar", type=int, default=30)
@@ -220,8 +256,9 @@ if __name__ == "__main__":
     ag.add_argument("rotulos")
     a = ap.parse_args()
     if a.modo == "rodada":
-        if a.sintetica != ROTULOS[a.rotulo]:
-            sys.exit("--sintetica não bate com o rótulo")
+        if a.sintetica != ROTULOS[a.rotulo]:  # `--ifc` só com o rótulo m25 (None), `--sintetica` só com o seu tamanho
+            sys.exit("--sintetica/--ifc não batem com o rótulo")
+        a.saida = str(saida_fora_do_repositorio(a.saida))
         import faulthandler
         faulthandler.dump_traceback_later(int(os.environ.get("OBIM_LIMITE", 3600)) - 20, exit=True)
         rodada(a)

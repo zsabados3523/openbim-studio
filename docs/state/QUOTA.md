@@ -36,5 +36,8 @@ Regra de abertura do Opus em vigor: semanal acima de 25% restante e janela abaix
 |---|---|---|---|
 | 1 (10 a 14/10) | 1 dia com pausa por limite (14/10, janela em 90%); sem medida nos demais | Não calculável: faltam antes/depois de 13 e 14/10 | 0 (a fila Opus só tinha itens pausados pela D1) |
 - 2026-10-13 (fim da tarde): janela 67%, semanal 75% (25% restante, no limite). Opus pausado até a renovação; sem novos subagentes em paralelo (janela >60%).
-- 2026-10-16/17 (sessão longa do líder, sonnet + opus lotes 32 a 51): semanal 55% → 76%; janela de 5 h passou de 100% duas vezes (renovou 14:30Z e 00:30Z). Opus por lotes com autorização do PO acima de 70% da janela. Piso de 25% semanal restante atingido: sem novo lote Opus até a renovação semanal em 2026-10-21 09:00Z.
+- 2026-10-16/17 (sessão longa do líder, sonnet + opus lotes 32 a 51): semanal 55% → 76%; janela de 5 h passou de 100% duas vezes (renovou 14:30Z e 00:30Z). Opus por lotes com autorização do PO acima de 70% da janela. Piso de 25% semanal restante atingido nesse momento. **Nota superada** pela redefinição de limite de 2026-10-17 (ver abaixo) e pela autorização do PO: a restrição "sem novo lote Opus até 2026-10-21" não vale mais.
 - 2026-10-17 (lotes Opus 52 e 53, T17a): janela de 5 h em 63% antes do lote 52 e em 84% antes de esperar a renovação; semanal de 84% a 87% (valores do `get_usage` do líder).
+- 2026-10-17 (por volta das 20h): **o PO usou a redefinição de limite**. A semanal voltou a 0%; a próxima renovação semanal é em 2026-10-21 por volta das 09:00Z. Antes da redefinição a semanal estava em 84% a 87% (linha anterior).
+- 2026-10-17 a 2026-10-18: a janela de 5 h chegou a 69% e 71% (renovações às 23:30Z e 04:30Z).
+- 2026-10-18 (manhã): semanal em 14% e janela de 5 h em 0% quando o lote Opus 57 foi aberto (lote de planejamento: T20 fase 1 e T22). Aberto com semanal acima de 25% restante e janela abaixo de 70% (regra do `CLAUDE.md` item 6).

@@ -12,6 +12,7 @@
 | 5 | T17 (módulo no AppImage e instalador; revisão Opus obrigatória, cartão esqueleto a reescrever), T18 (T1), T19 é ADR (decisão do PO) | BOARD | 2026-10-14 | Semanal acima de 25% restante (renova em 21/10) | Média |
 | 6 | Revisão completa do projeto pelo Opus (pedido do PO de 2026-10-15), ao fim da S04, antes do portão da F0 | PO | 2026-10-15 | Depois da T19 | Média |
 | 7 | (feito) **Lote 57 (planejamento, classe TA, sem implementação):** T20 fase 1 (opções para o pico de memória do arquivo pesado) e T22 (opções para o M2b em IFC real). Feito em 2026-10-18; relatório `lotes/LOTE_OPUS_57/resultado.md` | PO (2026-10-17); `reports/F0-S04-T21.md`, `reports/F0-S04-T22.md` | 2026-10-17 | Concluído; sai da fila | — |
+| 8 | **Lote 58 (planejamento, classe TA, esforço médio, sem implementação):** especificar a 1-B com bloco 250 (T20) e a troca de geometria abaixo de 200 ms no detalhado (T22). **Aguardando abertura.** Pedido em `lotes/LOTE_OPUS_58/pedido.md` | PO (2026-10-18); `reports/F0-S04-T24.md` §13, `reports/F0-S04-T25.md` §10 | 2026-10-18 | PRs 170 e 173 no main; uso conferido (semanal acima de 25% restante e janela de 5 h abaixo de 70%, ou ok do PO por evento) | Alta |
 
 ## Já despachado (resumo; detalhes no LOG)
 - **Lote 29 (S01), 2026-10-15: APROVADO 6 de 6** (`lotes/LOTE_OPUS_29/resultado.md`). Aberto pelo líder com a exceção de cota do PO.

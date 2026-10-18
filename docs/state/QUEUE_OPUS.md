@@ -11,6 +11,7 @@
 | 3 | (feito) Revisão da fatia S03: lote 31 em 2026-10-15, 5 itens reprovados por texto, correções aplicadas; relatório `lotes/LOTE_OPUS_31/resultado.md` | PROPOSTA_REVISAO_F0 §3.3 | 2026-10-14 | Concluído; sai da fila | — |
 | 5 | T17 (módulo no AppImage e instalador; revisão Opus obrigatória, cartão esqueleto a reescrever), T18 (T1), T19 é ADR (decisão do PO) | BOARD | 2026-10-14 | Semanal acima de 25% restante (renova em 21/10) | Média |
 | 6 | Revisão completa do projeto pelo Opus (pedido do PO de 2026-10-15), ao fim da S04, antes do portão da F0 | PO | 2026-10-15 | Depois da T19 | Média |
+| 7 | **Lote 57 (planejamento, classe TA, sem implementação):** T20 fase 1 (opções para o pico de memória do arquivo pesado, 6,84 GB, abaixo de 6,0 GB com abertura de até 60 s) e T22 (opções para o M2b em IFC real, 399 e 6.748 ms contra 200 ms); pedido em `lotes/LOTE_OPUS_57/pedido.md` | PO (2026-10-17); `reports/F0-S04-T21.md`, `reports/F0-S04-T22.md` | 2026-10-17 | Semanal acima de 25% e janela de 5 h abaixo de 70% (conferir `get_usage`) | **Alta** |
 
 ## Já despachado (resumo; detalhes no LOG)
 - **Lote 29 (S01), 2026-10-15: APROVADO 6 de 6** (`lotes/LOTE_OPUS_29/resultado.md`). Aberto pelo líder com a exceção de cota do PO.

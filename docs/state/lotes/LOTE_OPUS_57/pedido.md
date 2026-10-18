@@ -1,0 +1,34 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+# LOTE_OPUS_57: planejamento das reduções de memória (F0-S04-T20, fase 1) e do tempo do M2b em IFC real (F0-S04-T22)
+Pedido do líder (2026-10-17). **Classe TA (planejamento): o Opus especifica; ninguém implementa neste lote.** Módulo: viewport e ponte, S04. Escreva só `docs/state/lotes/LOTE_OPUS_57/resultado.md`; não edite nenhum outro arquivo, não escolha a opção, não implemente. Pergunte ao PO, em lista, o que for ambiguidade; não invente.
+
+## Regra do PO (2026-10-17): padrão rigoroso
+Nenhuma opção pode afrouxar meta, régua, limite ou teste existente (metas de `v2/03` S03/S04, juiz de metas, `limite_peca_s`, 60 s, 6,0 GB, 200 ms, M5, saída igual do T12). Mudar métrica ou meta (opções C e D do T22) só aparece como **"decisão do PO"**, com o impacto, e **nunca é recomendada para fechar a tarefa**. Opção que só passa porque uma peça deixou de ser desenhada, uma caixa substituiu a malha ou a saída mudou não vale (a linha de 1 fio do T21 é exemplo do que não vale).
+
+## Contexto fechado (só leitura; nada fora desta lista)
+Relatórios: `docs/state/reports/F0-S04-T21.md` (leia inteiro; as hipóteses dele **não são fatos**), `docs/state/reports/F0-S04-T22.md`, `docs/state/reports/F0-S04.md`. Cartões: `docs/state/cards/F0-S04/F0-S04-T20.md` (o texto cita o nome de uma peça de medição antiga: não o repita), `docs/state/cards/F0-S04/F0-S04-T22.md`. Metas: `v2/03_fase0_especificacao.md` (S03 e S04). ADRs: `docs/adr/ADR-004-processos-threads-e-trava.md`, `docs/adr/ADR-005-dependencias-e-build.md` (§10); o **ADR-001 ainda não existe** (decide-se depois das medições da S04; se algo aqui o afeta, diga). Código: `prototypes/viewport_qrhi/carregador.py`, `prototypes/viewport_qrhi/processo_malhas.py`, `prototypes/s04/fluxo_a/CONTRATO.md`, `prototypes/s04/obimcore/nucleo/motor.h` (`ORCAMENTO_BYTES`, linhas 16, 57, 205 a 219). **Dados do PO (IFC) não entram no contexto**: só os números dos relatórios; não abra `../openbim-studio-referencia/`.
+
+## Item 1: T20 fase 1, memória do arquivo pesado
+Meta: pico somado (pai + maior filho) **< 6,0 GB**, abrir **≤ 60 s**, **saída igual**. Medido (T21, fonte `reports/F0-S04-T21.md`; placa real = oficial `reports/F0-S04.md`; o resto em tela virtual com desenho por software, uma máquina, Linux, arquivo pesado de 14.804 peças e 8,6 mi de triângulos):
+- Oficial na placa real: **6,84 GB**, 8 fios, bloco de 1.000, 40,5 s. A sonda reproduziu: 6.815 MB (mediana, pior 6.875 MB), 48,2 s (T21 §1, §2).
+- **Nenhuma das 12 combinações de fios (1, 2, 4, 8) × bloco (250, 1.000, 4.000) cumpre as duas metas** (T21 §2). Abaixo de 6,0 GB: só 1 fio (cerca de 4,9 GB, 247 a 358 s) e 2 fios com bloco 250 (5.880 MB, 79,4 s). Com 4 fios o menor é 6.044 MB (bloco 250, 60,7 s). **As linhas de 1 fio tiveram 2 peças simplificadas em caixa e 8 processos filhos (T21 §1): não são comparáveis em saída nem em tempo.**
+- O grosso é o processo filho (cerca de 5,7 dos 6,8 GB); o pai fica em 1,02 a 1,09 GB em todas as 36 aberturas. **Só abrir e listar o arquivo custa cerca de 0,9 GB no filho** (T21 §3, §6).
+- Pico no bloco 6 de 15 (8 fios, bloco 1.000): anônima sobe de 2,3 para 5,6 GB em 16,3 s, +3,3 GB (T21 §4). Sozinha, a peça mais pesada (1,6 mi de triângulos) faz o processo crescer ~3,0 GB em 15,1 s; duas de 335 mil, ~1,0 GB e 28 s cada (T21 §5). **O nexo "o bloco 6 tem a peça mais pesada" é hipótese, não medida** (T21 §6 item 3).
+- **Sobra de ~1,2 a 1,3 GB acima da base após o pico (blocos 7 a 15); a causa não foi medida** (alocador retendo, dado vivo ou outra; T21 §4). A queda de 5,0 para 2,3 GB às 40 s também não tem motivo medido (T21 §3).
+- Não explicados no T21: por que o limite de 20 s por peça só atuou com 1 fio se uma peça leva ~28 s sozinha; tempo por peça não segue os triângulos; diferença de 2,6% nos triângulos entre passe e carregador. Windows não medido (T28). Troca (swap) em 0 MB em todas as amostras.
+- Pistas do cartão e do T21 §6.6 (**sem número de ganho**; trate como ponto de partida, não como fato): gerar a peça pesada em pedaços; limitar o tamanho do bloco por peça; filho de vida mais curta ou devolução de memória ao sistema (só se for retenção do alocador); outra forma de abrir o arquivo (os ~0,9 GB). Fios e bloco já estão medidos.
+
+## Item 2: T22, tempo do M2b em IFC real
+Meta: **p95 < 200 ms** (máx 600 no juiz). Medido na placa real (T22; fonte `reports/F0-S04-T22.md`): **49 ms** (sintética 3.000), **399 ms** (arquivo de 25 MB), **6.748 ms** (detalhado); repete a medição oficial (399 e 6.749). Quadro apresentado = **74%, 97% e 99,6%** do total; os cálculos somam menos de 25 ms nos três. Hipótese 1: a cena inteira é reenviada a `ORCAMENTO_BYTES` = 2 MiB por quadro de ~16,7 ms; "bytes da cena ÷ 2 MiB" previu 1,9; 23,0; 25,2; 403,3 quadros e se viram 3; 24; 25; 405 (a de 25,2 é a sintética de 41.600 peças, só em software). **Corroborada, não provada**: falta mudar o orçamento e ver o tempo cair na mesma proporção. Hipótese 2 (a malha cresce com o número de peças) sem confirmação, pesa até 2%. A diferença de 145 ms entre o 25 MB e a sintética de 41.600 (ambos em software) não tem causa medida. O detalhado em software estoura 10 s por quadro na abertura; na placa não.
+Opções do relatório, a especificar: **A** reenviar só o lote tocado (módulo C++, T3); **B** subir o orçamento (pode piorar M5, que hoje passa: maior intervalo 17,9 ms, meta < 200 ms); **C** mudar o ponto de medição do M2b (régua; PO); **D** meta por tamanho de cena (PO); **E** manter e registrar. C, D e E **só entram como "decisão do PO" com o impacto**, sem recomendação. O Opus pode propor opção que não está na lista (por exemplo, reenvio em fatias com prioridade para o lote tocado), desde que não afrouxe nada.
+
+## O que o Opus entrega no `resultado.md`
+Para **cada item, 2 a 3 opções especificadas**, cada uma com:
+1. O que muda (arquivos e módulos) e a classe (T2 ou T3).
+2. **O que cada número medido permite afirmar e o que NÃO permite.** Estimativa vem marcada "estimativa"; **não invente ganho**.
+3. Risco (inclui M5, saída igual, T12, threads do ADR-004, Windows ainda não medido).
+4. Custo em cartões de ≤ 400 linhas (diff máximo do projeto).
+5. **O teste mínimo, barato primeiro, que confirmaria a hipótese antes de investir** (por exemplo, posição dos ids das peças pesadas entre os blocos; mudar `ORCAMENTO_BYTES` só numa sonda e ver o tempo). Diga se usa o arquivo do PO (precisa de ok e horário dele) ou sintético, e se roda em tela virtual.
+6. O oráculo proposto (outro agente escreve; o implementador não toca).
+7. Uma recomendação por item (exceto C, D e E do item 2, ver acima).
+Além disso: **ordem sugerida entre os itens** (e se algum teste barato serve aos dois), **lista de perguntas ao PO**, e um **resumo de 5 linhas em português simples, sem siglas**, para o PO escolher.

@@ -58,6 +58,13 @@ def observar(f, agir, limite_ms=15000):  # um caso: `agir()` -> {"seq", "t0", "t
             "sequencia_caiu": any(b < a_ for a_, b in zip(seqs, seqs[1:]))}, a
 
 
+def saida_fora_do_repositorio(caminho):  # mesma guarda da sonda_memoria.py (T24): dado de medição nunca dentro do repositório
+    p = Path(caminho).resolve()
+    if AQUI.parents[2] in p.parents:
+        raise SystemExit("a saída da sonda tem de ficar fora do repositório")
+    return p
+
+
 def comando(f, cmd):
     def agir():
         g, u = f.executar_detalhado(cmd)
@@ -251,6 +258,7 @@ if __name__ == "__main__":
     if a.modo == "rodada":
         if a.sintetica != ROTULOS[a.rotulo]:  # `--ifc` só com o rótulo m25 (None), `--sintetica` só com o seu tamanho
             sys.exit("--sintetica/--ifc não batem com o rótulo")
+        a.saida = str(saida_fora_do_repositorio(a.saida))
         import faulthandler
         faulthandler.dump_traceback_later(int(os.environ.get("OBIM_LIMITE", 3600)) - 20, exit=True)
         rodada(a)

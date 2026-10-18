@@ -1,6 +1,6 @@
 # Quadro da F0
 
-> Atualizado: 2026-10-18. Só o que está **aberto**. Visão da máquina; o PO lê `docs/PAINEL_DO_PROJETO.md`. Fonte: `v2/03_fase0_especificacao.md`. Status de uma palavra: PRONTA · EM_ANDAMENTO · PAUSADA · BLOQUEADA · AGUARDA_PO · AGUARDA_OPUS · ABERTA · NAO_INICIADA · CONTINUA. Fatias e cartões fechados, com a história de cada um (lotes, reprovações, PRs): `arquivo/BOARD-historico-2026-10-15.md` e `LOG.md`.
+> Atualizado: 2026-10-18 (noite; orquestração passada a outra sessão). Só o que está **aberto**. Visão da máquina; o PO lê `docs/PAINEL_DO_PROJETO.md`. Fonte: `v2/03_fase0_especificacao.md`. Status de uma palavra: PRONTA · EM_ANDAMENTO · PAUSADA · BLOQUEADA · AGUARDA_PO · AGUARDA_OPUS · ABERTA · NAO_INICIADA · CONTINUA. Fatias e cartões fechados, com a história de cada um (lotes, reprovações, PRs): `arquivo/BOARD-historico-2026-10-15.md` e `LOG.md`.
 
 ## Fatias
 | Fatia | Nome | Tam. | Status | Nota |
@@ -36,10 +36,10 @@
 | F0-S04-T23 | Encurtar a cadeia de testes do Windows no CI | T2 | AGUARDA_PO | Rascunho (a escrever → rascunho para o PO): meta de 10 min do ADR-005 mantida pelo PO (A16, 2026-10-17); hoje 34 min 05 s; 4 tarefas T23a a T23d; piso estimado só com o CI de 15 a 17 min (o resto está em `packaging/`); sem ok do PO não começa |
 | F0-S04-T24 | Testes baratos da memória do arquivo pesado | T2 | EM_REVISAO | Medido em 2026-10-18 (tela virtual, 22 aberturas do pesado): 1-B padrão 6.511 MB (meta 6.000); 1-B com bloco 250 5.970 / 6.022 MB a 60,6 s; relatório `reports/F0-S04-T24.md`, sonda no PR 169. A escolha da opção é do PO. **Tela real (2026-10-18, relatório §13, PR 173):** 1-B com bloco 250 deu 5.867 / 5.894 MB e 52,3 / 52,7 s, abaixo das metas nas 3 rodadas (folga de 106 MB na pior); transformar em cartão T3 é a pergunta A24 em `PO.md`; especificação no lote Opus 58 (pedido pronto, aguarda abertura) |
 | F0-S04-T26 | R-0: simular a regra de reinício nos números gravados do T24 | T2 | PRONTA | Sonnet; sem IFC; cartão `cards/F0-S04/F0-S04-T26.md`; decide a regra do T29 |
-| F0-S04-T27 | G-0a: troca de geometria com os 13 tamanhos de lote (sintético, tela virtual) | T2 | PRONTA | Sonnet; sem arquivo do PO; linha de base do T30 |
-| F0-S04-T28 | G-0b: protótipo C++ descartável do salto no desenho (2-G) | T3 | AGUARDA T27 | Ramo descartável, nunca vai ao `main`; oráculo e revisão Opus |
+| F0-S04-T27 | G-0a: troca de geometria com os 13 tamanhos de lote (sintético, tela virtual) | T2 | PRONTA | Sonnet; sem arquivo do PO; linha de base do T30. Teste do DeepSeek em 2026-10-18 ficou inconcluso (ver `LOG.md`); a sonda do ramo `worktree-agent-3569f0f5` só serve de ponto de partida depois de conferida |
+| F0-S04-T32 | G-0b: protótipo C++ descartável do salto no desenho (2-G) | T3 | AGUARDA T27 | Ramo descartável, nunca vai ao `main`; oráculo e revisão Opus. Era T28; renomeado em 2026-10-18 porque F0-S03-T28 (Windows físico) já existe |
 | F0-S04-T29 | Bloco 250 mais reinício planejado (implementação da 1-B) | T3 | AGUARDA T26 | Rascunho: regra (R-A/R-B/R-C) escolhida só depois do T26; oráculo por peça em cartão à parte (T29b) |
-| F0-S04-T30 | M2b abaixo de 200 ms no detalhado (2-G ou 2-A com teto) | T3 | AGUARDA T27/T28 | Rascunho: opção escolhida só depois do T27 e T28; dividir em T30a a T30d |
+| F0-S04-T30 | M2b abaixo de 200 ms no detalhado (2-G ou 2-A com teto) | T3 | AGUARDA T27/T32 | Rascunho: opção escolhida só depois do T27 e T32; dividir em T30a a T30d |
 
 ## Revisão geral da F0 (2026-10-15)
 Cartões F0-RG-01 a RG-25 (relatório `reports/F0-REVISAO-GERAL-2026-10-15.md`, Parte D). Andamento de cada um: `LOG.md` e os PRs no GitHub.

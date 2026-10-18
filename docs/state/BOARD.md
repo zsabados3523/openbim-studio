@@ -32,6 +32,7 @@
 | F0-S04-T20 | Memória final do viewport abaixo de 6,0 GB | T3 | PAUSADA | Cartão-mãe. Medido 6,84 GB (2026-10-17); PO manteve a meta e mandou abrir cartão; a retomada pede o ok do PO (A17) |
 | F0-S04-T21 | Onde vai a memória ao abrir o arquivo pesado | T2 | AGUARDA_PO | Rascunho (etapa 1 do T20, só medir); sem ok do PO não começa |
 | F0-S04-T22 | O que pesa no M2b com modelos reais | T2 | em revisão | Sonda e relatório prontos (PR aberto); sintética e 25 MB medidas em tela virtual; detalhado parou no limite de 10 s em `abrir` (PRECISA_PO: opções a, b, c no relatório) |
+| F0-S04-T23 | Encurtar a cadeia de testes do Windows no CI | T2 | AGUARDA_PO | Rascunho (a escrever → rascunho para o PO): meta de 10 min do ADR-005 mantida pelo PO (A16, 2026-10-17); hoje 34 min 05 s; 4 tarefas T23a a T23d; piso estimado só com o CI de 15 a 17 min (o resto está em `packaging/`); sem ok do PO não começa |
 
 ## Revisão geral da F0 (2026-10-15)
 Cartões F0-RG-01 a RG-25 (relatório `reports/F0-REVISAO-GERAL-2026-10-15.md`, Parte D). Andamento de cada um: `LOG.md` e os PRs no GitHub.

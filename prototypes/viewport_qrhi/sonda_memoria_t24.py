@@ -7,6 +7,8 @@ nem `sonda_memoria.py` (T21), de onde vêm o amostrador e as funções de /proc.
           --reinicios 5 = protótipo da opção 1-B: o 1º filho termina limpo depois de 5 blocos e o carregador abre um filho NOVO com o resto
           (pelo mesmo caminho do carregador: ids pendentes + deslocamento). --malloc: variável da glibc só para o(s) filho(s).
   resumir PASTA ROTULO[,ROTULO...] [--ref ROTULO]   tabela em Markdown (só números) de PASTA/ROTULO_r*.json
+  blocos  PASTA ROTULO                              T1-1: por peça pesada (posição, bloco, triângulos, tempo até o aviso) e por bloco (duração, maior silêncio)
+  comparar PASTA ROTULO ROTULO                      quantos lotes do fluxo diferem entre cada par de rodadas (soma de verificação de 8 hex por lote)
 Rodar sob tela virtual (xvfb-run) e sob `flock ~/openbim-medicao/medicao.lock`. Nada de nome, GUID ou id de peça é impresso nem gravado."""
 import argparse
 import hashlib
@@ -171,6 +173,39 @@ def resumir(a):
               f"{sum(r['hash_fluxo'] == ref for r in rs)}/{len(rs)} | {max(max(r['arenas_max_por_filho'].values(), default=0) for r in rs)} |")
 
 
+def _rodadas(pasta, rot):
+    return [json.loads(p.read_text()) for p in sorted(Path(pasta).glob(f"{rot}_r*.json"))]
+
+
+def blocos(a):
+    rs = _rodadas(a.pasta, a.rotulo)
+    ini = lambda r: [m[0] for m in r["marcas"] if m[1] == "convertendo"]  # noqa: E731  (começo de cada bloco, em ordem global)
+    print("| rank | posição | bloco | triângulos no carregador | tempo do início do bloco até o aviso, s (menor / mediana / pior das rodadas; só limite superior com vários fios) |\n|---|---|---|---|---|")
+    for rk, (pos, bl) in sorted((int(k), v) for k, v in rs[0]["posicao_alvos"].items()):
+        d = [f[3] - ini(r)[bl - 1] for r in rs for f in r["feitos_alvos"] if f[0] == rk]
+        print(f"| {rk} | {pos} | {bl} | {rs[0]['triangulos_alvos'][str(rk)]} | {min(d):.1f} / {est.median(d):.1f} / {max(d):.1f} |")
+    print("\n| bloco | duração s (mediana / pior) | maior silêncio do filho s (mediana / pior) |\n|---|---|---|")
+    for b in range(1, len(ini(rs[0])) + 1):
+        dur, sil = [], []
+        for r in rs:
+            t = ini(r) + [max(m[0] for m in r["marcas"])]
+            dur.append(t[b] - t[b - 1])
+            for k, v in r["silencio_max_s_por_bloco"].items():
+                f, c = (int(x) for x in k.split("."))
+                if sum(r["reinicios"][:f - 1]) + c == b:
+                    sil.append(v)
+        print(f"| {b} | {est.median(dur):.1f} / {max(dur):.1f} | {est.median(sil):.2f} / {max(sil):.2f} |")
+
+
+def comparar(a):
+    r1, r2 = _rodadas(a.pasta, a.rot1), _rodadas(a.pasta, a.rot2)
+    for i, x in enumerate(r1):
+        for j, y in enumerate(r2):
+            if a.rot1 != a.rot2 or i < j:
+                d = [k for k, (p, q) in enumerate(zip(x["hash_lotes"], y["hash_lotes"])) if p != q]
+                print(f"{a.rot1} r{i + 1} x {a.rot2} r{j + 1}: lotes {len(x['hash_lotes'])}/{len(y['hash_lotes'])}, diferem {len(d)} (posições {d})")
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -187,5 +222,12 @@ if __name__ == "__main__":
     s_.add_argument("pasta")
     s_.add_argument("rotulos")
     s_.add_argument("--ref", default=None)
+    b_ = sub.add_parser("blocos")
+    b_.add_argument("pasta")
+    b_.add_argument("rotulo")
+    c_ = sub.add_parser("comparar")
+    c_.add_argument("pasta")
+    c_.add_argument("rot1")
+    c_.add_argument("rot2")
     a_ = ap.parse_args()
-    {"rodar": rodar, "resumir": resumir}[a_.cmd](a_)
+    {"rodar": rodar, "resumir": resumir, "blocos": blocos, "comparar": comparar}[a_.cmd](a_)

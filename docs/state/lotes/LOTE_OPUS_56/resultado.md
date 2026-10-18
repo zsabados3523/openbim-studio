@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 # LOTE_OPUS_56: resultado
 
 **APROVADO** (conteúdo do pedido 155 no HEAD `eff0ef6`). O merge continua preso ao CI: a execução `39064438868`, no mesmo commit, ainda estava rodando quando este lote fechou (ver item 5). Não é aprovação provisória: o conteúdo está aprovado por inteiro, e o que falta é só a prova do CI, que a autorização permanente já exige antes de qualquer merge.

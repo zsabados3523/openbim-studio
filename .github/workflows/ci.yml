@@ -356,6 +356,37 @@ jobs:
           OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15d_parede_pesada.py
           OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15e_painel_ausente.py
           OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15g_postador.py
+      - name: Pacote do que o job gerou
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p out
+          tar czf out/app.tar.gz app/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: openbim-ci-windows-viewport-a
+          path: out/
+          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
+      - name: Tempo total
+        if: always()
+        shell: bash
+        run: |
+          echo "### windows-viewport-a: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
+
+  # Informativo (T23a): as medições das threads saíram do windows-viewport-a para não alongar a fila. Fora do `needs` do `windows`; não bloqueia o merge.
+  windows-medicoes:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Início (relógio)
+        shell: bash
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/ambiente-windows
+      - name: Módulo obimcore (só o build, para as medições; a ponte é testada no job windows-viewport-a)
+        shell: bash -elo pipefail {0}
+        run: CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04
       - name: Medições das threads, números do Windows (S04-T15h; informativo, não bloqueia)
         shell: bash -elo pipefail {0}
         continue-on-error: true
@@ -390,23 +421,11 @@ jobs:
             echo "::error title=medições das threads::caíram:$CAIRAM (as outras seguiram; passo informativo, não bloqueia)"
             exit 1
           fi
-      - name: Pacote do que o job gerou
-        if: always()
-        shell: bash
-        run: |
-          mkdir -p out
-          tar czf out/app.tar.gz app/
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
-        with:
-          name: openbim-ci-windows-viewport-a
-          path: out/
-          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
       - name: Tempo total
         if: always()
         shell: bash
         run: |
-          echo "### windows-viewport-a: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
+          echo "### windows-medicoes: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
 
   windows-viewport-b:
     runs-on: windows-latest
@@ -546,6 +565,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Conferir que todo job do Windows que bloqueia está no needs (T23a)
+        run: python3 scripts/conferir_ci_windows.py .github/workflows/ci.yml
       - name: Todos os jobs do Windows passaram
         env:
           RESULTADOS: ${{ join(needs.*.result, ' ') }}

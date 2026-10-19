@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Confere o ci.yml: todo trabalho `windows-*` com passo que bloqueia o merge
-precisa estar no `needs` do agregador `windows` (senão os testes dele não bloqueiam).
+"""Confere o ci.yml: todo trabalho `windows-*` (fora o agregador `windows`) é bloqueante
+e precisa estar no `needs` do agregador `windows`, salvo os da lista INFORMATIVOS abaixo
+(falha-segura: um trabalho novo esquecido no needs derruba a conferência).
 
 Uso: python3 scripts/conferir_ci_windows.py [.github/workflows/ci.yml]
 Sai com código 1 e lista o que faltou. Só usa a biblioteca padrão.
@@ -8,7 +9,7 @@ Sai com código 1 e lista o que faltou. Só usa a biblioteca padrão.
 import re
 import sys
 
-BLOQUEIA = re.compile(r"(?<!não )bloqueia o merge")
+INFORMATIVOS = {"windows-sonda", "windows-medicoes"}  # não bloqueiam o merge; ficam fora do needs
 
 
 def trabalhos(texto):
@@ -40,8 +41,8 @@ def conferir(texto):
     needs = {n.strip() for n in m.group(1).split(",") if n.strip()}
     bloqueiam = {
         nome
-        for nome, linhas in jobs.items()
-        if nome.startswith("windows-") and BLOQUEIA.search("\n".join(linhas))
+        for nome in jobs
+        if nome.startswith("windows-") and nome not in INFORMATIVOS
     }
     erros = [f"`{n}` bloqueia o merge mas não está no needs de `windows`" for n in sorted(bloqueiam - needs)]
     erros += [f"`{n}` está no needs de `windows` mas não existe" for n in sorted(needs - set(jobs))]

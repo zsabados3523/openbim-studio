@@ -13,7 +13,7 @@
 | 6 | Revisão completa do projeto pelo Opus (pedido do PO de 2026-10-15), ao fim da S04, antes do portão da F0 | PO | 2026-10-15 | Depois da T19 | Média |
 | 7 | (feito) **Lote 57 (planejamento, classe TA, sem implementação):** T20 fase 1 (opções para o pico de memória do arquivo pesado) e T22 (opções para o M2b em IFC real). Feito em 2026-10-18; relatório `lotes/LOTE_OPUS_57/resultado.md` | PO (2026-10-17); `reports/F0-S04-T21.md`, `reports/F0-S04-T22.md` | 2026-10-17 | Concluído; sai da fila | — |
 | 8 | (feito) **Lote 58 (planejamento, classe TA, esforço médio, sem implementação):** especificação da 1-B com bloco 250 (T20) e da troca de geometria abaixo de 200 ms no detalhado (T22). Feito em 2026-10-18; relatório `lotes/LOTE_OPUS_58/resultado.md`. Os cartões T3 só nascem depois da escolha do PO (perguntas A25 a A31 em `PO.md`) | PO (2026-10-18); `reports/F0-S04-T24.md` §13, `reports/F0-S04-T25.md` §10 | 2026-10-18 | Concluído; sai da fila | — |
-| 9 | **Lote 62 (T3/TA):** decidir entre T-2 (teto de lote dentro de `cena`) e T-3 (compactação adiada) para a troca de geometria, com os números do `reports/F0-S04-T32a.md` (`sem` consertado 234,8 ms em 285 MiB, sem consertado não chega a 100 ms; 2-G tem de somar esse tempo); depois especificar o T32b e o T30a a T30d. Pré-requisito: conferência `jq` do T32a por outro agente (PR 193 mesclado) | T32a | 2026-10-19 | Semanal > 25% restante e janela < 70% | Média |
+| 9 | ~~Lote 62~~ **FEITO em 2026-10-19** (`lotes/LOTE_OPUS_62/resultado.md`): T-2 com C = 8 MiB; T32b cancelado; T30 em T30a1 a T30d | T32a | 2026-10-19 | FEITO | — |
 
 ## Já despachado (resumo; detalhes no LOG)
 - **Lote 29 (S01), 2026-10-15: APROVADO 6 de 6** (`lotes/LOTE_OPUS_29/resultado.md`). Aberto pelo líder com a exceção de cota do PO.

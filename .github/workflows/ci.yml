@@ -734,6 +734,8 @@ jobs:
           channel-priority: strict
           miniforge-version: latest
       - name: Testes
+        id: testes
+        continue-on-error: true  # macOS é experimental: a falha vira aviso e o job não aparece como falha (monitor do PO)
         shell: bash -elo pipefail {0}
         run: |
           # Em caso de falha, as últimas linhas viram anotação pública (o log completo exige login no GitHub).
@@ -769,7 +771,7 @@ jobs:
         run: |
           echo "### macos: tempo total do job até aqui: $(( $(date +%s) - T0 )) s (build limpo, sem cache do ambiente conda; incremental não medido)" >> "$GITHUB_STEP_SUMMARY"
       - name: Aviso (macOS não bloqueia merge)
-        if: failure()
+        if: failure() || steps.testes.outcome == 'failure'
         shell: bash
         run: |
           echo "::warning title=macOS::job macOS falhou; melhor esforço, não bloqueia merge. Registrar o motivo em docs/state/LOG.md."

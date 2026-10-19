@@ -1,0 +1,22 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+# LOTE_OPUS_62: revisão final curta do T29 (correções do lote 61) e decisão T-2 contra T-3 do T32 (F0-S04-T29, T32)
+Pedido do líder (2026-10-19), **classe T3, revisão Opus em lote, esforço médio**. Responda **aprovado ou reprovado com lista numerada** por PR. Escreva só `docs/state/lotes/LOTE_OPUS_62/resultado.md`; não edite mais nada, não implemente, não faça merge, não leia `~/openbim-medicao`, nenhum IFC.
+
+## Contexto fechado
+`docs/state/lotes/LOTE_OPUS_61/resultado.md` (seu parecer anterior; em `origin/s04-registro-lote-61` ou no `main` se o PR 195 já mesclou), `docs/state/lotes/LOTE_OPUS_60/resultado.md`, `docs/state/lotes/LOTE_OPUS_59/resultado.md` §3, `docs/state/reports/F0-S04-T32a.md` e `docs/state/cards/F0-S04/F0-S04-T32.md` (ramo `origin/s04-t32a-relatorio`, PR 193). Código nos ramos remotos (`git fetch origin`): **PR 185** `s04-t29b-oraculo` (ponta `908a49f`: teste `segundo_reinicio` com peça lenta em `3*BLOCO-1` e proibição de "visto só no fim do bloco"), **PR 188** `s04-t29a-reinicio` (ponta `117c412` = 3f66f85 aprovado + merge do oráculo + 7 marcadores removidos), **PR 189** `s04-t29c-regra` (ponta `c77bfe5`: retrabalho `40dfadb`, merges `c534359` e `c77bfe5`). Diferenças: `git diff origin/s04-t29a-reinicio...origin/s04-t29c-regra`, `git range-diff` do 3f66f85, `git diff origin/main...origin/s04-t29b-oraculo`. Pode rodar o oráculo num worktree temporário (`QT_QPA_PLATFORM=offscreen ~/miniforge3/envs/openbim/bin/pytest tests/test_s04_t29b_reinicio_oraculo.py -q`; no 189 deve dar 16 passam sem `--runxfail`).
+
+## Parte 1: T29 (curta)
+1. **185:** o achado único do lote 61 foi atendido? O teste novo falha sem o teto de 1 reinício no vigia (autor: "filhos de conversão: 3") e passa com ele? Sobrou teste que passe sem testar? Arquivo com 398 linhas.
+2. **188:** o merge `117c412` não traz nada além do oráculo (4 inserções e 3 deleções no arquivo do oráculo) e o 3f66f85 está igual? Aprovado por critério mecânico, confirme.
+3. **189:** os três pontos do lote 61 (frase "pedido e não feito" nunca escrita pelo `bloco_fim`; `max_silencio_s`, `primeira_mb`, `decisao_tarde`; `pico_filhos_mb` None sem leitura) estão certos no código? O `bloco_fim` continua sem pedir reinício em nenhum caminho? Marcadores só apagados? Nenhum teste existente editado?
+4. **Ordem e CI:** merge 185 → 188 → 189 com commit de merge, cada um com `linux` e `windows` verdes e as repetições `gh run rerun --failed` registradas no LOG (condições do lote 61). Confirme o plano e diga se falta algo antes de mesclar.
+
+## Parte 2: T32, decisão T-2 contra T-3 (a pedido do cartão T32, que manda parar depois do T32a)
+Fato (T32a, relatório no PR 193; tela virtual, 3 rodadas, 9 medidas por caso, hash medido b437b40b no ramo descartável): bytes enviados por troca = bytes da cena em 45 de 45 (a cena inteira é reenviada porque `ger_` sobe); `bytes_copia` previsto pela dobra do GCC = medido (315.806.861); tempo de `atualizar` no lote de 285 MiB: 377,8 ms hoje e 234,8 ms com o `sem` consertado (acima de 100 ms); o corte de 4 ms só ocorre em quadro com `create()`; a fatia de 28 bytes foi confirmada e não consertada.
+O que decidir (sem escolher pelo PO o que é dele; o PO deixou a escolha da opção para o líder seguir a sua recomendação):
+1. **T-1 (2-G no motor sobre a cópia refeita, com `sem` consertado), T-2 (teto de lote dentro de `cena`), T-3 (compactação adiada):** qual delas fecha a meta de 200 ms (p95, parede criada e parede do arquivo, A30) com o tempo de `atualizar` de 234,8 ms no lote de 285 MiB já contado? Com números do T32a e do T25/T27, diga para cada uma: o que muda, classe, risco para a trava `Motor::m_` → `DadosCena::m_` → `mc_`, o que ainda não está medido e o teste barato que fecha.
+2. O que o **T32b** deve ser (reescrever o cartão: critérios, arquivos permitidos, o que NÃO é medido) ou se o T32b é dispensável e o T30a pode começar; divisão do T30 em T30a a T30d (≤ 400 linhas cada) à luz disso.
+3. Pontos do relatório T32a a corrigir antes de mesclar o PR 193 (a conferência dos números por `jq` por outro agente fica com o líder).
+
+## Entrega
+Veredito por PR (185, 188, 189) com lista numerada (arquivo/linha, bloqueia ou sugestão); decisão T-1/T-2/T-3 com recomendação e cartões T32b/T30 prontos para colar; perguntas ao PO (só o que é dele); resumo de 5 linhas em português simples, sem siglas; linha do LOG. Resultado em português normal e claro; retorno final em caveman (curto). Não aprove provisoriamente.

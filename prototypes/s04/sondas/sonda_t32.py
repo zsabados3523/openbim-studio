@@ -27,7 +27,8 @@ import sonda_t27 as t27  # noqa: E402  (reaproveita a cena sintética do T27 sem
 
 LOTE_V, LOTE_I = 28, 4
 SIZEOF_OBJETO = 80  # int32 + std::string (32) + 4 x uint32 + 6 x float, com alinhamento de 8 (GCC, 64 bits)
-CAP_GUID = 31       # guid de 22 caracteres: capacidade 30 + 1 (cena.cpp totais); preparar e a cópia de `sem` dão o mesmo
+CAP_GUID = 31       # guid de 22 caracteres vindo de preparar() (assign): capacidade 30 + 1 (cena.cpp totais)
+CAP_GUID_COPIA = 23 # a cópia feita por `sem` (construtor de cópia do std::string): capacidade 22 + 1 (confirmado no ensaio: -24 bytes na 1ª troca de um lote com 3 objetos)
 CAMPOS_QUADRO = ["idx", "ms_apos_comando", "bytes_v", "bytes_i", "ped_v", "ped_i", "n_create", "t_create_ms", "motivo", "ger", "ver", "seq_placa", "tri_placa", "chamadas", "t_env_ms"]
 COLS = ["idx", "t_env_ini", "t_env_fim", "t_apres", "bytes_v", "bytes_i", "ped_v", "ped_i", "n_create", "t_create_ms", "motivo", "ger", "ver", "seq_placa", "tri_placa", "chamadas"]
 
@@ -46,12 +47,12 @@ class Modelo:
     def novo(self, lote):  # lote vindo de preparar()
         no = len(lote.objetos)
         self.lotes.append({"nv": len(lote.vertices), "ni": len(lote.indices), "no": no, "vcap": LOTE_V * len(lote.vertices), "icap": len(lote.indices),
-                           "ocap": pot2(no), "guids": {o.decode("ascii") for o in lote.objetos["guid"]}})
+                           "ocap": pot2(no), "copiado": False, "guids": {o.decode("ascii") for o in lote.objetos["guid"]}})
 
     def tocar(self, guid):  # `sem`: remove a parede `guid` (PAREDE_TRI*3 vértices e índices) do lote que a tem
         for L in self.lotes:
             if guid in L["guids"]:
-                L["guids"].discard(guid)
+                L["guids"].discard(guid); L["copiado"] = True
                 L["nv"] -= 3 * t27.PAREDE_TRI; L["ni"] -= 3 * t27.PAREDE_TRI; L["no"] -= 1
                 if self.modo == "hoje":
                     L["vcap"], L["icap"], L["ocap"] = LOTE_V * pot2(L["nv"]), pot2(L["ni"]), pot2(L["no"])
@@ -61,11 +62,11 @@ class Modelo:
         raise KeyError(guid)
 
     def bytes(self):
-        return sum(L["vcap"] + L["icap"] * LOTE_I + L["ocap"] * SIZEOF_OBJETO + L["no"] * CAP_GUID for L in self.lotes)
+        return sum(L["vcap"] + L["icap"] * LOTE_I + L["ocap"] * SIZEOF_OBJETO + L["no"] * (CAP_GUID_COPIA if L["copiado"] else CAP_GUID) for L in self.lotes)
 
     def componentes(self):
         return {"vertices": sum(L["vcap"] for L in self.lotes), "indices": sum(L["icap"] * LOTE_I for L in self.lotes),
-                "objetos": sum(L["ocap"] * SIZEOF_OBJETO + L["no"] * CAP_GUID for L in self.lotes)}
+                "objetos": sum(L["ocap"] * SIZEOF_OBJETO + L["no"] * (CAP_GUID_COPIA if L["copiado"] else CAP_GUID) for L in self.lotes)}
 
 
 def operar(f, c, obimcore, agir, limite_ms):

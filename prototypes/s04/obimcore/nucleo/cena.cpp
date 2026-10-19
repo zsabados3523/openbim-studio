@@ -3,6 +3,7 @@
 #include "cena.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <stdexcept>
 
@@ -39,6 +40,41 @@ std::shared_ptr<Dados> sem(const Dados& d, const std::set<std::string>& rem) {
   for (size_t k = 0; k < d.i.size(); ++k) pi[k + 1] = pi[k] + !morto[k];
   auto r = std::make_shared<Dados>(); r->seq = d.seq; std::copy(d.desl, d.desl + 3, r->desl);
   for (size_t k = 0; k < nv; ++k) if (usado[k]) r->v.insert(r->v.end(), d.v.begin() + k * BYTES_VERTICE, d.v.begin() + (k + 1) * BYTES_VERTICE);
+  for (size_t k = 0; k < d.i.size(); ++k) if (!morto[k]) r->i.push_back(pv[d.i[k]]);
+  for (Objeto o : d.objs) {
+    if (rem.count(o.guid)) continue;
+    const uint32_t a = pi[o.pi], b = pi[o.pi + o.ni], c = pv[o.pv], e = pv[o.pv + o.nv];
+    o.pi = a; o.ni = b - a; o.pv = c; o.nv = e - c; caixa_do_objeto(*r, o); r->objs.push_back(std::move(o));
+  }
+  caixa_de(*r);
+  return r;
+}
+
+// T32a (RAMO DESCARTÁVEL): `sem` consertado, escolhido por OBIM_SEM_CONSERTADO=1 (lido uma vez). Mesmo resultado que `sem`, mas: (1) sem pedaço
+// alocado para lote que não tem peça removida; (2) reserva exata de vértices, índices e objetos; (3) vértices copiados em trechos contínuos.
+bool sem_consertado() {
+  static const bool v = [] { const char* e = std::getenv("OBIM_SEM_CONSERTADO"); return e && e[0] == '1'; }();
+  return v;
+}
+std::shared_ptr<Dados> sem_novo(const Dados& d, const std::set<std::string>& rem) {
+  bool algum = false;
+  for (auto& o : d.objs) if (rem.count(o.guid)) { algum = true; break; }
+  if (!algum) return nullptr;  // `morto` só nasce para o lote tocado
+  std::vector<char> morto(d.i.size(), 0);
+  for (auto& o : d.objs) if (rem.count(o.guid)) std::fill(morto.begin() + o.pi, morto.begin() + o.pi + o.ni, 1);
+  const size_t nv = d.v.size() / BYTES_VERTICE; std::vector<char> usado(nv, 0);
+  for (size_t k = 0; k < d.i.size(); ++k) if (!morto[k]) usado[d.i[k]] = 1;
+  std::vector<uint32_t> pv(nv + 1, 0), pi(d.i.size() + 1, 0);
+  for (size_t k = 0; k < nv; ++k) pv[k + 1] = pv[k] + usado[k];
+  for (size_t k = 0; k < d.i.size(); ++k) pi[k + 1] = pi[k] + !morto[k];
+  size_t mantidos = 0; for (auto& o : d.objs) if (!rem.count(o.guid)) ++mantidos;
+  auto r = std::make_shared<Dados>(); r->seq = d.seq; std::copy(d.desl, d.desl + 3, r->desl);
+  r->v.reserve(size_t(pv[nv]) * BYTES_VERTICE); r->i.reserve(pi[d.i.size()]); r->objs.reserve(mantidos);
+  for (size_t k = 0; k < nv;) {  // trechos contínuos de vértices usados
+    if (!usado[k]) { ++k; continue; }
+    size_t e = k; while (e < nv && usado[e]) ++e;
+    r->v.insert(r->v.end(), d.v.begin() + k * BYTES_VERTICE, d.v.begin() + e * BYTES_VERTICE); k = e;
+  }
   for (size_t k = 0; k < d.i.size(); ++k) if (!morto[k]) r->i.push_back(pv[d.i[k]]);
   for (Objeto o : d.objs) {
     if (rem.count(o.guid)) continue;
@@ -101,7 +137,7 @@ int64_t DadosCena::atualizar(const LoteBruto* lote_novo, std::set<std::string> r
       std::vector<std::shared_ptr<Dados>> ls; int64_t ver;
       { std::lock_guard<std::mutex> l(m_); ls = lotes_; ver = ver_; }
       bool mudou = false;
-      for (auto& d : ls) if (auto r = sem(*d, rem)) { d = r; mudou = true; }  // fora do mutex: o desenho e o Python não esperam
+      for (auto& d : ls) if (auto r = sem_consertado() ? sem_novo(*d, rem) : sem(*d, rem)) { d = r; mudou = true; }  // fora do mutex: o desenho e o Python não esperam
       std::lock_guard<std::mutex> l(m_);
       if (ver != ver_) continue;  // alguém mudou a cena no meio: refaz com o estado novo
       if (auto* r = referencia(ls); novo && r && !novo->v.empty() && !std::equal(novo->desl, novo->desl + 3, r->desl)) { desl_ruim = true; break; }

@@ -36,6 +36,7 @@ class DadosCena {
   int64_t atualizar(const LoteBruto* lote_novo, std::set<std::string> guids);
   void limpar();
   int64_t geracao() { std::lock_guard<std::mutex> l(m_); return ger_; }
+  int64_t versao() { std::lock_guard<std::mutex> l(m_); return ver_; }  // T32a: só para o anel de instrumentação
   std::shared_ptr<Dados> proximo(Cursor& c);  // próximo lote ainda não visto (nullptr se não há); devolve nullptr se a geração mudou: quem chama zera a placa
   bool caixa(double mn[3], double mx[3]);     // false se a cena está vazia
   Totais totais();

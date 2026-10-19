@@ -123,6 +123,18 @@ void registrar_viewport(nb::module_& m) {
         r["superficies_soltas"] = s.superficies_soltas; r["solturas_atrasadas"] = s.solturas_atrasadas;
         return r;
       })
+      .def("registros", [](Viewport& v, int64_t desde) {  // T32a (ramo descartável): colunas do anel de instrumentação, mais "proximo" (índice do próximo registro)
+        int64_t prox = 0; const std::vector<RegQuadro> rs = v.registros(desde, prox); nb::dict r;
+        auto col = [&](const char* nome, auto f) { std::vector<double> x; x.reserve(rs.size()); for (auto& q : rs) x.push_back(double(f(q))); r[nome] = x; };
+        col("idx", [](auto& q) { return q.idx; }); col("t_env_ini", [](auto& q) { return q.t_env_ini; }); col("t_env_fim", [](auto& q) { return q.t_env_fim; });
+        col("t_apres", [](auto& q) { return q.t_apres; }); col("bytes_v", [](auto& q) { return q.bytes_v; }); col("bytes_i", [](auto& q) { return q.bytes_i; });
+        col("ped_v", [](auto& q) { return q.ped_v; }); col("ped_i", [](auto& q) { return q.ped_i; }); col("n_create", [](auto& q) { return q.n_create; });
+        col("t_create_ms", [](auto& q) { return q.t_create_ms; }); col("motivo", [](auto& q) { return q.motivo; }); col("ger", [](auto& q) { return q.ger; });
+        col("ver", [](auto& q) { return q.ver; }); col("seq_placa", [](auto& q) { return q.seq_placa; }); col("tri_placa", [](auto& q) { return q.tri_placa; });
+        col("chamadas", [](auto& q) { return q.chamadas; });
+        r["proximo"] = prox;
+        return r;
+      }, nb::arg("desde"))
       .def("perder_contexto", &Viewport::perder_contexto).def("info", &Viewport::info)
       .def("desenho_por_software", &Viewport::desenho_por_software).def("aviso", &Viewport::aviso);
 }

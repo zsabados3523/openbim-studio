@@ -53,6 +53,12 @@ namespace obim {
 using Rel = std::chrono::steady_clock;
 double agora_ms();  // motor.cpp
 extern const unsigned char QSB_VERT[], QSB_FRAG[]; extern const size_t QSB_VERT_N, QSB_FRAG_N;  // motor.cpp (QSB da S03, embutidos pelo CMake)
+// T32a (RAMO DESCARTÁVEL): um registro por quadro apresentado, num anel próprio lido depois da medida. Só a thread de desenho escreve (sob `mq_`).
+// motivo: 0 enviar não rodou até o fim, 1 orçamento de 2 MiB, 2 orçamento de 4 ms, 3 fila vazia, 4 create() falhou.
+struct RegQuadro {
+  int64_t idx = 0, ger = 0, ver = 0, seq_placa = 0; double t_env_ini = 0, t_env_fim = 0, t_apres = 0, t_create_ms = 0;
+  size_t bytes_v = 0, bytes_i = 0; int ped_v = 0, ped_i = 0, n_create = 0, motivo = 0, tri_placa = 0, chamadas = 0;
+};
 struct Estatisticas { size_t bytes_copia, lotes, triangulos, vertices; int64_t fatias_enviadas; int triangulos_na_placa, contextos, superficies_soltas, solturas_atrasadas; };
 constexpr size_t ORCAMENTO_BYTES = 2u << 20;  // por quadro (cabe em ~1 ms no software); lote maior é partido em fatias
 constexpr auto ORCAMENTO_TEMPO = std::chrono::milliseconds(4);
@@ -120,6 +126,11 @@ class Motor {
     return {cap_w_, cap_h_, std::move(cap_)};
   }
   std::string info() { std::lock_guard<std::mutex> l(m_); return info_; }
+  std::vector<RegQuadro> registros(int64_t desde, int64_t& proximo) {  // T32a: registros com idx >= desde (os mais antigos que o anel já sobrescreveu somem)
+    std::lock_guard<std::mutex> l(mq_); std::vector<RegQuadro> r; proximo = int64_t(nreg_);
+    for (size_t k = size_t((std::max)(int64_t(0), desde)); k < nreg_; ++k) if (nreg_ - k <= regs_.size()) r.push_back(regs_[k % regs_.size()]);
+    return r;
+  }
   bool software() const { return software_.load(); }  // true: sem placa de vídeo compatível, o desenho está sendo feito por software (F0-RG-13)
   std::string aviso() const {  // texto pronto para mostrar ao usuário; vazio quando a placa de vídeo é usada
     return software_.load() ? "Sem placa de vídeo compatível: o desenho está sendo feito por software e fica mais lento." : "";
@@ -200,17 +211,21 @@ class Motor {
   }
   void enviar(Gpu& g, QRhiResourceUpdateBatch* rub) {  // orçamento por quadro; sempre da cópia compacta; só lotes COMPLETOS entram em `lotes`
     const int64_t ger = cena_.geracao();
+    reg_ = RegQuadro{}; reg_.t_env_ini = agora_ms(); reg_.ger = ger; reg_.ver = cena_.versao();  // T32a
     if (ger != g.cur.ger) { g.lotes.clear(); g.pend = {}; g.cur = Cursor{0, ger}; tri_placa = 0; seq_placa_ = 0; }  // limpar(): a placa volta a zero
     size_t gasto = 0; const auto t0 = Rel::now();
     while (gasto < ORCAMENTO_BYTES && Rel::now() - t0 < ORCAMENTO_TEMPO) {
       Pend& p = g.pend;
       if (!p.d) {
-        if (!(p.d = cena_.proximo(g.cur))) break;
+        if (!(p.d = cena_.proximo(g.cur))) { reg_.motivo = 3; break; }
         if (p.d->i.empty()) { seq_placa_ = p.d->seq; p = {}; continue; }  // lote sem triângulos: já "na placa"
         p.e.n = quint32(p.d->i.size());
         p.e.vb.reset(g.rhi->newBuffer(QRhiBuffer::Immutable, QRhiBuffer::VertexBuffer, quint32(p.d->v.size())));
         p.e.ib.reset(g.rhi->newBuffer(QRhiBuffer::Immutable, QRhiBuffer::IndexBuffer, quint32(p.d->i.size() * 4)));
-        if (!p.e.vb->create() || !p.e.ib->create()) {  // achado 5: o lote NÃO se perde; volta à fila e repete no quadro seguinte
+        const auto tc = Rel::now(); const bool criou = p.e.vb->create() && p.e.ib->create();  // T32a: tempo e número de create()
+        reg_.t_create_ms += std::chrono::duration<double, std::milli>(Rel::now() - tc).count(); reg_.n_create += 2;
+        if (!criou) {
+          reg_.motivo = 4; reg_.t_env_fim = agora_ms();  // achado 5: o lote NÃO se perde; volta à fila e repete no quadro seguinte
           --g.cur.n; p = {}; { std::lock_guard<std::mutex> l(m_); info_ = "AVISO: create() de buffer falhou; repetindo no quadro seguinte"; } return;
         }
       }
@@ -220,10 +235,13 @@ class Motor {
       const unsigned char* dados = vert ? p.d->v.data() : reinterpret_cast<const unsigned char*>(p.d->i.data());
       rub->uploadStaticBuffer(vert ? p.e.vb.get() : p.e.ib.get(), quint32(off), quint32(n), dados + off);
       (vert ? p.voff : p.ioff) += n; gasto += n; ++fatias_;
+      if (vert) { reg_.bytes_v += n; ++reg_.ped_v; } else { reg_.bytes_i += n; ++reg_.ped_i; }  // T32a
       if (p.voff == p.d->v.size() && p.ioff == p.d->i.size() * 4) {  // completo: entra no desenho e a sequência avança (prefixo contínuo)
         tri_placa += int(p.d->i.size() / 3); seq_placa_ = p.d->seq; g.lotes.push_back(std::move(p.e)); p = {};
       }
     }
+    if (!reg_.motivo) reg_.motivo = gasto >= ORCAMENTO_BYTES ? 1 : 2;  // T32a
+    reg_.t_env_fim = agora_ms();
   }
   enum class Fim { Parar, Perdido };
   Fim quadros(Gpu& g) {
@@ -296,7 +314,9 @@ class Motor {
       if (fim == QRhi::FrameOpDeviceLost) return Fim::Perdido;
       { std::lock_guard<std::mutex> l(mc_); quadro_ = {c, alvo.width(), alvo.height(), perto, true}; }  // T10c: câmera, tamanho e perto do quadro apresentado
       const double t = agora_ms();  // quadro apresentado (armadilha 6)
-      { std::lock_guard<std::mutex> l(mq_); anel_[n_++ % anel_.size()] = {t, seq_placa_}; }
+      { std::lock_guard<std::mutex> l(mq_); anel_[n_++ % anel_.size()] = {t, seq_placa_};
+        reg_.t_apres = t; reg_.seq_placa = seq_placa_; reg_.tri_placa = tri_placa.load(); reg_.chamadas = int(g.lotes.size());  // T32a
+        reg_.idx = int64_t(nreg_); regs_[nreg_++ % regs_.size()] = reg_; }
       if (rb && !rb->data.isEmpty()) {
         QImage im(reinterpret_cast<const uchar*>(rb->data.constData()), rb->pixelSize.width(), rb->pixelSize.height(),
                   rb->format == QRhiTexture::BGRA8 ? QImage::Format_ARGB32 : QImage::Format_RGBA8888);
@@ -349,6 +369,7 @@ class Motor {
   int64_t seq_placa_ = 0;  // só a thread de desenho toca
   std::string info_, cap_; int cap_w_ = 0, cap_h_ = 0;
   std::array<std::tuple<double, int64_t>, 4096> anel_{}; size_t n_ = 0;
+  std::vector<RegQuadro> regs_ = std::vector<RegQuadro>(32768); size_t nreg_ = 0; RegQuadro reg_;  // T32a: anel de instrumentação (reg_: só a thread de desenho)
 };
 
 // Janela nativa. Os eventos chegam pela thread da janela e só mexem em atômicos do Motor.
@@ -422,6 +443,7 @@ class Viewport {  // o Qt é dono do contêiner (depois de posto num layout); es
   void parar_animacao() { m_->cam_.animar(0); }
   int64_t atualizar(const LoteBruto* lote_novo, std::set<std::string> guids_remover) { return m_->cena_.atualizar(lote_novo, std::move(guids_remover)); }
   Estatisticas estatisticas() { return m_->estatisticas(); }
+  std::vector<RegQuadro> registros(int64_t desde, int64_t& proximo) { return m_->registros(desde, proximo); }  // T32a
   // T10/T10c: (x, y) em pixels LÓGICOS (os do mouse do Qt); o pixel físico do backbuffer é lógico * devicePixelRatio. Câmera, tamanho e `perto` vêm juntos do último
   // quadro apresentado; trabalha sobre cópia imutável dos dados (nenhum mutex do Motor é pedido).
   std::optional<std::string> selecionar(double x, double y) {

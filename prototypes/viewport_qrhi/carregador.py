@@ -34,6 +34,7 @@ MAX_BYTES_LOTE = 8 * 1024 * 1024
 CINZA = (204, 204, 204, 255)
 ORANGE = (255, 140, 0, 255)  # caixa substituta (D4)
 FATIA_S = 0.05
+G_CRESCIMENTO_MB = 1000  # regra R-A (T29c): crescimento da memória do filho dentro de um bloco que pede o reinício (mesma unidade de pico_memoria_mb)
 MOTIVO_SEM_GEOMETRIA = "o conversor não achou geometria nesta peça"
 MOTIVO_CORTE = "esta carga já tinha peças lentas demais; a peça foi mostrada como caixa sem tentar de novo"
 
@@ -166,6 +167,9 @@ class CarregadorMalhas:
         self._feitos = set()  # ids avisados em `feitos` pelo filho atual
         self._atual = None  # peça em conversão no modo uma peça por vez
         self._pedido = None  # T29a: bloco global em que o filho atual deve ser reiniciado (None = nenhum pedido)
+        self._filho = None  # processo filho atual (o vigia de memória lê a memória dele)
+        self._base_mb = None  # T29c: memória do filho no início do bloco em curso (None = vigia desarmado)
+        self._prox_vigia = 0.0
         self._isolado = False  # o filho atual está em modo isolado (o reinício planejado só vale no modo normal)
 
     # ---- interface pública ----
@@ -234,9 +238,11 @@ class CarregadorMalhas:
         if self._cancelar.is_set():
             raise _Cancelado()
 
-    def _colocar(self, lote):
+    def _colocar(self, lote, est=None):
         while True:
             self._checar()
+            if est is not None:
+                self._vigiar(est)  # o pai fica cego enquanto a fila está cheia: o vigia roda também aqui
             try:
                 self._fila.put(lote, timeout=FATIA_S)
                 return
@@ -381,7 +387,7 @@ class CarregadorMalhas:
                   "excluir": self.excluir, "biblioteca": self.biblioteca, "max_bytes_lote": self.max_bytes_lote,
                   "ids": ids, "isolado": isolado, "desl": est["desl"], "por_peca": por_peca, "foto": est["foto"]}
         self._conv, self._feitos, self._fase, self._atual = 0, set(), None, None
-        self._pedido, self._isolado = None, isolado
+        self._pedido, self._isolado, self._base_mb = None, isolado, None
         est["filhos"] += 1
 
         def limite():
@@ -409,11 +415,15 @@ class CarregadorMalhas:
         try:
             self._checar()
             filho.start()
+            self._filho = filho
             tx.close()  # só o filho guarda a ponta de escrita: se ele morrer, o pai vê o fim do canal
             ultimo = inicio = time.perf_counter()
             while True:
                 self._checar()
                 if not rx.poll(FATIA_S):
+                    self._vigiar(est)
+                    if self._pedido is not None:
+                        return self._reiniciar(est, filho, inicio)
                     lim = limite()
                     seg = time.perf_counter() - ultimo
                     if lim is not None and seg >= lim:
@@ -429,6 +439,7 @@ class CarregadorMalhas:
                     return {"motivo": "queda", "seg": time.perf_counter() - ultimo, "codigo": codigo}
                 if ao_receber(tipo, dados):
                     return None
+                self._vigiar(est)
                 if self._pedido is not None:  # o que ainda estiver no canal é descartado: nada disso foi contado
                     return self._reiniciar(est, filho, inicio)
                 ultimo = time.perf_counter()  # o tempo gasto na fila cheia (contrapressão) não conta contra o filho
@@ -443,6 +454,36 @@ class CarregadorMalhas:
                     c.close()
                 except OSError:
                     pass
+
+    def _vigiar(self, est):
+        """Regra R-A (T29c): a cada `FATIA_S`, lê a memória atual do filho; se cresceu `G_CRESCIMENTO_MB` ou mais desde o começo
+        do bloco (armado em `bloco`, com `_conv` ≥ 2 e modo normal) e ainda não houve reinício, pede o reinício; com o teto cheio só registra. Desarma nos dois casos."""
+        agora = time.perf_counter()
+        if self._base_mb is None or self._pedido is not None or agora < self._prox_vigia:
+            return
+        self._prox_vigia = agora + FATIA_S
+        try:
+            try:
+                from . import processo_malhas as pm
+            except ImportError:  # pragma: no cover
+                import processo_malhas as pm
+            f = self._filho
+            if f is None or f.pid is None or not f.is_alive():
+                return
+            atual = pm.pico_memoria_mb(f.pid if sys.platform != "win32" else f.sentinel, atual=True)
+        except Exception:  # processo já saiu ou leitura impossível: sem decisão; a queda segue o caminho de hoje
+            return
+        self._decidir(est, atual)
+
+    def _decidir(self, est, atual):
+        """Pede o reinício se a memória `atual` do filho passou `G_CRESCIMENTO_MB` da partida do bloco; com o teto cheio só registra."""
+        if self._base_mb is None or atual - self._base_mb < G_CRESCIMENTO_MB:
+            return
+        self._base_mb = None
+        if est["reinicios"]:
+            est["msgs"].append(f"reinício pedido e não feito (bloco {est['conv_global']}): já houve 1 reinício")
+        else:
+            self._pedido = est["conv_global"]
 
     @staticmethod
     def _ler_pico(est, filho):
@@ -548,6 +589,12 @@ class CarregadorMalhas:
                 self._conv += 1
                 est["conv_global"] += 1
                 self._gancho_reinicio(est)
+        elif tipo == "bloco":  # memória do filho no início do bloco: arma o vigia (1º bloco de cada filho é isento)
+            if not self._isolado and self._conv >= 2:
+                self._base_mb, self._prox_vigia = float(dados["rss_mb"]), 0.0
+        elif tipo == "bloco_fim":  # memória do filho ao acabar de converter o bloco: vale mesmo que o pai esteja atrasado na fila
+            if self._base_mb is not None:
+                self._decidir(est, float(dados["rss_mb"]))
         elif tipo == "inicio":
             if not self._produtos:  # só o primeiro filho manda a tabela completa
                 est["produtos_total"] = dados["total"]
@@ -562,15 +609,17 @@ class CarregadorMalhas:
             desl = dados.deslocamento
             if est["desl"] is None:
                 est["desl"] = desl  # as reinicializações recebem o mesmo deslocamento
+            self._base_mb = None  # desarma no 1º lote
             self._contar_lote(est, dados)
             dados = replace(dados, indice_lote=est["lotes"] - 1, produtos_feitos=len(est["resolvidos"]),
                             produtos_total=est["produtos_total"])
-            self._colocar(dados)
+            self._colocar(dados, est)
         elif tipo == "feitos":
             self._feitos.add(dados)
         elif tipo == "atual":  # modo uma peça por vez: a peça que o filho vai converter agora
             self._atual = dados
         elif tipo == "sem_malha":
+            self._base_mb = None
             est["sem"].extend(dados)
             est["resolvidos"].update(d[0] for d in dados)
         elif tipo == "nota":  # o filho explica por que vai cair (ele não tem registro próprio)
@@ -578,6 +627,7 @@ class CarregadorMalhas:
         elif tipo == "erro":
             raise RuntimeError(dados)
         elif tipo == "fim":
+            self._base_mb = None
             for k, v in dados["tempos"].items():
                 est["t"][k] = est["t"].get(k, 0.0) + v
             est["msgs"].extend(dados["mensagens"])

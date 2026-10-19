@@ -322,9 +322,10 @@ def test_crescer_no_primeiro_bloco_do_filho_nao_reinicia_isencao(modelo, monkeyp
 @AINDA_NAO
 def test_segundo_reinicio_pedido_com_teto_padrao_e_registrado_e_nao_feito(modelo, monkeypatch):
     gs = ",".join(f"{_guid(modelo, k)}={CRESCER_MB}" for k in (BLOCO, 2 * BLOCO))  # 1ª peça dos blocos 2 e 3 da lista
-    env = _lenta(modelo, 2 * BLOCO - 1, {"OBIM_TESTE_CRESCER_MB": gs})  # lenta no fim do bloco 2
-    lotes, r, esp = _comparar_com_normal(modelo, monkeypatch, env, filhos=2, perdido_max=LENTA_S)
-    assert any("reinício pedido e não feito" in m for m in r.mensagens), r.mensagens
+    lentas = ",".join(f"{_guid(modelo, k)}={LENTA_S:g}" for k in (2 * BLOCO - 1, 3 * BLOCO - 1))  # fim dos dois blocos que crescem
+    env = {"OBIM_TESTE_CRESCER_MB": gs, "OBIM_TESTE_PECA_LENTA": lentas}
+    lotes, r, esp = _comparar_com_normal(modelo, monkeypatch, env, filhos=2, perdido_max=LENTA_S)  # 2º pedido: o teto de 1 vale
+    assert not any("visto só no fim do bloco" in m for m in r.mensagens), r.mensagens  # a vigia viu a tempo, não só o fim
 
 
 @AINDA_NAO

@@ -26,6 +26,7 @@ import numpy as np
 import pytest
 
 import ifcopenshell
+import ifcopenshell.api
 
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ / "prototypes"))
@@ -39,20 +40,51 @@ from viewport_qrhi.carregador import CarregadorMalhas, ResumoCarga  # noqa: E402
 BLOCO = 3  # peças por bloco nos testes
 KW = dict(threads=1, tamanho_bloco=BLOCO, max_bytes_lote=600)
 CRESCER_MB = 1100  # acima de G (1.000 MB)
+LENTA_S = 10.0  # peça lenta (abaixo de limite_peca_s = 20): o filho velho tem de morrer antes de terminá-la
 NAO_DEVOLVEU = "o conversor não devolveu a peça"
 AINDA_NAO = pytest.mark.xfail(strict=True, reason="T29a/T29c ainda não implementados")
 
 
 # ---------- modelo e peças ----------
+def _descrever(caminho):
+    f = ifcopenshell.open(str(caminho))
+    ordem = sorted((p for p in f.by_type("IfcProduct") if p.Representation is not None
+                    and not p.is_a("IfcFeatureElementSubtraction") and not p.is_a("IfcSpace")), key=lambda p: p.id())
+    assert len(ordem) == 12
+    return SimpleNamespace(caminho=str(caminho), ids=[p.id() for p in ordem], guids=[p.GlobalId for p in ordem])
+
+
 @pytest.fixture(scope="module")
 def modelo(tmp_path_factory):
     c = tmp_path_factory.mktemp("t29b") / "m12.ifc"
     gerar(c, paredes=12, por_andar=6)
-    f = ifcopenshell.open(str(c))
-    ordem = sorted((p for p in f.by_type("IfcProduct") if p.Representation is not None
-                    and not p.is_a("IfcFeatureElementSubtraction") and not p.is_a("IfcSpace")), key=lambda p: p.id())
-    assert len(ordem) == 12
-    return SimpleNamespace(caminho=str(c), ids=[p.id() for p in ordem], guids=[p.GlobalId for p in ordem])
+    return _descrever(c)
+
+
+@pytest.fixture(scope="module")
+def modelo_bloco1_vazio(tmp_path_factory):
+    """3 proxies com representação vazia (ids menores) + 9 paredes: o bloco 1 inteiro não dá geometria, então `desl` nasce vazio."""
+    api = ifcopenshell.api.run
+    f = api("project.create_file", version="IFC4")
+    api("root.create_entity", f, ifc_class="IfcProject", name="Teste")
+    api("unit.assign_unit", f)
+    ctx = api("context.add_context", f, context_type="Model")
+    corpo = api("context.add_context", f, context_type="Model", context_identifier="Body", target_view="MODEL_VIEW", parent=ctx)
+    for k in range(3):
+        p = api("root.create_entity", f, ifc_class="IfcBuildingElementProxy", name=f"vazio{k}")
+        p.Representation = f.create_entity("IfcProductDefinitionShape", Representations=[
+            f.create_entity("IfcShapeRepresentation", ContextOfItems=corpo, RepresentationIdentifier="Body",
+                            RepresentationType="SweptSolid", Items=[])])
+    for k in range(9):
+        w = api("root.create_entity", f, ifc_class="IfcWall", name=f"p{k}")
+        rep = api("geometry.add_wall_representation", f, context=corpo, length=3.0, height=2.8, thickness=0.15)
+        api("geometry.assign_representation", f, product=w, representation=rep)
+        m = np.eye(4)
+        m[:3, 3] = (k * 4.0, 0.0, 0.0)
+        api("geometry.edit_object_placement", f, product=w, matrix=m)
+    c = tmp_path_factory.mktemp("t29b_vazio") / "vazio.ifc"
+    f.write(str(c))
+    return _descrever(c)
 
 
 def _guid(m, k):
@@ -191,7 +223,8 @@ def conferir_igual(a, b, ctx=""):
     assert ca.keys() == cb.keys(), f"{ctx}: peças diferentes"
     for i in ca:
         assert ca[i] == cb[i], f"{ctx}: forma da peça {i} difere"
-    assert sorted(ra.sem_malha) == sorted(rb.sem_malha), ctx
+    motivo = lambda s: (s[0], s[1], s[2], s[3].split(":")[0])  # o registro do conversor traz hora: só o começo do motivo
+    assert sorted(map(motivo, ra.sem_malha)) == sorted(map(motivo, rb.sem_malha)), ctx
     assert sorted((s[0], s[4]) for s in ra.simplificadas) == sorted((s[0], s[4]) for s in rb.simplificadas), ctx
     assert (ra.produtos_total, ra.produtos_com_malha, ra.triangulos, ra.vertices) == \
            (rb.produtos_total, rb.produtos_com_malha, rb.triangulos, rb.vertices), ctx
@@ -227,21 +260,35 @@ def test_bloco_padrao_e_250():
 
 
 # ---------- reinício forçado (T29a) ----------
-def _comparar_com_normal(modelo, monkeypatch, env, filhos, normal=None, **kw):
+def _lenta(modelo, k, env):
+    """Acrescenta ao env uma peça lenta (LENTA_S) na posição k."""
+    return {**env, "OBIM_TESTE_PECA_LENTA": f"{_guid(modelo, k)}={LENTA_S:g}"}
+
+
+def _comparar_com_normal(modelo, monkeypatch, env, filhos, normal=None, sem_malha_ok=False, perdido_max=None, **kw):
+    """Normal (sem ganchos) contra a abertura com `env`. `perdido_max`: o filho velho tem de morrer antes de terminar a peça
+    lenta, isto é, `perdido_s` < L: só a vigia que decide NO MEIO do bloco consegue isso."""
     ref = normal or _rodar(modelo, monkeypatch, **kw)
     novo = _rodar(modelo, monkeypatch, env=env, **kw)
     lotes, r, esp = novo
-    assert r.estado == "concluido" and not r.sem_malha, r.sem_malha
+    assert r.estado == "concluido" and (sem_malha_ok or not r.sem_malha), r.sem_malha
     assert not any(NAO_DEVOLVEU in s[3] for s in r.sem_malha)
     assert len(esp.conversao) == filhos, f"filhos de conversão: {len(esp.conversao)}"
     assert esp.dois_vivos == 0 and all(not f.is_alive() for f in esp.filhos)
+    if perdido_max is not None:
+        assert r.tempos["perdido_s"] < perdido_max, f"o filho velho só morreu depois de {r.tempos['perdido_s']:.1f} s"
     conferir_igual(ref[:2], novo[:2], "reinício contra normal")
     return novo
 
 
 @AINDA_NAO
 def test_reinicio_forcado_no_bloco_2_igual_ao_normal(modelo, monkeypatch):
-    _, _, esp = _comparar_com_normal(modelo, monkeypatch, {"OBIM_TESTE_REINICIO_BLOCO": "2"}, filhos=2)
+    _, r, esp = _comparar_com_normal(modelo, monkeypatch, {"OBIM_TESTE_REINICIO_BLOCO": "2"}, filhos=2)
+    # resumo: número de filhos, bloco do reinício, perdido do filho morto, mensagens juntadas, tempos do filho novo
+    assert r.filhos == len(esp.conversao) and r.reinicios == [2]
+    assert r.tempos["perdido_s"] > 0
+    assert any("reinício planejado do filho no bloco 2" in m for m in r.mensagens), r.mensagens
+    assert all(r.tempos.get(k, 0) > 0 for k in ("abrir_s", "listar_s", "geometria_s")), r.tempos
     # o filho novo recebe os não resolvidos a partir da fronteira do bloco 2 (nada do bloco 2 foi entregue antes)
     assert esp.conversao[1].params["ids"] == modelo.ids[BLOCO:]
     assert esp.conversao[1].params["desl"] is not None  # o mesmo deslocamento do primeiro filho
@@ -256,32 +303,35 @@ def test_dois_reinicios_nenhuma_peca_some(modelo, monkeypatch):
 # ---------- reinício pelo caminho real (T29c) ----------
 @AINDA_NAO
 def test_crescer_em_bloco_que_nao_e_o_primeiro_reinicia_uma_vez_no_bloco_certo(modelo, monkeypatch):
-    g = _guid(modelo, BLOCO + 1)  # peça do bloco 2
-    lotes, r, esp = _comparar_com_normal(modelo, monkeypatch, {"OBIM_TESTE_CRESCER_MB": f"{g}={CRESCER_MB}"}, filhos=2)
+    g = _guid(modelo, BLOCO)  # 1ª peça do bloco 2 cresce; a última do mesmo bloco é lenta (L)
+    env = _lenta(modelo, 2 * BLOCO - 1, {"OBIM_TESTE_CRESCER_MB": f"{g}={CRESCER_MB}"})
+    lotes, r, esp = _comparar_com_normal(modelo, monkeypatch, env, filhos=2, perdido_max=LENTA_S)
     assert esp.conversao[1].params["ids"] == modelo.ids[BLOCO:]  # recomeça na fronteira do bloco 2
     assert r.pico_filho_mb >= 1000, "a peça precisa ter crescido de verdade no filho"
 
 
 @AINDA_NAO
 def test_crescer_no_primeiro_bloco_do_filho_nao_reinicia_isencao(modelo, monkeypatch):
-    g = _guid(modelo, 1)  # peça do bloco 1
-    lotes, r, esp = _rodar(modelo, monkeypatch, env={"OBIM_TESTE_CRESCER_MB": f"{g}={CRESCER_MB}"})
+    g = _guid(modelo, 0)  # 1ª peça do bloco 1 cresce; a última do bloco é lenta: a regra isenta, não falta tempo à vigia
+    env = _lenta(modelo, BLOCO - 1, {"OBIM_TESTE_CRESCER_MB": f"{g}={CRESCER_MB}"})
+    lotes, r, esp = _rodar(modelo, monkeypatch, env=env)
     assert r.pico_filho_mb >= 1000, "a peça precisa ter crescido de verdade no filho"  # prova que o gancho agiu
     assert len(esp.conversao) == 1 and r.estado == "concluido" and not r.sem_malha
 
 
 @AINDA_NAO
 def test_segundo_reinicio_pedido_com_teto_padrao_e_registrado_e_nao_feito(modelo, monkeypatch):
-    gs = ",".join(f"{_guid(modelo, k)}={CRESCER_MB}" for k in (BLOCO + 1, 2 * BLOCO + 1))  # blocos 2 e 3 da lista
-    lotes, r, esp = _comparar_com_normal(modelo, monkeypatch, {"OBIM_TESTE_CRESCER_MB": gs}, filhos=2)
+    gs = ",".join(f"{_guid(modelo, k)}={CRESCER_MB}" for k in (BLOCO, 2 * BLOCO))  # 1ª peça dos blocos 2 e 3 da lista
+    env = _lenta(modelo, 2 * BLOCO - 1, {"OBIM_TESTE_CRESCER_MB": gs})  # lenta no fim do bloco 2
+    lotes, r, esp = _comparar_com_normal(modelo, monkeypatch, env, filhos=2, perdido_max=LENTA_S)
     assert any("reinício pedido e não feito" in m for m in r.mensagens), r.mensagens
 
 
 @AINDA_NAO
 def test_fila_cheia_durante_o_bloco_vigiado_a_regra_ainda_dispara(modelo, monkeypatch):
-    g = _guid(modelo, 2 * BLOCO + 1)  # bloco 3; consumidor lento mantém a fila (tamanho 1) cheia antes dele
-    _comparar_com_normal(modelo, monkeypatch, {"OBIM_TESTE_CRESCER_MB": f"{g}={CRESCER_MB}"}, filhos=2,
-                         fila_max=1, pausa_s=0.2)
+    g = _guid(modelo, 2 * BLOCO)  # 1ª peça do bloco 3 cresce; a última dele é lenta; consumidor lento mantém a fila cheia
+    env = _lenta(modelo, 3 * BLOCO - 1, {"OBIM_TESTE_CRESCER_MB": f"{g}={CRESCER_MB}"})
+    _comparar_com_normal(modelo, monkeypatch, env, filhos=2, perdido_max=LENTA_S, fila_max=1, pausa_s=0.2)
 
 
 # ---------- cancelar ----------
@@ -291,6 +341,7 @@ def test_cancelar_entre_a_morte_e_o_filho_novo(modelo, monkeypatch):
         esp.ao_criar = lambda n, f: esp.car.cancelar() if n == 1 else None  # o filho novo ainda nem começou
     lotes, r, esp = _rodar(modelo, monkeypatch, env={"OBIM_TESTE_REINICIO_BLOCO": "2"}, espia_cb=preparar)
     assert len(esp.conversao) == 2 and not esp.conversao[1].iniciado
+    assert r.reinicios == [2]  # o cancelamento veio depois da morte planejada, não antes
     assert r.estado == "cancelado" and all(not f.is_alive() for f in esp.filhos) and esp.dois_vivos == 0
 
 
@@ -323,10 +374,24 @@ def test_queda_e_limite_no_bloco_refeito_seguem_o_caminho_de_hoje(modelo, monkey
 # ---------- modo isolado: a vigia nunca arma ----------
 @AINDA_NAO
 def test_modo_isolado_nunca_arma_a_vigia(modelo, monkeypatch):
-    mata, cresce = _guid(modelo, 1), _guid(modelo, 2)  # bloco 1: a queda leva ao modo isolado, onde a peça cresce
+    mata, cresce = _guid(modelo, 1), _guid(modelo, 0)  # bloco 1: a queda leva ao modo isolado, onde a peça cresce
     ref = _rodar(modelo, monkeypatch, env={"OBIM_TESTE_MATAR_FILHO": mata})
-    novo = _rodar(modelo, monkeypatch, env={"OBIM_TESTE_MATAR_FILHO": mata, "OBIM_TESTE_CRESCER_MB": f"{cresce}={CRESCER_MB}"})
+    novo = _rodar(modelo, monkeypatch, env=_lenta(modelo, 2, {"OBIM_TESTE_MATAR_FILHO": mata,  # lenta depois da que cresce
+                                                              "OBIM_TESTE_CRESCER_MB": f"{cresce}={CRESCER_MB}"}))
     assert novo[1].pico_filho_mb >= 1000, "a peça precisa ter crescido de verdade no filho"
     assert len(novo[2].conversao) == len(ref[2].conversao)  # o crescimento não pediu reinício
     assert novo[2].dois_vivos == 0
     conferir_igual(ref[:2], novo[:2], "isolado com crescimento contra isolado sem")
+
+
+# ---------- `desl` vazio: o bloco 1 inteiro sem geometria ----------
+@AINDA_NAO
+def test_reinicio_com_desl_vazio_o_filho_novo_calcula_o_seu(modelo_bloco1_vazio, monkeypatch):
+    m = modelo_bloco1_vazio
+    normal = _rodar(m, monkeypatch)
+    assert normal[1].produtos_com_malha == 9 and len(normal[1].sem_malha) == 3, "o bloco 1 não pode dar geometria"
+    assert min(int(i) for lote in normal[0] for i in lote.objetos["id_step"]) > m.ids[BLOCO - 1]
+    _, r, esp = _comparar_com_normal(m, monkeypatch, {"OBIM_TESTE_REINICIO_BLOCO": "2"}, filhos=2, normal=normal,
+                                     sem_malha_ok=True)
+    assert esp.conversao[1].params["desl"] is None  # nada foi entregue antes: o filho novo calcula o seu
+    assert r.reinicios == [2]

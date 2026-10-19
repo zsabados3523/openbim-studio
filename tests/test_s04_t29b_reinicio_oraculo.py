@@ -326,6 +326,7 @@ def test_segundo_reinicio_pedido_com_teto_padrao_e_registrado_e_nao_feito(modelo
     env = {"OBIM_TESTE_CRESCER_MB": gs, "OBIM_TESTE_PECA_LENTA": lentas}
     lotes, r, esp = _comparar_com_normal(modelo, monkeypatch, env, filhos=2, perdido_max=LENTA_S)  # 2º pedido: o teto de 1 vale
     assert not any("visto só no fim do bloco" in m for m in r.mensagens), r.mensagens  # a vigia viu a tempo, não só o fim
+    assert any("reinício pedido e não feito" in m for m in r.mensagens), r.mensagens
 
 
 @AINDA_NAO

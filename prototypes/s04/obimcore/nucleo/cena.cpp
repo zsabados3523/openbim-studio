@@ -29,16 +29,24 @@ void caixa_do_objeto(const Dados& d, Objeto& o) {
 // Cópia de `d` sem os objetos de `rem` (nullptr se nenhum está no lote). Mantém a sequência e o deslocamento; descarta índices e vértices dos removidos
 // e renumera o resto (qualquer lote serve: não supõe que cada objeto só use os seus vértices).
 std::shared_ptr<Dados> sem(const Dados& d, const std::set<std::string>& rem) {
-  std::vector<char> morto(d.i.size(), 0); bool algum = false;
-  for (auto& o : d.objs) if (rem.count(o.guid)) { algum = true; std::fill(morto.begin() + o.pi, morto.begin() + o.pi + o.ni, 1); }
-  if (!algum) return nullptr;
+  size_t tocados = 0;
+  for (auto& o : d.objs) if (rem.count(o.guid)) ++tocados;  // olha a tabela antes de alocar: lote sem removido não aloca `morto` nem `usado`
+  if (!tocados) return nullptr;
+  std::vector<char> morto(d.i.size(), 0);
+  for (auto& o : d.objs) if (rem.count(o.guid)) std::fill(morto.begin() + o.pi, morto.begin() + o.pi + o.ni, 1);
   const size_t nv = d.v.size() / BYTES_VERTICE; std::vector<char> usado(nv, 0);
   for (size_t k = 0; k < d.i.size(); ++k) if (!morto[k]) usado[d.i[k]] = 1;
   std::vector<uint32_t> pv(nv + 1, 0), pi(d.i.size() + 1, 0);  // somas parciais: posição nova de cada vértice e de cada índice
   for (size_t k = 0; k < nv; ++k) pv[k + 1] = pv[k] + usado[k];
   for (size_t k = 0; k < d.i.size(); ++k) pi[k + 1] = pi[k] + !morto[k];
   auto r = std::make_shared<Dados>(); r->seq = d.seq; std::copy(d.desl, d.desl + 3, r->desl);
-  for (size_t k = 0; k < nv; ++k) if (usado[k]) r->v.insert(r->v.end(), d.v.begin() + k * BYTES_VERTICE, d.v.begin() + (k + 1) * BYTES_VERTICE);
+  // capacidade exata: bytes_copia não pode depender de como o vetor cresce (GCC dobra, MSVC cresce 1,5 vez)
+  r->v.reserve(size_t(pv[nv]) * BYTES_VERTICE); r->i.reserve(pi[d.i.size()]); r->objs.reserve(d.objs.size() - tocados);
+  for (size_t k = 0; k < nv;) {  // vértices usados, em trechos contínuos
+    if (!usado[k]) { ++k; continue; }
+    size_t e = k; while (e < nv && usado[e]) ++e;
+    r->v.insert(r->v.end(), d.v.begin() + k * BYTES_VERTICE, d.v.begin() + e * BYTES_VERTICE); k = e;
+  }
   for (size_t k = 0; k < d.i.size(); ++k) if (!morto[k]) r->i.push_back(pv[d.i[k]]);
   for (Objeto o : d.objs) {
     if (rem.count(o.guid)) continue;
@@ -62,13 +70,13 @@ std::shared_ptr<Dados> DadosCena::preparar(const LoteBruto& L) {
   const char* erro = nullptr;
   {  // a única cópia (a ponte prende os arrays do numpy até o retorno e chama sem o bloqueio do interpretador)
     d->v.assign(V.p, V.p + V.n * BYTES_VERTICE); d->i.resize(I.n); std::memcpy(d->i.data(), I.p, I.n * 4);
-    caixa_de(*d);
+    caixa_de(*d); d->objs.reserve(O.n);  // capacidade exata da tabela (o push_back dobraria e inflaria bytes_copia)
     for (uint32_t x : d->i) if (x >= V.n) { erro = "indices: índice maior ou igual ao número de vértices"; break; }
     for (size_t k = 0; !erro && k < O.n; ++k) {
       const unsigned char* p = O.p + k * BYTES_OBJETO; Objeto o;
       std::memcpy(&o.id_step, p + O_ID, 4); std::memcpy(&o.pi, p + O_PI, 4); std::memcpy(&o.ni, p + O_NI, 4);
       std::memcpy(&o.pv, p + O_PV, 4); std::memcpy(&o.nv, p + O_NV, 4); std::memcpy(o.cmin, p + O_MIN, 12); std::memcpy(o.cmax, p + O_MAX, 12);
-      o.guid.assign(reinterpret_cast<const char*>(p + O_GUID), strnlen(reinterpret_cast<const char*>(p + O_GUID), N_GUID));
+      o.guid = std::string(reinterpret_cast<const char*>(p + O_GUID), strnlen(reinterpret_cast<const char*>(p + O_GUID), N_GUID));  // construtor: capacidade = tamanho (assign sobre string vazia dobra para 30)
       if (uint64_t(o.pi) + o.ni > I.n || uint64_t(o.pv) + o.nv > V.n) { erro = "objetos: faixa fora do lote"; break; }
       caixa_do_objeto(*d, o);  // pelos triângulos; sem geometria: NaN, nunca [0,0,0,0,0,0]
       d->objs.push_back(std::move(o));

@@ -57,6 +57,9 @@ class ResumoCarga:
     simplificadas: list = field(default_factory=list)  # (id_step, guid, classe, nome, motivo, segundos): viraram caixa
     filhos: int = 0  # filhos de conversão criados nesta abertura (o reinício planejado cria um a mais)
     reinicios: list = field(default_factory=list)  # bloco global (contando os `convertendo` de todos os filhos) de cada reinício feito
+    blocos: list = field(default_factory=list)  # T29c, só modo normal: por bloco {bloco, filho, base_mb, max_mb, fim_mb, atraso_armar_s, armado, falhas_leitura}
+    registro_reinicio: list = field(default_factory=list)  # por reinício feito {bloco, fonte "vigia"|"gancho", base_mb, decisao_mb, atraso_armar_s}
+    pico_filhos_mb: list = field(default_factory=list)  # pico de memória de cada filho, na ordem em que nasceram (o morto entra com o pico lido antes do kill)
 
 
 class _Cancelado(Exception):
@@ -168,6 +171,9 @@ class CarregadorMalhas:
         self._atual = None  # peça em conversão no modo uma peça por vez
         self._pedido = None  # T29a: bloco global em que o filho atual deve ser reiniciado (None = nenhum pedido)
         self._filho = None  # processo filho atual (o vigia de memória lê a memória dele)
+        self._reg = None  # registro do bloco em curso (T29c)
+        self._decisao = None  # registro do reinício pedido pelo vigia ou pelo gancho (T29c)
+        self._falhas = 0  # leituras de memória que falharam neste filho
         self._base_mb = None  # T29c: memória do filho no início do bloco em curso (None = vigia desarmado)
         self._prox_vigia = 0.0
         self._isolado = False  # o filho atual está em modo isolado (o reinício planejado só vale no modo normal)
@@ -238,11 +244,9 @@ class CarregadorMalhas:
         if self._cancelar.is_set():
             raise _Cancelado()
 
-    def _colocar(self, lote, est=None):
+    def _colocar(self, lote):
         while True:
             self._checar()
-            if est is not None:
-                self._vigiar(est)  # o pai fica cego enquanto a fila está cheia: o vigia roda também aqui
             try:
                 self._fila.put(lote, timeout=FATIA_S)
                 return
@@ -255,7 +259,8 @@ class CarregadorMalhas:
         est = {"estado": "erro", "erro": None, "produtos_total": 0, "ids": set(), "tri": 0, "vert": 0,
                "lotes": 0, "sem": [], "t": {"abrir_s": 0.0, "listar_s": 0.0, "geometria_s": 0.0}, "msgs": [],
                "pico_filho": 0.0, "foto": None, "resolvidos": set(), "simp": [], "desl": None, "acusadas": 0, "espera": 0.0,
-               "filhos": 0, "reinicios": [], "conv_global": 0, "alvos": _alvos_reinicio_teste()}
+               "filhos": 0, "reinicios": [], "conv_global": 0, "alvos": _alvos_reinicio_teste(),
+               "blocos": [], "reg_reinicio": [], "picos": []}
         try:
             est["foto"] = foto_arquivo.tirar(self.caminho, com_soma=self.manter_arquivo)  # antes de qualquer filho; a soma (lê o arquivo todo) só vale com manter_arquivo
             self._ler(est)
@@ -278,7 +283,7 @@ class CarregadorMalhas:
             self._resumo = ResumoCarga(
                 est["estado"], est["erro"], est["produtos_total"], len(est["ids"]), est["tri"], est["vert"],
                 est["lotes"], est["sem"], est["t"], self.threads, self.tamanho_bloco, est["msgs"] + self._linhas_resumo(est["simp"]),
-                est["pico_filho"], est["simp"], est["filhos"], est["reinicios"])
+                est["pico_filho"], est["simp"], est["filhos"], est["reinicios"], est["blocos"], est["reg_reinicio"], est["picos"])
         finally:  # o resumo existe ou não, quem espera nunca fica preso
             self._pronto.set()
 
@@ -325,6 +330,7 @@ class CarregadorMalhas:
                 est["reinicios"].append(falha["bloco_global"])
                 for k in ("decisao_s", "morte_s", "perdido_s"):
                     est["t"][k] = est["t"].get(k, 0.0) + falha[k]
+                est["reg_reinicio"].append({"bloco": falha["bloco_global"], **self._decisao})
                 est["msgs"].append(f"reinício planejado do filho no bloco {falha['bloco_global']}: "
                                    f"{falha['perdido_s']:.1f} s do filho antigo perdidos")
                 antes = len(est["resolvidos"])
@@ -387,7 +393,8 @@ class CarregadorMalhas:
                   "excluir": self.excluir, "biblioteca": self.biblioteca, "max_bytes_lote": self.max_bytes_lote,
                   "ids": ids, "isolado": isolado, "desl": est["desl"], "por_peca": por_peca, "foto": est["foto"]}
         self._conv, self._feitos, self._fase, self._atual = 0, set(), None, None
-        self._pedido, self._isolado, self._base_mb = None, isolado, None
+        self._pedido, self._isolado, self._base_mb, self._reg, self._decisao, self._falhas = None, isolado, None, None, None, 0
+        est["picos"].append(0.0)
         est["filhos"] += 1
 
         def limite():
@@ -457,36 +464,50 @@ class CarregadorMalhas:
 
     def _vigiar(self, est):
         """Regra R-A (T29c): a cada `FATIA_S`, lê a memória atual do filho; se cresceu `G_CRESCIMENTO_MB` ou mais desde o começo
-        do bloco (armado em `bloco`, com `_conv` ≥ 2 e modo normal) e ainda não houve reinício, pede o reinício; com o teto cheio só registra. Desarma nos dois casos."""
+        do bloco (armado em `bloco`, com `_conv` ≥ 2 e modo normal), decide (`_decidir`). É o único gatilho: a medida do fim do bloco
+        (`bloco_fim`) só registra, porque o pico já passou. Falha de leitura: aviso no log na 1ª de cada filho e contagem no registro."""
         agora = time.perf_counter()
         if self._base_mb is None or self._pedido is not None or agora < self._prox_vigia:
             return
         self._prox_vigia = agora + FATIA_S
+        f = self._filho
+        if f is None or f.pid is None or not f.is_alive():
+            return
         try:
             try:
                 from . import processo_malhas as pm
             except ImportError:  # pragma: no cover
                 import processo_malhas as pm
-            f = self._filho
-            if f is None or f.pid is None or not f.is_alive():
-                return
             atual = pm.pico_memoria_mb(f.pid if sys.platform != "win32" else f.sentinel, atual=True)
-        except Exception:  # processo já saiu ou leitura impossível: sem decisão; a queda segue o caminho de hoje
+        except Exception as e:  # sem leitura a regra não decide: não pode ser em silêncio
+            self._falhas += 1
+            if self._reg is not None:
+                self._reg["falhas_leitura"] = self._falhas
+            if self._falhas == 1:
+                log.warning("Vigia de memória do filho: leitura falhou (%s: %s); a regra de crescimento pode não agir", type(e).__name__, e)
             return
+        if self._reg is not None:
+            self._reg["max_mb"] = max(self._reg["max_mb"] or 0.0, atual)
         self._decidir(est, atual)
 
     def _decidir(self, est, atual):
         """Pede o reinício se a memória `atual` do filho passou `G_CRESCIMENTO_MB` da partida do bloco; com o teto cheio só registra."""
         if self._base_mb is None or atual - self._base_mb < G_CRESCIMENTO_MB:
             return
-        self._base_mb = None
+        base, self._base_mb = self._base_mb, None
         if est["reinicios"]:
             est["msgs"].append(f"reinício pedido e não feito (bloco {est['conv_global']}): já houve 1 reinício")
         else:
             self._pedido = est["conv_global"]
+            self._decisao = {"fonte": "vigia", "base_mb": base, "decisao_mb": atual,
+                             "atraso_armar_s": self._reg["atraso_armar_s"] if self._reg else None}
 
     @staticmethod
-    def _ler_pico(est, filho):
+    def _pico(est, valor):
+        est["pico_filho"] = max(est["pico_filho"], valor)
+        est["picos"][-1] = max(est["picos"][-1], valor)
+
+    def _ler_pico(self, est, filho):
         """Pico de memória do filho vivo entra em `pico_filho` (o filho morto não manda `fim`)."""
         if filho.is_alive() and filho.pid is not None:
             try:
@@ -494,8 +515,7 @@ class CarregadorMalhas:
                     from . import processo_malhas as pm
                 except ImportError:  # pragma: no cover
                     import processo_malhas as pm
-                est["pico_filho"] = max(est["pico_filho"], pm.pico_memoria_mb(
-                    filho.pid if sys.platform != "win32" else filho.sentinel))
+                self._pico(est, pm.pico_memoria_mb(filho.pid if sys.platform != "win32" else filho.sentinel))
             except Exception:
                 pass
 
@@ -506,12 +526,16 @@ class CarregadorMalhas:
         self._ler_pico(est, filho)
         if filho.pid is not None and filho.is_alive():
             filho.kill()
+        avisou = False
         while filho.exitcode is None:
             self._checar()
             filho.join(FATIA_S)
+            if not avisou and time.perf_counter() - t_decisao > 5.0:  # a espera não tem teto (só o cancelamento a interrompe)
+                avisou = True
+                log.warning("O filho morto ainda não saiu 5 s depois do kill; o filho novo espera")
         t_fim = time.perf_counter()
         return {"motivo": "reinicio", "seg": t_decisao - inicio, "bloco_global": self._pedido, "decisao_s": t_decisao - inicio,
-                "morte_s": t_fim - t_decisao, "perdido_s": t_fim - inicio}
+                "morte_s": t_fim - t_decisao, "perdido_s": t_fim - inicio}  # perdido_s começa depois do start() e já inclui decisao_s e morte_s: não somar os três
 
     def _caixas(self, est, itens):
         """Peças [(id, motivo, segundos)] viram caixa laranja de 12 triângulos. Os pontos vêm de um filho sem a
@@ -579,7 +603,7 @@ class CarregadorMalhas:
         elif len(est["reinicios"]) >= (2 if len(est["alvos"]) >= 2 else 1):
             est["msgs"].append(f"reinício pedido e não feito (bloco {k})")
         else:
-            self._pedido = k
+            self._pedido, self._decisao = k, {"fonte": "gancho", "base_mb": None, "decisao_mb": None, "atraso_armar_s": None}
 
     def _tratar(self, tipo, dados, est):
         """Aplica uma mensagem do filho de conversão. Devolve True na última (`fim`)."""
@@ -590,11 +614,24 @@ class CarregadorMalhas:
                 est["conv_global"] += 1
                 self._gancho_reinicio(est)
         elif tipo == "bloco":  # memória do filho no início do bloco: arma o vigia (1º bloco de cada filho é isento)
-            if not self._isolado and self._conv >= 2:
-                self._base_mb, self._prox_vigia = float(dados["rss_mb"]), 0.0
-        elif tipo == "bloco_fim":  # memória do filho ao acabar de converter o bloco: vale mesmo que o pai esteja atrasado na fila
-            if self._base_mb is not None:
-                self._decidir(est, float(dados["rss_mb"]))
+            # macOS (experimental): a base é o pico (ru_maxrss) e o pai lê a atual por `ps`: o crescimento sai subestimado, nunca falso
+            if not self._isolado:
+                atraso = time.time() - dados["t"]
+                self._reg = {"bloco": est["conv_global"], "filho": est["filhos"], "base_mb": float(dados["rss_mb"]), "max_mb": None,
+                             "fim_mb": None, "atraso_armar_s": atraso, "armado": self._conv >= 2, "falhas_leitura": 0}
+                est["blocos"].append(self._reg)
+                if self._conv >= 2:
+                    self._base_mb, self._prox_vigia = self._reg["base_mb"], 0.0
+        elif tipo == "bloco_fim":  # só registro: o pico do bloco já passou, matar agora não ajuda
+            if self._reg is not None:
+                self._reg["fim_mb"] = float(dados["rss_mb"])
+                if self._base_mb is not None and self._reg["fim_mb"] - self._base_mb >= G_CRESCIMENTO_MB:
+                    cresc = self._reg["fim_mb"] - self._base_mb
+                    # com o teto cheio o pedido seria recusado de qualquer jeito: usa a mesma frase do vigia
+                    est["msgs"].append(f"reinício pedido e não feito (bloco {est['conv_global']}): crescimento de {cresc:.0f} MB visto só no fim "
+                                       "do bloco, já houve 1 reinício" if est["reinicios"] else
+                                       f"crescimento de {cresc:.0f} MB visto só no fim do bloco {est['conv_global']}: reinício não feito (tarde)")
+                self._base_mb = None
         elif tipo == "inicio":
             if not self._produtos:  # só o primeiro filho manda a tabela completa
                 est["produtos_total"] = dados["total"]
@@ -613,7 +650,7 @@ class CarregadorMalhas:
             self._contar_lote(est, dados)
             dados = replace(dados, indice_lote=est["lotes"] - 1, produtos_feitos=len(est["resolvidos"]),
                             produtos_total=est["produtos_total"])
-            self._colocar(dados, est)
+            self._colocar(dados)
         elif tipo == "feitos":
             self._feitos.add(dados)
         elif tipo == "atual":  # modo uma peça por vez: a peça que o filho vai converter agora
@@ -630,8 +667,8 @@ class CarregadorMalhas:
             self._base_mb = None
             for k, v in dados["tempos"].items():
                 est["t"][k] = est["t"].get(k, 0.0) + v
-            est["msgs"].extend(dados["mensagens"])
-            est["pico_filho"] = max(est["pico_filho"], dados["pico_memoria_mb"])
+            est["msgs"].extend(m for m in dados["mensagens"] if m not in est["msgs"])  # cada filho repete o fim do registro do conversor
+            self._pico(est, dados["pico_memoria_mb"])
             return True
         return False
 

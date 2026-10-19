@@ -244,7 +244,7 @@ def _converter(enviar, params):
             bloco = produtos[ini:ini + tb]
             _RETIDO.clear()  # fim do bloco anterior: a memória do gancho de crescimento volta ao sistema
             enviar("fase", "convertendo")  # antes de criar o iterador: a primeira peça é convertida em initialize()
-            enviar("bloco", {"rss_mb": pico_memoria_mb(atual=True)})  # memória de partida do bloco (regra R-A, T29c)
+            enviar("bloco", {"rss_mb": pico_memoria_mb(atual=True), "t": time.time()})  # memória de partida do bloco (regra R-A, T29c)
             prods, sem = _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar, None, crescer)
             enviar("bloco_fim", {"rss_mb": pico_memoria_mb(atual=True)})  # o pai pode estar atrasado na fila: a medida vem do filho
             feitos += len(bloco)

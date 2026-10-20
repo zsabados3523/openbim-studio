@@ -45,7 +45,6 @@ class DadosCena {
   // sequência (sempre nova, estritamente crescente). Erro: std::invalid_argument e a cena fica intacta. Escolha (achado 4): lote com deslocamento
   // diferente do primeiro da cena é RECUSADO; `limpar()` zera a cena e libera o deslocamento.
   int64_t atualizar(const LoteBruto* lote_novo, std::set<std::string> guids);
-  // ger_ muda só em limpar() (a placa recomeça do zero); atualizar/remover mudam só ver_ (T30b1: o reenvio por posição é do motor, T30b2).
   void limpar();
   int64_t geracao() { std::lock_guard<std::mutex> l(m_); return ger_; }
   std::shared_ptr<Dados> proximo(Cursor& c);  // próximo lote ainda não visto (nullptr se não há); devolve nullptr se a geração mudou: quem chama zera a placa
@@ -57,7 +56,7 @@ class DadosCena {
  private:
   std::vector<std::shared_ptr<Dados>> preparar(const LoteBruto& lote);  // valida e copia (sem o mutex), partindo em sub-lotes de até C; não publica; sempre ≥ 1
   void recalcular_caixa();                            // com m_
-  std::mutex m_; std::vector<std::shared_ptr<Dados>> lotes_; int64_t seq_ = 0, ger_ = 0, ver_ = 0;  // ger_: sobe só em limpar(); ver_: sobe a cada mudança (atualizar refaz se mudou)
+  std::mutex m_; std::vector<std::shared_ptr<Dados>> lotes_; int64_t seq_ = 0, ger_ = 0, ver_ = 0;  // ger_: sobe em limpar() e em atualizar que refaz lotes (a placa recomeça); ver_: sobe a cada mudança (atualizar refaz se mudou)
   double cmin_[3] = {1e30, 1e30, 1e30}, cmax_[3] = {-1e30, -1e30, -1e30};
 };
 }  // namespace obim

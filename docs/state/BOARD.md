@@ -43,7 +43,7 @@
 | F0-S04-T30a1 | `sem` consertado na cena (reescopo: `ger_` e instantâneo foram para o T30b) | T3 | EM_ANDAMENTO | Ramo `s04-t30a1-sem`; oráculo T30d1 em paralelo (outro agente, ramo `s04-t30d1-oraculo`); cartões em `cards/F0-S04/` |
 | F0-S04-T30d1 | Oráculo do `sem` consertado (equivalência passa hoje; `bytes_copia` xfail estrito) | T3 | EM_ANDAMENTO | Escrito por agente diferente do T30a1 |
 | F0-S04-T30a2 | Divisão em sub-lotes de até 8 MiB dentro de `preparar` | T3 | EM_ANDAMENTO | Ramo `s04-t30a2-sublotes` (partido do T30a1); oráculo T30d2 depois, por outro agente |
-| F0-S04-T33 | Sonda do ensaio da R-A no pesado (tela virtual) | T2 | EM_ANDAMENTO | Só escreve a sonda, testa com IFC sintético; o ensaio do pesado (A32) é o T33b: 1 abertura feita em 2026-10-20, 3 critérios falharam (ver reports/F0-S04-T33b.md), PARADO para PO/Opus |
+| F0-S04-T33 | Sonda do ensaio da R-A no pesado (tela virtual) | T2 | FEITA (ensaio de 1 abertura feito) | Sonda mesclada (PR 203); padrão do bloco corrigido para 250 (PR 206). Ensaio T33b, 2ª rodada (bloco 250, tela virtual, 1 abertura): 60,75 s, 1 reinício `vigia` no bloco 22, conta A 5.921 MB, 5 de 6 critérios de parada passaram; falhou `primeira_vs_base_ok` (memória do filho caiu em 4 blocos). Levado ao Opus (lote 63, ponto 7). Relatório `reports/F0-S04-T33b.md`. Faltam até 2 aberturas e a placa |
 
 ## Revisão geral da F0 (2026-10-15)
 Cartões F0-RG-01 a RG-25 (relatório `reports/F0-REVISAO-GERAL-2026-10-15.md`, Parte D). Andamento de cada um: `LOG.md` e os PRs no GitHub.

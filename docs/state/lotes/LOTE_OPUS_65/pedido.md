@@ -1,7 +1,7 @@
 <!--
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
-# LOTE_OPUS_65: revisão dos PRs 217, 218, 219 e 222 (T30b1, T30b2, T30d3, T34) e decisão do T29d (F0-S04)
+# LOTE_OPUS_65: revisão dos PRs 217, 218, 219, 222 e 224 (T30b1, T30b2, T30d3, T34, T23b) e decisão do T29d (F0-S04)
 Pedido do líder (2026-10-20), **classe T3, revisão Opus em lote, esforço médio**. Responda **aprovado ou reprovado com lista numerada** por PR. Escreva só `docs/state/lotes/LOTE_OPUS_65/resultado.md`; não edite mais nada, não implemente, não faça merge, não leia `~/openbim-medicao`, nenhum IFC. Você não escreveu nenhum destes (autores do oráculo e do teste são agentes diferentes dos implementadores).
 
 ## Contexto fechado
@@ -18,6 +18,8 @@ Pedido do líder (2026-10-20), **classe T3, revisão Opus em lote, esforço méd
 4. **222 (T34):** os números (0,7; 700 ms) não mudaram, nenhum caso saiu, o controle continua controlando (mutação), a mediana de 5 e 3 repetições é uma forma legítima de medir; os valores únicos do `conferencias.json` principal deixaram de ser conferidos nesses dois limites: aceitável? No Windows a conferência de 700 ms fica por conta do CI.
 5. **T29d (cartão novo):** a base do vigia está no ponto certo? A premissa da regra (d) do lote 63 vale por construção? Leitura do líder: `bloco_fim` mede antes de `emitir`, o `bloco` seguinte mede a base depois de `emitir` e de `_RETIDO.clear()`. Decida o critério para o ensaio continuar e o que o autor do oráculo exige; nenhum número do produto muda. Diga se o ensaio já gravado basta ou precisa de nova rodada.
 6. **Ordem de merge** de 217, 218, 219 e 222 e quem tira os marcadores `@AINDA_NAO` (e quando); se o 218 pode entrar antes do 219 ou só junto.
+
+7. **PR 224 (T23b, CI do Windows):** só `.github/workflows/ci.yml` (+31/−8): trabalho novo `windows-obimcore` (ambiente, build limpo, `touch ponte.cpp`, incremental, entrega pelo cache `obimcore-win-<run_id>`); `instalador-windows` passa a depender dele; `windows-viewport-a` ficou com o build limpo e os 21 testes da ponte. Confira o cartão T23 (aceite 1 e 2): nenhum teste removido, pulado ou com limite maior; nomes dos checks obrigatórios intactos (`linux`, `windows`, `appimage`, `instalador-windows`); todo trabalho novo que bloqueia no `needs` de `windows`; o R1-j dentro do instalador prova o mesmo módulo. Tempos da 1ª rodada: fila crítica 34m05 → 27m03 (meta 10 min não atingida); o job novo esperou 7 min por vaga de máquina. Aprovar para mesclar? O que mais deve entrar na T23c?
 
 ## Entrega
 Veredito por PR; respostas 1 a 6; perguntas ao PO (só o que é dele); resumo de 5 linhas em português simples, sem siglas; linha do LOG. Resultado em português claro; retorno final em caveman (curto). Não aprove provisoriamente.

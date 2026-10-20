@@ -135,8 +135,9 @@ def test_t15c_iii_desenho_nao_passa_pelo_python_nem_pela_thread_da_janela(conf, 
     x = conf["iii"]
     presos = [y["gil_preso_ms"] for y in rep["iii"]]
     assert len(presos) == REP_III and statistics.median(presos) >= 700, f"a thread da janela tem de ficar presa >= 700 ms (T05: 0,75 s), mediana de {REP_III} medidas: {presos}"
-    assert x["maior_intervalo_ms"] < 50 and x["quadros"] >= 20 * x["gil_preso_ms"] / 1000, f"(iii) o desenho parou com o bloqueio preso na thread da janela: {x}"
-    assert x["conteiner_python"] is False and x["classe_conteiner"].startswith("PySide6."), x
+    for y in [x, *rep["iii"]]:  # T34: o desenho tem de continuar em cada repetição (e na execução principal), não só em alguma
+        assert y["maior_intervalo_ms"] < 50 and y["quadros"] >= 20 * y["gil_preso_ms"] / 1000, f"(iii) o desenho parou com o bloqueio preso na thread da janela: {y}"
+        assert y["conteiner_python"] is False and y["classe_conteiner"].startswith("PySide6."), y
 
 
 def test_t15c_iii_nenhum_arquivo_do_fluxo_mexe_na_janela_de_desenho():

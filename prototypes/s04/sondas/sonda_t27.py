@@ -8,6 +8,7 @@ Os milissegundos de software NÃO valem como os da placa; o que se lê são cont
 Geometria de enchimento DEGENERADA mas REFERENCIADA: nv vértices na origem e nv índices (um por vértice), de modo que os bytes do lote
 (28*vértices + 4*índices) sobrevivam a `sem` de `cena.cpp` — que descarta vértice sem índice vivo (um enchimento com poucos índices
 encolheria o lote a cada troca; achado no ensaio). Sem fragmento (triângulos de área zero), mas o desenho por software ainda processa os vértices.
+T30c: o enchimento vem em peças de ~128 KiB (o lote ladrilha e a cena o parte em sub-lotes de até 8 MiB); cada troca também registra sub-lotes novos, bytes do sub-lote da parede e lotes da cena (chamadas de desenho).
 O contador de quadros depende dos BYTES por quadro (2 MiB), não da forma. Uso: sonda_t27.py rodada --rotulo t27 --saida ARQ.json [--cena cheia|reduzida] [--paredes 3] [--limite-ms 120000]
      sonda_t27.py agregar PASTA
 """
@@ -35,31 +36,33 @@ TOCADOS = {"8MiB": 4, "24MiB": 9, "68MiB": 10, "285MiB": 12}  # índices dos lot
 CENA_REDUZIDA = [24.24, 68.27, 285.36]  # critério 4: só os lotes grandes (~378 MiB)
 PAREDE_TRI = 12  # a parede do roteiro (T25 §2): 12 triângulos -> 28*36 + 4*36 = 1.152 bytes
 PAREDE_BYTES = 28 * 3 * PAREDE_TRI + 4 * 3 * PAREDE_TRI
+PECA_ENCH = 4098  # vértices por peça de enchimento (~128 KiB; múltiplo de 3): lote de 285 MiB = ~2.300 peças, como um lote real
+ULT = [0]  # sequência do último sub-lote devolvido pela cena (T30c): a faixa de uma chamada vai de ULT+1 até a sequência devolvida
+SUB_BYTES = {}  # GlobalId de parede -> bytes do sub-lote que a contém (T30c)
 
 
-def lote_de(bytes_alvo, guids_parede=(), guid_filler="T27FILLER"):
-    # Enchimento REAL: nv_f vértices degenerados (todos na origem) e nv_f índices (arange), de modo que cada vértice
-    # fica referenciado. `sem` (cena.cpp) descarta vértice sem índice vivo: um enchimento com 3 índices degenerados
-    # apontando sempre para o vértice 0 encolheria o lote a ~40 bytes em qualquer troca (achado no ensaio). Assim os bytes
-    # do lote sobrevivem à troca, como no detalhado (que tem ~3 vértices por triângulo, 8,8 M tri em 805,7 MiB).
-    # Guids únicos por lote (enchimento e paredes): `atualizar` soma os guids do lote novo ao conjunto de remoção.
+def lote_de(bytes_alvo, guids_parede=(), guid_filler="T27F"):
+    # Enchimento em VÁRIAS peças (T30c: o núcleo parte o lote na fronteira de peça, então uma peça só de ~285 MiB não se partiria): peças de
+    # PECA_ENCH vértices degenerados (todos na origem) e um índice por vértice (arange), cada uma só aponta para os próprios vértices, em ordem e sem sobra
+    # -> o lote LADRILHA. Todo vértice fica referenciado: `sem` (cena.cpp) descarta vértice sem índice vivo e o lote encolheria a cada troca (achado no ensaio).
+    # Guids únicos por lote (enchimento e paredes): `atualizar` soma os guids do lote novo ao conjunto de remoção. As paredes vêm DEPOIS do enchimento.
     nv_p = 3 * PAREDE_TRI
     nb = len(guids_parede)
     restante = int(bytes_alvo) - nb * PAREDE_BYTES
     nv_f = 0
     if nb == 0 or restante > 0:
         nv_f = max(3, (max(32, restante) // 32) // 3 * 3)  # 28 bytes/vértice + 4 bytes/índice (indice = vertice)
-    ni_f = nv_f
+    n_pe = -(-nv_f // PECA_ENCH)  # peças de enchimento (a última leva o resto; PECA_ENCH e nv_f são múltiplos de 3)
     total_v = nv_f + nb * nv_p
-    total_i = ni_f + nb * 3 * PAREDE_TRI
+    total_i = nv_f + nb * 3 * PAREDE_TRI
     v, ind = np.zeros(total_v, DTYPE_VERTICE), np.zeros(total_i, np.uint32)
-    objs = np.empty((1 if nv_f else 0) + nb, DTYPE_OBJETO)
-    vv, ii, k = 0, 0, 0
-    tri = 0
-    if nv_f:  # vértices na origem -> triângulos degenerados (sem fragmento), mas todos referenciados
-        ind[ii:ii + ni_f] = np.arange(vv, vv + ni_f, dtype=np.uint32)
-        objs[k] = (0, guid_filler.encode("ascii"), ii, ni_f, vv, nv_f, [0.0, 0.0, 0.0], [0.0, 0.0, 0.0])
-        vv, ii, k, tri = vv + nv_f, ii + ni_f, k + 1, ni_f // 3
+    objs = np.empty(n_pe + nb, DTYPE_OBJETO)
+    ind[:nv_f] = np.arange(nv_f, dtype=np.uint32)
+    for k in range(n_pe):  # vértices na origem -> triângulos degenerados (sem fragmento), mas todos referenciados
+        a = k * PECA_ENCH
+        n = min(PECA_ENCH, nv_f - a)
+        objs[k] = (0, f"{guid_filler}P{k:010d}".encode("ascii"), a, n, a, n, [0.0, 0.0, 0.0], [0.0, 0.0, 0.0])
+    vv, ii, k, tri = nv_f, nv_f, n_pe, nv_f // 3
     for g in guids_parede:
         base = np.arange(nv_p, dtype=np.float32)
         v["pos"][vv:vv + nv_p, 0] = (base % 6) * 0.2
@@ -79,6 +82,8 @@ def observar(f, agir, limite_ms=None):  # um caso: agir() devolve a sequência; 
     ultimo = max([t for t, _ in c.relogio()] or [0.0])
     t0 = f._relogio()
     seq = agir()
+    novos_sub = seq - ULT[0]  # sub-lotes novos desta chamada (T30c): a faixa devolvida pela cena
+    ULT[0] = seq
     t_cmd = f._relogio()
     quadros, ant, fim = [], e0, f._relogio() + limite_ms
     while True:
@@ -103,13 +108,16 @@ def observar(f, agir, limite_ms=None):  # um caso: agir() devolve a sequência; 
     return {"ms_total": t_fim - t0, "quadros_depois": sum(q["agrupados"] for q in quadros), "fatias": int(ant["fatias_enviadas"] - e0["fatias_enviadas"]),
             "dfatias_por_quadro": [q["dfatias"] for q in quadros], "amostras": [[q["agrupados"], q["dfatias"], q["tri_placa"]] for q in quadros], "lotes_antes": int(e0["lotes"]), "lotes_depois": int(ant["lotes"]), "tri_placa_antes": int(e0["triangulos_na_placa"]), "tri_placa_min": int(min(tri) if tri else e0["triangulos_na_placa"]),
             "tri_placa_depois": tri[-1] if tri else int(e0["triangulos_na_placa"]), "triangulos_antes": int(e0["triangulos"]), "triangulos_depois": int(ant["triangulos"]),
-            "contextos_delta": int(ant["contextos"] - e0["contextos"]), "cena_vi_depois": vi, "previsto_quadros": -(-vi // ORCAMENTO) + 1}
+            "contextos_delta": int(ant["contextos"] - e0["contextos"]), "cena_vi_depois": vi,
+            "sublotes_novos": novos_sub, "chamadas_desenho_depois": int(ant["lotes"]),
+            "previsto_quadros": -(-vi // ORCAMENTO) + 1}  # chamadas_desenho_depois (T30c): 1 chamada de desenho por sub-lote = lotes da cena depois do comando
 
 
 def trocar(f, casos, caso, guid_antigo, gnovo, bytes_tocado, tri_tocado, seq_guids):
     lote, _, _ = lote_de(PAREDE_BYTES, [gnovo])
     r = observar(f, lambda l=lote, o=guid_antigo: int(f.cena.atualizar(l, [o])))
-    r.update({"caso": caso, "bytes_lote_tocado": bytes_tocado, "tri_lote_tocado": tri_tocado, "guids": seq_guids})
+    r.update({"caso": caso, "bytes_lote_tocado": bytes_tocado, "tri_lote_tocado": tri_tocado, "guids": seq_guids, "bytes_sublote_tocado": SUB_BYTES.pop(guid_antigo, None)})
+    SUB_BYTES[gnovo] = PAREDE_BYTES  # a parede nova mora num sub-lote de 1 KB
     casos.setdefault(caso, []).append(r)
     f._bombear(lambda: False, 150)
     return gnovo
@@ -134,10 +142,14 @@ def rodada(a):
             if i in idx_tocados.values():
                 gs = [f"T27PAREDE{n + k:013d}" for k in range(a.paredes)]
             n += len(gs)
-            lote, nb, tri = lote_de(mib * (1 << 20), gs, f"T27FILLER{i:013d}")
-            c.adicionar_lote(lote)
+            lote, nb, tri = lote_de(mib * (1 << 20), gs, f"T27F{i:02d}")
+            s = int(c.adicionar_lote(lote))
             if i in idx_tocados.values():
                 gs_parede[i], tri_lote[i] = list(gs), tri
+                for q in range(ULT[0] + 1, s + 1):  # bytes do sub-lote de cada parede (T30c)
+                    o = c.objetos(q)
+                    SUB_BYTES.update({g: int(28 * o["n_vertices"].sum() + 4 * o["n_indices"].sum()) for g in o["guid"] if g in gs})
+            ULT[0] = s
             saida.setdefault("lotes_bytes", []).append(nb)
         passo = "assentar"  # espera a placa completar (805 MiB levam ~400 quadros em software); sem isso o "criar" mediria a placa ainda enchendo
         fim = f._relogio() + 300000
@@ -147,7 +159,7 @@ def rodada(a):
             if int(e["triangulos_na_placa"]) >= int(e["triangulos"]):
                 break
         e = c.estatisticas()
-        saida["cena_antes"] = {k: int(e[k]) for k in ("triangulos", "vertices", "lotes", "bytes_copia", "fatias_enviadas", "triangulos_na_placa")}
+        saida["cena_antes"] = {k: int(e[k]) for k in ("triangulos", "vertices", "lotes", "bytes_copia", "fatias_enviadas", "triangulos_na_placa", "nao_partidos", "pecas_maiores_que_c") if k in e}  # os dois últimos só depois do T30b
         saida["cena_bytes_vi"] = int(sum(saida["lotes_bytes"]))
         saida["previsto_quadros"] = -(-saida["cena_bytes_vi"] // ORCAMENTO) + 1
         casos = saida["casos"]
@@ -158,7 +170,8 @@ def rodada(a):
             g = f"T27CRIADA{n + k:013d}"
             lote, _, tri = lote_de(PAREDE_BYTES, [g])
             r = observar(f, lambda l=lote: int(c.atualizar(l, [])))
-            r.update({"caso": "criar_1KB", "bytes_lote_tocado": PAREDE_BYTES, "tri_lote_tocado": tri, "guids": [g]})
+            r.update({"caso": "criar_1KB", "bytes_lote_tocado": PAREDE_BYTES, "tri_lote_tocado": tri, "guids": [g], "bytes_sublote_tocado": None})
+            SUB_BYTES[g] = PAREDE_BYTES
             casos.setdefault("criar_1KB", []).append(r)
             criadas.append(g)
             f._bombear(lambda: False, 150)
@@ -208,6 +221,7 @@ def agregar(pasta):
         am = [a for q in ev for a in q["amostras"]]  # [agrupados, dfatias, tri_placa] por quadro novo; pedaços por quadro só de amostras com 1 quadro (as agrupadas somam vários)
         fp = [a[1] for a in am if a[0] == 1]
         por_rodada = [[q["quadros_depois"] for q in x["casos"].get(caso, [])] for x in ok if x["casos"].get(caso)]
+        bst = [q["bytes_sublote_tocado"] for q in ev if q.get("bytes_sublote_tocado")]
         out["casos"][caso] = {
             "eventos": len(ev), "eventos_por_rodada": [len(v) for v in por_rodada],
             "quadros_depois": {"mediana": med([q["quadros_depois"] for q in ev]), "pior": max(q["quadros_depois"] for q in ev), "por_rodada": [med(v) for v in por_rodada]},
@@ -224,7 +238,10 @@ def agregar(pasta):
             "esvaziou_abaixo_do_lote_tocado": sum(q["tri_placa_min"] < q["triangulos_antes"] - q["tri_lote_tocado"] for q in ev),
             "nunca_abaixo_do_anterior": sum(q["tri_placa_min"] >= q["tri_placa_antes"] for q in ev),
             "fatias_2_exatas": sum(q["fatias"] == 2 for q in ev),
-            "ms_total_mediana": med([q["ms_total"] for q in ev])}
+            "ms_total_mediana": med([q["ms_total"] for q in ev]),
+            "sublotes_novos": {"mediana": med([q["sublotes_novos"] for q in ev]), "maior": max(q["sublotes_novos"] for q in ev)},  # T30c
+            "bytes_sublote_tocado": {"mediana": med(bst), "maior": max(bst or [0])},
+            "chamadas_desenho_depois": {"mediana": med([q["chamadas_desenho_depois"] for q in ev]), "maior": max(q["chamadas_desenho_depois"] for q in ev)}}
     return out
 
 

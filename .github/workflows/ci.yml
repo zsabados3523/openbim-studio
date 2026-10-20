@@ -298,7 +298,9 @@ jobs:
         run: |
           echo "### windows-testes: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
 
-  windows-viewport-a:
+  # T23b: o módulo obimcore do Windows (build limpo + incremental + entrega ao instalador) em trabalho próprio, para o instalador-windows
+  # não esperar o windows-viewport-a inteiro. Bloqueia o merge (está no needs de `windows`); a chave do cache e os arquivos são os mesmos de antes.
+  windows-obimcore:
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
@@ -307,7 +309,7 @@ jobs:
         run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/ambiente-windows
-      - name: Módulo obimcore (S04-T03; compila com a ponte e roda o oráculo R1-a a R1-i; bloqueia o merge)
+      - name: Módulo obimcore (build limpo, touch ponte.cpp, build incremental; bloqueia o merge; os 21 testes da ponte rodam no windows-viewport-a)
         shell: bash -elo pipefail {0}
         run: |
           # Ambiente criado pela trava (T01); nada é instalado aqui. Build limpo e depois incremental, com os tempos no resumo.
@@ -319,9 +321,6 @@ jobs:
           touch prototypes/s04/obimcore/ponte.cpp
           bash prototypes/s04/obimcore/build.sh out/s04 | tee "$RUNNER_TEMP/b2.txt"
           echo "obimcore ${RUNNER_OS}: limpo $(grep OBIMCORE "$RUNNER_TEMP/b1.txt") | incremental $(grep OBIMCORE "$RUNNER_TEMP/b2.txt")" >> "$GITHUB_STEP_SUMMARY"
-          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
-          export OBIM_CI=1  # liga todas as chaves de obrigatório (pulo vira falha; tests/conftest.py) (T04c entregou versao()["registro_ifc4"])
-          QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_ponte.py
       - name: Entregar o módulo obimcore e o pytest ao job instalador-windows (T17b; usa a ação de cache que já está fixada)
         shell: bash -elo pipefail {0}
         run: |
@@ -342,6 +341,30 @@ jobs:
             ${{ runner.temp }}/pytest_site
           key: obimcore-win-${{ github.run_id }}
           lookup-only: true
+      - name: Tempo total
+        if: always()
+        shell: bash
+        run: |
+          echo "### windows-obimcore: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
+
+  windows-viewport-a:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Início (relógio)
+        shell: bash
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/ambiente-windows
+      - name: Módulo obimcore (só o build limpo, para os testes deste job; o incremental e a entrega ao instalador estão no job windows-obimcore)
+        shell: bash -elo pipefail {0}
+        run: CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04
+      - name: Testes da ponte (S04-T03; oráculo R1-a a R1-i; bloqueia o merge)
+        shell: bash -elo pipefail {0}
+        run: |
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          export OBIM_CI=1  # liga todas as chaves de obrigatório (pulo vira falha; tests/conftest.py) (T04c entregou versao()["registro_ifc4"])
+          QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_ponte.py
       - name: Viewport C++ (parte A; S04-T06/T07; bloqueia o merge)
         shell: bash -elo pipefail {0}
         timeout-minutes: 30
@@ -561,7 +584,7 @@ jobs:
   # Mantém o nome `windows` (regra de bloqueio de merge): passa só se TODOS os jobs paralelos acima passarem.
   windows:
     if: always()
-    needs: [windows-testes, windows-viewport-a, windows-viewport-b, windows-fluxo-b]
+    needs: [windows-testes, windows-obimcore, windows-viewport-a, windows-viewport-b, windows-fluxo-b]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -578,7 +601,7 @@ jobs:
   # Instalador do Windows em job próprio: roda ao mesmo tempo que o job windows, em vez de depois dele.
   instalador-windows:
     runs-on: windows-latest
-    needs: windows-viewport-a  # T17b: o módulo obimcore é compilado no windows-viewport-a e entra no instalador pronto (o pacote não tem compilador)
+    needs: windows-obimcore  # T17b/T23b: o módulo obimcore é compilado no windows-obimcore e entra no instalador pronto (o pacote não tem compilador)
     env:
       PLAT: win-64
     timeout-minutes: 75  # era 60; o R1-j acrescenta uma instalação e os 9 casos do pytest
@@ -603,7 +626,7 @@ jobs:
           fi
           echo "instalador=$r" >> "$GITHUB_OUTPUT"
           echo "::notice title=instalador::instalador=$r ($motivo)"
-      - name: Módulo obimcore e pytest vindos do job windows-viewport-a (T17b; falha se não vierem)
+      - name: Módulo obimcore e pytest vindos do job windows-obimcore (T17b/T23b; falha se não vierem)
         if: steps.detecta.outputs.instalador == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:

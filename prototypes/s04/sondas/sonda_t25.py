@@ -80,9 +80,13 @@ def forcar(f):
     return agir
 
 
-def lotes_da_cena(f):  # bytes de vértices e índices de cada lote anotado em `f.sequencias` (lotes vazios e marcadores ficam de fora e são contados à parte)
+def sequencias_da_cena(f):  # T30c: `adicionar_lote`/`atualizar` devolvem a sequência do ÚLTIMO sub-lote; as chamadas são seguidas, então a faixa toda é 1..maior
+    return range(1, max(f.sequencias, default=0) + 1)
+
+
+def lotes_da_cena(f):  # bytes de vértices e índices de cada SUB-lote da cena (lotes vazios e marcadores ficam de fora e são contados à parte)
     b, vazios, indisp = [], 0, 0
-    for s in f.sequencias:
+    for s in sequencias_da_cena(f):
         try:
             o = f.cena.objetos(s)
         except Exception:  # lote já refeito ou removido
@@ -95,9 +99,9 @@ def lotes_da_cena(f):  # bytes de vértices e índices de cada lote anotado em `
     return {"lotes": len(b), "vazios": vazios, "indisponiveis": indisp, "mediana_bytes": float(np.median(b)) if b else 0, "maior_bytes": b[-1] if b else 0, "menor_bytes": b[0] if b else 0, "soma_bytes": sum(b), "acima_de_2MiB": sum(x > (2 << 20) for x in b), "maiores_bytes": b[-5:]}
 
 
-def bytes_por_guid(f):  # bytes (vértices+índices) do lote que hoje contém cada GlobalId; só para saber o tamanho do lote tocado
+def bytes_por_guid(f):  # bytes (vértices+índices) do sub-lote que hoje contém cada GlobalId; só para saber o tamanho do sub-lote tocado
     r = {}
-    for s in f.sequencias:
+    for s in sequencias_da_cena(f):
         try:
             o = f.cena.objetos(s)
         except Exception:
@@ -109,7 +113,7 @@ def bytes_por_guid(f):  # bytes (vértices+índices) do lote que hoje contém ca
 
 def estat(f):
     e = f.cena.estatisticas()
-    return {k: int(e[k]) for k in ("triangulos", "vertices", "lotes", "bytes_copia", "fatias_enviadas", "triangulos_na_placa", "contextos")}
+    return {k: int(e[k]) for k in ("triangulos", "vertices", "lotes", "bytes_copia", "fatias_enviadas", "triangulos_na_placa", "contextos", "nao_partidos", "pecas_maiores_que_c") if k in e}  # os dois últimos só depois do T30b
 
 
 def uma_vez(f, saida, casos, nome, cmds, par=None, tam=None, max_ok=None):  # roda os comandos em sequência; com `par`, cada um é seguido de um reenvio forçado da MESMA cena (a troca reenvia a cena já trocada)

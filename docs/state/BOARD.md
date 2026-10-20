@@ -47,6 +47,10 @@
 | F0-S04-T30a2 | Divisão em sub-lotes de até 8 MiB dentro de `preparar` | T3 | EM_RETRABALHO (PR 204) | Lote Opus 63: REPROVADO (índices desalinhados por `reinterpret_cast`; `nao_partido` mistura dois casos; flag velho no `sem`). Só entra junto com T30a3 e T30d2 |
 | F0-S04-T33 | Sonda do ensaio da R-A no pesado (tela virtual) | T2 | FEITA (ensaio de 1 abertura feito) | Sonda mesclada (PR 203); padrão do bloco corrigido para 250 (PR 206). Ensaio T33b, 2ª rodada (bloco 250, tela virtual, 1 abertura): 60,75 s, 1 reinício `vigia` no bloco 22, conta A 5.921 MB, 5 de 6 critérios de parada passaram; falhou `primeira_vs_base_ok` (memória do filho caiu em 4 blocos). Levado ao Opus (lote 63, ponto 7). Relatório `reports/F0-S04-T33b.md`. Faltam até 2 aberturas e a placa |
 | F0-S04-T34 | Teste instável do T15c (controle positivo de ritmo, razão rente a 0,7; windows com 698,7 contra 700 ms) | T3 | PRONTO | Falhou no CI de vários PRs sem relação (razões 0,72 a 0,79). Mudar só a forma de medir, nenhum número; Opus em lote. Cartão `cards/F0-S04/F0-S04-T34.md` |
+| F0-S04-T30b1 | Cena: troca sem subir `ger_`, instantâneo coerente, contadores no Python | T3 | PRONTO depois do T30a2 no `main` | Cartão novo (lote 64, ponto 5); oráculo T30d3 por outro agente |
+| F0-S04-T30b2 | Motor: reenvio por posição e entrada atômica | T3 | PRONTO depois do T30b1 | Critérios do lote 62 §6.2 |
+| F0-S04-T30d3 | Oráculo do reenvio, do instantâneo e dos contadores | T3 | PRONTO (pode começar já) | Outro agente; marcadores `@AINDA_NAO` tirados pelo autor do oráculo |
+| F0-S04-T30c | Sondas de sub-lote nos dados reais (só números) | T2 | PRONTO depois do T30a2 no `main` | Regra de decisão da T-2 escrita no cartão |
 
 ## Revisão geral da F0 (2026-10-15)
 Cartões F0-RG-01 a RG-25 (relatório `reports/F0-REVISAO-GERAL-2026-10-15.md`, Parte D). Andamento de cada um: `LOG.md` e os PRs no GitHub.

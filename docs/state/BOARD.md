@@ -42,9 +42,9 @@
 | F0-S04-T30 | M2b abaixo de 200 ms no detalhado (T-2: teto de lote C = 8 MiB dentro de `cena`) | T3 | PRONTO depois do T29 no `main` | Lote 62: dividido em T30a1 (`sem` consertado, sem `ger_` na troca, instantâneo), T30a2 (divisão em sub-lotes em `preparar`), T30b (motor: reenvio por posição, entrada atômica), T30c (sondas, T2), T30d (oráculo por outro agente). Cartões em `lotes/LOTE_OPUS_62/resultado.md` §6 |
 | F0-S04-T30a1 | `sem` consertado na cena (reescopo: `ger_` e instantâneo foram para o T30b) | T3 | FEITA (PR 200 mesclado) | Aprovado pelo lote Opus 63 (73a16a2); `bytes_copia` +2.757 bytes exato contra +788.869 antes |
 | F0-S04-T30d1 | Oráculo do `sem` consertado | T3 | EM_REVISAO (PR 199) | Aprovado pelo lote Opus 63 com 1 commit do autor do oráculo (3 linhas); merge depois do 200 (já no main) |
-| F0-S04-T30a3 | Acessor `Cena.dados_lote(seq)` (leitura bit a bit) | T3 | PRONTO | Cartão novo do lote 63 (ponto 5); só a ponte |
-| F0-S04-T30d2 | Oráculo dos sub-lotes (11 exigências) | T3 | PRONTO depois do T30a3 | Outro agente, nunca o implementador do T30a2/T30b |
-| F0-S04-T30a2 | Divisão em sub-lotes de até 8 MiB dentro de `preparar` | T3 | EM_RETRABALHO (PR 204) | Lote Opus 63: REPROVADO (índices desalinhados por `reinterpret_cast`; `nao_partido` mistura dois casos; flag velho no `sem`). Só entra junto com T30a3 e T30d2 |
+| F0-S04-T30a3 | Acessor `Cena.dados_lote(seq)` (leitura bit a bit) | T3 | EM_REVISAO (PR 210, auto-merge) | Aprovado pelo lote Opus 64 (a97da0e); entra primeiro |
+| F0-S04-T30d2 | Oráculo dos sub-lotes (11 exigências) | T3 | EM_REVISAO (PR 211, auto-merge) | Aprovado pelo lote Opus 64 (5d837cf); entra depois do 210. Autor do oráculo tira os 2 `@AINDA_NAO` no ramo do 204 |
+| F0-S04-T30a2 | Divisão em sub-lotes de até 8 MiB dentro de `preparar` | T3 | APROVADO (PR 204), entra por último | Lote Opus 64 aprovou 710ad57. Ordem: 210 → 211 → 204 (mesclar o `main` no ramo, autor do oráculo tira as 4 linhas, CI verde, merge). Depois: cartões T30b e T30c |
 | F0-S04-T33 | Sonda do ensaio da R-A no pesado (tela virtual) | T2 | EM_ANDAMENTO | Só escreve a sonda, testa com IFC sintético; o ensaio do pesado (A32) é o T33b: 1 abertura feita em 2026-10-20, 3 critérios falharam (ver reports/F0-S04-T33b.md), PARADO para PO/Opus |
 | F0-S04-T34 | Teste instável do T15c (controle positivo de ritmo, razão rente a 0,7; windows com 698,7 contra 700 ms) | T3 | PRONTO | Falhou no CI de vários PRs sem relação (razões 0,72 a 0,79). Mudar só a forma de medir, nenhum número; Opus em lote. Cartão `cards/F0-S04/F0-S04-T34.md` |
 

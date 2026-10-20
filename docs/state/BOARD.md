@@ -42,6 +42,8 @@
 | F0-S04-T30 | M2b abaixo de 200 ms no detalhado (T-2: teto de lote C = 8 MiB dentro de `cena`) | T3 | PRONTO depois do T29 no `main` | Lote 62: dividido em T30a1 (`sem` consertado, sem `ger_` na troca, instantâneo), T30a2 (divisão em sub-lotes em `preparar`), T30b (motor: reenvio por posição, entrada atômica), T30c (sondas, T2), T30d (oráculo por outro agente). Cartões em `lotes/LOTE_OPUS_62/resultado.md` §6 |
 | F0-S04-T30a1 | `sem` consertado na cena (reescopo: `ger_` e instantâneo foram para o T30b) | T3 | EM_ANDAMENTO | Ramo `s04-t30a1-sem`; oráculo T30d1 em paralelo (outro agente, ramo `s04-t30d1-oraculo`); cartões em `cards/F0-S04/` |
 | F0-S04-T30d1 | Oráculo do `sem` consertado (equivalência passa hoje; `bytes_copia` xfail estrito) | T3 | EM_ANDAMENTO | Escrito por agente diferente do T30a1 |
+| F0-S04-T30a2 | Divisão em sub-lotes de até 8 MiB dentro de `preparar` | T3 | EM_ANDAMENTO | Ramo `s04-t30a2-sublotes` (partido do T30a1); oráculo T30d2 depois, por outro agente |
+| F0-S04-T33 | Sonda do ensaio da R-A no pesado (tela virtual) | T2 | EM_ANDAMENTO | Só escreve a sonda, testa com IFC sintético; o ensaio do pesado (A32) é o T33b, rodado pelo líder |
 
 ## Revisão geral da F0 (2026-10-15)
 Cartões F0-RG-01 a RG-25 (relatório `reports/F0-REVISAO-GERAL-2026-10-15.md`, Parte D). Andamento de cada um: `LOG.md` e os PRs no GitHub.

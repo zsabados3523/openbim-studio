@@ -163,7 +163,7 @@ int64_t DadosCena::atualizar(const LoteBruto* lote_novo, std::set<std::string> r
       if (novos.empty()) novos.push_back(std::make_shared<Dados>());  // marcador vazio: leva a sequência até a placa (prefixo contínuo)
       for (auto& n : novos) { n->seq = seq = ++seq_; ls.push_back(n); }  // sub-lotes com sequências seguidas; devolve a do último
       lotes_ = std::move(ls); ++ver_;
-      if (mudou) { ++ger_; recalcular_caixa(); }  // a placa recomeça da cópia compacta (como limpar()); só acrescentar não precisa
+      if (mudou) recalcular_caixa();  // ger_ não sobe (T30b1): quem reenvia por posição lê ver_ (motor, T30b2); só acrescentar não recalcula
       else for (auto& n : novos) for (int a = 0; a < 3; ++a) { cmin_[a] = (std::min)(cmin_[a], n->cmin[a]); cmax_[a] = (std::max)(cmax_[a], n->cmax[a]); }
       break;
     }

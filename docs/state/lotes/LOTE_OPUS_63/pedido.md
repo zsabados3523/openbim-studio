@@ -12,6 +12,7 @@ Pedido do líder (2026-10-20), **classe T3, revisão Opus em lote, esforço méd
 4. **Oráculo T30d1 (d):** supõe um lote por chamada e falha com sub-lotes em duas verificações (contagem e sequência). Deve ser adaptado no T30d2 por autor diferente do implementador do T30a2. Confirme o plano e liste o que o T30d2 deve exigir.
 5. **Conferência bit a bit (e):** só existe comparação de imagem pixel a pixel via Python. Pede acessor de depuração? Se sim, em qual cartão.
 6. **Veredito numerado** de 200, 204 e 199 (aprovado/reprovado; arquivo/linha; bloqueia ou sugestão). Diga a ordem de merge e se o marcador `@AINDA_NAO` do 199 deve ser removido (por quem e quando).
+7. **Ensaio do pesado (T33b, `reports/F0-S04-T33b.md`):** reinício certo (bloco 22, vigia, sem "tarde"), conta A 5.921 MB; só falhou `primeira_vs_base_ok`: em 4 blocos do 2º filho a memória *caiu* (de -75 a -2.031 MB) e a base do vigia ficou acima da memória real. Isso pode atrasar a detecção de um crescimento depois da queda? A base do vigia deve acompanhar a queda (ex.: mínimo entre a base e a leitura)? É mudança no produto do T29 (cartão T3 novo, autor do oráculo diferente) ou a regra atual basta? Não afrouxe número.
 
 ## Entrega
 Veredito por PR; respostas 1 a 5; perguntas ao PO (só o que é dele); resumo de 5 linhas em português simples, sem siglas; linha do LOG. Resultado em português claro; retorno final em caveman (curto). Não aprove provisoriamente.

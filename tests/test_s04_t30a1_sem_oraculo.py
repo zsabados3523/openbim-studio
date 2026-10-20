@@ -40,18 +40,27 @@ def sem_mortos(l, mortos):  # forma canônica do lote sem os objetos de `mortos`
     novo_o["primeiro_indice"] = np.cumsum(novo_o["n_indices"]) - novo_o["n_indices"]
     return replace(l, vertices=l.vertices[kv], indices=(ind - mortos_antes[ind]).astype(np.uint32), objetos=novo_o)
 
-def confere(c, seqs, lotes, mortos, n_lotes, rotulo):  # compara tabela(seq), estatísticas e caixa da cena com a forma canônica; devolve falhas
+def tabela(c, faixa):  # a tabela de uma chamada = concatenação de objetos(q) para as sequências q da faixa (anterior + 1 até a devolvida)
+    ds = [c.objetos(q) for q in range(faixa[0], faixa[1] + 1)]
+    t = {k: np.concatenate([np.asarray(d[k]).ravel() for d in ds]) for k in ("id_step", "n_indices", "n_vertices")}
+    return ds, t | {"caixa": np.concatenate([np.asarray(d["caixa"]).reshape(-1, 6) for d in ds]), "guid": [g for d in ds for g in d["guid"]]}
+
+def confere(c, faixas, lotes, mortos, n_lotes, rotulo):  # compara a tabela de cada chamada, estatísticas e caixa da cena com a forma canônica; devolve falhas
     falhas, tri, ver, caixas = [], 0, 0, []
-    for seq, l in zip(seqs, lotes):
-        e, d = sem_mortos(l, mortos), c.objetos(seq)
+    for faixa, l in zip(faixas, lotes):
+        e = sem_mortos(l, mortos)
+        ds, t = tabela(c, faixa)
         o = e.objetos
         tri, ver = tri + len(e.indices) // 3, ver + len(e.vertices)
         caixas += [np.r_[o["caixa_min"].min(0), o["caixa_max"].max(0)]] if len(o) else []
-        ok = list(d["guid"]) == [x.decode() for x in o["guid"]]
-        for k in ("id_step", "primeiro_indice", "n_indices", "primeiro_vertice", "n_vertices"):
-            ok = ok and d[k].tolist() == o[k].tolist()
-        ok = ok and np.array_equal(d["caixa"].reshape(-1, 6), np.c_[o["caixa_min"], o["caixa_max"]].reshape(-1, 6))
-        ok or falhas.append(f"{rotulo}: tabela do lote seq {seq} diferente da forma canônica")
+        ok = t["guid"] == [x.decode() for x in o["guid"]]
+        for k in ("id_step", "n_indices", "n_vertices"):
+            ok = ok and t[k].tolist() == o[k].tolist()
+        ok = ok and np.array_equal(t["caixa"], np.c_[o["caixa_min"], o["caixa_max"]].reshape(-1, 6))
+        for d in ds:  # em cada sub-lote as faixas começam em 0 e são contíguas; sem partir (1 sub-lote) são exatamente as da forma canônica
+            for p, n in (("primeiro_indice", "n_indices"), ("primeiro_vertice", "n_vertices")):
+                ok = ok and d[p].tolist() == (np.cumsum(d[n]) - d[n]).tolist() and (len(ds) > 1 or d[p].tolist() == o[p].tolist())
+        ok or falhas.append(f"{rotulo}: tabela da chamada (sequências {faixa[0]} a {faixa[1]}) diferente da forma canônica")
     s = c.estatisticas()
     s["triangulos"] == tri and s["vertices"] == ver or falhas.append(f"{rotulo}: triângulos/vértices {s['triangulos']}/{s['vertices']}, esperado {tri}/{ver}")
     s["lotes"] == n_lotes or falhas.append(f"{rotulo}: lotes {s['lotes']}, esperado {n_lotes}")
@@ -63,9 +72,14 @@ def c_equivalencia(res):
     for k, n in TAMANHOS.items():
         lotes[k], ini = lote_sint(n, ini), ini + n
     ordem = ["A", "D", "B", "C"]
-    seqs = [c.adicionar_lote(lotes[k]) for k in ordem]
+    faixas, ult = [], 0
+    for k in ordem:  # cada chamada devolve a sequência do ÚLTIMO sub-lote; os sub-lotes dela são os seguidos, de ult + 1 até a devolvida
+        s = c.adicionar_lote(lotes[k])
+        faixas.append((ult + 1, s))
+        ult = s
     L = [lotes[k] for k in ordem]
-    mortos, n_lotes, falhas, ult = set(), len(ordem), [], seqs[-1]
+    mortos, falhas = set(), []
+    n_lotes = sum(b - a + 1 for a, b in faixas)  # lotes = sub-lotes dessas faixas + um por marcador
     guid = lambda k, j: lotes[k].objetos["guid"][j].decode()  # noqa: E731
     ops = [("1 objeto do lote de 24 MiB", [guid("C", 15_000)]),
            ("vários do mesmo lote (8 MiB)", [guid("B", j) for j in (0, 1, 5_000, 10_499)]),
@@ -78,11 +92,11 @@ def c_equivalencia(res):
         antes = c.estatisticas()["lotes"]
         s = c.atualizar(None, rem)
         mortos |= set(rem)
-        n_lotes += c.estatisticas()["lotes"] - antes  # o `atualizar` põe um marcador de lote; a contagem de hoje, 1 por chamada, não pode mudar
-        c.estatisticas()["lotes"] - antes == 1 or falhas.append(f"{nome}: lotes subiu {c.estatisticas()['lotes'] - antes}, hoje sobe 1 por atualizar")
-        s > ult or falhas.append(f"{nome}: sequência {s} não é maior que {ult}")
+        n_lotes += 1  # o `atualizar` sem lote novo põe 1 marcador (1 lote, 1 sequência)
+        c.estatisticas()["lotes"] - antes == 1 or falhas.append(f"{nome}: lotes subiu {c.estatisticas()['lotes'] - antes}, o marcador é 1 lote")
+        s == ult + 1 or falhas.append(f"{nome}: sequência {s}, esperado {ult + 1} (marcador = 1 lote)")
         ult = s
-        f, centro = confere(c, seqs, L, mortos, n_lotes, nome)
+        f, centro = confere(c, faixas, L, mortos, n_lotes, nome)
         falhas += f
         c.enquadrar()
         ok = yield from esperar(lambda: np.allclose(c.camera()["alvo"], centro, atol=1e-3), 4000)
@@ -114,7 +128,7 @@ def c_marcador(res):
     for nome, args in {"atualizar(None, [])": (None, []), "lote só com marcador": (vazio, []), "atualizar(None, []) de novo": (None, [])}.items():
         seqs.append(c.atualizar(*args))
         foto() == antes or falhas.append(f"{nome}: mudou a tabela ou as contagens")
-    all(a < b for a, b in zip(seqs, seqs[1:])) or falhas.append(f"sequência não é estritamente crescente: {seqs}")
+    all(b == a + 1 for a, b in zip(seqs, seqs[1:])) or falhas.append(f"cada marcador é 1 lote e as sequências são seguidas: {seqs}")
     res.update(falhas=falhas, seqs=seqs)
     c.parar()
     yield 0

@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Oráculo do F0-S04-T30d2 (LOTE_OPUS_63 §3 ponto 4): a cena parte um lote grande em sub-lotes de até C = 8 MiB de vértices e índices (nv*28 + ni*4),
 na fronteira de peça. Quem implementa o T30a2/T30b não edita este arquivo. Cada caso roda em subprocesso sob `xvfb-run`, como em `test_s04_viewport.py`.
-@AINDA_NAO (xfail estrito) = o `main` de hoje não parte lotes; o marcador sai em commit do autor do oráculo depois do PR 204 no `main`.
 Guardas (pulam, nunca afrouxam): `Cena.dados_lote` (T30a3, bits), `nao_partidos`/`pecas_maiores_que_c` em `estatisticas()` (T30b), Linux (/proc).
 Uma chamada devolve a sequência do ÚLTIMO sub-lote; os sub-lotes dela são os seguidos (anterior + 1 até a devolvida); a tabela da chamada é a
 concatenação de `objetos(q)` dessa faixa (função `tabela`, do oráculo do T30a1)."""
@@ -18,7 +17,6 @@ from test_s04_viewport import CORES, RAIZ, caso as _caso, captura, cubo, esperar
 ESTE = Path(__file__).resolve()
 caso = lambda nome, *a, **k: _caso(nome, *a, alvo=ESTE, **k)  # noqa: E731
 C = 8 << 20
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="PR 204 (sub-lotes) ainda não está no main; o marcador sai em commit do autor do oráculo")
 PEQ, GIGANTE, METADE = (30, 90), (200_000, 900_000), (100_000, 348_576)  # (vértices, índices): 1,2 KB; 9,2 MB (> C); 4 MiB (duas = C exato)
 tam = lambda p: p[0] * 28 + p[1] * 4  # noqa: E731
 
@@ -277,7 +275,6 @@ def c_memoria(res):  # item 11 (Linux)
     c.parar()
     yield 0
 
-@AINDA_NAO
 def test_teto_de_cada_sublote_e_numero_minimo_de_sublotes(viewport):  # item 3
     r = caso("teto", limite=600)
     assert not r["falhas_teto"], "\n".join(r["falhas_teto"])
@@ -296,7 +293,6 @@ def test_contadores_nao_partidos_e_pecas_maiores_que_c(viewport):  # item 10, co
     r["contadores"] or pytest.skip("estatisticas() sem nao_partidos/pecas_maiores_que_c (T30b)")
     assert not r["falhas_contadores"], "\n".join(r["falhas_contadores"])
 
-@AINDA_NAO
 def test_sequencias_seguidas_crescentes_e_atualizar_devolve_a_do_ultimo(viewport):  # item 2
     r = caso("sequencias", limite=600)
     assert not r["falhas"], "\n".join(r["falhas"])

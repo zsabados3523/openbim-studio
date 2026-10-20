@@ -90,7 +90,10 @@ void registrar_viewport(nb::module_& m) {
         nb::object np = nb::module_::import_("numpy");
         nb::bytes vb(reinterpret_cast<const char*>(d->v.data()), d->v.size());
         nb::bytes ib(reinterpret_cast<const char*>(d->i.data()), d->i.size() * sizeof(uint32_t));
-        nb::object dv = np.attr("dtype")(nb::eval("[('pos','<f4',(3,)),('normal','<f4',(3,)),('cor','u1',(4,))]"));
+        nb::list campos;  // mesmo formato do DTYPE_VERTICE, sem um terceiro nb::eval (tests/test_formato_malha.py confere os textos)
+        campos.append(nb::make_tuple("pos", "<f4", nb::make_tuple(3))); campos.append(nb::make_tuple("normal", "<f4", nb::make_tuple(3)));
+        campos.append(nb::make_tuple("cor", "u1", nb::make_tuple(4)));
+        nb::object dv = np.attr("dtype")(campos);
         return nb::make_tuple(np.attr("frombuffer")(vb, dv), np.attr("frombuffer")(ib, "<u4"));
       }, nb::arg("sequencia"))
       .def("capturar", [](Viewport& v) {

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Oráculo do F0-S04-T30a1 (T30d1): o `sem` da cena (refaz um lote sem os objetos removidos) tem de dar o MESMO resultado de hoje
 e parar de inflar `bytes_copia`. Quem implementa o T30a1 não edita este arquivo.
-Sem marca: equivalência (passa com o `sem` de hoje e tem de continuar passando). `@AINDA_NAO` (xfail estrito): `bytes_copia` sem sobra.
+Sem marca: equivalência (passa com o `sem` de hoje e tem de continuar passando). `bytes_copia` sem sobra: passa desde o T30a1 (PR 200).
 Forma canônica por peça: calculada em Python puro (`sem_mortos`) a partir do lote de entrada, pelo GUID; índices renumerados por soma parcial.
 O Python não lê os vértices da cena de volta: a conferência em bits dos vértices é indireta, pela imagem (captura) da cena operada contra a
 captura da mesma cena remontada do zero com a forma canônica (mesmo `enquadrar`, mesma ordem de lotes). Tabela, contagens e caixa: exatas.
@@ -17,7 +17,6 @@ from test_s04_viewport import CORES, RAIZ, caso as _caso, captura, esperar, lote
 
 ESTE = Path(__file__).resolve()
 caso = lambda nome, *a, **k: _caso(nome, *a, alvo=ESTE, **k)  # noqa: E731
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="T30a1 ainda não implementado: `sem` deixa capacidade sobrando em bytes_copia")
 LARG = 200  # a grade de posições (1 m entre cubos) é uma só para todos os lotes: nenhum cubo encosta em outro
 G = lambda j: f"{j:022d}"  # noqa: E731
 TAMANHOS = {"A": 1, "D": 100, "B": 10_500, "C": 31_000}  # cubos: ~1 KB, ~80 KB, ~8,2 MiB, ~24,1 MiB (816 bytes de malha por cubo)
@@ -144,7 +143,6 @@ def test_marcador_vazio_e_lote_so_com_marcador_nao_mudam_nada(viewport):  # crit
     r = caso("marcador")
     assert not r["falhas"], "\n".join(r["falhas"])
 
-@AINDA_NAO
 def test_bytes_copia_sobe_so_o_lote_novo(viewport):  # critério 2; hoje a sobra de capacidade é de megabytes
     r = caso("bytes_copia")
     print(f"MEDIDO bytes_copia antes {r['antes']} depois {r['depois']} diferença {r['depois'] - r['antes']} (lote novo {r['bytes_novo']}, lote tocado {r['tam_lote']})")

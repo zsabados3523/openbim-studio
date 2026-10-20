@@ -57,7 +57,7 @@ class ResumoCarga:
     simplificadas: list = field(default_factory=list)  # (id_step, guid, classe, nome, motivo, segundos): viraram caixa
     filhos: int = 0  # filhos de conversão criados nesta abertura (o reinício planejado cria um a mais)
     reinicios: list = field(default_factory=list)  # bloco global (contando os `convertendo` de todos os filhos) de cada reinício feito
-    blocos: list = field(default_factory=list)  # T29c, só modo normal: por bloco {bloco, filho, base_mb, max_mb, fim_mb, atraso_armar_s, armado, falhas_leitura, max_silencio_s, primeira_mb, tarde}
+    blocos: list = field(default_factory=list)  # T29c, só modo normal: por bloco {bloco, filho, base_mb, max_mb, fim_mb, atraso_armar_s, armado, falhas_leitura, max_silencio_s, primeira_mb, tarde, pos_emitir_mb}
     registro_reinicio: list = field(default_factory=list)  # por reinício feito {bloco, fonte "vigia"|"gancho", base_mb, decisao_mb, atraso_armar_s, decisao_tarde, max_silencio_s}
     pico_filhos_mb: list = field(default_factory=list)  # pico de memória de cada filho, na ordem em que nasceram (o morto entra com o pico lido antes do kill; None = sem leitura)
 
@@ -630,12 +630,13 @@ class CarregadorMalhas:
                 est["conv_global"] += 1
                 self._gancho_reinicio(est)
         elif tipo == "bloco":  # memória do filho no início do bloco: arma o vigia (1º bloco de cada filho é isento)
+            self._gravar_pos_emitir(dados)
             # macOS (experimental): a base é o pico (ru_maxrss) e o pai lê a atual por `ps`: o crescimento sai subestimado, nunca falso
             if not self._isolado:
                 atraso = time.time() - dados["t"]
                 self._reg = {"bloco": est["conv_global"], "filho": est["filhos"], "base_mb": float(dados["rss_mb"]), "max_mb": None,
                              "fim_mb": None, "atraso_armar_s": atraso, "armado": self._conv >= 2, "falhas_leitura": 0,
-                             "max_silencio_s": 0.0, "primeira_mb": None, "tarde": False}
+                             "max_silencio_s": 0.0, "primeira_mb": None, "tarde": False, "pos_emitir_mb": None}
                 est["blocos"].append(self._reg)
                 if self._conv >= 2:
                     self._base_mb, self._prox_vigia = self._reg["base_mb"], 0.0
@@ -681,12 +682,19 @@ class CarregadorMalhas:
             raise RuntimeError(dados)
         elif tipo == "fim":
             self._base_mb = None
+            self._gravar_pos_emitir(dados)
             for k, v in dados["tempos"].items():
                 est["t"][k] = est["t"].get(k, 0.0) + v
             est["msgs"].extend(m for m in dados["mensagens"] if m not in est["msgs"])  # cada filho repete o fim do registro do conversor
             self._pico(est, dados["pico_memoria_mb"])
             return True
         return False
+
+
+    def _gravar_pos_emitir(self, dados):
+        """T29e: só registro. A memória depois de `emitir` do bloco anterior chega no `bloco` seguinte (ou no `fim`)."""
+        if self._reg is not None and dados.get("pos_emitir_mb") is not None:
+            self._reg["pos_emitir_mb"] = float(dados["pos_emitir_mb"])
 
 
 def _alvos_reinicio_teste():

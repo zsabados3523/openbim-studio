@@ -2,7 +2,7 @@
 """Processo filho que converte o IFC em malhas (S03-T08-B1; arquivo/lotes-1-a-28/LOTE_OPUS_6/resultado.md §2.2 D3). Python puro, sem Qt.
 
 O filho abre o arquivo, lista os produtos, converte com `ifcopenshell.geom.iterator` e manda mensagens
-`(tipo, dados)` por um `Pipe` de mão única: `fase`, `bloco` e `bloco_fim` (memória do filho no início e no fim da conversão de cada bloco), `inicio`, `lote`, `feitos`, `atual`, `sem_malha`, `erro`, `fim`.
+`(tipo, dados)` por um `Pipe` de mão única: `fase`, `bloco` e `bloco_fim` (memória do filho no início e no fim da conversão de cada bloco; `bloco` e `fim` trazem também `pos_emitir_mb`, a memória depois de `emitir` do bloco anterior), `inicio`, `lote`, `feitos`, `atual`, `sem_malha`, `erro`, `fim`.
 Quem lê e vigia é a thread do `CarregadorMalhas`. O filho nunca importa Qt.
 Ganchos de teste (só valem se a variável existir): OBIM_TESTE_PECA_LENTA="<guid>=<s>[,<guid>=<s>]" e
 OBIM_TESTE_MATAR_FILHO="<guid>" (o filho sai com código 3 nessa peça) e OBIM_TESTE_FALHAR_CAIXA="<guid>" (o filho da
@@ -208,6 +208,7 @@ def _converter(enviar, params):
             estado["indice"] += 1
 
     feitos = 0
+    pos_emitir = None  # T29e: memória logo depois de `emitir` do bloco anterior; vai dentro do próximo `bloco` (ou do `fim`)
     t = time.perf_counter()
     if isolado:  # UM iterador para todas as peças pedidas (S04-T16), ou um por peça (`por_peca`); cada peça sai assim que fica pronta
         enviar("fase", "convertendo")
@@ -244,19 +245,21 @@ def _converter(enviar, params):
             bloco = produtos[ini:ini + tb]
             _RETIDO.clear()  # fim do bloco anterior: a memória do gancho de crescimento volta ao sistema
             enviar("fase", "convertendo")  # antes de criar o iterador: a primeira peça é convertida em initialize()
-            enviar("bloco", {"rss_mb": pico_memoria_mb(atual=True), "t": time.time()})  # memória de partida do bloco (regra R-A, T29c)
+            enviar("bloco", {"rss_mb": pico_memoria_mb(atual=True), "t": time.time(), "pos_emitir_mb": pos_emitir})  # memória de partida do bloco (regra R-A, T29c)
             prods, sem = _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar, None, crescer)
             enviar("bloco_fim", {"rss_mb": pico_memoria_mb(atual=True)})  # o pai pode estar atrasado na fila: a medida vem do filho
             feitos += len(bloco)
             if sem:
                 enviar("sem_malha", sem)
             emitir(prods, feitos)
+            pos_emitir = pico_memoria_mb(atual=True)
     tempos["geometria_s"] = time.perf_counter() - t
     try:
         mensagens = str(ifcopenshell.get_log()).splitlines()[-50:]
     except Exception:
         mensagens = []
-    enviar("fim", {"tempos": tempos, "pico_memoria_mb": pico_memoria_mb(), "mensagens": mensagens})
+    enviar("fim", {"tempos": tempos, "pico_memoria_mb": pico_memoria_mb(), "mensagens": mensagens,
+                  "pos_emitir_mb": pos_emitir})
 
 
 def _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar, entregar=None, crescer=None):

@@ -26,6 +26,8 @@ void caixa_do_objeto(const Dados& d, Objeto& o) {
   }
 }
 
+bool acima_de_c(const Dados& d) { return d.v.size() + d.i.size() * 4 > BYTES_SUBLOTE; }  // bytes de vértices + índices passam do tamanho C do sub-lote
+
 // Cópia de `d` sem os objetos de `rem` (nullptr se nenhum está no lote). Mantém a sequência e o deslocamento; descarta índices e vértices dos removidos
 // e renumera o resto (qualquer lote serve: não supõe que cada objeto só use os seus vértices).
 std::shared_ptr<Dados> sem(const Dados& d, const std::set<std::string>& rem) {
@@ -39,7 +41,7 @@ std::shared_ptr<Dados> sem(const Dados& d, const std::set<std::string>& rem) {
   std::vector<uint32_t> pv(nv + 1, 0), pi(d.i.size() + 1, 0);  // somas parciais: posição nova de cada vértice e de cada índice
   for (size_t k = 0; k < nv; ++k) pv[k + 1] = pv[k] + usado[k];
   for (size_t k = 0; k < d.i.size(); ++k) pi[k + 1] = pi[k] + !morto[k];
-  auto r = std::make_shared<Dados>(); r->seq = d.seq; r->nao_partido = d.nao_partido; std::copy(d.desl, d.desl + 3, r->desl);
+  auto r = std::make_shared<Dados>(); r->seq = d.seq; std::copy(d.desl, d.desl + 3, r->desl);
   // capacidade exata: bytes_copia não pode depender de como o vetor cresce (GCC dobra, MSVC cresce 1,5 vez)
   r->v.reserve(size_t(pv[nv]) * BYTES_VERTICE); r->i.reserve(pi[d.i.size()]); r->objs.reserve(d.objs.size() - tocados);
   for (size_t k = 0; k < nv;) {  // vértices usados, em trechos contínuos
@@ -54,8 +56,13 @@ std::shared_ptr<Dados> sem(const Dados& d, const std::set<std::string>& rem) {
     o.pi = a; o.ni = b - a; o.pv = c; o.nv = e - c; caixa_do_objeto(*r, o); r->objs.push_back(std::move(o));
   }
   caixa_de(*r);
+  const bool grande = acima_de_c(*r);  // o lote só encolhe: as marcas valem enquanto ele passar de C
+  r->nao_partido = d.nao_partido && grande; r->peca_maior_que_c = d.peca_maior_que_c && grande && r->objs.size() == 1;
   return r;
 }
+
+// Índice k da entrada: memcpy, pois a ponte aceita array desalinhado (só confere contiguidade).
+uint32_t indice(const unsigned char* p, size_t k) { uint32_t x; std::memcpy(&x, p + k * 4, 4); return x; }
 
 const Dados* referencia(const std::vector<std::shared_ptr<Dados>>& ls) {  // o primeiro lote com geometria dá o deslocamento da cena (marcadores vazios não)
   for (auto& d : ls) if (!d->v.empty()) return d.get();
@@ -67,8 +74,7 @@ std::vector<std::shared_ptr<Dados>> DadosCena::preparar(const LoteBruto& L) {
   const Vista &V = L.v, &I = L.i, &O = L.o;
   if (I.n % 3) throw std::invalid_argument("indices: o número de índices não é múltiplo de 3");
   const char* erro = nullptr;
-  const uint32_t* ind = reinterpret_cast<const uint32_t*>(I.p);  // lê direto da entrada (numpy: alinhado); nada é montado antes da divisão
-  for (size_t k = 0; k < I.n; ++k) if (ind[k] >= V.n) { erro = "indices: índice maior ou igual ao número de vértices"; break; }
+  for (size_t k = 0; k < I.n; ++k) if (indice(I.p, k) >= V.n) { erro = "indices: índice maior ou igual ao número de vértices"; break; }
   std::vector<Objeto> objs; objs.reserve(O.n);
   for (size_t k = 0; !erro && k < O.n; ++k) {
     const unsigned char* p = O.p + k * BYTES_OBJETO; Objeto o;
@@ -83,7 +89,7 @@ std::vector<std::shared_ptr<Dados>> DadosCena::preparar(const LoteBruto& L) {
   bool partivel = !objs.empty(); uint64_t pi = 0, pv = 0;
   for (auto& o : objs) {
     if (o.pi != pi || o.pv != pv) { partivel = false; break; }
-    for (uint32_t k = 0; k < o.ni; ++k) if (ind[o.pi + k] < o.pv || ind[o.pi + k] - o.pv >= o.nv) { partivel = false; break; }
+    for (uint32_t k = 0; k < o.ni; ++k) if (const uint32_t x = indice(I.p, o.pi + k); x < o.pv || x - o.pv >= o.nv) { partivel = false; break; }  // lê direto da entrada
     if (!partivel) break;
     pi += o.ni; pv += o.nv;
   }
@@ -109,14 +115,16 @@ std::vector<std::shared_ptr<Dados>> DadosCena::preparar(const LoteBruto& L) {
       if (g.b < objs.size()) { i1 = objs[g.b].pi; v1 = objs[g.b].pv; }
     }
     d->v.assign(V.p + v0 * BYTES_VERTICE, V.p + v1 * BYTES_VERTICE); d->i.resize(i1 - i0);
-    for (size_t k = i0; k < i1; ++k) d->i[k - i0] = ind[k] - uint32_t(v0);  // sem partir: v0 = 0 e é a cópia pura
+    for (size_t k = i0; k < i1; ++k) d->i[k - i0] = indice(I.p, k) - uint32_t(v0);  // sem partir: v0 = 0 e é a cópia pura
     caixa_de(*d); d->objs.reserve(g.b - g.a);  // capacidade exata da tabela (o push_back dobraria e inflaria bytes_copia)
     for (size_t k = g.a; k < g.b; ++k) {
       Objeto o = std::move(objs[k]); o.pi -= uint32_t(i0); o.pv -= uint32_t(v0);
       caixa_do_objeto(*d, o);  // pelos triângulos; sem geometria: NaN, nunca [0,0,0,0,0,0]
       d->objs.push_back(std::move(o));
     }
-    d->nao_partido = d->v.size() + d->i.size() * 4 > BYTES_SUBLOTE;  // só acontece com peça maior que C sozinha ou lote sem fronteira
+    if (acima_de_c(*d)) {  // lote que não ladrilha e cabe em C fica inteiro, sem marca
+      if (partivel) d->peca_maior_que_c = true; else d->nao_partido = true;
+    }
     r.push_back(std::move(d));
   }
   return r;
@@ -183,7 +191,7 @@ bool DadosCena::caixa(double mn[3], double mx[3]) {
 
 Totais DadosCena::totais() {
   std::lock_guard<std::mutex> l(m_); Totais t; t.lotes = lotes_.size();
-  for (auto& d : lotes_) { t.nao_partidos += d->nao_partido; t.triangulos += d->i.size() / 3; t.vertices += d->v.size() / BYTES_VERTICE;
+  for (auto& d : lotes_) { t.nao_partidos += d->nao_partido; t.pecas_maiores_que_c += d->peca_maior_que_c; t.triangulos += d->i.size() / 3; t.vertices += d->v.size() / BYTES_VERTICE;
     t.bytes += d->v.capacity() + d->i.capacity() * 4 + d->objs.capacity() * sizeof(Objeto);
     for (auto& o : d->objs) if (o.guid.capacity() > 15) t.bytes += o.guid.capacity() + 1; }  // texto do GlobalId fora do std::string (T10c achado 6)
   return t;

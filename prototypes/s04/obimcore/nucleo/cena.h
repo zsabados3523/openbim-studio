@@ -21,13 +21,13 @@ struct Objeto {  // uma linha de DTYPE_OBJETO de prototypes/formato_malha.py
 };
 struct Dados {  // imutável depois de publicado (atualizar() troca o ponteiro, nunca edita o conteúdo)
   std::vector<unsigned char> v; std::vector<uint32_t> i; std::vector<Objeto> objs; int64_t seq = 0;
-  bool nao_partido = false;  // T30a2: sub-lote acima de C que não pôde ser partido (peça maior que C, ou lote sem fronteira de peça)
+  bool nao_partido = false, peca_maior_que_c = false;  // T30a2: nao_partido = sub-lote > C de um lote de entrada que não ladrilha (sem fronteira de peça); peca_maior_que_c = sub-lote > C de uma só peça, em lote que ladrilha
   double desl[3] = {0, 0, 0}, cmin[3] = {1e30, 1e30, 1e30}, cmax[3] = {-1e30, -1e30, -1e30};  // deslocamento do lote (T09) e caixa dos vértices
 };
 struct Vista { const unsigned char* p = nullptr; size_t n = 0; };  // memória EMPRESTADA (do numpy): quem chama a mantém viva e imóvel durante a chamada; nada é guardado
 struct LoteBruto { Vista v, i, o; double desl[3] = {0, 0, 0}; };    // v: vértices (28 bytes cada), i: índices u4, o: DTYPE_OBJETO empacotado (n = objetos), desl: deslocamento
 struct Cursor { size_t n = 0; int64_t ger = -1; };  // o que a thread de desenho já tirou da fila (a placa é uma visão da fila)
-struct Totais { size_t lotes = 0, triangulos = 0, vertices = 0, bytes = 0, nao_partidos = 0; };  // bytes: memória da cópia compacta (T10); lotes: sub-lotes (T30a2)
+struct Totais { size_t lotes = 0, triangulos = 0, vertices = 0, bytes = 0, nao_partidos = 0, pecas_maiores_que_c = 0; };  // bytes: memória da cópia compacta (T10); lotes: sub-lotes; nao_partidos, pecas_maiores_que_c: ver Dados (T30a2)
 
 class DadosCena {
  public:

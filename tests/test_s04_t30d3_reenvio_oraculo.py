@@ -4,9 +4,8 @@ não edita este arquivo. Cada caso roda em subprocesso sob `xvfb-run` (helpers d
 Guardas (pulam, nunca afrouxam): `nao_partidos`/`pecas_maiores_que_c` em `estatisticas()` (T30b1), chave `geracao` em `estatisticas()` (o T30b1 não a
 expõe hoje: o item "ger_" fica pulado até alguém expô-la; o "instantâneo coerente" não tem API no Python: o revisor lê o diff e o item 6 o cobre pelo piso
 de triângulos na placa), `Cena.dados_lote` (T30a3).
-`@AINDA_NAO` (xfail estrito) = o `main` de hoje reenvia a cena inteira a cada troca (`sem` sobe `ger_`): `test_quadros_por_troca...`, `test_placa_nunca_...`,
-`test_so_o_sublote_trocado_e_reenviado`, `test_troca_repetida...` e `test_apagar...`. Quem os tira: o autor deste oráculo, em commit próprio, depois que o
-T30b1 e o T30b2 estiverem no `main` (só as linhas `AINDA_NAO = ...` e `@AINDA_NAO`). Cena do T27 reduzida aos 4 lotes tocados (8,97, 24,24, 68,27 e 285,36 MiB, 387 MiB) mais o de 1 KB: com os 13 lotes (805,7 MiB) o `main`
+Os marcadores `@AINDA_NAO` (xfail estrito) foram retirados depois do T30b1/T30b2 no ramo (antes, o `main` reenviava a cena inteira a cada troca e `sem` subia `ger_`): `test_quadros_por_troca...`, `test_placa_nunca_...`,
+`test_so_o_sublote_trocado_e_reenviado`, `test_troca_repetida...` e `test_apagar...`. Cena do T27 reduzida aos 4 lotes tocados (8,97, 24,24, 68,27 e 285,36 MiB, 387 MiB) mais o de 1 KB: com os 13 lotes (805,7 MiB) o `main`
 leva ~500 s só nas trocas (reenvia tudo), e a conta de quadros do reenvio por posição é por lote tocado. O enchimento é de peças de ~1 MiB, para o sub-lote tocado
 ser cheio (~8 MiB), como no detalhado. Trocas: 2 nos lotes de 8,97 e 285,36 (a mediana do item 4) e 1 nos demais."""
 import importlib, statistics, sys, time  # noqa: E401
@@ -21,7 +20,6 @@ from test_s04_viewport import RAIZ, agora, caso as _caso, captura, esperar, novo
 
 ESTE = Path(__file__).resolve()
 caso = lambda nome, *a, **k: _caso(nome, *a, alvo=ESTE, **k)  # noqa: E731
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="T30b1/T30b2: o main reenvia a cena inteira a cada troca")
 MIB = (8.97, 24.24, 68.27, 285.36)  # lotes tocados do T27 (os outros 9 lotes do T27 só atrasam: o main leva ~500 s com os 13; ver cabeçalho)
 TOCADOS, ORC, AMARELO = {"8MiB": 0, "24MiB": 1, "68MiB": 2, "285MiB": 3}, 2 << 20, (240, 240, 30, 255)
 NOMES = ("1KB", "8MiB", "24MiB", "68MiB", "285MiB")
@@ -235,7 +233,6 @@ def test_troca_nao_sobe_a_geracao_e_limpar_sobe(viewport):  # item 1
     r["guarda"] or pytest.skip("estatisticas() sem a chave geracao (o T30b1 não a expõe)")
     assert not r["falhas"], "\n".join(r["falhas"])
 
-@AINDA_NAO
 def test_quadros_por_troca_ate_teto_de_c_por_2_mib_mais_3_em_toda_faixa_de_lote(viewport):  # item 3
     r = caso("trocas", limite=1500)
     assert r["na_placa"], "a cena do T27 não chegou à placa"
@@ -250,7 +247,6 @@ def test_atualizar_do_lote_de_285_mib_custa_no_maximo_3_vezes_o_de_8_97_mib(view
     print("MEDIDO atualizar_ms mediana", ms)
     assert ms["285MiB"] <= 3 * ms["8MiB"], f"atualizar no lote de 285 MiB {ms['285MiB']:.2f} ms > 3 × {ms['8MiB']:.2f} ms (8,97 MiB)"
 
-@AINDA_NAO
 def test_placa_nunca_abaixo_da_cena_menos_a_peca_antiga_em_toda_troca(viewport):  # lote 62 §6.2 critério 2
     r = caso("trocas", limite=1500)
     ruins = [f"{n}: placa {x['tri_min']} < {x['piso']}" for n, xs in r["casos"].items() for x in xs if x["tri_min"] < x["piso"]]
@@ -261,7 +257,6 @@ def test_sublotes_nao_tocados_ficam_com_os_mesmos_bits_e_a_mesma_sequencia(viewp
     r["tem_acessor"] or pytest.skip("sem Cena.dados_lote (T30a3)")
     assert r["sublotes"] >= 3 and not r["falhas"], f"{r['sublotes']} sub-lotes; " + "\n".join(r["falhas"])
 
-@AINDA_NAO
 def test_so_o_sublote_trocado_e_reenviado_bytes_por_troca(viewport):  # item 2: bytes por troca = lote novo + sub-lote trocado
     r = caso("reenvio", limite=900)
     r["tem_acessor"] or pytest.skip("sem Cena.dados_lote (T30a3)")
@@ -278,7 +273,6 @@ def test_captura_depois_das_trocas_igual_pixel_a_pixel_a_de_depois_de_perder_con
     assert r["recuperou"] and r["amarelas"] >= 800, f"a placa não voltou ou os 5 cubos novos não aparecem: {r}"
     assert r["dif_contexto"] == 0, f"{r['dif_contexto']} pixels diferentes depois de perder o contexto"
 
-@AINDA_NAO
 def test_troca_repetida_no_mesmo_lote_durante_o_reenvio_mantem_piso_e_estado_final(viewport):  # item 6
     r = caso("repetida", limite=1500)
     assert r["na_placa"] and not r["falhas"], "\n".join(r["falhas"])
@@ -288,7 +282,6 @@ def test_bytes_copia_das_trocas_repetidas_sem_sobra(viewport):  # item 6 (lote 6
     r = caso("repetida", limite=1500)
     assert abs(r["delta_copia"]) <= 5 * 816 + 64 * 1024, f"bytes_copia mudou {r['delta_copia']} em 5 trocas de cubo por cubo"
 
-@AINDA_NAO
 def test_apagar_em_lote_de_ate_2_mib_leva_no_maximo_2_quadros(viewport):  # item 6
     r = caso("repetida", limite=1500)
     assert r["apagar_quadros"] <= 2 and r["apagar_tri_min"] >= r["apagar_piso"], f"apagar: {r['apagar_quadros']} quadros, placa mínima {r['apagar_tri_min']} (piso {r['apagar_piso']})"

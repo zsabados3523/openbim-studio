@@ -85,6 +85,14 @@ void registrar_viewport(nb::module_& m) {
         r["deslocamento"] = numpy_de(std::vector<double>(d->desl, d->desl + 3), 0);  // do lote (T09)
         return r;
       }, nb::arg("sequencia"))
+      .def("dados_lote", [](Viewport& v, int64_t seq) {  // só para teste (T30a3): cópias SOMENTE LEITURA (frombuffer de bytes) dos vértices e índices do lote
+        std::shared_ptr<Dados> d = v.lote(seq);  // ValueError se desconhecido ou limpo
+        nb::object np = nb::module_::import_("numpy");
+        nb::bytes vb(reinterpret_cast<const char*>(d->v.data()), d->v.size());
+        nb::bytes ib(reinterpret_cast<const char*>(d->i.data()), d->i.size() * sizeof(uint32_t));
+        nb::object dv = np.attr("dtype")(nb::eval("[('pos','<f4',(3,)),('normal','<f4',(3,)),('cor','u1',(4,))]"));
+        return nb::make_tuple(np.attr("frombuffer")(vb, dv), np.attr("frombuffer")(ib, "<u4"));
+      }, nb::arg("sequencia"))
       .def("capturar", [](Viewport& v) {
         std::tuple<int, int, std::string> r; { nb::gil_scoped_release lib; r = v.capturar(); }
         return nb::make_tuple(std::get<0>(r), std::get<1>(r), nb::bytes(std::get<2>(r).data(), std::get<2>(r).size()));

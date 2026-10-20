@@ -2,12 +2,12 @@
 """Processo filho que converte o IFC em malhas (S03-T08-B1; arquivo/lotes-1-a-28/LOTE_OPUS_6/resultado.md §2.2 D3). Python puro, sem Qt.
 
 O filho abre o arquivo, lista os produtos, converte com `ifcopenshell.geom.iterator` e manda mensagens
-`(tipo, dados)` por um `Pipe` de mão única: `fase`, `inicio`, `lote`, `feitos`, `atual`, `sem_malha`, `erro`, `fim`.
+`(tipo, dados)` por um `Pipe` de mão única: `fase`, `bloco` e `bloco_fim` (memória do filho no início e no fim da conversão de cada bloco), `inicio`, `lote`, `feitos`, `atual`, `sem_malha`, `erro`, `fim`.
 Quem lê e vigia é a thread do `CarregadorMalhas`. O filho nunca importa Qt.
 Ganchos de teste (só valem se a variável existir): OBIM_TESTE_PECA_LENTA="<guid>=<s>[,<guid>=<s>]" e
 OBIM_TESTE_MATAR_FILHO="<guid>" (o filho sai com código 3 nessa peça) e OBIM_TESTE_FALHAR_CAIXA="<guid>" (o filho da
 caixa falha só nessa peça) e OBIM_TESTE_MATAR_NO_FIM=1 (o filho em modo isolado sai com código 3 depois do último
-`lote` e antes do `fim`).
+`lote` e antes do `fim`) e OBIM_TESTE_CRESCER_MB="<guid>=<mb>[,<guid>=<mb>]" (a peça aloca e escreve essa memória até o fim do bloco).
 Modos: normal (blocos, várias threads), isolado (`isolado`: 1 thread, UM iterador para os ids pedidos) e uma peça por vez
 (`isolado` e `por_peca`: um iterador por peça; antes de cada peça o filho manda `atual` com o id dela, e a peça em conversão
 quando o filho para ou cai é a acusada).
@@ -26,9 +26,10 @@ except ImportError:  # pragma: no cover  (módulo importado fora do pacote)
     from carregador import DTYPE_VERTICE, MOTIVO_SEM_GEOMETRIA, montar_lote, paleta_da_peca, produto_para_numpy
 
 
-def pico_memoria_mb(ident=None) -> float:
+def pico_memoria_mb(ident=None, atual=False) -> float:
     """Pico de memória de um processo, sem psutil. Sem argumento: o próprio processo.
-    Com `ident`: pid no Linux; no Windows, o identificador (handle) do processo, p.ex. `Process.sentinel`."""
+    Com `ident`: pid no Linux; no Windows, o identificador (handle) do processo, p.ex. `Process.sentinel`.
+    Com `atual=True` (T29c): a memória residente de agora, não o pico (Linux VmRSS; Windows WorkingSetSize)."""
     if sys.platform == "win32":
         import ctypes
         from ctypes import wintypes
@@ -48,11 +49,11 @@ def pico_memoria_mb(ident=None) -> float:
         f.restype = wintypes.BOOL
         if not f(k.GetCurrentProcess() if ident is None else wintypes.HANDLE(ident), ctypes.byref(pmc), pmc.cb):
             raise ctypes.WinError(ctypes.get_last_error())
-        return pmc.PeakWorkingSetSize / 2**20
-    if ident is not None and sys.platform.startswith("linux"):  # VmHWM (pico do conjunto residente) em kB
-        with open(f"/proc/{int(ident)}/status") as a:
+        return (pmc.WorkingSetSize if atual else pmc.PeakWorkingSetSize) / 2**20
+    if sys.platform.startswith("linux") and (ident is not None or atual):  # VmHWM (pico) ou VmRSS (atual), em kB
+        with open(f"/proc/{'self' if ident is None else int(ident)}/status") as a:
             for linha in a:
-                if linha.startswith("VmHWM:"):
+                if linha.startswith("VmRSS:" if atual else "VmHWM:"):
                     return int(linha.split()[1]) / 1024.0
         return 0.0
     if ident is not None:  # macOS e outros: `ps` existe no sistema; dá o conjunto residente atual (não o pico), em kB
@@ -114,6 +115,19 @@ def _lentas():
     return saida
 
 
+_RETIDO = []  # memória do gancho OBIM_TESTE_CRESCER_MB: guardada até o fim do bloco
+
+
+def _crescer():
+    """OBIM_TESTE_CRESCER_MB="<guid>=<mb>[,<guid>=<mb>...]": ao converter a peça, o filho aloca e escreve essa memória (T29c)."""
+    saida = {}
+    for par in os.environ.get("OBIM_TESTE_CRESCER_MB", "").split(","):
+        if "=" in par:
+            g, mb = par.rsplit("=", 1)
+            saida[g.strip()] = int(float(mb))
+    return saida
+
+
 class _Enviador:
     def __init__(self, tx):
         self.tx = tx
@@ -155,6 +169,7 @@ def _converter(enviar, params):
     import ifcopenshell.geom
 
     lentas, matar = _lentas(), os.environ.get("OBIM_TESTE_MATAR_FILHO")
+    crescer = _crescer()
     tempos = {"abrir_s": 0.0, "listar_s": 0.0, "geometria_s": 0.0}
     enviar("fase", "abrindo")
     _conferir_foto(params)
@@ -216,9 +231,9 @@ def _converter(enviar, params):
             sem = []
             for p in produtos:
                 enviar("atual", p.id())  # antes de criar o iterador: a conversão da peça começa em initialize()
-                sem.extend(_bloco(ifcopenshell, cfg, arq, [p], params, enviar, lentas, matar, juntar)[1])
+                sem.extend(_bloco(ifcopenshell, cfg, arq, [p], params, enviar, lentas, matar, juntar, crescer)[1])
         else:
-            _, sem = _bloco(ifcopenshell, cfg, arq, produtos, params, enviar, lentas, matar, juntar)
+            _, sem = _bloco(ifcopenshell, cfg, arq, produtos, params, enviar, lentas, matar, juntar, crescer)
         soltar()
         if sem:
             enviar("sem_malha", sem)
@@ -227,8 +242,11 @@ def _converter(enviar, params):
     else:
         for ini in range(0, total, tb):
             bloco = produtos[ini:ini + tb]
+            _RETIDO.clear()  # fim do bloco anterior: a memória do gancho de crescimento volta ao sistema
             enviar("fase", "convertendo")  # antes de criar o iterador: a primeira peça é convertida em initialize()
-            prods, sem = _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar)
+            enviar("bloco", {"rss_mb": pico_memoria_mb(atual=True), "t": time.time()})  # memória de partida do bloco (regra R-A, T29c)
+            prods, sem = _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar, None, crescer)
+            enviar("bloco_fim", {"rss_mb": pico_memoria_mb(atual=True)})  # o pai pode estar atrasado na fila: a medida vem do filho
             feitos += len(bloco)
             if sem:
                 enviar("sem_malha", sem)
@@ -241,7 +259,7 @@ def _converter(enviar, params):
     enviar("fim", {"tempos": tempos, "pico_memoria_mb": pico_memoria_mb(), "mensagens": mensagens})
 
 
-def _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar, entregar=None):
+def _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar, entregar=None, crescer=None):
     """Converte os produtos de um bloco com UM iterador. Devolve (lista ordenada por id, lista de sem malha).
     Com `entregar` (modo isolado) cada peça sai logo depois do aviso `feitos` e a lista devolvida fica vazia."""
     porid = {p.id(): p for p in bloco}
@@ -268,6 +286,8 @@ def _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar, entrega
                     os._exit(3)
                 if guid in lentas:
                     time.sleep(lentas[guid])
+                if crescer and guid in crescer:  # gancho de teste (T29c): escreve de verdade, senão a memória não é residente
+                    _RETIDO.append(np.ones(crescer[guid] * 2**20, dtype=np.uint8))
                 if guid is not None:
                     enviar("feitos", s.id)
                     if entregar and r is not None and s.id in porid:

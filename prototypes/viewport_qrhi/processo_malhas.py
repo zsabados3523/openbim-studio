@@ -258,8 +258,7 @@ def _converter(enviar, params):
         mensagens = str(ifcopenshell.get_log()).splitlines()[-50:]
     except Exception:
         mensagens = []
-    enviar("fim", {"tempos": tempos, "pico_memoria_mb": pico_memoria_mb(), "mensagens": mensagens,
-                  "pos_emitir_mb": pos_emitir})
+    enviar("fim", {"tempos": tempos, "pico_memoria_mb": pico_memoria_mb(), "mensagens": mensagens, "pos_emitir_mb": pos_emitir})
 
 
 def _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar, entregar=None, crescer=None):

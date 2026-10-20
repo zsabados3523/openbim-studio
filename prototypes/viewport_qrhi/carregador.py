@@ -690,7 +690,6 @@ class CarregadorMalhas:
             return True
         return False
 
-
     def _gravar_pos_emitir(self, dados):
         """T29e: só registro. A memória depois de `emitir` do bloco anterior chega no `bloco` seguinte (ou no `fim`)."""
         if self._reg is not None and dados.get("pos_emitir_mb") is not None:

@@ -13,6 +13,7 @@
 #include <vector>
 
 namespace obim {
+constexpr size_t BYTES_SUBLOTE = size_t(8) << 20;  // C (T30a2): teto de bytes de vértices e índices por sub-lote
 constexpr int BYTES_VERTICE = 28;  // pos f4x3, normal f4x3, cor u1x4 (DTYPE_VERTICE em prototypes/formato_malha.py; tests/test_formato_malha.py confere)
 
 struct Objeto {  // uma linha de DTYPE_OBJETO de prototypes/formato_malha.py
@@ -20,12 +21,13 @@ struct Objeto {  // uma linha de DTYPE_OBJETO de prototypes/formato_malha.py
 };
 struct Dados {  // imutável depois de publicado (atualizar() troca o ponteiro, nunca edita o conteúdo)
   std::vector<unsigned char> v; std::vector<uint32_t> i; std::vector<Objeto> objs; int64_t seq = 0;
+  bool nao_partido = false;  // T30a2: sub-lote acima de C que não pôde ser partido (peça maior que C, ou lote sem fronteira de peça)
   double desl[3] = {0, 0, 0}, cmin[3] = {1e30, 1e30, 1e30}, cmax[3] = {-1e30, -1e30, -1e30};  // deslocamento do lote (T09) e caixa dos vértices
 };
 struct Vista { const unsigned char* p = nullptr; size_t n = 0; };  // memória EMPRESTADA (do numpy): quem chama a mantém viva e imóvel durante a chamada; nada é guardado
 struct LoteBruto { Vista v, i, o; double desl[3] = {0, 0, 0}; };    // v: vértices (28 bytes cada), i: índices u4, o: DTYPE_OBJETO empacotado (n = objetos), desl: deslocamento
 struct Cursor { size_t n = 0; int64_t ger = -1; };  // o que a thread de desenho já tirou da fila (a placa é uma visão da fila)
-struct Totais { size_t lotes = 0, triangulos = 0, vertices = 0, bytes = 0; };  // bytes: memória da cópia compacta (T10)
+struct Totais { size_t lotes = 0, triangulos = 0, vertices = 0, bytes = 0, nao_partidos = 0; };  // bytes: memória da cópia compacta (T10); lotes: sub-lotes (T30a2)
 
 class DadosCena {
  public:
@@ -42,7 +44,7 @@ class DadosCena {
   std::vector<std::shared_ptr<Dados>> lotes() { std::lock_guard<std::mutex> l(m_); return lotes_; }  // T10: instantâneo imutável para a seleção (mutex só na cópia dos ponteiros)
   std::shared_ptr<Dados> lote(int64_t seq);   // lote `seq` (T09/T10; a ponte monta a tabela de objetos); std::invalid_argument se desconhecido ou já limpo
  private:
-  std::shared_ptr<Dados> preparar(const LoteBruto& lote);  // valida e copia (sem o mutex); não publica
+  std::vector<std::shared_ptr<Dados>> preparar(const LoteBruto& lote);  // valida e copia (sem o mutex), partindo em sub-lotes de até C; não publica; sempre ≥ 1
   void recalcular_caixa();                            // com m_
   std::mutex m_; std::vector<std::shared_ptr<Dados>> lotes_; int64_t seq_ = 0, ger_ = 0, ver_ = 0;  // ver_: sobe a cada mudança (atualizar refaz se mudou)
   double cmin_[3] = {1e30, 1e30, 1e30}, cmax_[3] = {-1e30, -1e30, -1e30};

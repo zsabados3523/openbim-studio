@@ -254,7 +254,6 @@ def test_limites_padrao_na_assinatura():
             p["max_espera_s"].default) == (20.0, 600.0, 20, 120.0)
 
 
-@AINDA_NAO
 def test_bloco_padrao_e_250():
     assert inspect.signature(CarregadorMalhas.__init__).parameters["tamanho_bloco"].default == 250
 
@@ -281,7 +280,6 @@ def _comparar_com_normal(modelo, monkeypatch, env, filhos, normal=None, sem_malh
     return novo
 
 
-@AINDA_NAO
 def test_reinicio_forcado_no_bloco_2_igual_ao_normal(modelo, monkeypatch):
     _, r, esp = _comparar_com_normal(modelo, monkeypatch, {"OBIM_TESTE_REINICIO_BLOCO": "2"}, filhos=2)
     # resumo: número de filhos, bloco do reinício, perdido do filho morto, mensagens juntadas, tempos do filho novo
@@ -294,7 +292,6 @@ def test_reinicio_forcado_no_bloco_2_igual_ao_normal(modelo, monkeypatch):
     assert esp.conversao[1].params["desl"] is not None  # o mesmo deslocamento do primeiro filho
 
 
-@AINDA_NAO
 def test_dois_reinicios_nenhuma_peca_some(modelo, monkeypatch):
     """Blocos globais 2 e 4 (o 3º é a refeitura do 2º no filho novo): 3 filhos, nada em sem_malha."""
     _comparar_com_normal(modelo, monkeypatch, {"OBIM_TESTE_REINICIO_BLOCO": "2,4"}, filhos=3)
@@ -337,7 +334,6 @@ def test_fila_cheia_durante_o_bloco_vigiado_a_regra_ainda_dispara(modelo, monkey
 
 
 # ---------- cancelar ----------
-@AINDA_NAO
 def test_cancelar_entre_a_morte_e_o_filho_novo(modelo, monkeypatch):
     def preparar(esp):
         esp.ao_criar = lambda n, f: esp.car.cancelar() if n == 1 else None  # o filho novo ainda nem começou
@@ -347,7 +343,6 @@ def test_cancelar_entre_a_morte_e_o_filho_novo(modelo, monkeypatch):
     assert r.estado == "cancelado" and all(not f.is_alive() for f in esp.filhos) and esp.dois_vivos == 0
 
 
-@AINDA_NAO
 def test_cancelar_durante_o_filho_novo(modelo, monkeypatch):
     def preparar(esp):
         esp.ao_iniciar = lambda n, f: esp.car.cancelar() if n == 1 else None
@@ -357,7 +352,6 @@ def test_cancelar_durante_o_filho_novo(modelo, monkeypatch):
 
 
 # ---------- queda e limite no bloco refeito: caminho de hoje, sem mudança ----------
-@AINDA_NAO
 @pytest.mark.parametrize("gancho,motivo", [("OBIM_TESTE_MATAR_FILHO", "caiu"), ("OBIM_TESTE_PECA_LENTA", "limite")])
 def test_queda_e_limite_no_bloco_refeito_seguem_o_caminho_de_hoje(modelo, monkeypatch, gancho, motivo):
     g = _guid(modelo, 2 * BLOCO - 1)  # última peça do bloco 2 (com 1 fio, as outras saem antes)
@@ -387,7 +381,6 @@ def test_modo_isolado_nunca_arma_a_vigia(modelo, monkeypatch):
 
 
 # ---------- `desl` vazio: o bloco 1 inteiro sem geometria ----------
-@AINDA_NAO
 def test_reinicio_com_desl_vazio_o_filho_novo_calcula_o_seu(modelo_bloco1_vazio, monkeypatch):
     m = modelo_bloco1_vazio
     normal = _rodar(m, monkeypatch)

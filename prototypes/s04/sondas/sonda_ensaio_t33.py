@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Sonda da F0-S04-T33: ensaio da regra R-A (T29) ao abrir um IFC, em tela virtual. Só lê números; não muda o produto nem nenhum limite.
 Uma abertura por execução (o pico de memória é por processo). Grava JSON só com números (nunca nome, GUID, id de peça, texto de mensagem).
-Uso: sonda_ensaio_t33.py rodar ARQ.ifc --saida r.json [--fios 8] [--bloco 1000] [--rotulo R] [--bloco-alvo 22]
+Uso: sonda_ensaio_t33.py rodar ARQ.ifc --saida r.json [--fios 8] [--bloco 250] [--rotulo R] [--bloco-alvo 22]
      sonda_ensaio_t33.py --auto-teste     (lógica dos critérios de parada com números inventados; sem tela, sem IFC)
 Campos ausentes saem como null. `parada.<nome>`: true = o critério do lote 60/61 passou, false = reprovou, null = sem dado para julgar.
 Rodar com `rodar_t33.sh` (cadeado + tela virtual). A saída tem de ficar fora do repositório."""
@@ -154,7 +154,7 @@ if __name__ == "__main__":
     r_.add_argument("arquivo")
     r_.add_argument("--saida", required=True)
     r_.add_argument("--fios", type=int, default=8)
-    r_.add_argument("--bloco", type=int, default=1000)
+    r_.add_argument("--bloco", type=int, default=250)
     r_.add_argument("--rotulo", default="t33")
     r_.add_argument("--bloco-alvo", type=int, default=BLOCO_ALVO)
     a_ = ap.parse_args()

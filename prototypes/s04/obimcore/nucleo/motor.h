@@ -54,7 +54,7 @@ namespace obim {
 using Rel = std::chrono::steady_clock;
 double agora_ms();  // motor.cpp
 extern const unsigned char QSB_VERT[], QSB_FRAG[]; extern const size_t QSB_VERT_N, QSB_FRAG_N;  // motor.cpp (QSB da S03, embutidos pelo CMake)
-struct Estatisticas { size_t bytes_copia, lotes, triangulos, vertices; int64_t fatias_enviadas; int triangulos_na_placa, contextos, superficies_soltas, solturas_atrasadas; size_t nao_partidos, pecas_maiores_que_c; };
+struct Estatisticas { size_t bytes_copia, lotes, triangulos, vertices; int64_t fatias_enviadas; int triangulos_na_placa, contextos, superficies_soltas, solturas_atrasadas; size_t nao_partidos, pecas_maiores_que_c; int64_t geracao; };
 constexpr size_t ORCAMENTO_BYTES = 2u << 20;  // por quadro (cabe em ~1 ms no software); lote maior é partido em fatias
 constexpr auto ORCAMENTO_TEMPO = std::chrono::milliseconds(4);
 
@@ -102,7 +102,7 @@ class Motor {
   Estatisticas estatisticas() {
     std::lock_guard<std::mutex> l(m_);  // Motor::m_ e, dentro de totais(), DadosCena::m_: sempre nesta ordem
     const Totais t = cena_.totais();
-    return {t.bytes, t.lotes, t.triangulos, t.vertices, fatias_.load(), tri_placa.load(), contextos.load(), superficies_soltas.load(), solturas_atrasadas.load(), t.nao_partidos, t.pecas_maiores_que_c};
+    return {t.bytes, t.lotes, t.triangulos, t.vertices, fatias_.load(), tri_placa.load(), contextos.load(), superficies_soltas.load(), solturas_atrasadas.load(), t.nao_partidos, t.pecas_maiores_que_c, t.ger};
   }
   std::vector<std::tuple<double, int64_t>> relogio() {
     std::vector<std::tuple<double, int64_t>> r; size_t n;

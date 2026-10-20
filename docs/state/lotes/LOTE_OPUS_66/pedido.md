@@ -1,7 +1,7 @@
 <!--
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
-# LOTE_OPUS_66: revisão dos PRs 222, 227, 228 e 229 (T34 corrigido, T29e implementação e oráculo, T30b3) e leitura da medição na placa (F0-S04)
+# LOTE_OPUS_66: revisão dos PRs 222, 227, 228, 229 e 231 (T34 corrigido, T29e implementação e oráculo, T30b3, T23c) e leitura da medição na placa (F0-S04)
 Pedido do líder (2026-10-20), **classe T3, revisão Opus em lote, esforço médio**. Responda **aprovado ou reprovado com lista numerada** por PR. Escreva só `docs/state/lotes/LOTE_OPUS_66/resultado.md` (num worktree seu, sem commit; informe o caminho); não implemente, não faça merge, não leia `~/openbim-medicao`, nenhum IFC. Você não escreveu nenhum destes.
 
 ## Contexto fechado
@@ -17,7 +17,8 @@ Pedido do líder (2026-10-20), **classe T3, revisão Opus em lote, esforço méd
 3. **228:** o oráculo cobre os 4 itens do §4 item 4; casos de borda (d′) 50 passa e 50,1 para, (e) 999 passa e 1.000 para (no teste: `fim` = 1000 e `pos_emitir` 1999 passa, 2000 para), leitura 6.000 para; a leitura "o registro do bloco N guarda a medida feita depois de `emitir` do bloco N (a mensagem chega no bloco N+1)" é a certa para a sonda? Nenhum número afrouxado?
 4. **229:** `Totais::ger` sob `DadosCena::m_`, sem trava nova, `mc_` intacto, nenhum `nb::eval` novo; o teste de `geracao` do T30d3 passa sem edição. Tirar `DadosCena::geracao()` agora ou em cartão à parte?
 5. **Medição na placa (somente leitura de um resumo meu):** o T30b2 está no `main` (cb434a5). O líder mediu a troca de parede na RTX 3070 do PO; os números estão em `reports/F0-S04-T30-placa.md` se o PR já estiver mesclado (senão o líder cola o resumo no pedido). Diga se a meta M2b (< 200 ms, p95, parede criada e do arquivo) fecha e o que fazer se não.
-6. **Ordem de merge** de 222, 227, 228 e 229.
+6. **PR 231 (T23c, CI do Windows):** só `.github/actions/ambiente-windows/action.yml` e `.github/workflows/ci.yml` (+16/−9) e o relatório `reports/F0-S04-T23.md`: o cache de pacotes (1,3 GB) só roda se o ambiente pronto não veio do cache; `windows-medicoes` e `windows-sonda` (informativos) passam a depender de `windows` com `if: !cancelled()`. Confira o cartão T23 (aceite 1 e 2: nenhum teste removido ou com limite maior; nomes dos checks obrigatórios intactos; `needs` de `windows`). Medida: 1 rodada, fila crítica 17m38 → 17m08, instalador 19m11 → 14m30; meta de 10 min **não atingida** (a fila agora são os testes do viewport, ~17 min). Aprovar para mesclar? O relatório leva as opções (a) cartão do instalador em `packaging/windows/`, (b) T23d dividir viewport-a/b, (c) rever a meta ao PO sem escolher: concorda com o texto?
+7. **Ordem de merge** de 222, 227, 228, 229 e 231.
 
 ## Entrega
-Veredito por PR; respostas 1 a 6; perguntas ao PO (só o que é dele); resumo de 5 linhas em português simples, sem siglas; linha do LOG. Resultado em português claro; retorno final em caveman. Não aprove provisoriamente.
+Veredito por PR; respostas 1 a 7; perguntas ao PO (só o que é dele); resumo de 5 linhas em português simples, sem siglas; linha do LOG. Resultado em português claro; retorno final em caveman. Não aprove provisoriamente.

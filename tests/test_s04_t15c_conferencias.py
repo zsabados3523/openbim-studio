@@ -72,8 +72,11 @@ def registrar(titulo, texto):
     print(f"T34b {titulo}: {texto}", flush=True)
     resumo = os.environ.get("GITHUB_STEP_SUMMARY")
     if resumo:
-        with open(resumo, "a", encoding="utf-8") as f:
-            f.write(f"### T34b {titulo}\n```\n{texto}\n```\n")
+        try:  # só a gravação: resumo não gravável (pasta inexistente, só leitura) nunca muda o resultado dos testes
+            with open(resumo, "a", encoding="utf-8") as f:
+                f.write(f"### T34b {titulo}\n```\n{texto}\n```\n")
+        except OSError as e:
+            print(f"T34b: resumo do CI não gravado ({e})", flush=True)
 
 
 def guarda_mensagem(teste):

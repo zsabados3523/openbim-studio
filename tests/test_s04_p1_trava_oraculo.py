@@ -60,6 +60,18 @@ def _ate(cond, s=5.0):
         time.sleep(0.002)
 
 
+class _ler_fora:  # contexto: `leitor` numa outra thread, dentro de ler() até sair do contexto
+    def __init__(s, leitor, dentro, solta):
+        s.th, s.dentro, s.solta = _em_thread(leitor, "p1-leitor")[0], dentro, solta
+
+    def __enter__(s):
+        assert s.dentro.wait(5), "o leitor não entrou"
+
+    def __exit__(s, *a):
+        s.solta.set()
+        s.th.join(5)
+
+
 def _ocupado(sm, porta, espera):  # tenta a porta numa outra thread; devolve (tipo da exceção ou None, segundos)
     def fn():
         t = time.monotonic()
@@ -243,6 +255,52 @@ def test_p1_porta_do_obimcore_confere_quem_chama():
             with pytest.raises(sm.TravaNaoSegura):
                 s._obimcore_entrar()
     assert s.estado() == REPOUSO
+
+
+@AINDA_NAO
+def test_p1_porta_do_obimcore_recusa_outra_thread_com_leitor_ativo():  # lote 70 §2.3: o leitor sairia com o C++ de outra thread ainda lendo
+    sm, s = _nova()
+    dentro, solta = threading.Event(), threading.Event()
+
+    def leitor():
+        with s.ler():
+            dentro.set()
+            solta.wait(5)
+    for quem_le in ("outra", "esta"):  # o leitor numa outra thread e o C++ nesta; depois o contrário
+        with s.ler() if quem_le == "esta" else _ler_fora(leitor, dentro, solta):
+            antes = s.estado()
+            if quem_le == "esta":
+                th, out = _em_thread(s._obimcore_entrar, "p1-geometria")
+                th.join(5)
+                exc = out.get("exc")
+            else:
+                try:
+                    s._obimcore_entrar()
+                    exc = None
+                except BaseException as e:
+                    exc = e
+            assert isinstance(exc, sm.TravaNaoSegura) and s.estado() == antes, f"leitor em {quem_le}, C++ na outra thread: TravaNaoSegura sem mudar nada ({exc!r})"
+    assert s.estado() == REPOUSO
+
+
+@AINDA_NAO
+def test_p1_reentrada_com_espera_none_falha_na_hora():  # lote 70 §2.3 (recomendação): numa thread com join(2), um erro aqui falha e não trava o pytest
+    sm, s = _nova()
+
+    def fn():
+        r = []
+        for fora in (s.ler, s.escrever):
+            with fora():
+                for porta in (s.ler, s.escrever):
+                    try:
+                        with porta(espera=None):
+                            r.append("entrou")
+                    except sm.ReentradaProibida:
+                        r.append("na hora")
+        return r
+    th, out = _em_thread(fn)
+    th.join(2)
+    assert not th.is_alive() and out.get("ok") == ["na hora"] * 4, f"reentrada com espera=None: {out or 'travou'}"
 
 
 @AINDA_NAO

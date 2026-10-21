@@ -81,10 +81,11 @@ def _rod(pulso, mouse_med=10.0, mouse_max=20.0, maior=30.0, janelas=(40, 41), pa
 
 
 def _sinteticos():  # casos que passam e que reprovam por pouco (as pontas que mandam: <, <=, mediana, pior rodada)
-    def lote_(c2, cm, fm, f2, m5m, estrito=False, par=17.0):
-        g = lambda vs, **k: [_rod(v, **k) for v in vs]  # noqa: E731
-        return {"parte": "lote", "estrito": estrito, "controle": {"1": g([400, 500, 600]), "2": g(c2), "mista": g(cm, maior=m5m, parado=par)},
-                "formas": {"1": g([400, 500, 600], mouse_med=700), "2": [_rod(300, mouse_med=x) for x in f2], "mista": [_rod(300, mouse_med=x, maior=m5m, parado=par) for x in fm]}}
+    def lote_(c2, cm, fm, f2, m5m, estrito=False, par=17.0, jan=(40, 41)):  # m5m: um número para as 6 rodadas da mista, ou a lista (3 do controle, 3 com mouse)
+        g, mx = (lambda vs, **k: [_rod(v, **k) for v in vs]), (m5m if isinstance(m5m, list) else [m5m] * 6)  # noqa: E731
+        return {"parte": "lote", "estrito": estrito, "controle": {"1": g([400, 500, 600]), "2": g(c2), "mista": [_rod(v, maior=m, parado=par, janelas=jan) for v, m in zip(cm, mx)]},
+                "formas": {"1": g([400, 500, 600], mouse_med=700), "2": [_rod(300, mouse_med=x) for x in f2],
+                           "mista": [_rod(300, mouse_med=x, maior=m, parado=par, janelas=jan) for x, m in zip(fm, mx[3:])]}}
 
     def pes(mista, com, sem, malha=200.0):
         g = lambda vs: [_rod(50.0, mouse_max=v) for v in vs]  # noqa: E731
@@ -97,7 +98,17 @@ def _sinteticos():  # casos que passam e que reprovam por pouco (as pontas que m
             lote_([640, 700, 717], [600, 700, 717], [13, 14, 30], [13, 14, 14], 150.0, True, 60.0),  # passa: estrito (200), 150 < 3 x 60
             lote_([640, 700, 717], [600, 700, 717], [13, 14, 30], [13, 14, 14], 150.0, False, 60.0),  # reprova só 5_m5_mista: 150 >= 100 fora do estrito
             pes([2, 99.9, 300], [10, 110, 120], [5, 10, 20]),  # passa: 99,9 < 100; 110 - 10 = 100 <= 100
-            pes([2, 100.0, 300], [10, 111, 120], [5, 10, 20])]  # reprova 3_parede (100 não é < 100) e 6_longo (101)
+            pes([2, 100.0, 300], [10, 111, 120], [5, 10, 20]),  # reprova 3_parede (100 não é < 100) e 6_longo (101)
+            # lote 70 §2.2: cada regra sozinha, na fronteira (cada um destes vira com um mutante da conta)
+            lote_([640, 700, 717], [600, 700, 717], [13, 14, 30], [13, 14, 14], [30, 30, 210, 30, 30, 30]),  # reprova só 5_m5_mista: UMA rodada a 210 (o ADR: toda rodada < 200)
+            lote_([640, 700, 717], [600, 700, 717], [13, 14, 30], [13, 14, 14], 30.0, jan=(19, 41)),  # reprova só 5_m5_mista: janela com 19 quadros
+            lote_([640, 700, 717], [600, 700, 717], [13, 14, 30], [13, 14, 14], 150.0, True, 17.0),  # reprova só 5_m5_mista: estrito, mas 150 > 3 x 33,3
+            lote_([640, 700, 717], [600, 700, 717], [13, 14, 30], [13, 14, 14], [30, 30, 30, 30, 200, 30]),  # reprova só 5_m5_mista: maior = 200 não é < 200
+            lote_([640, 700, 717], [600, 700, 717], [13, 14, 30], [13, 14, 14], 100.0, False, 60.0),  # reprova só 5_m5_mista: mediana 100 não é < 100
+            lote_([640, 700, 1000], [600, 1000, 1000], [13, 14, 30], [13, 14, 14], 30.0),  # reprova só 4_controle_1s: 1.000 não é < 1.000 (<= pior da forma 2)
+            lote_([640, 700, 717], [600, 700, 1000], [13, 14, 30], [13, 14, 14], 30.0)]  # passa: 4_surda com pulso de 1.000 (<= 1.000)
+FALHAS = [[], ["4_controle_forma2"], ["4_surda"], ["4_mouse_forma2", "5_m5_mista"], [], ["5_m5_mista"], [], ["3_parede", "6_longo"],
+          ["5_m5_mista"], ["5_m5_mista"], ["5_m5_mista"], ["5_m5_mista"], ["5_m5_mista"], ["4_controle_1s"], []]  # o que cada caso sintético reprova
 
 
 # ---------- testes ----------
@@ -131,8 +142,9 @@ def test_v1_veredito_mista_igual_a_conta_independente():
         assert set(v) == set(esp), f"caso {i}: chaves {sorted(v)} != {sorted(esp)}"
         for k in esp:
             assert v[k] == esp[k] if k == "ok" else (v[k]["ok"] == esp[k]["ok"] and abs(v[k]["valor"] - esp[k]["valor"]) <= 1e-9 and abs(v[k]["limite"] - esp[k]["limite"]) <= 1e-9), f"caso {i}, {k}: {v[k]} != {esp[k]}"
-    assert [v["ok"] for v in vs] == [True, False, False, False, True, False, True, False], "sentinela: os casos sintéticos passam e reprovam onde devem"
-    assert [k for k, x in vs[5].items() if k != "ok" and not x["ok"]] == ["5_m5_mista"], "fora do estrito vale o limite de 100 ms do T15b"
+    assert [v["ok"] for v in vs] == [True, False, False, False, True, False, True, False] + [False] * 6 + [True], "sentinela: os casos sintéticos passam e reprovam onde devem"
+    falhas = [sorted(k for k, x in v.items() if k != "ok" and not x["ok"]) for v in vs]
+    assert falhas == FALHAS, f"cada caso reprova só o que deve: {[(i, a, b) for i, (a, b) in enumerate(zip(falhas, FALHAS)) if a != b]}"
 
 
 @AINDA_NAO

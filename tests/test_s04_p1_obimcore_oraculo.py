@@ -111,6 +111,34 @@ def test_p1_erro_na_geometria_ainda_chama_sair(base):
 
 
 @AINDA_NAO
+def test_p1_emprestimo_que_falha_ainda_chama_sair_e_entrar_que_falha_nao(base):  # lote 70 §2.2 item 2: senão em_uso_cpp fica preso e o produto trava
+    oc, f, pesada, leves = base
+
+    class Falsa:  # não é ifcopenshell.file; a porta devolve o que `entrar` der e conta as saídas
+        def __init__(s, entrar):
+            s.entrar, s.saidas = entrar, 0
+
+        def _obimcore_entrar(s):
+            return s.entrar()
+
+        def _obimcore_sair(s):
+            s.saidas += 1
+
+    class Recusada(Exception):
+        pass
+
+    def recusa():
+        raise Recusada("trava recusada")
+    errada, recusada = Falsa(object), Falsa(recusa)
+    with pytest.raises(TypeError):
+        oc.malhas(errada, leves)  # _obimcore_entrar devolve object(): o empréstimo falha
+    assert errada.saidas == 1, f"o empréstimo falhou e o C++ chamou _obimcore_sair {errada.saidas} vezes (tem de ser 1)"
+    with pytest.raises(Recusada):
+        oc.malhas(recusada, leves)  # o erro de _obimcore_entrar sobe como está
+    assert recusada.saidas == 0, f"_obimcore_entrar falhou e o C++ chamou _obimcore_sair {recusada.saidas} vezes (nada a soltar)"
+
+
+@AINDA_NAO
 def test_p1_bloqueio_solto_durante_a_geometria_da_sessao(base):  # R1-h, regra 4 do lote 9 §1.4, agora pelo caminho da sessão
     oc, f, pesada, leves = base
     s, marca, fim = _sm().SessaoModelo(f), [], {}

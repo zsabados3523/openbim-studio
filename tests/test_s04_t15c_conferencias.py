@@ -13,6 +13,7 @@ Forma 3 (referência): a forma 1 com a viewport Python da S03 (`CuboViewport`, g
 o controle é ela desenhar parada (>= 20 quadros por segundo).
 GUARDA: SUBPROCESSO sob `xvfb-run` (nunca na tela real; Windows só no CI ou com OBIM_S04_TELA_VIRTUAL=1); pula sem conferencias.py ou obimcore;
 com OBIM_S04_T15_OBRIGATORIO=1 todo pulo vira falha."""
+import functools
 import importlib.util
 import json
 import os
@@ -66,6 +67,30 @@ def c_rep(res, base, n_i, n_iii):
     return res
 
 
+def registrar(titulo, texto):
+    """T34b: mostra no `print` e, se `GITHUB_STEP_SUMMARY` existir, grava no resumo do CI (a mensagem de uma falha não se perde)."""
+    print(f"T34b {titulo}: {texto}", flush=True)
+    resumo = os.environ.get("GITHUB_STEP_SUMMARY")
+    if resumo:
+        try:  # só a gravação: resumo não gravável (pasta inexistente, só leitura) nunca muda o resultado dos testes
+            with open(resumo, "a", encoding="utf-8") as f:
+                f.write(f"### T34b {titulo}\n```\n{texto}\n```\n")
+        except OSError as e:
+            print(f"T34b: resumo do CI não gravado ({e})", flush=True)
+
+
+def guarda_mensagem(teste):
+    """T34b: qualquer falha de asserção do teste é registrada por inteiro (resumo do CI e print) antes de subir; não muda nenhuma conferência."""
+    @functools.wraps(teste)
+    def corpo(*a, **k):
+        try:
+            return teste(*a, **k)
+        except AssertionError as e:
+            registrar(f"FALHA em {teste.__name__}", str(e))
+            raise
+    return corpo
+
+
 REP_I, REP_III = 5, 3  # T34: nº de repetições do controle (i) e da janela presa (iii); passa a MEDIANA, os limites (0,7 e 700 ms) são os de sempre
 
 
@@ -74,6 +99,8 @@ def rep():
     from test_s04_viewport import caso
     r = caso("rep", BASE, REP_I, REP_III, alvo=ESTE, limite=900)
     print("T34 razao_ocupada:", [round(x["razao_ocupada"], 3) for x in r["i"]], "gil_preso_ms:", [round(x["gil_preso_ms"], 1) for x in r["iii"]])
+    registrar("controle (i), 5 razões", "; ".join(f"join={x['join']} ocupada={x['ocupada']} razao={x['razao_ocupada']:.3f}" for x in r["i"]))
+    registrar("janelas presas (iii), 3 repetições", "; ".join(f"preso={x['gil_preso_ms']:.1f} ms quadros={x['quadros']} maior_intervalo={x['maior_intervalo_ms']:.1f} ms" for x in r["iii"]))
     return r
 
 
@@ -89,9 +116,11 @@ def conf():
     r = caso("conf", BASE, QTD, RODADAS, alvo=ESTE, limite=900)
     assert r["ret"] == r["arquivo"], "conferencias.main devolve o mesmo dicionário que grava"
     assert r["arquivo"]["versao"] == 1 and r["arquivo"]["base"] == BASE and r["arquivo"]["quantidade"] == QTD and r["arquivo"]["rodadas"] == RODADAS
+    registrar("execução única (i)", json.dumps({k: r["arquivo"]["i"].get(k) for k in ("join", "exec", "ocupada", "razao_exec", "razao_ocupada", "resposta")}))
     return r["arquivo"]
 
 
+@guarda_mensagem
 def test_t15c_i_exec_solta_o_bloqueio_com_controle_positivo(conf, rep):
     i = conf["i"]
     ocup = [x["razao_ocupada"] for x in rep["i"]]
@@ -131,6 +160,7 @@ def test_t15c_ii_quais_chamadas_longas_soltam_o_bloqueio(conf):
         assert x["solta"] is (x["taxa_principal"] >= 0.5), x
 
 
+@guarda_mensagem
 def test_t15c_iii_desenho_nao_passa_pelo_python_nem_pela_thread_da_janela(conf, rep):
     x = conf["iii"]
     presos = [y["gil_preso_ms"] for y in rep["iii"]]

@@ -4,17 +4,9 @@ description: Cache de pacotes, conda-forge, ambiente openbim pela trava (com cac
 runs:
   using: composite
   steps:
-    - name: Cache de pacotes do conda
-      id: cache_conda
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: ${{ runner.temp }}/conda_pkgs
-        key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'environment.*.lock', 'packaging/runtime-environment.yml') }}
     - name: Pasta de pacotes do conda
       shell: bash
-      run: |
-        echo "CONDA_PKGS_DIRS=$RUNNER_TEMP/conda_pkgs" >> "$GITHUB_ENV"
-        echo "::notice title=cache de pacotes::cache-hit=${{ steps.cache_conda.outputs.cache-hit }}"
+      run: echo "CONDA_PKGS_DIRS=$RUNNER_TEMP/conda_pkgs" >> "$GITHUB_ENV"
     - uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
       with:
         activate-environment: openbim
@@ -29,6 +21,17 @@ runs:
       with:
         path: ${{ env.CONDA }}/envs/openbim
         key: ambiente-${{ runner.os }}-${{ hashFiles('environment.win-64.lock', 'environment.yml') }}-v1
+    # T23c: o cache de pacotes (1.347 MB, 35 s) só serve para criar o ambiente; com o ambiente pronto vindo do cache ele era baixado à toa.
+    - name: Cache de pacotes do conda (só se o ambiente não veio do cache)
+      id: cache_conda
+      if: steps.cache_env.outputs.cache-hit != 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/conda_pkgs
+        key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'environment.*.lock', 'packaging/runtime-environment.yml') }}
+    - name: Cache de pacotes
+      shell: bash
+      run: echo "::notice title=cache de pacotes::cache-hit=${{ steps.cache_conda.outputs.cache-hit || 'não usado' }}"
     - name: Criar o ambiente (pela trava environment.win-64.lock, se não veio do cache)
       if: steps.cache_env.outputs.cache-hit != 'true'
       shell: bash -el {0}

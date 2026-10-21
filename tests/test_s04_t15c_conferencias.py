@@ -18,6 +18,7 @@ import json
 import os
 import re
 import shutil
+import statistics
 import sys
 import tempfile
 import traceback
@@ -50,6 +51,32 @@ def c_conf(res, base, qtd, rodadas):
     return res
 
 
+def c_rep(res, base, n_i, n_iii):
+    """T34: repete a medida do controle positivo (i) n_i vezes e a da janela presa (iii) n_iii vezes, no mesmo processo e na mesma preparação de `main`."""
+    import conferencias
+    conferencias.lote._caminhos()
+    import gerar_modelo_grande
+    tmp = Path(tempfile.mkdtemp(prefix="t34_"))
+    gerar_modelo_grande.gerar(str(tmp / "base.ifc"), paredes=int(base))
+    f = conferencias.lote.preparar(str(tmp / "base.ifc"), tmp / "saida")
+    f._app.setQuitOnLastWindowClosed(False)
+    res["i"] = [conferencias.conferencia_i() for _ in range(int(n_i))]
+    res["iii"] = [conferencias.conferencia_iii(f) for _ in range(int(n_iii))]
+    f.fechar()
+    return res
+
+
+REP_I, REP_III = 5, 3  # T34: nº de repetições do controle (i) e da janela presa (iii); passa a MEDIANA, os limites (0,7 e 700 ms) são os de sempre
+
+
+@pytest.fixture(scope="module")
+def rep():
+    from test_s04_viewport import caso
+    r = caso("rep", BASE, REP_I, REP_III, alvo=ESTE, limite=900)
+    print("T34 razao_ocupada:", [round(x["razao_ocupada"], 3) for x in r["i"]], "gil_preso_ms:", [round(x["gil_preso_ms"], 1) for x in r["iii"]])
+    return r
+
+
 @pytest.fixture(scope="module")
 def conf():
     if not (aux.PASTA / "conferencias.py").is_file():
@@ -65,11 +92,13 @@ def conf():
     return r["arquivo"]
 
 
-def test_t15c_i_exec_solta_o_bloqueio_com_controle_positivo(conf):
+def test_t15c_i_exec_solta_o_bloqueio_com_controle_positivo(conf, rep):
     i = conf["i"]
+    ocup = [x["razao_ocupada"] for x in rep["i"]]
+    assert len(ocup) == REP_I and all(x["join"] > 0 and abs(x["razao_ocupada"] - x["ocupada"] / x["join"]) <= 1e-9 for x in rep["i"]), rep["i"]
+    assert statistics.median(ocup) <= 0.7, f"controle positivo falhou: mediana de {REP_I} medidas da razão com a principal ocupada em Python > 0,7 ({ocup}); a medida não distingue nada"
     assert all(isinstance(i[k], int) and i[k] > 0 for k in ("join", "exec", "ocupada")), i
     assert abs(i["razao_exec"] - i["exec"] / i["join"]) <= 1e-9 and abs(i["razao_ocupada"] - i["ocupada"] / i["join"]) <= 1e-9, i
-    assert i["razao_ocupada"] <= 0.7, f"controle positivo falhou: com a principal ocupada em Python a outra thread não perdeu ritmo ({i}); a medida não distingue nada"
     esperado = "sim" if i["razao_exec"] >= 0.8 else "não" if i["razao_exec"] <= 0.3 else None
     assert esperado is not None, f"(i) inconclusivo (razão {i['razao_exec']:.2f} entre 0,3 e 0,8): repetir; se persistir, levar ao PO"
     assert i["resposta"] == esperado, i
@@ -102,11 +131,13 @@ def test_t15c_ii_quais_chamadas_longas_soltam_o_bloqueio(conf):
         assert x["solta"] is (x["taxa_principal"] >= 0.5), x
 
 
-def test_t15c_iii_desenho_nao_passa_pelo_python_nem_pela_thread_da_janela(conf):
+def test_t15c_iii_desenho_nao_passa_pelo_python_nem_pela_thread_da_janela(conf, rep):
     x = conf["iii"]
-    assert x["gil_preso_ms"] >= 700, f"a thread da janela tem de ficar presa >= 700 ms (T05: 0,75 s): {x}"
-    assert x["maior_intervalo_ms"] < 50 and x["quadros"] >= 20 * x["gil_preso_ms"] / 1000, f"(iii) o desenho parou com o bloqueio preso na thread da janela: {x}"
-    assert x["conteiner_python"] is False and x["classe_conteiner"].startswith("PySide6."), x
+    presos = [y["gil_preso_ms"] for y in rep["iii"]]
+    assert len(presos) == REP_III and statistics.median(presos) >= 700, f"a thread da janela tem de ficar presa >= 700 ms (T05: 0,75 s), mediana de {REP_III} medidas: {presos}"
+    for y in [x, *rep["iii"]]:  # T34: o desenho tem de continuar em cada repetição (e na execução principal), não só em alguma
+        assert y["maior_intervalo_ms"] < 50 and y["quadros"] >= 20 * y["gil_preso_ms"] / 1000, f"(iii) o desenho parou com o bloqueio preso na thread da janela: {y}"
+        assert y["conteiner_python"] is False and y["classe_conteiner"].startswith("PySide6."), y
 
 
 def test_t15c_iii_nenhum_arquivo_do_fluxo_mexe_na_janela_de_desenho():

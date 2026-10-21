@@ -34,7 +34,7 @@ ESTE = Path(__file__).resolve()
 OBRIGATORIO = os.environ.get("OBIM_S04_V1_OBRIGATORIO") == "1"
 AINDA_NAO = pytest.mark.xfail(strict=True, reason="V1: lote.py ainda não tem a forma mista")
 GEO = "lote-geometria"
-REG = {"log": [], "qt": [], "falha": False, "geo_s": 0.3, "f": None}
+REG = {"log": [], "qt": [], "falha": False, "geo_s": 0.3, "f": None, "emit": 0, "exec": 0, "pos_s": 0.2}
 
 
 def pular(msg):
@@ -43,13 +43,15 @@ def pular(msg):
 
 # ---------- espiões (só no subprocesso, ANTES de `import lote`) ----------
 def _perfil(frame, ev, arg):  # regra 5: chamada C ao PySide6/shiboken6 na thread de geometria (construtor não aparece aqui: ver _espioes_qt)
-    if ev == "c_call" and threading.current_thread().name == GEO:
+    if ev in ("c_call", "c_return") and threading.current_thread().name == GEO:
         mods = (getattr(arg, "__module__", None) or "", type(getattr(arg, "__self__", None)).__module__ or "")
-        if any(m.startswith(("PySide6", "shiboken6")) for m in mods) and getattr(arg, "__qualname__", "") != "SignalInstance.emit":
+        if getattr(arg, "__qualname__", "") == "SignalInstance.emit":  # lote 70 §2.1: conta o emit; depois dele a thread fica viva `pos_s` (sem join, medir volta com ela viva)
+            REG.update(emit=REG["emit"] + 1) if ev == "c_call" else time.sleep(REG["pos_s"])
+        elif ev == "c_call" and any(m.startswith(("PySide6", "shiboken6")) for m in mods):
             REG["qt"].append(f"chamada {getattr(arg, '__qualname__', repr(arg))}")
 
 
-def _espioes_qt():  # construção de QObject, QEventLoop, QTimer ou QThread fora da thread da janela
+def _espioes_qt():  # construção de QObject, QEventLoop, QTimer ou QThread fora da thread da janela; `QEventLoop.exec` contado (lote 70 §2.1)
     import PySide6.QtCore as C
     for nome in ("QObject", "QEventLoop", "QTimer", "QThread"):
         base = getattr(C, nome)
@@ -57,7 +59,10 @@ def _espioes_qt():  # construção de QObject, QEventLoop, QTimer ou QThread for
         def init(s, *a, _b=base, _n=nome, **k):
             threading.current_thread() is threading.main_thread() or REG["qt"].append(f"{_n} construído em {threading.current_thread().name}")
             _b.__init__(s, *a, **k)
-        setattr(C, nome, type(nome, (base,), {"__init__": init}))
+        def exe(s, *a, _b=base):
+            REG["exec"] += threading.current_thread() is threading.main_thread() and bool(REG["f"] and REG["f"].trava.locked())  # só DURANTE o comando
+            return _b.exec(s, *a)
+        setattr(C, nome, type(nome, (base,), {"__init__": init} | ({"exec": exe, "exec_": exe} if nome == "QEventLoop" else {})))
     threading.setprofile(_perfil)
 
 
@@ -154,24 +159,23 @@ def c_ensaio(res):  # regras 2 a 5 e erro, com o `f` de ensaio (sem obimcore de 
                 tent.append((agora(), "ocupado"))
             except Exception as e:
                 tent.append((agora(), repr(e)))
-    tm = QTimer()
-    tm.setInterval(5)
-    tm.timeout.connect(tenta)
+    tm = QTimer(interval=5, timeout=tenta)
     tm.start()
     r = lote.medir(f, "mista", 10, cmd={"cmd": "ensaio"})
+    res["mec"], res["vivas"] = [REG["emit"], REG["exec"]], sorted(t.name for t in threading.enumerate() if t.name == GEO)
     tm.stop()
     f.cmds.clear()
     res["r"] = {k: r.get(k) for k in ("forma", "thread_janela", "thread_lote", "pulsos", "mouse", "fatias", "geometria")}
     res["log"], res["tentativas"], res["qt"] = list(REG["log"]), tent, list(REG["qt"])
     res["restaurado"] = fluxo_a.api is api0 and sys.modules["obimcore"].malhas is mal0 and isinstance(f.cena, _Cena)
     REG["log"].clear()
-    REG["falha"] = True  # erro na geometria: sobe na janela, solta a trava, restaura os embrulhos, não deixa a thread viva
+    REG.update(falha=True, emit=0, exec=0)  # erro na geometria: sobe na janela, solta a trava, restaura os embrulhos, não deixa a thread viva
     try:
         lote.medir(f, "mista", 10, cmd={"cmd": "ensaio"}, mouse=False)
         res["excecao"] = None
     except Exception as e:
         res["excecao"] = [type(e).__name__, str(e)]
-    REG["falha"] = False
+    REG["falha"], res["erro_mec"] = False, [REG["emit"], REG["exec"]]
     res["erro_log"] = [x[:2] for x in REG["log"] if x[0] == "malhas"]
     res["erro_estado"] = {"trava": f.trava.locked(), "restaurado": fluxo_a.api is api0 and sys.modules["obimcore"].malhas is mal0 and isinstance(f.cena, _Cena),
                           "vivas": sorted(t.name for t in threading.enumerate() if t.name == GEO)}
@@ -219,9 +223,7 @@ def c_real(res, base, aberturas):  # o FluxoA e o obimcore de verdade: parede pe
                 tent.append([obimcore.agora(), "passou", v, (time.perf_counter() - t) * 1000])
             except fluxo_a.ModeloOcupado:
                 tent.append([obimcore.agora(), "ocupado", v, (time.perf_counter() - t) * 1000])
-    tm = QTimer()
-    tm.setInterval(5)
-    tm.timeout.connect(tenta)
+    tm = QTimer(interval=5, timeout=tenta)
     paredes = len(f.ifc.by_type("IfcWall"))
     tm.start()
     rp = lote.medir(f, "mista", cmd={"cmd": "mover", "alvo": guid, "dx": 0.01, "dy": 0, "dz": 0})
@@ -258,9 +260,7 @@ def _rodar(nome, *a, limite, alvo=ESTE):
         return {"erro": str(e)}
 
 
-def _ok(r):
-    "erro" in r and pytest.fail(r["erro"][-3000:])
-    return r
+_ok = lambda r: ("erro" in r and pytest.fail(r["erro"][-3000:])) or r  # noqa: E731
 
 
 @pytest.fixture(scope="module")
@@ -282,8 +282,7 @@ def test_v1_ambiente_tela_virtual_e_obimcore():  # sem marcador: com OBIM_S04_V1
     assert (aux.PASTA / "lote.py").is_file()
 
 
-def _dentro(t, ini, fim):
-    return ini < t < fim
+_dentro = lambda t, ini, fim: ini < t < fim  # noqa: E731
 
 
 @AINDA_NAO
@@ -319,6 +318,14 @@ def test_v1_regra_2_janela_trata_eventos_durante_a_malha_e_a_espera_nao_e_fatia(
     fz = r["fatias"]
     assert fz and len(fz) >= 20 and statistics.median(x["ms"] for x in fz) <= 20.0, "a mista fatia como a forma 2 (>= 20 fatias, mediana <= 20 ms)"
     assert max(x["ms"] for x in fz) < 150 and all(x["op_mais_longa"] != "obimcore.malhas" for x in fz), f"a espera da geometria entrou numa fatia: {max(fz, key=lambda x: x['ms'])}"
+
+
+@AINDA_NAO
+def test_v1_regra_2_resultado_volta_por_sinal_enfileirado_e_qeventloop(ensaio):  # lote 70 §2.1: espera ocupada com processEvents não passa
+    n, (emit, exe), (emit_e, exe_e) = len(_ok(ensaio)["r"]["geometria"]), ensaio["mec"], ensaio["erro_mec"]
+    assert n >= 1 and emit >= n and exe >= n, f"{n} pedidos de geometria: {emit} emit na {GEO} e {exe} QEventLoop.exec na janela (pelo menos 1 de cada por pedido)"
+    assert emit_e >= len(ensaio["erro_log"]) >= 1 and exe_e >= 1, f"no erro da geometria: {emit_e} emit e {exe_e} exec (o erro também volta pelo sinal)"
+    assert not ensaio["vivas"], f"{GEO} ainda viva depois de medir no sucesso (falta o join): {ensaio['vivas']}"
 
 
 @AINDA_NAO

@@ -18,10 +18,13 @@ for p in (AQUI.parents[1] / "viewport_qrhi", AQUI.parents[1]):
 
 BLOCO_ALVO = 22  # bloco das 3 peças pesadas do arquivo pesado (lote 60 §7)
 LIM_ATRASO_S, LIM_SILENCIO_S, LIM_CRESC_MB, LIM_BASE_MB = 0.5, 20.0, 500.0, 50.0  # critérios de parada do lote 60/61; só são lidos
+G_MB, TETO_MB = 1000.0, 6000.0  # os do produto (G_CRESCIMENTO_MB e o teto); a sonda só os lê, nunca os muda
 CAMPOS = ("rotulo", "fios", "bloco", "estado", "blocos", "registro_reinicio", "reinicios", "filhos", "pico_filhos_mb", "tempos",
           "msgs_nao_feito", "msgs_visto_so_no_fim", "filhos_vivos_juntos", "conta_a_mb", "conta_b_mb", "pico_pai_mb", "m5_atraso_max_ms",
           "m5_atraso_p95_ms", "pecas_com_malha", "triangulos", "vertices", "sem_malha", "simplificadas", "pecas_modo_isolado", "abrir_s", "parada")
-PARADAS = ("fonte_vigia_bloco_alvo", "tarde_zero", "atraso_armar_bloco_alvo_ok", "max_silencio_ok", "crescimento_ok", "primeira_vs_base_ok")
+PARADAS = ("fonte_vigia_bloco_alvo", "tarde_zero", "atraso_armar_bloco_alvo_ok", "max_silencio_ok", "crescimento_ok", "primeira_vs_base_ok",
+            "base_vs_pos_emitir_ok", "pos_emitir_vs_fim_ok")
+INFORMATIVAS = ("base_vs_fim_ok",)  # (d) do lote 63: calculada e gravada, mas não para o ensaio (lote 65 §4)
 
 
 def _nums(itens, chave):
@@ -44,12 +47,21 @@ def calcular_parada(r, alvo=BLOCO_ALVO):
     cresc = [_topo(b) - b["base_mb"] for b in blocos
              if b.get("bloco") not in (alvo, primeiro.get(b.get("filho"))) and b.get("base_mb") is not None and _topo(b) is not None]
     pares = [(b["primeira_mb"], b["base_mb"]) for b in blocos if b.get("primeira_mb") is not None and b.get("base_mb") is not None]
+    seguintes = [(a, b) for a in blocos for b in blocos  # N e N+1 do mesmo filho
+                 if a.get("filho") == b.get("filho") and None not in (a.get("bloco"), b.get("bloco")) and b["bloco"] == a["bloco"] + 1]
+    d_antigo = [(a["fim_mb"], b["base_mb"]) for a, b in seguintes if a.get("fim_mb") is not None and b.get("base_mb") is not None]
+    d_novo = [(a["pos_emitir_mb"], b["base_mb"]) for a, b in seguintes if a.get("pos_emitir_mb") is not None and b.get("base_mb") is not None]
+    sobra = [b["pos_emitir_mb"] - b["fim_mb"] for b in blocos if b.get("pos_emitir_mb") is not None and b.get("fim_mb") is not None]
+    leituras = [b[c] for b in blocos for c in ("fim_mb", "pos_emitir_mb", "base_mb", "max_mb") if b.get(c) is not None]
     return {"fonte_vigia_bloco_alvo": any(g.get("fonte") == "vigia" and g.get("bloco") == alvo for g in regs),  # falso também quando não houve reinício
             "tarde_zero": not any(b.get("tarde") for b in blocos) and not any(g.get("decisao_tarde") for g in regs),
             "atraso_armar_bloco_alvo_ok": max(atraso) <= LIM_ATRASO_S if atraso else None,
             "max_silencio_ok": max(silencio) < LIM_SILENCIO_S if silencio else None,
             "crescimento_ok": max(cresc) <= LIM_CRESC_MB if cresc else None,
-            "primeira_vs_base_ok": all(abs(p - b) <= LIM_BASE_MB for p, b in pares) if pares else None}
+            "primeira_vs_base_ok": all(abs(p - b) <= LIM_BASE_MB for p, b in pares) if pares else None,
+            "base_vs_fim_ok": all(abs(b - f) <= LIM_BASE_MB for f, b in d_antigo) if d_antigo else None,  # (d), informativa
+            "base_vs_pos_emitir_ok": all(abs(b - p) <= LIM_BASE_MB for p, b in d_novo) if d_novo else None,  # (d′)
+            "pos_emitir_vs_fim_ok": (all(x < G_MB for x in sobra) and all(x < TETO_MB for x in leituras)) if sobra else None}  # (e)
 
 
 def montar(resumo, medido, amostras, isolado, rotulo, fios, bloco, alvo=BLOCO_ALVO):
@@ -119,22 +131,33 @@ def auto_teste():
     """Números inventados nos dois lados de cada limite; também confere que todo campo sai (null quando falta)."""
     def b(n, f=1, base=1000, mx=1100, **kw):
         return {"bloco": n, "filho": f, "base_mb": base, "max_mb": mx, "fim_mb": mx, "atraso_armar_s": 0.1, "max_silencio_s": 1.0,
-                "primeira_mb": base, "tarde": False, **kw}
+                "primeira_mb": base, "tarde": False, "pos_emitir_mb": base, **kw}
     bom = {"blocos": [b(1), b(2), b(22, atraso_armar_s=0.5), b(23, f=2, base=900, mx=1400)],
            "registro_reinicio": [{"bloco": 22, "fonte": "vigia", "decisao_tarde": False, "max_silencio_s": 19.9}]}
-    assert calcular_parada(bom) == dict.fromkeys(PARADAS, True), calcular_parada(bom)
+    def criterios(r):  # só os que param o ensaio (as informativas ficam de fora)
+        return {k: v for k, v in calcular_parada(r).items() if k in PARADAS}
+    assert criterios(bom) == dict.fromkeys(PARADAS, True), calcular_parada(bom)
+    assert calcular_parada(bom)["base_vs_fim_ok"] is False  # (d) antigo: gravado como falso e não para (fim 1100 contra base 1000)
     ruins = {"fonte_vigia_bloco_alvo": [{"registro_reinicio": [{"bloco": 22, "fonte": "gancho"}]}, {"registro_reinicio": [{"bloco": 21, "fonte": "vigia"}]}, {"registro_reinicio": []}],
              "tarde_zero": [{"blocos": [b(1, tarde=True)]}, {"registro_reinicio": [{"bloco": 22, "fonte": "vigia", "decisao_tarde": True}]}],
              "atraso_armar_bloco_alvo_ok": [{"blocos": [b(22, atraso_armar_s=0.51)]}],
              "max_silencio_ok": [{"blocos": [b(1, max_silencio_s=20.0)]}, {"registro_reinicio": [{"bloco": 22, "fonte": "vigia", "max_silencio_s": 25}]}],
              "crescimento_ok": [{"blocos": [b(1), b(2, mx=1501)]}, {"blocos": [b(1), b(3, mx=None, fim_mb=1700)]}],
-             "primeira_vs_base_ok": [{"blocos": [b(1, primeira_mb=1051)]}, {"blocos": [b(1, primeira_mb=949)]}]}
+             "primeira_vs_base_ok": [{"blocos": [b(1, primeira_mb=1051)]}, {"blocos": [b(1, primeira_mb=949)]}],
+             "base_vs_pos_emitir_ok": [{"blocos": [b(1, pos_emitir_mb=1050.1), b(2)]}, {"blocos": [b(1, pos_emitir_mb=949.9), b(2)]}],
+             "pos_emitir_vs_fim_ok": [{"blocos": [b(1, mx=1000, pos_emitir_mb=2000)]}, {"blocos": [b(1, pos_emitir_mb=1000, mx=None, fim_mb=6000)]}]}
     for nome, lista in ruins.items():
         for ruim in lista:
             assert calcular_parada({**bom, **ruim})[nome] is False, (nome, ruim)
-    assert calcular_parada({**bom, "blocos": [b(1, primeira_mb=1050), b(2, mx=1500), b(22, atraso_armar_s=0.5)]}) == dict.fromkeys(PARADAS, True)  # no limite exato passa
+    assert criterios({**bom, "blocos": [b(1, primeira_mb=1050), b(2, mx=1500), b(22, atraso_armar_s=0.5)]}) == dict.fromkeys(PARADAS, True)  # no limite exato passa
+    assert criterios({"blocos": [b(1, pos_emitir_mb=1050), b(2)]})["base_vs_pos_emitir_ok"] is True  # (d′) = 50 passa
+    assert criterios({"blocos": [b(1, mx=1000, fim_mb=1000, pos_emitir_mb=1999), b(2)]})["pos_emitir_vs_fim_ok"] is True  # (e) 999 passa
+    assert criterios({"blocos": [b(1, mx=1000, fim_mb=1000, pos_emitir_mb=2000), b(2)]})["pos_emitir_vs_fim_ok"] is False  # (e) 1000 para
+    assert criterios({"blocos": [b(1, base=5999, mx=5999, fim_mb=5999, pos_emitir_mb=5999)]})["pos_emitir_vs_fim_ok"] is True
+    assert criterios({"blocos": [b(1, base=5999, mx=6000, fim_mb=5999, pos_emitir_mb=5999)]})["pos_emitir_vs_fim_ok"] is False  # leitura 6000 para
+    assert criterios({"blocos": [b(1, pos_emitir_mb=None)]})["pos_emitir_vs_fim_ok"] is None  # sem a medida, sem julgamento
     assert calcular_parada({"blocos": [b(2, mx=2000), b(22, mx=9000)]})["crescimento_ok"] is None  # 1º bloco do filho e bloco alvo não contam
-    assert calcular_parada({}) == dict.fromkeys(PARADAS) | {"fonte_vigia_bloco_alvo": False, "tarde_zero": True}
+    assert criterios({}) == dict.fromkeys(PARADAS) | {"fonte_vigia_bloco_alvo": False, "tarde_zero": True}
     from types import SimpleNamespace as NS
     assert set(montar(None, {}, [], [], "x", 1, 1)) == set(CAMPOS)
     res = NS(estado="concluido", blocos=[], registro_reinicio=[], reinicios=[], filhos=1, pico_filhos_mb=[10.0], tempos={"decisao_s": 1.0},

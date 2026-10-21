@@ -399,6 +399,8 @@ jobs:
 
   # Informativo (T23a): as medições das threads saíram do windows-viewport-a para não alongar a fila. Fora do `needs` do `windows`; não bloqueia o merge.
   windows-medicoes:
+    needs: windows  # T23c: informativo; começa depois da fila crítica para não tomar vaga de máquina dela
+    if: ${{ !cancelled() }}
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
@@ -537,6 +539,8 @@ jobs:
 
   # Informativo: fora da regra de bloqueio e fora do caminho do `windows` (a sonda esgota 3 min por conta própria).
   windows-sonda:
+    needs: windows  # T23c: informativo; começa depois da fila crítica para não tomar vaga de máquina dela
+    if: ${{ !cancelled() }}
     runs-on: windows-latest
     timeout-minutes: 60
     steps:

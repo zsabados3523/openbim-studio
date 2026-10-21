@@ -36,6 +36,7 @@
 #include <cmath>
 #include <condition_variable>
 #include <cstring>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -53,7 +54,7 @@ namespace obim {
 using Rel = std::chrono::steady_clock;
 double agora_ms();  // motor.cpp
 extern const unsigned char QSB_VERT[], QSB_FRAG[]; extern const size_t QSB_VERT_N, QSB_FRAG_N;  // motor.cpp (QSB da S03, embutidos pelo CMake)
-struct Estatisticas { size_t bytes_copia, lotes, triangulos, vertices; int64_t fatias_enviadas; int triangulos_na_placa, contextos, superficies_soltas, solturas_atrasadas; size_t nao_partidos, pecas_maiores_que_c; };
+struct Estatisticas { size_t bytes_copia, lotes, triangulos, vertices; int64_t fatias_enviadas; int triangulos_na_placa, contextos, superficies_soltas, solturas_atrasadas; size_t nao_partidos, pecas_maiores_que_c; int64_t geracao; };
 constexpr size_t ORCAMENTO_BYTES = 2u << 20;  // por quadro (cabe em ~1 ms no software); lote maior é partido em fatias
 constexpr auto ORCAMENTO_TEMPO = std::chrono::milliseconds(4);
 
@@ -101,7 +102,7 @@ class Motor {
   Estatisticas estatisticas() {
     std::lock_guard<std::mutex> l(m_);  // Motor::m_ e, dentro de totais(), DadosCena::m_: sempre nesta ordem
     const Totais t = cena_.totais();
-    return {t.bytes, t.lotes, t.triangulos, t.vertices, fatias_.load(), tri_placa.load(), contextos.load(), superficies_soltas.load(), solturas_atrasadas.load(), t.nao_partidos, t.pecas_maiores_que_c};
+    return {t.bytes, t.lotes, t.triangulos, t.vertices, fatias_.load(), tri_placa.load(), contextos.load(), superficies_soltas.load(), solturas_atrasadas.load(), t.nao_partidos, t.pecas_maiores_que_c, t.ger};
   }
   std::vector<std::tuple<double, int64_t>> relogio() {
     std::vector<std::tuple<double, int64_t>> r; size_t n;
@@ -142,13 +143,16 @@ class Motor {
     }
     return true;
   }
-  struct L { std::unique_ptr<QRhiBuffer> vb, ib; quint32 n; };
-  struct Pend { std::shared_ptr<Dados> d; L e; size_t voff = 0, ioff = 0; };  // lote em envio, em fatias
+  struct L { std::unique_ptr<QRhiBuffer> vb, ib; quint32 n = 0; };
+  struct Pend { std::shared_ptr<Dados> d; L e; size_t voff = 0, ioff = 0; size_t pos = 0; };  // lote em envio, em fatias; `pos`: posição dele na cena
+  struct Slot { std::shared_ptr<Dados> d; L e; };  // o que está (ou ficou pronto) na placa numa posição da cena
   struct Gpu {  // a ordem importa: o destruidor libera de baixo para cima e a QRhi por último
     std::unique_ptr<QRhi> rhi; std::unique_ptr<QRhiSwapChain> sc; std::unique_ptr<QRhiRenderBuffer> ds;
     std::unique_ptr<QRhiRenderPassDescriptor> rp; std::unique_ptr<QRhiBuffer> ub; std::unique_ptr<QRhiShaderResourceBindings> srb;
-    std::unique_ptr<QRhiGraphicsPipeline> pipe; std::vector<L> lotes; bool pronta = false;
-    Cursor cur; Pend pend;  // o que a fila já entregou e o lote pela metade (somem junto com a placa: a perda de contexto reenvia tudo)
+    std::unique_ptr<QRhiGraphicsPipeline> pipe; bool pronta = false;
+    // T30b2: a placa é uma visão POR POSIÇÃO do instantâneo da cena. `pos`: o que o desenho usa (completo); `prontos`: versões novas já completas à espera da
+    // entrada atômica; `pend`: a que está sendo enviada. Tudo some junto com a placa: a perda de contexto reenvia tudo.
+    std::vector<Slot> pos; std::map<size_t, Slot> prontos; Pend pend; int64_t ger = -1;
   };
   bool criar(Gpu& g) {
     QRhi::Flags fl;  // renderizador por software só com a variável do Qt (o CI a liga no WARP)
@@ -198,31 +202,58 @@ class Motor {
     ++contextos; tri_placa = 0; seq_placa_ = 0;
     return true;
   }
-  void enviar(Gpu& g, QRhiResourceUpdateBatch* rub) {  // orçamento por quadro; sempre da cópia compacta; só lotes COMPLETOS entram em `lotes`
-    const int64_t ger = cena_.geracao();
-    if (ger != g.cur.ger) { g.lotes.clear(); g.pend = {}; g.cur = Cursor{0, ger}; tri_placa = 0; seq_placa_ = 0; }  // limpar(): a placa volta a zero
+  // T30b2: compara o instantâneo da cena com a placa, por posição. Lote novo (posição além da placa) e sub-lote trocado (mesma posição, ponteiro diferente) são
+  // reenviados; os demais não. Fila: novos antes dos trocados. Sem trocado no plano, cada novo entra ao completar (prefixo contínuo, como antes). Com trocado, o
+  // lote novo e os trocados entram JUNTOS, no quadro em que o último completa, e só então a sequência da placa avança (nunca duas paredes nem nenhuma).
+  void enviar(Gpu& g, QRhiResourceUpdateBatch* rub) {  // orçamento por quadro; sempre da cópia compacta; só lotes COMPLETOS entram no desenho
+    const Instantaneo s = cena_.instantaneo();  // uma chamada só, sem segurar Motor::m_ (ordem Motor::m_ → DadosCena::m_ → mc_ intocada)
+    if (s.ger != g.ger || s.lotes.size() < g.pos.size()) {  // limpar() (ou perda de contexto): a placa volta a zero e tudo é reenviado
+      g.pos.clear(); g.prontos.clear(); g.pend = {}; g.ger = s.ger; tri_placa = 0; seq_placa_ = 0;
+    }
+    const size_t n = s.lotes.size();
+    auto vigente = [&](size_t q, const auto& d) { return q < n && s.lotes[q] == d; };  // falso = troca repetida: a versão preparada ficou velha
+    for (auto it = g.prontos.begin(); it != g.prontos.end();) it = vigente(it->first, it->second.d) ? std::next(it) : g.prontos.erase(it);
+    if (g.pend.d && !vigente(g.pend.pos, g.pend.d)) g.pend = {};
+    std::vector<size_t> fila; bool trocado = false;  // novos primeiro, depois os trocados
+    auto falta = [&](size_t p) { return !g.prontos.count(p) && !(g.pend.d && g.pend.pos == p); };
+    for (size_t p = g.pos.size(); p < n; ++p) if (falta(p)) fila.push_back(p);
+    for (size_t p = 0; p < g.pos.size(); ++p) if (s.lotes[p] != g.pos[p].d) { trocado = true; if (falta(p)) fila.push_back(p); }
     size_t gasto = 0; const auto t0 = Rel::now();
+    auto prox = fila.begin();
     while (gasto < ORCAMENTO_BYTES && Rel::now() - t0 < ORCAMENTO_TEMPO) {
       Pend& p = g.pend;
       if (!p.d) {
-        if (!(p.d = cena_.proximo(g.cur))) break;
-        if (p.d->i.empty()) { seq_placa_ = p.d->seq; p = {}; continue; }  // lote sem triângulos: já "na placa"
-        p.e.n = quint32(p.d->i.size());
-        p.e.vb.reset(g.rhi->newBuffer(QRhiBuffer::Immutable, QRhiBuffer::VertexBuffer, quint32(p.d->v.size())));
-        p.e.ib.reset(g.rhi->newBuffer(QRhiBuffer::Immutable, QRhiBuffer::IndexBuffer, quint32(p.d->i.size() * 4)));
-        if (!p.e.vb->create() || !p.e.ib->create()) {  // achado 5: o lote NÃO se perde; volta à fila e repete no quadro seguinte
-          --g.cur.n; p = {}; { std::lock_guard<std::mutex> l(m_); info_ = "AVISO: create() de buffer falhou; repetindo no quadro seguinte"; } return;
+        if (prox == fila.end()) break;
+        const size_t q = *prox++; const auto& d = s.lotes[q];
+        if (d->i.empty()) { g.prontos[q] = {d, {}}; continue; }  // lote sem triângulos: já "na placa"
+        p.pos = q; p.voff = p.ioff = 0; p.e.n = quint32(d->i.size());
+        p.e.vb.reset(g.rhi->newBuffer(QRhiBuffer::Immutable, QRhiBuffer::VertexBuffer, quint32(d->v.size())));
+        p.e.ib.reset(g.rhi->newBuffer(QRhiBuffer::Immutable, QRhiBuffer::IndexBuffer, quint32(d->i.size() * 4)));
+        if (!p.e.vb->create() || !p.e.ib->create()) {  // achado 5: o lote NÃO se perde; continua pendente e repete no quadro seguinte
+          --prox; p = {}; { std::lock_guard<std::mutex> l(m_); info_ = "AVISO: create() de buffer falhou; repetindo no quadro seguinte"; } break;
         }
+        p.d = d;
       }
       const bool vert = p.voff < p.d->v.size();  // primeiro os vértices, depois os índices
       const size_t total = vert ? p.d->v.size() : p.d->i.size() * 4, off = vert ? p.voff : p.ioff, un = vert ? BYTES_VERTICE : 4;
-      const size_t n = (std::min)(total - off, (std::max)(un, (ORCAMENTO_BYTES - gasto) / un * un));
+      const size_t m = (std::min)(total - off, (ORCAMENTO_BYTES - gasto) / un * un);  // fatia em múltiplo de `un`: o quadro nunca passa de ORCAMENTO_BYTES
+      if (!m) break;
       const unsigned char* dados = vert ? p.d->v.data() : reinterpret_cast<const unsigned char*>(p.d->i.data());
-      rub->uploadStaticBuffer(vert ? p.e.vb.get() : p.e.ib.get(), quint32(off), quint32(n), dados + off);
-      (vert ? p.voff : p.ioff) += n; gasto += n; ++fatias_;
-      if (p.voff == p.d->v.size() && p.ioff == p.d->i.size() * 4) {  // completo: entra no desenho e a sequência avança (prefixo contínuo)
-        tri_placa += int(p.d->i.size() / 3); seq_placa_ = p.d->seq; g.lotes.push_back(std::move(p.e)); p = {};
-      }
+      rub->uploadStaticBuffer(vert ? p.e.vb.get() : p.e.ib.get(), quint32(off), quint32(m), dados + off);
+      (vert ? p.voff : p.ioff) += m; gasto += m; ++fatias_;
+      if (p.voff == p.d->v.size() && p.ioff == p.d->i.size() * 4) { g.prontos[p.pos] = {std::move(p.d), std::move(p.e)}; p = {}; }  // completo, ainda fora do desenho
+    }
+    // Entrada: sem trocado, o prefixo contínuo de novos prontos; com trocado, tudo de uma vez e só quando nada falta.
+    const bool tudo = trocado && prox == fila.end() && !g.pend.d;
+    auto entrar = [&](Slot&& sl, size_t q) {
+      const int novo = int(sl.d->i.size() / 3);
+      if (q == g.pos.size()) { tri_placa += novo; g.pos.push_back(std::move(sl)); }
+      else { tri_placa += novo - int(g.pos[q].d->i.size() / 3); g.pos[q] = std::move(sl); }
+      seq_placa_ = (std::max)(seq_placa_, g.pos.back().d->seq);  // sequência = a do último lote que a placa tem por inteiro
+    };
+    if (tudo) { for (auto& [q, sl] : g.prontos) entrar(std::move(sl), q); g.prontos.clear(); }
+    else if (!trocado) {
+      for (auto it = g.prontos.find(g.pos.size()); it != g.prontos.end(); it = g.prontos.find(g.pos.size())) { entrar(std::move(it->second), it->first); g.prontos.erase(it); }
     }
   }
   enum class Fim { Parar, Perdido };
@@ -284,7 +315,8 @@ class Motor {
       cb->setGraphicsPipeline(g.pipe.get());
       cb->setViewport({0, 0, float(alvo.width()), float(alvo.height())});
       cb->setShaderResources();
-      for (auto& e : g.lotes) {
+      for (auto& sl : g.pos) {
+        auto& e = sl.e; if (!e.n) continue;
         const QRhiCommandBuffer::VertexInput vi(e.vb.get(), 0);
         cb->setVertexInput(0, 1, &vi, e.ib.get(), 0, QRhiCommandBuffer::IndexUInt32);
         cb->drawIndexed(e.n);

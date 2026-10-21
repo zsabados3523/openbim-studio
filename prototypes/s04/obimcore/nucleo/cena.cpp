@@ -163,7 +163,7 @@ int64_t DadosCena::atualizar(const LoteBruto* lote_novo, std::set<std::string> r
       if (novos.empty()) novos.push_back(std::make_shared<Dados>());  // marcador vazio: leva a sequência até a placa (prefixo contínuo)
       for (auto& n : novos) { n->seq = seq = ++seq_; ls.push_back(n); }  // sub-lotes com sequências seguidas; devolve a do último
       lotes_ = std::move(ls); ++ver_;
-      if (mudou) { ++ger_; recalcular_caixa(); }  // a placa recomeça da cópia compacta (como limpar()); só acrescentar não precisa
+      if (mudou) recalcular_caixa();  // T30b2: a troca NÃO sobe ger_ (o motor reenvia por posição, comparando ponteiros); só limpar() sobe
       else for (auto& n : novos) for (int a = 0; a < 3; ++a) { cmin_[a] = (std::min)(cmin_[a], n->cmin[a]); cmax_[a] = (std::max)(cmax_[a], n->cmax[a]); }
       break;
     }
@@ -177,12 +177,6 @@ void DadosCena::limpar() {
   for (int a = 0; a < 3; ++a) { cmin_[a] = 1e30; cmax_[a] = -1e30; }
 }
 
-std::shared_ptr<Dados> DadosCena::proximo(Cursor& c) {
-  std::lock_guard<std::mutex> l(m_);
-  if (c.ger != ger_) return nullptr;  // limpar() no meio do quadro: quem chama zera a placa no próximo quadro
-  return c.n < lotes_.size() ? lotes_[c.n++] : nullptr;
-}
-
 bool DadosCena::caixa(double mn[3], double mx[3]) {
   std::lock_guard<std::mutex> l(m_);
   std::copy(cmin_, cmin_ + 3, mn); std::copy(cmax_, cmax_ + 3, mx);
@@ -190,7 +184,7 @@ bool DadosCena::caixa(double mn[3], double mx[3]) {
 }
 
 Totais DadosCena::totais() {
-  std::lock_guard<std::mutex> l(m_); Totais t; t.lotes = lotes_.size();
+  std::lock_guard<std::mutex> l(m_); Totais t; t.lotes = lotes_.size(); t.ger = ger_;
   for (auto& d : lotes_) { t.nao_partidos += d->nao_partido; t.pecas_maiores_que_c += d->peca_maior_que_c; t.triangulos += d->i.size() / 3; t.vertices += d->v.size() / BYTES_VERTICE;
     t.bytes += d->v.capacity() + d->i.capacity() * 4 + d->objs.capacity() * sizeof(Objeto);
     for (auto& o : d->objs) if (o.guid.capacity() > 15) t.bytes += o.guid.capacity() + 1; }  // texto do GlobalId fora do std::string (T10c achado 6)

@@ -11,7 +11,8 @@ RequestExecutionLevel user
 InstallDir "$LOCALAPPDATA\Programs\OpenBIM Studio"
 ; reinstalar lembra a pasta escolhida da vez anterior (chave que o próprio instalador grava; /D= continua mandando)
 InstallDirRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\OpenBIM Studio" "InstallLocation"
-SetCompressor /SOLID lzma
+; T23e: sem /SOLID, para o env.tgz (já gzip, 296 MB) entrar sem recompressão (SetCompress off abaixo); o resto (~7 MB) segue em LZMA.
+SetCompressor lzma
 SetCompressorDictSize 64
 
 !define MUI_ABORTWARNING
@@ -109,7 +110,9 @@ Section "OpenBIM Studio"
   ; ambiente conda: um tar.gz único, extraído com o tar.exe do Windows (10 e 11)
   InitPluginsDir
   DetailPrint "Copiando o pacote do programa (cerca de 310 MB)..."
+  SetCompress off
   File "/oname=$PLUGINSDIR\env.tgz" "${ENV_TGZ}"
+  SetCompress auto
   DetailPrint "Extraindo os arquivos do programa; isto leva de 1 a 3 minutos e a janela pode parecer parada..."
   nsExec::ExecToLog '"$SYSDIR\tar.exe" -xzf "$PLUGINSDIR\env.tgz" -C "$INSTDIR"'
   Pop $0

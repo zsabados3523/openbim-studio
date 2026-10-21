@@ -3,6 +3,7 @@
 //  1. O Python é o dono do arquivo; o C++ pega emprestado só durante a chamada (o objeto Python fica referenciado até o retorno).
 //  2. O C++ nunca guarda o endereço do arquivo nem ponteiros de entidades entre chamadas.
 //  3. Só a thread do comando chama; as funções curtas mantêm o bloqueio, `malhas` (ponte_malha.cpp) o solta na geometria.
+//     Com a sessão, vale o ADR-004 §5.1 regra 3 (a geometria roda noutra thread, com a trava conferida).
 // Único arquivo que inclui ifcparse/file.h (custo de compilação alto).
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>

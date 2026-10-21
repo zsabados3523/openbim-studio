@@ -24,12 +24,25 @@ nb::object matriz(std::vector<T>&& v, size_t colunas) {  // o numpy fica dono do
 
 void registrar_malhas(nb::module_& m) {
     m.def("malhas", [](nb::object arquivo, const std::vector<std::string>& guids) {
-        ifcopenshell::file* f = emprestar(arquivo);  // com o bloqueio: toca em objeto Python
+        // Com a SessaoModelo (P1; ADR-004 §5.1 regra 3): confere a trava COM o bloqueio (o erro de _obimcore_entrar sobe como está) e chama
+        // _obimcore_sair com o bloqueio de volta, em todo caminho. O C++ nunca pega a trava do modelo. O caminho do ifcopenshell.file não muda.
+        nb::object sessao;
+        nb::object alvo = arquivo;  // fica referenciado até o fim
+        if (!PyObject_IsInstance(arquivo.ptr(), nb::module_::import_("ifcopenshell.ifcopenshell_wrapper").attr("file").ptr()) &&
+            nb::hasattr(arquivo, "_obimcore_entrar")) {
+            sessao = arquivo;
+            alvo = sessao.attr("_obimcore_entrar")();
+        }
         std::map<std::string, obim::Malha> res;
-        {
+        try {
+            ifcopenshell::file* f = emprestar(alvo);  // com o bloqueio: toca em objeto Python
             nb::gil_scoped_release solto;  // daqui até o fim do bloco: nenhum objeto Python (falha = std::invalid_argument = ValueError)
             res = obim::malhas_do_arquivo(f, guids);
+        } catch (...) {
+            if (sessao.is_valid()) sessao.attr("_obimcore_sair")();
+            throw;
         }
+        if (sessao.is_valid()) sessao.attr("_obimcore_sair")();
         nb::dict d;
         for (auto& [g, ml] : res) {
             nb::dict item;

@@ -131,7 +131,7 @@ void registrar_viewport(nb::module_& m) {
         const Estatisticas s = v.estatisticas(); nb::dict r;
         r["bytes_copia"] = s.bytes_copia; r["lotes"] = s.lotes; r["triangulos"] = s.triangulos; r["vertices"] = s.vertices; r["fatias_enviadas"] = s.fatias_enviadas;
         r["triangulos_na_placa"] = s.triangulos_na_placa; r["contextos"] = s.contextos;
-        r["superficies_soltas"] = s.superficies_soltas; r["solturas_atrasadas"] = s.solturas_atrasadas; r["nao_partidos"] = s.nao_partidos; r["pecas_maiores_que_c"] = s.pecas_maiores_que_c;
+        r["superficies_soltas"] = s.superficies_soltas; r["solturas_atrasadas"] = s.solturas_atrasadas; r["nao_partidos"] = s.nao_partidos; r["pecas_maiores_que_c"] = s.pecas_maiores_que_c; r["geracao"] = s.geracao;
         return r;
       })
       .def("perder_contexto", &Viewport::perder_contexto).def("info", &Viewport::info)

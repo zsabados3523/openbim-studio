@@ -17,7 +17,6 @@ import numpy as np
 import pytest
 import s04_fluxo_aux as aux  # noqa: F401  (põe prototypes/s04/fluxo_a, scripts e app no caminho)
 
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="P1: obimcore.malhas ainda não aceita a SessaoModelo")
 OBRIGATORIO = os.environ.get("OBIM_S04_P1_OBRIGATORIO") == "1"
 
 
@@ -55,7 +54,6 @@ def test_p1_caminho_do_arquivo_segue_igual_e_tipo_errado_e_typeerror(base):  # p
         oc.malhas(object(), leves)
 
 
-@AINDA_NAO
 def test_p1_sem_trava_erro_claro_e_nada_preso(base):
     oc, f, pesada, leves = base
     sm = _sm()
@@ -65,7 +63,6 @@ def test_p1_sem_trava_erro_claro_e_nada_preso(base):
     assert s.estado()["em_uso_cpp"] == 0
 
 
-@AINDA_NAO
 def test_p1_com_ler_resultado_igual_ao_do_arquivo(base):
     oc, f, pesada, leves = base
     s = _sm().SessaoModelo(f)
@@ -74,7 +71,6 @@ def test_p1_com_ler_resultado_igual_ao_do_arquivo(base):
     assert s.estado()["em_uso_cpp"] == 0
 
 
-@AINDA_NAO
 def test_p1_escritor_ativo_bloqueia_outra_thread_e_o_emprestimo_libera(base):
     oc, f, pesada, leves = base
     sm = _sm()
@@ -100,7 +96,6 @@ def test_p1_escritor_ativo_bloqueia_outra_thread_e_o_emprestimo_libera(base):
     assert s.estado()["em_uso_cpp"] == 0
 
 
-@AINDA_NAO
 def test_p1_erro_na_geometria_ainda_chama_sair(base):
     oc, f, pesada, leves = base
     s = _sm().SessaoModelo(f)
@@ -110,7 +105,6 @@ def test_p1_erro_na_geometria_ainda_chama_sair(base):
         assert s.estado()["em_uso_cpp"] == 0, "a geometria falhou e o C++ não chamou _obimcore_sair"
 
 
-@AINDA_NAO
 def test_p1_emprestimo_que_falha_ainda_chama_sair_e_entrar_que_falha_nao(base):  # lote 70 §2.2 item 2: senão em_uso_cpp fica preso e o produto trava
     oc, f, pesada, leves = base
 
@@ -138,7 +132,6 @@ def test_p1_emprestimo_que_falha_ainda_chama_sair_e_entrar_que_falha_nao(base): 
     assert recusada.saidas == 0, f"_obimcore_entrar falhou e o C++ chamou _obimcore_sair {recusada.saidas} vezes (nada a soltar)"
 
 
-@AINDA_NAO
 def test_p1_bloqueio_solto_durante_a_geometria_da_sessao(base):  # R1-h, regra 4 do lote 9 §1.4, agora pelo caminho da sessão
     oc, f, pesada, leves = base
     s, marca, fim = _sm().SessaoModelo(f), [], {}
@@ -161,7 +154,6 @@ def test_p1_bloqueio_solto_durante_a_geometria_da_sessao(base):  # R1-h, regra 4
     assert gap < 0.05, f"a thread principal ficou {gap * 1000:.0f} ms parada durante {dur * 1000:.0f} ms de geometria: o C++ não soltou o bloqueio"
 
 
-@AINDA_NAO
 def test_p1_saida_do_emprestimo_espera_a_geometria_do_cpp(base):
     oc, f, pesada, leves = base
     s, fim = _sm().SessaoModelo(f), []

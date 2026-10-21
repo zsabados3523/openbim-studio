@@ -122,6 +122,7 @@ jobs:
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_CI=1  # liga todas as chaves de obrigatório (pulo vira falha; tests/conftest.py) (T04c entregou versao()["registro_ifc4"])
           QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_ponte.py
+          OBIM_S04_P1_OBRIGATORIO=1 QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_p1_trava_oraculo.py tests/test_s04_p1_obimcore_oraculo.py
       - name: Entregar o módulo obimcore e o pytest ao job appimage (T17a; usa a ação de cache que já está fixada)
         shell: bash -elo pipefail {0}
         run: |
@@ -366,6 +367,7 @@ jobs:
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_CI=1  # liga todas as chaves de obrigatório (pulo vira falha; tests/conftest.py) (T04c entregou versao()["registro_ifc4"])
           QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_ponte.py
+          OBIM_S04_P1_OBRIGATORIO=1 QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_p1_trava_oraculo.py tests/test_s04_p1_obimcore_oraculo.py
       - name: Viewport C++ (parte A; S04-T06/T07; bloqueia o merge)
         shell: bash -elo pipefail {0}
         timeout-minutes: 30

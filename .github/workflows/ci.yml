@@ -450,6 +450,22 @@ jobs:
             echo "::error title=medições das threads::caíram:$CAIRAM (as outras seguiram; passo informativo, não bloqueia)"
             exit 1
           fi
+      - name: V1m forma mista, números do Windows (TEMPORÁRIO, informativo; sai antes do merge)
+        shell: bash -elo pipefail {0}
+        continue-on-error: true
+        timeout-minutes: 20
+        run: |
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          export OBIM_S04_TELA_VIRTUAL=1 QSG_RHI_BACKEND=d3d11 QSG_RHI_PREFER_SOFTWARE_RENDERER=1 QT_QPA_PLATFORM=windows RHI=d3d11 LC_ALL=C
+          SAIDA="$(python -c 'import os; print(os.path.abspath("out/v1m-ci"))')"
+          mkdir -p "$SAIDA"
+          COMPACTO='import json,sys; print(json.dumps(json.load(open(sys.argv[1], encoding="utf-8")), separators=(",", ":")))'
+          cd prototypes/s04/fluxo_a
+          for parte in lote pesada; do
+            args="--parte $parte --base 300"; [ $parte = pesada ] && args="$args --aberturas 150"
+            python -c "import sys; sys.path[:0]=['.']; import ifcopenshell, lote; lote.main_mista(sys.argv[1:])" "$SAIDA/$parte.json" $args || echo "CAIU $parte"
+            [ -s "$SAIDA/$parte.json" ] && echo "JSON_COMPACTO v1m-$parte $(python -c "$COMPACTO" "$SAIDA/$parte.json")"
+          done
       - name: Tempo total
         if: always()
         shell: bash

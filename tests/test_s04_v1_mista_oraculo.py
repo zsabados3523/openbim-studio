@@ -285,7 +285,6 @@ def test_v1_ambiente_tela_virtual_e_obimcore():  # sem marcador: com OBIM_S04_V1
 _dentro = lambda t, ini, fim: ini < t < fim  # noqa: E731
 
 
-@AINDA_NAO
 def test_v1_comando_na_janela_e_cada_malha_inteira_na_thread_de_geometria(ensaio):
     r = _ok(ensaio)["r"]
     mal = [x for x in ensaio["log"] if x[0] == "malhas"]
@@ -297,7 +296,6 @@ def test_v1_comando_na_janela_e_cada_malha_inteira_na_thread_de_geometria(ensaio
     assert ensaio["restaurado"], "fluxo_a.api, obimcore.malhas e f.cena voltam a ser os de antes depois do comando"
 
 
-@AINDA_NAO
 def test_v1_regra_3_trava_presa_e_nada_escreve_durante_a_malha(ensaio):
     mal = [x for x in _ok(ensaio)["log"] if x[0] == "malhas"]
     assert mal and all(x[4] for x in mal), "durante a malha a trava do modelo segue presa pelo comando"
@@ -308,7 +306,6 @@ def test_v1_regra_3_trava_presa_e_nada_escreve_durante_a_malha(ensaio):
     assert at and all(x[2] >= mal[0][3] for x in at) and all(x[4] for x in at), "Cena.atualizar depois do resultado, ainda com a trava"
 
 
-@AINDA_NAO
 def test_v1_regra_2_janela_trata_eventos_durante_a_malha_e_a_espera_nao_e_fatia(ensaio):
     r = _ok(ensaio)["r"]
     g = r["geometria"][0]
@@ -320,7 +317,6 @@ def test_v1_regra_2_janela_trata_eventos_durante_a_malha_e_a_espera_nao_e_fatia(
     assert max(x["ms"] for x in fz) < 150 and all(x["op_mais_longa"] != "obimcore.malhas" for x in fz), f"a espera da geometria entrou numa fatia: {max(fz, key=lambda x: x['ms'])}"
 
 
-@AINDA_NAO
 def test_v1_regra_2_resultado_volta_por_sinal_enfileirado_e_qeventloop(ensaio):  # lote 70 §2.1: espera ocupada com processEvents não passa
     n, (emit, exe), (emit_e, exe_e) = len(_ok(ensaio)["r"]["geometria"]), ensaio["mec"], ensaio["erro_mec"]
     assert n >= 1 and emit >= n and exe >= n, f"{n} pedidos de geometria: {emit} emit na {GEO} e {exe} QEventLoop.exec na janela (pelo menos 1 de cada por pedido)"
@@ -328,7 +324,6 @@ def test_v1_regra_2_resultado_volta_por_sinal_enfileirado_e_qeventloop(ensaio): 
     assert not ensaio["vivas"], f"{GEO} ainda viva depois de medir o composto (falta o join): {ensaio['vivas']}"
 
 
-@AINDA_NAO
 def test_v1_regra_4_tratador_durante_a_espera_recebe_modelo_ocupado(ensaio):
     g = _ok(ensaio)["r"]["geometria"][0]
     t = ensaio["tentativas"]
@@ -337,14 +332,12 @@ def test_v1_regra_4_tratador_durante_a_espera_recebe_modelo_ocupado(ensaio):
     assert all(x[1] == "ocupado" for x in t), f"nenhum comando entra no meio (reentrada proibida): {[x for x in t if x[1] != 'ocupado'][:3]}"
 
 
-@AINDA_NAO
 def test_v1_regra_5_nenhum_objeto_qt_fora_da_thread_da_janela(ensaio):
     _ok(ensaio)
     assert ensaio["r"]["geometria"], "sem geometria medida a regra 5 não foi exercitada"
     assert not ensaio["qt_fim"], f"na thread de geometria só `SignalInstance.emit`; nada construído fora da janela: {ensaio['qt_fim'][:5]}"
 
 
-@AINDA_NAO
 def test_v1_erro_na_geometria_sobe_na_janela_e_solta_tudo(ensaio):
     _ok(ensaio)
     assert ensaio["excecao"] == ["RuntimeError", "falha de ensaio na geometria"], f"o erro da thread de geometria sobe igual na janela: {ensaio['excecao']}"
@@ -353,7 +346,6 @@ def test_v1_erro_na_geometria_sobe_na_janela_e_solta_tudo(ensaio):
     assert not e["trava"] and e["restaurado"] and not e["vivas"], f"trava solta, embrulhos restaurados, nenhuma {GEO} viva: {e}"
 
 
-@AINDA_NAO
 def test_v1_composto_roda_os_passos_em_ordem(ensaio):
     c = _ok(ensaio)["composto"]
     assert c == {"cmds": ["a", "b", "c"], "criados": 3, "n_geo": 3}, f"composto: um executar_detalhado por passo, em ordem; criados somados: {c}"
@@ -363,7 +355,6 @@ def test_v1_composto_roda_os_passos_em_ordem(ensaio):
     assert pesado == {"cmd": "composto", "passos": [lc(5), {"cmd": "mover", "alvo": "GUIDPESADO", "dx": 0.01, "dy": 0, "dz": 0}, lc(5)]}, pesado
 
 
-@AINDA_NAO
 def test_v1_real_parede_pesada_na_mista(real):
     r = _ok(real)
     p, mal = r["pesada"], [x for x in r["log"] if x[0] == "malhas"]
@@ -378,7 +369,6 @@ def test_v1_real_parede_pesada_na_mista(real):
     assert r["paredes"] == 0 and not r["qt"], f"nenhuma parede entrou no meio; nada de Qt fora da janela: {r['paredes']}, {r['qt'][:3]}"
 
 
-@AINDA_NAO
 def test_v1_real_lote_na_mista_igual_ao_da_forma_2(real):
     r = _ok(real)
     x = r["lote"]

@@ -133,7 +133,6 @@ def test_v1_criterio_1_formas_1_e_2_fluxo_a_e_resto_do_lote_intactos():  # passa
     assert h == INTACTAS, f"mudou o que não pode mudar: {sorted(k for k in h if h[k] != INTACTAS[k])}"
 
 
-@AINDA_NAO
 def test_v1_veredito_mista_igual_a_conta_independente():
     import lote
     vs = [lote.veredito_mista(json.loads(json.dumps(d))) for d in _sinteticos()]
@@ -147,7 +146,6 @@ def test_v1_veredito_mista_igual_a_conta_independente():
     assert falhas == FALHAS, f"cada caso reprova só o que deve: {[(i, a, b) for i, (a, b) in enumerate(zip(falhas, FALHAS)) if a != b]}"
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("parte", ["lote", "pesada"])
 def test_v1_main_mista_grava_e_o_veredito_bate(parte):
     if importlib.util.find_spec("obimcore") is None:

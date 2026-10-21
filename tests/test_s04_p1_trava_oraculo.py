@@ -25,7 +25,6 @@ from pathlib import Path
 import ifcopenshell
 import pytest
 
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="P1: app/openbim_app/sessao_modelo.py ainda não existe")
 APP = Path(__file__).resolve().parent.parent / "app"
 REPOUSO = {"leitores": 0, "escritor": None, "esperando_escrever": 0, "emprestada": False, "em_uso_cpp": 0}
 
@@ -85,7 +84,6 @@ def _ocupado(sm, porta, espera):  # tenta a porta numa outra thread; devolve (ti
     return out["ok"]
 
 
-@AINDA_NAO
 def test_p1_tipos_hierarquia_e_dono_unico():
     sm, s = _nova()
     with pytest.raises(TypeError):
@@ -99,7 +97,6 @@ def test_p1_tipos_hierarquia_e_dono_unico():
             pass
 
 
-@AINDA_NAO
 def test_p1_varios_leitores_ao_mesmo_tempo():
     sm, s = _nova()
     b, vistos = threading.Barrier(3, timeout=3), []
@@ -116,7 +113,6 @@ def test_p1_varios_leitores_ao_mesmo_tempo():
     assert vistos == [("IFC4", 3)] * 3 and s.estado() == REPOUSO
 
 
-@AINDA_NAO
 def test_p1_escritor_exclui_leitores_e_escritores():
     sm, s = _nova()
     with s.escrever() as esc:
@@ -139,7 +135,6 @@ def test_p1_escritor_exclui_leitores_e_escritores():
     assert entrou and entrou[0] >= saiu and "exc" not in out and s.estado() == REPOUSO, "o leitor que esperava entra depois que o escritor sai"
 
 
-@AINDA_NAO
 def test_p1_escritor_espera_o_leitor_e_tem_preferencia():
     sm, s = _nova()
     ordem, solta_r1 = [], threading.Event()
@@ -172,7 +167,6 @@ def test_p1_escritor_espera_o_leitor_e_tem_preferencia():
     assert ordem == ["r1", "w", "r2"] and s.estado() == REPOUSO, ordem
 
 
-@AINDA_NAO
 def test_p1_reentrada_proibida_na_hora_e_sem_travar():
     sm, s = _nova()
     for porta_fora in (s.ler, s.escrever):
@@ -196,7 +190,6 @@ def test_p1_reentrada_proibida_na_hora_e_sem_travar():
     assert s.estado() == REPOUSO
 
 
-@AINDA_NAO
 def test_p1_excecao_solta_a_porta_e_sobe_igual():
     sm, s = _nova()
 
@@ -214,7 +207,6 @@ def test_p1_excecao_solta_a_porta_e_sobe_igual():
     assert s.estado() == REPOUSO
 
 
-@AINDA_NAO
 def test_p1_escrita_e_emprestimo():
     sm, s = _nova()
     with s.escrever() as esc:
@@ -231,7 +223,6 @@ def test_p1_escrita_e_emprestimo():
         esc.arquivo  # noqa: B018  (fora do contexto)
 
 
-@AINDA_NAO
 def test_p1_porta_do_obimcore_confere_quem_chama():
     sm, s = _nova()
     entrar = lambda: (s._obimcore_entrar(), s.estado()["em_uso_cpp"], s._obimcore_sair())[:2]  # noqa: E731
@@ -257,7 +248,6 @@ def test_p1_porta_do_obimcore_confere_quem_chama():
     assert s.estado() == REPOUSO
 
 
-@AINDA_NAO
 def test_p1_porta_do_obimcore_recusa_outra_thread_com_leitor_ativo():  # lote 70 §2.3: o leitor sairia com o C++ de outra thread ainda lendo
     sm, s = _nova()
     dentro, solta = threading.Event(), threading.Event()
@@ -283,7 +273,6 @@ def test_p1_porta_do_obimcore_recusa_outra_thread_com_leitor_ativo():  # lote 70
     assert s.estado() == REPOUSO
 
 
-@AINDA_NAO
 def test_p1_reentrada_com_espera_none_falha_na_hora():  # lote 70 §2.3 (recomendação): numa thread com join(2), um erro aqui falha e não trava o pytest
     sm, s = _nova()
 
@@ -303,7 +292,6 @@ def test_p1_reentrada_com_espera_none_falha_na_hora():  # lote 70 §2.3 (recomen
     assert not th.is_alive() and out.get("ok") == ["na hora"] * 4, f"reentrada com espera=None: {out or 'travou'}"
 
 
-@AINDA_NAO
 def test_p1_saida_do_emprestimo_espera_o_cpp():
     sm, s = _nova()
     fim = []
@@ -323,7 +311,6 @@ def test_p1_saida_do_emprestimo_espera_o_cpp():
     assert "exc" not in out and s.estado() == REPOUSO
 
 
-@AINDA_NAO
 def test_p1_carga_leitores_e_escritores_sem_mistura_nem_trava():
     sm, s = _nova()
     viol, ativo, n = [], {"w": 0, "r": 0}, threading.Lock()

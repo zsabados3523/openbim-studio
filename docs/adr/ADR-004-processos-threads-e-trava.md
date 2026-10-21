@@ -2,7 +2,7 @@
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 # ADR-004: Processos, threads e trava do modelo
-- Status: perguntas 1 a 3 **decididas pelo PO** (2026-10-15, no chat do projeto: "Aprovar tudo"; opções 1C, 2C e 3C). Pergunta 4 (§5.1, em que thread roda um comando longo): **direção do PO** (2026-10-21, "forma mista"), **condicionada ao cartão de validação V1** (§5.1); o texto da atualização de 2026-10-21 depende da aprovação do PO pelo resumo de 5 linhas. Os números N1 a N4 **seguem sem medida** (§2). Não passa a "aceito" antes do V1 e dessa aprovação.
+- Status: perguntas 1 a 3 **decididas pelo PO** (2026-10-15, no chat do projeto: "Aprovar tudo"; opções 1C, 2C e 3C). Pergunta 4 (§5.1, em que thread roda um comando longo): **direção do PO** (2026-10-21, "forma mista"), **condicionada ao cartão de validação V1** (§5.1); texto da atualização de 2026-10-21 aprovado pelo PO no mesmo dia (resumo de 5 linhas). Os números N1 a N4 **seguem sem medida** (§2). Não passa a "aceito" antes do V1 e dessa aprovação.
 - Autor: opus (cartão F0-RG-01, TA) · Data: 2026-10-15
 - **Atualização de 2026-10-21 (opus, lote 68, cartão F0-S04-T19):** números da S04 em §2; pergunta 4 nova (§5.1); mapa do §6, consequências (§7), decisão (§8), gatilhos (§9) e "não verificado" (§10) revistos; o que deixa de valer em §11. Fontes novas: `reports/F0-S04.md`, `F0-S04-threads.md`, `F0-S04-T15f-diagnostico.md`, `T21`, `T24`, `T29-placa-memoria` (e `-2`), `T29e-ensaio`, `T30-placa`; lotes Opus 57, 62, 65, 66; `fluxo_a/CONTRATO.md` (T15).
 

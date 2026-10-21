@@ -2,7 +2,7 @@
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 # ADR-001: Stack (híbrido Python + C++ ou C++ puro), ponte, pythonocc e Rust
-- Status: **proposto; direção decidida pelo PO** (2026-10-21, no chat: "manter a estrutura híbrida; C++ puro rejeitado como não necessário"). O texto deste ADR ainda depende da aprovação do PO pelo resumo de 5 linhas. Passa a "aceito" só com essa aprovação **e** com a medição de fechamento da S04 (§7, itens A1 e A2).
+- Status: **proposto; direção decidida pelo PO** (2026-10-21, no chat: "manter a estrutura híbrida; C++ puro rejeitado como não necessário"). Texto aprovado pelo PO em 2026-10-21 (resumo de 5 linhas). Passa a "aceito" só com essa aprovação **e** com a medição de fechamento da S04 (§7, itens A1 e A2).
 - Autor: opus (cartão F0-S04-T19, classe TA, lote Opus 68) · Data: 2026-10-21
 - Base: especificação da S04 (`docs/state/arquivo/lotes-1-a-28/LOTE_OPUS_9/resultado.md` §1 a §6: casos R1, metas M1 a M7, regra de leitura §3, esqueleto §5.1); `v2/03` F0-S04 e §3; ADR-005 §7.1 e §10; relatórios `docs/state/reports/F0-S04.md` (medição oficial de 2026-10-17), `F0-S04-T21`, `T22`, `T24`, `T29-placa-memoria` (e `-2`), `T29e-ensaio`, `T30-placa`, `T30c-dados-reais`, `T23`, `F0-S04-threads.md`; lotes Opus 57, 62, 65 e 66; `PO.md` (decisões de 17 e 18/10).
 - Escopo: o tema "Stack, ponte, papel do pythonocc, Rust" de `v2/03 §3`. Threads e trava do modelo ficam no ADR-004. Não muda `v2/` nem `CLAUDE.md`.

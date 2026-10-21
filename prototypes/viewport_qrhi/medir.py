@@ -62,6 +62,7 @@ def medir_cancelamento(caminho, apos_s, biblioteca=None) -> dict:
 
 def medir(caminho, threads, bloco, png=None, janela=(1280, 720), biblioteca=None) -> dict:
     from PySide6.QtCore import QCoreApplication, QEventLoop, Qt, QTimer
+    from PySide6.QtGui import QRhiDriverInfo
     from PySide6.QtWidgets import QApplication
 
     from viewport_qrhi.cubo_rhi import CuboViewport
@@ -148,6 +149,10 @@ def medir(caminho, threads, bloco, png=None, janela=(1280, 720), biblioteca=None
         w.update()
         QCoreApplication.processEvents()
     fps = (len(quadros) - n0) / (time.perf_counter() - t1)
+    rhi = w.rhi()  # qual desenho rodou (lido antes de fechar a janela)
+    di = rhi.driverInfo()
+    desenho = {"info": f"{rhi.backendName()} {bytes(di.deviceName).decode(errors='replace')}",
+               "software": di.deviceType == QRhiDriverInfo.DeviceType.CpuDevice}
     w.close()
     pico_pai = pico_memoria_mb()
     pico_filho = float(resumo.pico_filho_mb)
@@ -171,6 +176,7 @@ def medir(caminho, threads, bloco, png=None, janela=(1280, 720), biblioteca=None
         "pico_memoria_mb": round(pico_memoria_mb()), "atraso_max_ms": round(float(atrasos.max()), 1),
         "atraso_p95_ms": round(float(np.percentile(atrasos, 95)), 1), "fps": round(fps, 1),
         "bytes_gpu_mb": round(est["bytes_gpu"] / 2**20),
+        "reinicios": list(resumo.reinicios), "registro_reinicio": list(resumo.registro_reinicio), "desenho": desenho,
     }
 
 

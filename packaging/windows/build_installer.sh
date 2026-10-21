@@ -126,14 +126,18 @@ cp "$PKG/FONTES.md" "$PKG/licenses/FONTES.md"
 
 # 3b. O ambiente (~1 GB, dezenas de milhares de arquivos) vai num único tar.gz dentro do instalador:
 # o makensis (32 bits) estoura a memória com tantos arquivos soltos. O instalador extrai com o tar.exe do Windows.
-tar -cf - -C "$PKG" env | gzip -9 > "$OUT/env.tgz"
+# T23e: gzip -6 (o -9 custava ~80 s a mais por ~1% de tamanho); o instalador guarda o env.tgz sem recomprimir. O conteúdo extraído é o mesmo.
+T_TGZ=$(date +%s)
+tar -cf - -C "$PKG" env | gzip -6 > "$OUT/env.tgz"
 rm -rf "$OUT/env-pronto" && mv "$PKG/env" "$OUT/env-pronto"
-echo "env.tgz: $(du -h "$OUT/env.tgz" | cut -f1)"
+echo "env.tgz: $(du -h "$OUT/env.tgz" | cut -f1) ($(( $(date +%s) - T_TGZ )) s)"
 
 # 4. Gera o instalador
 # makensis: variável MAKENSIS, ou o do PATH (no CI vem do pacote conda-forge `nsis`, ambiente separado)
 MAKENSIS="${MAKENSIS:-$(command -v makensis || true)}"
 [ -n "$MAKENSIS" ] || { echo "makensis nao encontrado (defina MAKENSIS)" >&2; exit 1; }
 WPKG="$(cygpath -w "$PKG")"; WEXE="$(cygpath -w "$EXE")"
+T_NSIS=$(date +%s)
 MSYS2_ARG_CONV_EXCL='*' "$MAKENSIS" -V2 "-DPASTA_PACOTE=$WPKG" "-DSAIDA=$WEXE" "-DVERSAO=$VERSAO" "-DENV_TGZ=$(cygpath -w "$OUT/env.tgz")" "$(cygpath -w "$HERE/openbim-studio.nsi")"
+echo "makensis: $(( $(date +%s) - T_NSIS )) s"
 echo "Ambiente (descompactado): $(du -sh "$OUT/env-pronto" | cut -f1)  Pacote (sem ambiente): $(du -sh "$PKG" | cut -f1)  Instalador: $(du -h "$EXE" | cut -f1)  tempo: $(( $(date +%s) - START )) s"

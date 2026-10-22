@@ -349,6 +349,54 @@ jobs:
         run: |
           echo "### windows-obimcore: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
 
+  windows-t07c:
+    # TEMPORÁRIO (T07c, ramo sem merge): mede a taxa de trava do caso `destruir janela`. Informativo.
+    continue-on-error: true
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/ambiente-windows
+      - name: Módulo obimcore (build limpo)
+        shell: bash -elo pipefail {0}
+        run: CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04
+      - name: 12 voltas do caso destruir janela
+        shell: bash -elo pipefail {0}
+        run: |
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          export OBIM_S04_TELA_VIRTUAL=1 QSG_RHI_BACKEND=d3d11 QSG_RHI_PREFER_SOFTWARE_RENDERER=1
+          cat > "$RUNNER_TEMP/laco.py" <<'PYEOF'
+          import os, subprocess, sys, time
+          env = {k: v for k, v in os.environ.items() if k not in ("DISPLAY", "WAYLAND_DISPLAY")} | {"LC_ALL": "C"}
+          env.update(QT_QPA_PLATFORM="windows", RHI="d3d11", OBIM_LIMITE="100")
+          travas = 0
+          for volta in range(12):
+              t0 = time.time()
+              p = subprocess.Popen([sys.executable, "tests/test_s04_viewport.py", "destruir", "janela"], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+              estado = ""
+              try:
+                  saida, _ = p.communicate(timeout=65)
+              except subprocess.TimeoutExpired:
+                  estado = "TRAVOU(>65s)"
+                  print(f"--- volta {volta}: threads do processo {p.pid} aos 65 s ---", flush=True)
+                  subprocess.run(["powershell", "-NoProfile", "-Command", f"Get-Process -Id {p.pid} | Select -Expand Threads | Select Id,ThreadState,WaitReason,StartAddress,TotalProcessorTime | Format-Table -Auto | Out-String -Width 200"], timeout=60)
+                  try:
+                      saida, _ = p.communicate(timeout=40)  # o faulthandler despeja a pilha aos 80 s e encerra
+                  except subprocess.TimeoutExpired:
+                      p.kill(); saida, _ = p.communicate(); estado += " morto-a-forca"
+              dt = time.time() - t0
+              ok = p.returncode == 0 and "RESULTADO" in saida
+              if not ok:
+                  travas += 1
+              print(f"VOLTA {volta} codigo={p.returncode} tempo={dt:.1f}s {'OK' if ok else 'FALHA'} {estado}", flush=True)
+              if not ok:
+                  print(saida[-6000:], flush=True)
+              else:
+                  print(saida[-300:], flush=True)
+          print(f"RESUMO falhas={travas}/12", flush=True)
+          PYEOF
+          python "$RUNNER_TEMP/laco.py"
+
   windows-viewport-a:
     runs-on: windows-latest
     timeout-minutes: 60

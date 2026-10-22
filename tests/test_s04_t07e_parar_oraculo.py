@@ -34,7 +34,6 @@ from test_s04_viewport import RAIZ, caso as _caso, novo, retoma, rodar  # noqa: 
 
 ESTE = Path(__file__).resolve()
 OBRIGATORIO = os.environ.get("OBIM_S04_T07E_OBRIGATORIO") == "1"
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="T07e: parar() ainda espera sem limite; sem paradas_atrasadas nem travar_desenho_teste")
 LIMITE_S, FOLGA_S = 5.0, 1.0
 TRAVA_MS = 7500  # maior que o limite (força o abandono) e acorda durante o subprocesso (mostra o que a thread faz ao acordar)
 VOLTAS = int(os.environ.get("OBIM_S04_T07E_VOLTAS", "1"))
@@ -58,7 +57,6 @@ def tela():
 
 
 # ---------- testes ----------
-@AINDA_NAO
 def test_contador_existe_e_fica_em_zero_em_operacao_normal(tela):
     r = caso("normal")
     assert r["desenhou"], f"a viewport não chegou a desenhar: {r}"
@@ -66,7 +64,6 @@ def test_contador_existe_e_fica_em_zero_em_operacao_normal(tela):
     assert r["parar_s"] < LIMITE_S and not r["viva"], f"parar() normal não pode chegar ao limite: {r}"
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("modo", ["parar", "janela", "soltar"])
 def test_parar_volta_no_limite_com_a_thread_presa_e_conta_uma_vez(tela, modo):
     r = caso("travar", modo, limite=90 + 25 * VOLTAS)
@@ -82,7 +79,6 @@ def test_parar_volta_no_limite_com_a_thread_presa_e_conta_uma_vez(tela, modo):
     assert r["final_ok"] and r["final_atrasadas"] == 0, f"depois do abandono uma viewport nova não voltou a desenhar limpa: {r}"
 
 
-@AINDA_NAO
 def test_sair_com_a_thread_presa_nao_congela(tela):
     r = caso("sair", limite=60)  # caso(): código 0 e resultado; estourar 60 s (gancho de 60 s) = travou
     assert LIMITE_S - 0.5 <= r["parar_s"] <= LIMITE_S + FOLGA_S and r["n"] == 1, r

@@ -422,14 +422,23 @@ def main_mista(argv=None):  # V1: as formas 1, 2 e mista, mesmas réguas do T15;
     ap.add_argument("--quantidade", type=int, default=1000)
     ap.add_argument("--rodadas", type=int, default=3)
     ap.add_argument("--aberturas", type=int, default=150)
+    ap.add_argument("--ifc", help="V1b: IFC existente no lugar da base gerada (só parte lote); no JSON vai só o --apelido")
+    ap.add_argument("--apelido")
     a = ap.parse_args(argv)
+    if bool(a.ifc) != bool(a.apelido) or (a.ifc and a.parte != "lote"):
+        ap.error("--ifc e --apelido vão juntos e só valem com --parte lote")
     _caminhos()
     tmp = Path(tempfile.mkdtemp(prefix="mista_"))
-    dados = {"versao": 1, "parte": a.parte, "plataforma": sys.platform, "estrito": os.environ.get("OBIM_S04_ESTRITO") == "1", "base": a.base, "quantidade": a.quantidade, "rodadas": a.rodadas, "aberturas": a.aberturas}
+    dados = {"versao": 1, "parte": a.parte, "plataforma": sys.platform, "estrito": os.environ.get("OBIM_S04_ESTRITO") == "1", "base": None if a.ifc else a.base, "quantidade": a.quantidade, "rodadas": a.rodadas, "aberturas": a.aberturas}
     if a.parte == "lote":
-        import gerar_modelo_grande
-        gerar_modelo_grande.gerar(str(tmp / "base.ifc"), paredes=a.base)
-        f = preparar(str(tmp / "base.ifc"), tmp / "saida")
+        if a.ifc:
+            dados["ifc"] = a.apelido
+            entrada = a.ifc
+        else:
+            import gerar_modelo_grande
+            entrada = str(tmp / "base.ifc")
+            gerar_modelo_grande.gerar(entrada, paredes=a.base)
+        f = preparar(entrada, tmp / "saida")
         dados |= {"rhi": f._rhi, "formas": {"1": [], "2": [], "mista": []}, "controle": {"1": [], "2": [], "mista": []}}
         for forma in (1, 2, "mista"):
             for _ in range(a.rodadas):

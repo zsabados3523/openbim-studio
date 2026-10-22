@@ -349,6 +349,81 @@ jobs:
         run: |
           echo "### windows-obimcore: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
 
+  windows-t07d:
+    # TEMPORÁRIO (T07d, ramo sem merge): taxa e pilha nativa da trava de `destruir janela`. Informativo.
+    continue-on-error: true
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/ambiente-windows
+      - name: Módulo obimcore (build limpo)
+        shell: bash -elo pipefail {0}
+        run: CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04
+      - name: Depurador na imagem?
+        shell: bash
+        run: |
+          ls "/c/Program Files (x86)/Windows Kits/10/Debuggers/x64/" 2>&1 | head -20 || true
+          where cdb 2>&1 || true
+          ls "/c/Program Files (x86)/Windows Kits/10/Debuggers" 2>&1 | head || true
+      - name: 100 voltas isoladas
+        shell: bash
+        continue-on-error: true
+        timeout-minutes: 25
+        run: |
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          export OBIM_S04_TELA_VIRTUAL=1 QSG_RHI_BACKEND=d3d11 QSG_RHI_PREFER_SOFTWARE_RENDERER=1
+          cat > "$RUNNER_TEMP/laco.py" <<'PYEOF'
+          import glob, os, subprocess, sys, time
+          env = {k: v for k, v in os.environ.items() if k not in ("DISPLAY", "WAYLAND_DISPLAY")} | {"LC_ALL": "C"}
+          env.update(QT_QPA_PLATFORM="windows", RHI="d3d11", OBIM_LIMITE="100")
+          cdbs = glob.glob(r"C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe")
+          print("cdb:", cdbs, flush=True)
+          falhas, tempos = 0, []
+          for volta in range(100):
+              t0 = time.time()
+              p = subprocess.Popen([sys.executable, "tests/test_s04_viewport.py", "destruir", "janela"], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+              estado = ""
+              try:
+                  saida, _ = p.communicate(timeout=40)
+              except subprocess.TimeoutExpired:
+                  estado = "PASSOU-DE-40s"
+                  print(f"--- volta {volta}: threads do processo {p.pid} aos 40 s ---", flush=True)
+                  subprocess.run(["powershell", "-NoProfile", "-Command", f"Get-Process -Id {p.pid} | Select -Expand Threads | Select Id,ThreadState,WaitReason,StartAddress,TotalProcessorTime | Format-Table -Auto | Out-String -Width 200"], timeout=60)
+                  if cdbs:
+                      r = subprocess.run([cdbs[0], "-p", str(p.pid), "-pv", "-c", "~*kv 40;q"], capture_output=True, text=True, timeout=120)
+                      print("CDB:", r.stdout[-30000:], r.stderr[-2000:], flush=True)
+                  try:
+                      saida, _ = p.communicate(timeout=60)
+                  except subprocess.TimeoutExpired:
+                      p.kill(); saida, _ = p.communicate(); estado += " morto"
+              dt = time.time() - t0; tempos.append(dt)
+              ok = p.returncode == 0 and "RESULTADO" in saida
+              if not ok or estado:
+                  falhas += 1
+                  print(f"VOLTA {volta} codigo={p.returncode} tempo={dt:.1f}s {'OK' if ok else 'FALHA'} {estado}\n{saida[-8000:]}", flush=True)
+              elif volta % 10 == 0:
+                  print(f"VOLTA {volta} ok {dt:.1f}s", flush=True)
+          print(f"RESUMO falhas={falhas}/100 min={min(tempos):.1f} max={max(tempos):.1f} media={sum(tempos)/len(tempos):.1f}", flush=True)
+          PYEOF
+          python "$RUNNER_TEMP/laco.py"
+      - name: 3 execuções do viewport_b com -k destruir
+        shell: bash
+        continue-on-error: true
+        timeout-minutes: 12
+        run: |
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          export OBIM_S04_TELA_VIRTUAL=1 QSG_RHI_BACKEND=d3d11 QSG_RHI_PREFER_SOFTWARE_RENDERER=1
+          for i in 1 2 3; do OBIM_CI=1 pytest -q -rs -k destruir tests/test_s04_viewport_b.py; echo "k-destruir volta $i codigo=$?"; done
+      - name: viewport-b completo
+        shell: bash
+        continue-on-error: true
+        timeout-minutes: 25
+        run: |
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          export OBIM_S04_TELA_VIRTUAL=1 QSG_RHI_BACKEND=d3d11 QSG_RHI_PREFER_SOFTWARE_RENDERER=1
+          OBIM_CI=1 pytest -q -rsP --durations=5 tests/test_s04_viewport.py tests/test_s04_cena.py tests/test_s04_selecao.py tests/test_s04_selecao_c.py tests/test_s04_metas.py tests/test_s04_abertura.py tests/test_s04_viewport_software.py
+
   windows-viewport-a:
     runs-on: windows-latest
     timeout-minutes: 60

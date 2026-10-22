@@ -15,6 +15,7 @@
 //  - Cena (T08): fila de lotes, cópia compacta, sequência e caixa vivem em `cena.*` (mutex próprio). Aqui só o envio à placa: orçamento por quadro
 //    (`ORCAMENTO_BYTES`, ~4 ms), lotes grandes partidos em fatias; a sequência de um quadro = maior prefixo contínuo de lotes já NA placa.
 #pragma once
+#include <cstdio>
 #include "camera.h"
 #include "cena.h"
 #include <QGuiApplication>
@@ -82,9 +83,11 @@ class Motor {
     th_ = std::thread([this] { laco(); });
   }
   void parar() {  // espera a thread; idempotente; qualquer thread. Bombeia mensagens até `terminou_`; só então faz o join.
-    parar_ = true;
+    parar_ = true; const bool dbg = th_.joinable(); if (dbg) std::fprintf(stderr, "[T07d] parar: inicio\n");
     while (!terminou_) { bombear(); std::this_thread::sleep_for(std::chrono::milliseconds(1)); }
+    if (dbg) std::fprintf(stderr, "[T07d] parar: terminou_\n");
     { std::lock_guard<std::mutex> lt(th_m_); if (th_.joinable()) th_.join(); }
+    if (dbg) std::fprintf(stderr, "[T07d] parar: join ok\n");
     std::lock_guard<std::mutex> l(m_); rodando_ = false;
   }
   bool viva() { std::lock_guard<std::mutex> l(m_); return rodando_; }

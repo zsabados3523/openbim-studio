@@ -367,7 +367,7 @@ jobs:
           where cdb 2>&1 || true
           ls "/c/Program Files (x86)/Windows Kits/10/Debuggers" 2>&1 | head || true
       - name: 100 voltas isoladas
-        shell: bash
+        shell: bash -elo pipefail {0}
         continue-on-error: true
         timeout-minutes: 25
         run: |
@@ -408,15 +408,15 @@ jobs:
           PYEOF
           python "$RUNNER_TEMP/laco.py"
       - name: 3 execuções do viewport_b com -k destruir
-        shell: bash
+        shell: bash -elo pipefail {0}
         continue-on-error: true
         timeout-minutes: 12
         run: |
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_S04_TELA_VIRTUAL=1 QSG_RHI_BACKEND=d3d11 QSG_RHI_PREFER_SOFTWARE_RENDERER=1
-          for i in 1 2 3; do OBIM_CI=1 pytest -q -rs -k destruir tests/test_s04_viewport_b.py; echo "k-destruir volta $i codigo=$?"; done
+          for i in 1 2 3; do OBIM_CI=1 pytest -q -rs -k destruir tests/test_s04_viewport_b.py || echo "FALHOU volta $i"; echo "k-destruir volta $i"; done
       - name: viewport-b completo
-        shell: bash
+        shell: bash -elo pipefail {0}
         continue-on-error: true
         timeout-minutes: 25
         run: |

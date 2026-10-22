@@ -111,12 +111,10 @@ def _espia_ac(reg):
     return embrulho
 
 
-@AINDA_NAO
 def test_b_constante_fixada(mods):
     assert getattr(mods["fluxo_a"], "SUBLOTE_CONTAINER", None) == SUBLOTE, "fluxo_a.SUBLOTE_CONTAINER deve ser 100 (valor medido, ver cabeçalho)"
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("n", [N, 1001, 250])  # 1001 e 250: o resto do último sub-lote
 def test_b_chamadas_em_sublotes(mods, monkeypatch, n):
     reg = []
@@ -145,7 +143,6 @@ def test_c_desfazer_refazer_um_passo(mods, monkeypatch):
 
 
 # ---------- (d) o ponto de cessão passa entre sub-lotes ----------
-@AINDA_NAO
 def test_d_cessao_entre_sublotes(mods, monkeypatch):
     lote, ev = mods["lote"], []
     fat = lote._Fatiador(lambda: ev.append("cessao"))

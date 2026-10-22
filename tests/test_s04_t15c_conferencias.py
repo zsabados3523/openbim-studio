@@ -16,6 +16,7 @@ com OBIM_S04_T15_OBRIGATORIO=1 todo pulo vira falha."""
 import functools
 import importlib.util
 import json
+import math
 import os
 import re
 import shutil
@@ -29,11 +30,13 @@ import numpy as np
 import pytest
 import s04_fluxo_aux as aux
 
+import fluxo_a  # noqa: E402  (o caminho vem de s04_fluxo_aux)
+
 ESTE = Path(__file__).resolve()
 OBRIGATORIO = os.environ.get("OBIM_S04_T15_OBRIGATORIO") == "1"
 BASE, QTD, RODADAS = int(os.environ.get("OBIM_S04_BASE", "300")), 1000, 3
 FUNCOES = {"root.create_entity": QTD, "geometry.add_wall_representation": QTD, "geometry.edit_object_placement": QTD, "material.assign_material": QTD,
-           "type.assign_type": 1, "spatial.assign_container": 1}
+           "type.assign_type": 1, "spatial.assign_container": math.ceil(QTD / fluxo_a.SUBLOTE_CONTAINER)}  # V1c (PO, 2026-10-22): sub-lotes, nunca uma por parede
 
 
 def pular(msg):

@@ -55,5 +55,6 @@ Roteiro R: `roteiro_r.json` (7 passos do lote 9 §1.1; 200 paredes; 200 edicoes;
 - Saída: a de `medir` + `geometria` (`GEOMETRIA`: `{t_ini_ms, t_fim_ms, n, thread}` por pedido, relógio `obimcore.agora`).
 - `{"cmd": "composto", "passos": [...]}` só na mista (um `executar_detalhado` por passo; solta a trava entre passos: serve só para medir); `lote_partido_cmd(n)` e `lote_pesado_cmd(guid, n, dx)` (critério 6).
 - `veredito_mista(dados)` (pura) e `main_mista(argv)`: `--parte lote|pesada`, `--base`, `--quantidade`, `--rodadas`, `--aberturas`; grava o JSON com `veredito`.
+  V1b: `--parte lote --ifc <arquivo> --apelido <nome>` mede num IFC existente (`--base` sem efeito, `base` = null no JSON); grava `"ifc": <apelido>`, nunca nome nem caminho.
 - V1c: `SUBLOTE_CONTAINER = 100` (módulo `fluxo_a`, lido na hora da chamada); `_paredes` chama `spatial.assign_container` em sub-lotes de até esse tamanho, mesmo pavimento e ordem, pelo `api` do módulo (ponto de cessão entre sub-lotes).
 - O IFC e o desfazer ficam como na chamada única: uma só relação `IfcRelContainedInSpatialStructure` e um passo de desfazer por lote; `type.assign_type` segue em chamada única.

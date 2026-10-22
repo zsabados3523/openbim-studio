@@ -48,20 +48,23 @@
 #  define WIN32_LEAN_AND_MEAN
 #  define NOMINMAX
 #  include <windows.h>
+#  include <d3d11.h>
 #  include <timeapi.h>
 #endif
 namespace obim {
 using Rel = std::chrono::steady_clock;
 double agora_ms();  // motor.cpp
 extern const unsigned char QSB_VERT[], QSB_FRAG[]; extern const size_t QSB_VERT_N, QSB_FRAG_N;  // motor.cpp (QSB da S03, embutidos pelo CMake)
-struct Estatisticas { size_t bytes_copia, lotes, triangulos, vertices; int64_t fatias_enviadas; int triangulos_na_placa, contextos, superficies_soltas, solturas_atrasadas; size_t nao_partidos, pecas_maiores_que_c; int64_t geracao; };
+struct Estatisticas { size_t bytes_copia, lotes, triangulos, vertices; int64_t fatias_enviadas; int triangulos_na_placa, contextos, superficies_soltas, solturas_atrasadas, paradas_atrasadas; size_t nao_partidos, pecas_maiores_que_c; int64_t geracao; };
 constexpr size_t ORCAMENTO_BYTES = 2u << 20;  // por quadro (cabe em ~1 ms no software); lote maior é partido em fatias
 constexpr auto ORCAMENTO_TEMPO = std::chrono::milliseconds(4);
+constexpr auto LIMITE_PARAR = std::chrono::seconds(5);  // T07e: espera máxima de Motor::parar() pela thread de desenho (depois, abandono controlado)
 
-class Motor {
+class Motor : public std::enable_shared_from_this<Motor> {  // a thread de desenho guarda um shared_ptr do Motor (T07e): o abandono não deixa ponteiro solto
  public:
   std::atomic<bool> exposta{false}, soltar{false}, perder{false}, parar_{false}, perdida_{false}, terminou_{true};
-  std::atomic<int> contextos{0}, tri_placa{0}, superficies_soltas{0}, solturas_atrasadas{0};
+  std::atomic<int> contextos{0}, tri_placa{0}, superficies_soltas{0}, solturas_atrasadas{0}, paradas_atrasadas{0}, trava_ms_{0};  // trava_ms_: gancho de teste (travar_desenho_teste)
+  std::atomic<bool> abandonada_{false};  // a thread atual estourou LIMITE_PARAR e foi solta (detach); só a própria thread termina o que falta
   std::atomic<int64_t> fatias_{0};
   // T10c: o que o último quadro APRESENTADO usou (câmera aplicada, tamanho real do backbuffer, plano perto), gravado junto, sob um só mutex folha (`mc_`),
   // depois do endFrame; a seleção lê tudo de uma vez (nunca câmera de um quadro com tamanho de outro).
@@ -70,20 +73,28 @@ class Motor {
   std::atomic<double> dpr_{1.0}, escala_teste_{0.0};  // dpr_: devicePixelRatio da janela (atualizado na thread da janela); escala_teste_ > 0 o substitui (gancho de teste)
   DadosCena cena_;  // fila de lotes, cópia compacta, sequência e caixa (T08); o Python entra direto, com mutex próprio
   explicit Motor(bool gl) : gl_(gl) {}
-  ~Motor() { parar(); }
+  ~Motor() {  // pode rodar NA thread de desenho (último dono = o shared_ptr dela): aí não há join de si mesma
+    if (th_.get_id() == std::this_thread::get_id()) th_.detach(); else parar();
+  }
   void ligar(QWindow* w, QOffscreenSurface* fb) { std::lock_guard<std::mutex> l(m_); win_ = w; fb_ = fb; fmt_ = w->format(); }
   void desligar() { parar(); std::lock_guard<std::mutex> l(m_); win_ = nullptr; fb_ = nullptr; }
   void iniciar() {  // qualquer thread (th_m_ guarda th_)
     { std::lock_guard<std::mutex> l(m_); if (!win_) return; }
     std::lock_guard<std::mutex> lt(th_m_);
     if (th_.joinable()) return;
+    if (abandonada_) { if (!terminou_) return; abandonada_ = false; }  // thread abandonada ainda presa: não inicia outra por cima
     parar_ = false; perdida_ = false; terminou_ = false;
     { std::lock_guard<std::mutex> l(m_); rodando_ = true; }
-    th_ = std::thread([this] { laco(); });
+    th_ = std::thread([self = shared_from_this()] { self->laco(); });
   }
   void parar() {  // espera a thread; idempotente; qualquer thread. Bombeia mensagens até `terminou_`; só então faz o join.
     parar_ = true;
-    while (!terminou_) { bombear(); std::this_thread::sleep_for(std::chrono::milliseconds(1)); }
+    if (abandonada_) return;  // thread já abandonada (e ainda presa): nada a esperar, nem a contar de novo
+    const auto fim = Rel::now() + LIMITE_PARAR;
+    while (!terminou_) {
+      if (Rel::now() >= fim) { abandonar(); return; }
+      bombear(); std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
     { std::lock_guard<std::mutex> lt(th_m_); if (th_.joinable()) th_.join(); }
     std::lock_guard<std::mutex> l(m_); rodando_ = false;
   }
@@ -102,7 +113,7 @@ class Motor {
   Estatisticas estatisticas() {
     std::lock_guard<std::mutex> l(m_);  // Motor::m_ e, dentro de totais(), DadosCena::m_: sempre nesta ordem
     const Totais t = cena_.totais();
-    return {t.bytes, t.lotes, t.triangulos, t.vertices, fatias_.load(), tri_placa.load(), contextos.load(), superficies_soltas.load(), solturas_atrasadas.load(), t.nao_partidos, t.pecas_maiores_que_c, t.ger};
+    return {t.bytes, t.lotes, t.triangulos, t.vertices, fatias_.load(), tri_placa.load(), contextos.load(), superficies_soltas.load(), solturas_atrasadas.load(), paradas_atrasadas.load(), t.nao_partidos, t.pecas_maiores_que_c, t.ger};
   }
   std::vector<std::tuple<double, int64_t>> relogio() {
     std::vector<std::tuple<double, int64_t>> r; size_t n;
@@ -127,6 +138,13 @@ class Motor {
   }
 
  private:
+  void abandonar() {  // T07e: a thread de desenho não saiu em LIMITE_PARAR (no Windows com WARP, `~QRhi` pode parar para sempre): solta a thread, conta uma vez
+    { std::lock_guard<std::mutex> lt(th_m_); if (th_.joinable()) th_.detach(); }
+    if (abandonada_.exchange(true)) return;
+    ++paradas_atrasadas;
+    std::lock_guard<std::mutex> l(m_);
+    rodando_ = false; info_ += " | AVISO: a thread de desenho não terminou em 5 s e foi abandonada (vazamento controlado)"; cv_.notify_all();
+  }
   static void bombear() {  // Windows: atende mensagens enviadas (SendMessage) por outras threads, sem retirar nada da fila
 #ifdef Q_OS_WIN
     MSG msg; PeekMessageW(&msg, nullptr, 0, 0, PM_NOREMOVE | PM_QS_SENDMESSAGE);
@@ -345,13 +363,21 @@ class Motor {
     }
     return Fim::Parar;
   }
+  void ociosa(Gpu& g) {  // T07e: antes de destruir a QRhi, a GPU fica ociosa (o `Flush` final do WARP não encontra trabalho em voo)
+    g.rhi->finish();
+#ifdef Q_OS_WIN
+    if (!gl_) if (auto* nh = static_cast<const QRhiD3D11NativeHandles*>(g.rhi->nativeHandles())) if (nh->context) {
+      auto* cx = static_cast<ID3D11DeviceContext*>(nh->context); cx->ClearState(); cx->Flush();
+    }
+#endif
+  }
   void laco() {
 #ifdef Q_OS_WIN
     timeBeginPeriod(1);
 #endif
     try {
       for (int falhas = 0; !parar_;) {
-        Gpu g;  // destruído ao sair do bloco, NESTA thread
+        auto gp = std::make_unique<Gpu>(); Gpu& g = *gp;  // destruído ao sair do bloco, NESTA thread (salvo o abandono: ver abaixo)
         if (!criar(g)) {
           { std::lock_guard<std::mutex> l(m_); info_ = "ERRO: QRhi não pôde ser criada"; }
           if (++falhas >= 3) break;  // `rodando` vira falso: viva() informa
@@ -359,6 +385,9 @@ class Motor {
         }
         falhas = 0;
         const Fim fim = quadros(g);
+        if (fim == Fim::Parar) ociosa(g);
+        if (fim == Fim::Parar && trava_ms_ > 0) std::this_thread::sleep_for(std::chrono::milliseconds(trava_ms_.exchange(0)));  // gancho de teste: finge o travamento do `~QRhi`; não olha `parar_`
+        if (fim == Fim::Parar && abandonada_) { (void)gp.release(); break; }  // ninguém mais espera: janela e superfície podem não existir; a placa vaza de propósito
         if (perdida_.exchange(false)) (void)g.sc.release();  // swapchain perdida: vaza de propósito, nunca é destruída
         if (fim == Fim::Parar) break;
       }
@@ -466,6 +495,10 @@ class Viewport {  // o Qt é dono do contêiner (depois de posto num layout); es
   void definir_escala_teste(double r) {  // gancho de teste: usa r (> 0) no lugar do devicePixelRatio real
     if (!std::isfinite(r) || r <= 0) throw std::invalid_argument("escala deve ser maior que zero");
     m_->escala_teste_ = r;
+  }
+  void travar_desenho_teste(int ms) {  // gancho de teste: na próxima parada, a thread dorme `ms` antes de destruir a placa (finge o travamento do WARP)
+    if (ms < 0) throw std::invalid_argument("ms deve ser zero ou maior");
+    m_->trava_ms_ = ms;
   }
   void perder_contexto() { m_->perder = true; }  // gancho de teste: simula FrameOpDeviceLost
   std::string info() { return m_->info(); }

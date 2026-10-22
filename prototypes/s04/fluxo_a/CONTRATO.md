@@ -55,3 +55,4 @@ Roteiro R: `roteiro_r.json` (7 passos do lote 9 §1.1; 200 paredes; 200 edicoes;
 - Saída: a de `medir` + `geometria` (`GEOMETRIA`: `{t_ini_ms, t_fim_ms, n, thread}` por pedido, relógio `obimcore.agora`).
 - `{"cmd": "composto", "passos": [...]}` só na mista (um `executar_detalhado` por passo; solta a trava entre passos: serve só para medir); `lote_partido_cmd(n)` e `lote_pesado_cmd(guid, n, dx)` (critério 6).
 - `veredito_mista(dados)` (pura) e `main_mista(argv)`: `--parte lote|pesada`, `--base`, `--quantidade`, `--rodadas`, `--aberturas`; grava o JSON com `veredito`.
+  V1b: `--parte lote --ifc <arquivo> --apelido <nome>` mede num IFC existente (`--base` sem efeito, `base` = null no JSON); grava `"ifc": <apelido>`, nunca nome nem caminho.

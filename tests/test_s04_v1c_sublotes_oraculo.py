@@ -15,7 +15,12 @@ VALOR MEDIDO (Linux local, 2026-10-22, xvfb-run, ambiente openbim; base sintéti
   (base 300 do lote.py, 0,2 MB: 100 -> 66 ms, 250 -> 159-163 ms, 1.000 -> 627-640 ms; custo linear, ~0,65 ms por peça.)
   Regra: o maior valor cuja chamada mais longa fique <= 250 ms -> 100 (250 passa de 250 ms). O casa25 real foi ~1,6x mais lento que a base sintética
   na chamada única (~1.000 ms contra ~640 ms), por isso 100 e não um valor mais justo. Custo: a soma das chamadas sobe de ~640 para 920-1.070 ms.
-GUARDA (pula, nunca afrouxa): sem ifcopenshell ou sem o fluxo A, pula; com OBIM_S04_V1C_OBRIGATORIO=1 todo pulo vira falha. Sem janela (janela=False)."""
+GUARDA (pula, nunca afrouxa): sem ifcopenshell ou sem o fluxo A, pula; com OBIM_S04_V1C_OBRIGATORIO=1 todo pulo vira falha. Sem janela (janela=False).
+CORREÇÃO (2026-10-22, CI do PR 261): o ifcopenshell guarda o histórico de desfazer de cada arquivo num dicionário da CLASSE (`ifcopenshell.file.registry`),
+que nunca solta: os ~10 modelos deste arquivo (~75 mil objetos cada) ficavam vivos e cada varredura do coletor do Python ficava mais longa, até uma pausa
+única de ~250-500 ms no teste seguinte (test_viewport_responsivo). Agora cada caso tira do registro os arquivos que ele mesmo criou e coleta o lixo ao
+terminar (`_limpa`, autouse); nenhum número nem caso mudou."""
+import gc
 import itertools
 import math
 import os
@@ -34,6 +39,20 @@ AC = "spatial.assign_container"
 
 def pular(msg):
     (pytest.fail if OBRIGATORIO else pytest.skip)(f"\n!!! S04-V1c: {msg} (oráculo dos sub-lotes NÃO FOI EXECUTADO) !!!\n")
+
+
+@pytest.fixture(autouse=True)
+def _limpa():  # solta o histórico dos modelos DESTE caso (registro da classe) e coleta aqui, não no teste seguinte de outro arquivo
+    try:
+        import ifcopenshell
+        reg = getattr(ifcopenshell.file, "registry", {})  # `ifcopenshell.file` é a CLASSE (o pacote reexporta), não o submódulo
+    except ImportError:  # sem ifcopenshell: o caso pula sozinho
+        reg = {}
+    antes = set(reg)
+    yield
+    for k in set(reg) - antes:
+        reg.pop(k, None)
+    gc.collect()
 
 
 @pytest.fixture(scope="module")

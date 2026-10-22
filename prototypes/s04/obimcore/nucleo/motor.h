@@ -139,11 +139,12 @@ class Motor : public std::enable_shared_from_this<Motor> {  // a thread de desen
 
  private:
   void abandonar() {  // T07e: a thread de desenho não saiu em LIMITE_PARAR (no Windows com WARP, `~QRhi` pode parar para sempre): solta a thread, conta uma vez
-    { std::lock_guard<std::mutex> lt(th_m_); if (th_.joinable()) th_.detach(); }
-    if (abandonada_.exchange(true)) return;
+    bool ja;
+    { std::lock_guard<std::mutex> lt(th_m_); if (th_.joinable()) th_.detach(); ja = abandonada_.exchange(true); }  // juntos: `iniciar` nunca vê th_ solta com abandonada_ falso
+    if (ja) return;
     ++paradas_atrasadas;
     std::lock_guard<std::mutex> l(m_);
-    rodando_ = false; info_ += " | AVISO: a thread de desenho não terminou em 5 s e foi abandonada (vazamento controlado)"; cv_.notify_all();
+    rodando_ = false; info_ += " | AVISO: a thread de desenho não terminou em " + std::to_string(LIMITE_PARAR.count()) + " s e foi abandonada (vazamento controlado)"; cv_.notify_all();
   }
   static void bombear() {  // Windows: atende mensagens enviadas (SendMessage) por outras threads, sem retirar nada da fila
 #ifdef Q_OS_WIN
@@ -387,7 +388,7 @@ class Motor : public std::enable_shared_from_this<Motor> {  // a thread de desen
         const Fim fim = quadros(g);
         if (fim == Fim::Parar) ociosa(g);
         if (fim == Fim::Parar && trava_ms_ > 0) std::this_thread::sleep_for(std::chrono::milliseconds(trava_ms_.exchange(0)));  // gancho de teste: finge o travamento do `~QRhi`; não olha `parar_`
-        if (fim == Fim::Parar && abandonada_) { (void)gp.release(); break; }  // ninguém mais espera: janela e superfície podem não existir; a placa vaza de propósito
+        if (fim == Fim::Parar && abandonada_) { (void)gp.release(); break; }  // ninguém mais espera: janela e superfície podem não existir; a placa vaza de propósito. Corrida mínima aceita (ver soltar_superficie): se o estouro vier logo depois desta checagem, ~Gpu ainda toca janela/contexto; idem abandono com a thread dentro de `criar()` (setWindow em janela já apagada)
         if (perdida_.exchange(false)) (void)g.sc.release();  // swapchain perdida: vaza de propósito, nunca é destruída
         if (fim == Fim::Parar) break;
       }

@@ -5,8 +5,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 Para o PO. Uma página para saber **onde estamos, o que está decidido, o que entra onde e o que falta decidir**. Atualizado em 2026-10-23 (S04 pronta, esperando o seu aceite; S05 em andamento; plano `v2/02` na Revisão 3). O líder atualiza no fim de cada sessão. Detalhes: `docs/state/BOARD.md` (quadro), `docs/state/PO.md` (decisões), `v2/02_plano_mestre_v2.md` (plano).
 
+## Resumo: onde estamos e o que preciso de você
+**Onde estamos:** Fase 0 (provas técnicas). S01, S02 e S03 estão aceitas. A S04 (ponte entre Python e C++) está pronta: você já aceitou a arquitetura e a forma das threads. A S05 (desfazer e gravar sem perder dados) está em andamento. Os documentos de acompanhamento ficaram em dois: este painel, para você, e o quadro, para a máquina.
+
+**O que preciso de você:**
+1. Aceite da S04 pelo roteiro `docs/acceptance/S04.md` (AppImage e instalador). Quando puder; depois a S04 vira "Fechada".
+2. Desenhos de tela: as imagens da pasta `design/` (seção 6, item 3).
+3. Sem prazo: as perguntas menores da seção 6.
+
 ## 1. Em que fase estamos
-**Fase 0 (provas técnicas), com a S04 pronta e a S05 em andamento.** Das 10 fatias, 3 estão aceitas por você (S01, S02, S03). A S04 (ponte entre Python e C++) chegou ao fim técnico em 23/10: você aceitou o híbrido (ADR-001) e a forma mista das threads (ADR-004), e na sua placa todas as metas passaram; falta só o seu aceite pelo roteiro `docs/acceptance/S04.md`. A S05 (desfazer, refazer e gravar sem perder dados) começou: plano e 12 cartões prontos, respostas P1 a P5 aprovadas por você, P6 em aberto (organização destes documentos). Ainda não existe programa para usar.
+**Fase 0 (provas técnicas), com a S04 pronta e a S05 em andamento.** Das 10 fatias, 3 estão aceitas por você (S01, S02, S03). A S04 (ponte entre Python e C++) chegou ao fim técnico em 23/10: você aceitou o híbrido (ADR-001) e a forma mista das threads (ADR-004), e na sua placa todas as metas passaram; falta só o seu aceite pelo roteiro `docs/acceptance/S04.md`. A S05 (desfazer, refazer e gravar sem perder dados) começou: plano e 12 cartões prontos, respostas P1 a P6 aprovadas por você (P6: o mapa foi juntado a este painel). Ainda não existe programa para usar.
 **Cota (Claude Pro; `QUOTA.md`):** o registro de cota está em `docs/state/QUOTA.md`; as últimas linhas dizem o uso mais recente.
 
 ## 2. Plano principal (as 7 fases)
@@ -25,13 +33,15 @@ Para o PO. Uma página para saber **onde estamos, o que está decidido, o que en
 Portões (você decide se passa): F0 (go ou não go da arquitetura), F1 (roteiro de 30 min com 3 IFCs), F2 (casa de 60 m² em até 2 h), v0.3 (planta, corte e quadro de áreas em 1 dia), F4 (sobrado com telhado de 4 águas e escada), F5 (projeto legal + 5 pranchas executivas), 1.0 (um projeto real seu, sem outro programa, 8 h sem travar).
 
 ## 3. Plano ramificado: a Fase 0 em fatias
+Pense numa obra: antes de levantar a casa, provamos que o terreno e as fundações aguentam.
+
 | Fatia | O que é | Situação |
 |---|---|---|
 | S01 | Repositório, licenças, pesquisa | **Feita** |
 | S02 | Testes automáticos Windows + Linux e programa esqueleto | **Feita** (você aceitou) |
 | S03 | Protótipo de visualização 3D | **Feita** (você aprovou o portão) |
 | **S04** | **Ponte entre Python e C++ (decide a arquitetura)** | **Pronta; aguarda o seu aceite** (roteiro `docs/acceptance/S04.md`) |
-| **S05** | Desfazer, refazer e gravar o par `.ifc` + `.obim` | **Em andamento** (plano em `cards/F0-S05/README.md`; P1 a P5 aprovadas, P6 aberta) |
+| **S05** | Desfazer, refazer e gravar o par `.ifc` + `.obim` | **Em andamento** (plano em `cards/F0-S05/README.md`; P1 a P6 aprovadas) |
 | S06 | Planta e corte automáticos (HLR) | Não iniciada |
 | S07 | Tipo paramétrico por script | Não iniciada |
 | S08 | Corpus de modelos de teste | Contínua |
@@ -52,7 +62,8 @@ Portões (você decide se passa): F0 (go ou não go da arquitetura), F1 (roteiro
 ### S05: cartões (plano de 23/10; `cards/F0-S05/README.md`)
 | Cartão | O que é | Situação |
 |---|---|---|
-| T01 | Organização: quadro, mapa e painel (este conjunto) | Em andamento; espera a sua P6 |
+| T01 | Organização: quadro, mapa e painel | Feita (23/10) |
+| T01b | Juntar o mapa no painel e atualizar o CLAUDE.md (P6) | Feita (23/10) |
 | T02 | Sondas do ifcopenshell (só números) | Pronta |
 | T03 | ADR-002, rascunho (Opus) | Depende de T02 |
 | T04 | Transação única IFC + lateral, desfazer, prova das 10.000 | Depende de T03 |
@@ -89,6 +100,7 @@ Lotes 52 a 77 (módulo no AppImage e no instalador, reduções de memória e de 
 - **Metas da S04:** padrão rigoroso mantido; todas atingidas na placa em 23/10, sem afrouxar. Mudar métrica ou meta só aparece como decisão sua, com a meta original ao lado. O portão da F0 é reavaliado com as metas originais.
 - **CI do Windows (23/10):** cerca de 12 min aceito por você; meta de 10 min passa à F1 (`cards/F1-CI-cadeia-instalador.md`).
 - **S05 (23/10):** P1 a P5 aprovadas como recomendadas (comparação por conteúdo sem `ifcdiff`; `.obim` mínimo provisório; 5 ms = edição pequena em memória com desfazer, modelo sintético de 50 MB; diário na hora com escrita forçada a cada 2 s; "Recuperar o trabalho de HH:MM?" sem gravar por cima do `Casa.ifc`; autosave a cada 5 min).
+- **Documentos (23/10, P6):** o quadro (para a máquina) e este painel (para você) ficam; o mapa foi juntado ao painel e apagado.
 - **Transparência:** texto no README sobre quem faz e como; revisão externa será convidada quando você decidir.
 
 ## 6. O que ainda precisa decidir (com recomendação)
@@ -111,6 +123,12 @@ Lotes 52 a 77 (módulo no AppImage e no instalador, reduções de memória e de 
 | 15 | ~~Opções do lote 57~~ | **Resolvido** | Escolhidas e feitas (T29, T30) |
 | 16 | ~~Cartão T23 da S04~~ | **Resolvido (23/10)** | Cerca de 12 min aceito; resto na F1 |
 | 17 | **Aceite da S04** pelo roteiro `docs/acceptance/S04.md` (AppImage e instalador) | Quando puder | Conferir o roteiro; depois a S04 vira Fechada |
-| 20 | **P6: quadro, mapa e painel** (manter 1, 2 ou 3) | Quando puder | Ver `reports/F0-S05-T01-organizacao.md`; nada será apagado antes da sua resposta |
+| 20 | ~~**P6: quadro, mapa e painel**~~ | **Resolvido (23/10)** | Manter quadro e painel; mapa juntado ao painel e apagado (`reports/F0-S05-T01-organizacao.md`) |
 | 18 | **Texto do `CLAUDE.md`** (RG-28) e **limpeza de ramos antigos no GitHub** | Quando puder | Aprovar o texto exato; apagar ramos só com a sua palavra |
 | 19 | **Perguntas menores abertas em `PO.md`:** confirmar que as exceções de ausência acabaram (A9), ambiente do instalador pela trava (A3), critério do instalador para o AppImage (A4), folga nos testes de tempo do Windows (A5), `/usage` para o registro de cota (A10), nomes dos colegas de estágio (A11), autorização da CAIXA para o SINAPI na F5 (A15) | Sem prazo | Ver a recomendação de cada uma em `PO.md` |
+
+## 7. O plano de revisão (de onde veio a pausa da S04)
+**A ideia:** antes de continuar a parte mais difícil (a S04), conferir se S01, S02 e S03 estão realmente certas, e organizar os riscos. As revisões terminaram em 15/10 e a S04 voltou a andar.
+**O que você decidiu (14 e 15/10):** pausar a S04 até as revisões terminarem (D1); mover os 3 planos antigos para `docs/arquivo/` (D2, feito); detalhes 2D ficam na 1.0, com DXF e fachadas como candidatos a adiar (D3); exceções de portão sempre registram a meta original (D8).
+**O que foi feito:** S01, S02 e S03 revisadas e aceitas por você em 15/10; 25 cartões de revisão geral (RG-01 a RG-25), quase todos mesclados; uma revisão final independente do Opus concluiu que o CI não ficou mais frouxo e que nada se perdeu na reorganização.
+**O que falta:** texto do `CLAUDE.md` do cartão RG-28, que espera a sua aprovação (seção 6, item 18); limpeza dos ramos antigos no GitHub, só com a sua palavra.

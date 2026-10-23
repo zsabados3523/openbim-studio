@@ -252,7 +252,6 @@ Próximos passos: os números N1 a N4 seguem sem medida (o RG-02 fechou a S04 se
 - Se o `num_threads` do iterador é seguro dentro do processo do `obimcore` (a S03 só usou no processo filho, que pode cair sem dano).
 - O custo real das opções 1B e 1C (N1, N2).
 - A forma mista 4C fora da base sintética e do `casa25`: o V1c (sub-lotes de 100) só foi medido no Linux em tela virtual; na placa e no Windows os números são de antes da divisão. Nenhuma forma foi medida no produto (cartão I1); o V1 mede o protótipo em `lote.py`.
-- (Reconfirmado, sai da dúvida: a M1F mostra de novo que `exec` solta o bloqueio em `ifcopenshell.open` e não em `file.write`; §2.1.)
 - Forma 1 em IFC real; forma 2 e mista em IFC real só na maior fatia (V1b e V1c, Linux em tela virtual); as três com placa real no Windows (T28).
 - O impasse do WARP ao destruir o dispositivo D3D11 (T07c): a causa é interna do WARP e a correção de fundo (F1-D3D11) ainda não existe; com o T07e o programa não congela ao sair, mas a thread presa segura uma trava global do WARP e para a criação de dispositivo novo no mesmo processo.
 - Por que a forma 1 piora com uma terceira thread Python (o T15 mediu o efeito, não a causa).

@@ -1,7 +1,7 @@
 # LOTE_OPUS_72: revisão do relatório de medição V1m (forma mista)
 Revisor: opus (effort médio), contexto fechado. Não escreveu o oráculo nem o código do V1 (o Opus 71 revisou o código; este lote só olha o relatório).
 ## Leia (só estes)
-- `docs/state/cards/F0-S04/F0-S04-V1.md` (critérios 2, 3, 4, 5)
+- `docs/state/arquivo/F0-S04/cartoes/F0-S04-V1.md` (critérios 2, 3, 4, 5)
 - `docs/adr/ADR-004-processos-threads-e-trava.md` §5.1 e §9
 - `docs/state/reports/F0-S04-V1.md` (o que se revisa)
 - JSON brutos: `~/openbim-medicao/2026-10-21-V1m-linux/{lote,pesada}.json`, `~/openbim-medicao/2026-10-21-V1m-placa/{lote,pesada}.json`, `~/openbim-medicao/2026-10-21-V1m-windows/v1m-win.txt`

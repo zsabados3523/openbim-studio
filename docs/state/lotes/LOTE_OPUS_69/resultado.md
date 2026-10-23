@@ -7,9 +7,9 @@ Autor: Opus. Não escrevi o ADR-004 de 2026-10-21 (lote 68) nem `lote.py`, `flux
 ## 1. Entregas (no worktree, sem commit)
 | Arquivo | Linhas | O quê |
 |---|---|---|
-| `docs/state/cards/F0-S04/F0-S04-V1.md` | 43 | Validar a forma mista (T3) |
-| `docs/state/cards/F0-S04/F0-S04-V1b.md` | 27 | `--ifc` e a maior fatia num IFC real (T2) |
-| `docs/state/cards/F0-S04/F0-S04-P1.md` | 35 | Porta única do modelo (T3) |
+| `docs/state/arquivo/F0-S04/cartoes/F0-S04-V1.md` | 43 | Validar a forma mista (T3) |
+| `docs/state/arquivo/F0-S04/cartoes/F0-S04-V1b.md` | 27 | `--ifc` e a maior fatia num IFC real (T2) |
+| `docs/state/arquivo/F0-S04/cartoes/F0-S04-P1.md` | 35 | Porta única do modelo (T3) |
 | `tests/test_s04_v1_mista_oraculo.py` | 393 | V1, regras 2 a 5 do §5.1, erro, comando composto; ensaio sem obimcore e caso real |
 | `tests/test_s04_v1_veredito_oraculo.py` | 166 | V1, critério 1 (intactos por sha256), `veredito_mista` contra conta independente, `main_mista` |
 | `tests/test_s04_p1_trava_oraculo.py` | 301 | P1, a trava de leitura e escrita, empréstimo, porta do C++ (Python puro) e regra 9 |

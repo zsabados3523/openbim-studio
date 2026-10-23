@@ -17,96 +17,17 @@ concurrency:
 jobs:
   # Os nomes dos jobs linux, windows, appimage e instalador-windows são usados na regra de bloqueio de merge (proteger-main). Não renomear.
   # (macos não bloqueia.)
-  linux:
+  # T23L: o job que se chamava `linux` virou as partes `linux-*`; o `linux` no fim só junta o resultado (nome da regra de bloqueio de merge).
+  # Os testes de cada parte são os mesmos de antes (mesmos comandos e variáveis); o tempo de cada arquivo foi medido com --durations=0.
+  # O módulo obimcore sai do `linux-obimcore` (que entrega ao `appimage`); as partes de teste que usam o módulo o compilam de novo (cerca de 25 s).
+  linux-obimcore:
     runs-on: ubuntu-latest
-    env:
-      PLAT: linux-64
+    timeout-minutes: 60
     steps:
       - name: Início (relógio)
         run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Cache de pacotes do conda
-        id: cache_conda
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ runner.temp }}/conda_pkgs
-          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'environment.*.lock', 'packaging/runtime-environment.yml', 'packaging/runtime-environment.*.lock') }}
-      - name: Pasta de pacotes do conda
-        shell: bash
-        run: |
-          echo "CONDA_PKGS_DIRS=$RUNNER_TEMP/conda_pkgs" >> "$GITHUB_ENV"
-          echo "::notice title=cache de pacotes::cache-hit=${{ steps.cache_conda.outputs.cache-hit }}"
-      - uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
-        with:
-          activate-environment: openbim
-          channels: conda-forge
-          conda-remove-defaults: "true"
-          channel-priority: strict
-          miniforge-version: latest
-      - name: Criar o ambiente (pela trava environment.linux-64.lock, se existir)
-        shell: bash -elo pipefail {0}
-        run: |
-          LOCK="environment.${PLAT}.lock"
-          if [ -f "$LOCK" ]; then
-            envs=$(conda env list); if grep -qE '^openbim[[:space:]]' <<<"$envs"; then conda install -n openbim -y -q --file "$LOCK"; else conda create -n openbim -y -q --file "$LOCK"; fi
-            echo "::notice title=ambiente::criado pela trava $LOCK"
-          else
-            conda env update -n openbim -f environment.yml -q
-            echo "::notice title=ambiente::sem trava para ${PLAT}; criado pelo environment.yml"
-          fi
-      - name: Trava do ambiente (informativo; o líder traz o arquivo ao repositório)
-        shell: bash -elo pipefail {0}
-        continue-on-error: true
-        run: |
-          mkdir -p out
-          conda list -n openbim --explicit --md5 > "out/environment.${PLAT}.lock"
-          if [ -f "environment.${PLAT}.lock" ]; then
-            if diff <(grep -v '^#' "environment.${PLAT}.lock" | tr -d '\r') <(grep -v '^#' "out/environment.${PLAT}.lock" | tr -d '\r') >/dev/null; then r="igual à do repositório"; else r="DIFERENTE da do repositório (atualizar)"; fi
-          else r="ainda não existe no repositório (trazer o artefato)"; fi
-          echo "::notice title=trava ${PLAT}::${r}"
-          echo "Trava do ambiente (${PLAT}): ${r}" >> "$GITHUB_STEP_SUMMARY"
-      - name: Localidade pt_BR na máquina descartável (T26; bloqueia o merge)
-        run: |
-          # RG-03: sem a localidade os testes da T26 pulariam sem avisar; agora o passo falha e a chave liga o "pulo vira falha".
-          sudo locale-gen pt_BR.UTF-8 >/dev/null 2>&1 || true
-          sudo update-locale >/dev/null 2>&1 || true
-          locais=$(locale -a); if grep -qi '^pt_BR\.utf-\?8$' <<<"$locais"; then
-            echo "OBIM_LOCALIDADE_OBRIGATORIA=1" >> "$GITHUB_ENV"
-            echo "::notice title=localidade pt_BR::criada"
-          else
-            echo "::error title=localidade pt_BR::não foi criada; os testes da T26 e do fluxo B não podem rodar"
-            exit 1
-          fi
-      - name: Testes
-        shell: bash -elo pipefail {0}
-        run: |
-          # Em caso de falha, as últimas linhas viram anotação pública (o log completo exige login no GitHub).
-          set +e
-          QT_QPA_PLATFORM=offscreen pytest -q -rs tests > pytest.log 2>&1
-          rc=$?
-          cat pytest.log
-          if [ $rc -ne 0 ]; then
-            msg=$(tail -n 40 pytest.log | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
-            echo "::error title=pytest falhou::$msg"
-          fi
-          exit $rc
-      - name: Testes de tela da S03 e desenho do cubo (tela virtual e Mesa por software; bloqueia o merge)
-        shell: bash -elo pipefail {0}
-        timeout-minutes: 20
-        run: |
-          # RG-03: estes testes pulavam sem tela (offscreen). Aqui rodam com Xvfb e Mesa (llvmpipe), e pulo vira falha (OBIM_TELA_OBRIGATORIA=1).
-          mkdir -p out/desenho
-          # Xvfb e Mesa vêm do próprio runner Ubuntu; se faltar, instala só no runner.
-          command -v xvfb-run >/dev/null || sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0
-          OBIM_TELA_OBRIGATORIA=1 OBIM_EXIGIR_DESENHO=1 OBIM_PNG_SAIDA=out/desenho LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe \
-            QT_QPA_PLATFORM=xcb xvfb-run -a -s "-screen 0 1280x1024x24" \
-            pytest -q -rs tests/test_viewport_qrhi.py tests/test_viewport_camera.py tests/test_viewport_malha.py tests/test_viewport_adaptador.py tests/test_viewport_responsivo.py tests/test_viewport_selecao.py
-          test -f out/desenho/cubo.png
-      - name: Inventário de licenças e canal
-        shell: bash -elo pipefail {0}
-        run: |
-          mkdir -p out
-          python scripts/license_inventory.py out/license-inventory.md --informativo
+      - uses: ./.github/actions/ambiente-linux
       - name: Módulo obimcore (S04-T03; compila com a ponte e roda o oráculo R1-a a R1-i; bloqueia o merge)
         shell: bash -elo pipefail {0}
         run: |
@@ -143,13 +64,102 @@ jobs:
             ${{ runner.temp }}/pytest_site
           key: obimcore-${{ github.run_id }}
           lookup-only: true
-      - name: Viewport C++ (S04-T06/T07; bloqueia o merge)
+      - name: Tempo total
+        if: always()
+        run: |
+          echo "### linux-obimcore: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
+
+  linux-testes:
+    name: linux-testes (${{ matrix.parte }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # Parte 1 = todo o resto (arquivo de teste novo cai nela sozinho); 2 = os mais lentos sem o módulo; 3 a 6 = os que usam o módulo.
+        parte: [1, 2, 3, 4, 5, 6]
+        include:
+          - {parte: 1, modulo: false}
+          - {parte: 2, modulo: false}
+          - {parte: 3, modulo: true}
+          - {parte: 4, modulo: true}
+          - {parte: 5, modulo: true}
+          - {parte: 6, modulo: true}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Início (relógio)
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/ambiente-linux
+      - name: Testes (partes 1 e 2; sem o módulo obimcore, e os testes que precisam dele pulam, como antes)
+        if: matrix.parte == 1 || matrix.parte == 2
+        shell: bash -elo pipefail {0}
+        run: |
+          # Em caso de falha, as últimas linhas viram anotação pública (o log completo exige login no GitHub).
+          set +e
+          if [ "${{ matrix.parte }}" = 1 ]; then
+            ALVO="tests --ignore=tests/test_s04_metas.py --ignore=tests/test_s04_t29b_reinicio_oraculo.py --ignore=tests/test_s04_abertura.py"
+          else
+            ALVO="tests/test_s04_metas.py tests/test_s04_t29b_reinicio_oraculo.py tests/test_s04_abertura.py"
+          fi
+          QT_QPA_PLATFORM=offscreen pytest -q -rs $ALVO > pytest.log 2>&1
+          rc=$?
+          cat pytest.log
+          if [ $rc -ne 0 ]; then
+            msg=$(tail -n 40 pytest.log | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=pytest falhou::$msg"
+          fi
+          exit $rc
+      - name: Testes de tela da S03 e desenho do cubo (tela virtual e Mesa por software; bloqueia o merge) (só na parte 1)
+        if: matrix.parte == 1
+        shell: bash -elo pipefail {0}
+        timeout-minutes: 20
+        run: |
+          # RG-03: estes testes pulavam sem tela (offscreen). Aqui rodam com Xvfb e Mesa (llvmpipe), e pulo vira falha (OBIM_TELA_OBRIGATORIA=1).
+          mkdir -p out/desenho
+          # Xvfb e Mesa vêm do próprio runner Ubuntu; se faltar, instala só no runner.
+          command -v xvfb-run >/dev/null || sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0
+          OBIM_TELA_OBRIGATORIA=1 OBIM_EXIGIR_DESENHO=1 OBIM_PNG_SAIDA=out/desenho LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe \
+            QT_QPA_PLATFORM=xcb xvfb-run -a -s "-screen 0 1280x1024x24" \
+            pytest -q -rs tests/test_viewport_qrhi.py tests/test_viewport_camera.py tests/test_viewport_malha.py tests/test_viewport_adaptador.py tests/test_viewport_responsivo.py tests/test_viewport_selecao.py
+          test -f out/desenho/cubo.png
+      - name: Autoteste do oráculo do instalador Windows (T17b; só bash e Python, sem Windows; bloqueia o merge) (só na parte 1)
+        if: matrix.parte == 1
+        shell: bash -elo pipefail {0}
+        run: |
+          out="$(bash packaging/windows/test_instalador_ponte.sh --autoteste)"
+          echo "$out"
+          [ "$(echo "$out" | tail -n 1)" = ok ] || { echo "::error title=autoteste do oráculo do instalador::a última linha não é 'ok'"; exit 1; }
+      - name: REUSE (ferramenta só no CI, ambiente separado) (só na parte 1)
+        if: matrix.parte == 1
+        shell: bash -elo pipefail {0}
+        run: |
+          conda create -n reuse -c conda-forge --override-channels reuse=6.2.0 -y
+          conda run -n reuse reuse lint
+      - name: Módulo obimcore (só compila; o oráculo R1 roda no linux-obimcore)
+        if: matrix.modulo
+        shell: bash -elo pipefail {0}
+        run: bash prototypes/s04/obimcore/build.sh out/s04
+      - name: Viewport C++, parte 3 (S04-T06/T07; bloqueia o merge)
+        if: matrix.parte == 3
         shell: bash -elo pipefail {0}
         timeout-minutes: 30
         run: |
-          # O oráculo abre a tela virtual sozinho em subprocesso (xvfb-run no Linux; no Windows, WARP). Nada na tela real.
+          # O oráculo abre a tela virtual sozinho em subprocesso (xvfb-run no Linux). Nada na tela real.
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
-          OBIM_CI=1 pytest -q -rsP tests/test_s04_viewport.py tests/test_s04_viewport_b.py tests/test_s04_cena.py tests/test_s04_selecao.py tests/test_s04_selecao_c.py tests/test_s04_profundidade.py tests/test_s04_fluxo_a.py tests/test_s04_fluxo_a_camera_selecao.py tests/test_s04_metas.py tests/test_s04_abertura.py
+          OBIM_CI=1 pytest -q -rsP tests/test_s04_viewport.py tests/test_s04_metas.py
+      - name: Viewport C++, parte 4 (S04-T06/T07; bloqueia o merge)
+        if: matrix.parte == 4
+        shell: bash -elo pipefail {0}
+        timeout-minutes: 30
+        run: |
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          OBIM_CI=1 pytest -q -rsP tests/test_s04_viewport_b.py tests/test_s04_cena.py tests/test_s04_selecao.py tests/test_s04_selecao_c.py tests/test_s04_profundidade.py tests/test_s04_fluxo_a.py tests/test_s04_fluxo_a_camera_selecao.py tests/test_s04_abertura.py
+      - name: Viewport C++, parte 5 (T15, V1 e desenho por software; bloqueia o merge)
+        if: matrix.parte == 5
+        shell: bash -elo pipefail {0}
+        timeout-minutes: 30
+        run: |
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15a_threads_fluxo_a.py
           OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15b_formas.py
           OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15c_conferencias.py
@@ -157,52 +167,54 @@ jobs:
           OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15e_painel_ausente.py
           OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15g_postador.py
           OBIM_CI=1 OBIM_S04_V1_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_v1_mista_oraculo.py tests/test_s04_v1_veredito_oraculo.py
-          OBIM_CI=1 OBIM_S04_V1C_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_v1c_sublotes_oraculo.py
-          OBIM_CI=1 OBIM_S04_T07E_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t07e_parar_oraculo.py
           OBIM_CI=1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe pytest -q -rsP tests/test_s04_viewport_software.py  # aviso de desenho por software (F0-RG-13)
-      - name: Fluxo B, paredes em C++ (S04-T13; bloqueia o merge)
-        shell: bash -elo pipefail {0}
-        timeout-minutes: 20
-        run: |
-          # Sem janela: compara o IFC da biblioteca C++ com o do fluxo A (saída igual).
-          bash prototypes/s04/fluxo_b/build.sh out/s04
-          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
-          OBIM_CI=1 pytest -q -rsP tests/test_s04_fluxo_b_paredes.py
-      - name: Fluxo B, executável com janela (S04-T14c; bloqueia o merge)
+      - name: Fluxo B e sublotes (T13, T14c, V1c e T07e; bloqueia o merge) (só na parte 6)
+        if: matrix.parte == 6
         shell: bash -elo pipefail {0}
         timeout-minutes: 40
         run: |
-          # O build.sh do passo anterior já gerou fluxo_b_janela ao lado do módulo. Tela virtual (xvfb-run no Linux; WARP no Windows), nada na tela real.
-          # O oráculo roda o fluxo A de referência (roteiro R) e o executável de B com a mesma base; autotestes de localidade, `ler`, corrida e memória sem janela.
+          # Sem janela: compara o IFC da biblioteca C++ com o do fluxo A (T13); o executável com janela (T14c) roda em tela virtual.
+          bash prototypes/s04/fluxo_b/build.sh out/s04
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          OBIM_CI=1 pytest -q -rsP tests/test_s04_fluxo_b_paredes.py
           OBIM_CI=1 OBIM_S04_T14_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_fluxo_b_janela.py
+          OBIM_CI=1 OBIM_S04_V1C_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_v1c_sublotes_oraculo.py
+          OBIM_CI=1 OBIM_S04_T07E_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t07e_parar_oraculo.py
+      - name: Tempo total
+        if: always()
+        run: |
+          echo "### linux-testes (${{ matrix.parte }}): tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
+
+  # Passos que só informam (nunca bloqueiam): ficam fora do needs do `linux`, como o windows-medicoes.
+  linux-informativo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - name: Início (relógio)
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/ambiente-linux
+      - name: Inventário de licenças e canal
+        shell: bash -elo pipefail {0}
+        run: |
+          mkdir -p out
+          python scripts/license_inventory.py out/license-inventory.md --informativo
       - name: Sonda da thread de desenho (S04-T05; informativo, não bloqueia)
         shell: bash -elo pipefail {0}
         continue-on-error: true
         timeout-minutes: 5
         run: |
-          # Desenho por software (Linux: tela virtual + Mesa; Windows: WARP). Nenhuma janela na tela real.
+          # Desenho por software (Linux: tela virtual + Mesa). Nenhuma janela na tela real.
           mkdir -p out/s04_sonda
           B="$(python -c 'import os; print(os.path.abspath("out/s04_sonda/build"))')"; O="$(python -c 'import os; print(os.path.abspath("out/s04_sonda"))')"
-          if [ "${RUNNER_OS}" = "Windows" ]; then GEN=(-A x64); else GEN=(-G Ninja); fi
-          cmake -S prototypes/s04/sonda_desenho -B "$B" "${GEN[@]}" -DCMAKE_BUILD_TYPE=Release -DOBIM_SAIDA="$O" -DCMAKE_PREFIX_PATH="$CONDA_PREFIX"
+          cmake -S prototypes/s04/sonda_desenho -B "$B" -G Ninja -DCMAKE_BUILD_TYPE=Release -DOBIM_SAIDA="$O" -DCMAKE_PREFIX_PATH="$CONDA_PREFIX"
           cmake --build "$B" --config Release
           QT_QPA_PLATFORM=xcb LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x800x24" python prototypes/s04/sonda_desenho/sonda.py "$O" out/s04_sonda/sonda.json; rc=$?
           cat out/s04_sonda/sonda.json || true
           echo "::notice title=sonda da thread de desenho no ${RUNNER_OS}::$(python -c "import json; r=json.load(open('out/s04_sonda/sonda.json')); print('rc=$rc meta_atingida=%s' % r.get('meta_atingida'), {k:v.get('maior_intervalo_ms') for k,v in r['fases'].items() if isinstance(v,dict)})" || echo sem resultado)"
           echo "Sonda da thread de desenho (${RUNNER_OS}): código $rc, relatório em out/s04_sonda/sonda.json" >> "$GITHUB_STEP_SUMMARY"
           true
-      - name: Autoteste do oráculo do instalador Windows (T17b; só bash e Python, sem Windows; bloqueia o merge)
-        shell: bash -elo pipefail {0}
-        run: |
-          out="$(bash packaging/windows/test_instalador_ponte.sh --autoteste)"
-          echo "$out"
-          [ "$(echo "$out" | tail -n 1)" = ok ] || { echo "::error title=autoteste do oráculo do instalador::a última linha não é 'ok'"; exit 1; }
-      - name: REUSE (ferramenta só no CI, ambiente separado)
-        shell: bash -elo pipefail {0}
-        run: |
-          conda create -n reuse -c conda-forge --override-channels reuse=6.2.0 -y
-          conda run -n reuse reuse lint
       - name: Gravação do roteiro (experimento T12; não bloqueia)
         shell: bash -elo pipefail {0}
         continue-on-error: true
@@ -220,7 +232,21 @@ jobs:
       - name: Tempo total
         if: always()
         run: |
-          echo "Tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
+          echo "### linux-informativo: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
+
+  # Mantém o nome `linux` (regra de bloqueio de merge): passa só se TODOS os jobs paralelos acima que bloqueiam passarem.
+  linux:
+    if: always()
+    needs: [linux-obimcore, linux-testes]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Todos os jobs do Linux passaram
+        env:
+          RESULTADOS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "resultados: $RESULTADOS"
+          for r in $RESULTADOS; do [ "$r" = success ] || { echo "::error title=linux::algum job do Linux não passou ($RESULTADOS)"; exit 1; }; done
 
   # Windows em jobs paralelos (T25). O job `windows` no fim só junta o resultado: o nome é o usado na regra de bloqueio de merge.
   windows-testes:
@@ -860,7 +886,7 @@ jobs:
   # Gera o AppImage (pacote Linux) a cada alteração. Bloqueia o merge: o job `appimage` é obrigatório na regra proteger-main. Não renomear.
   appimage:
     runs-on: ubuntu-latest
-    needs: linux  # T17a: o módulo obimcore é compilado no job linux e entra no pacote pronto (o pacote não tem compilador)
+    needs: linux-obimcore  # T17a/T23L: o módulo obimcore é compilado no linux-obimcore e entra no pacote pronto (o pacote não tem compilador)
     timeout-minutes: 45
     steps:
       - name: Início (relógio)

@@ -115,7 +115,7 @@ FALHAS = [[], ["4_controle_forma2"], ["4_surda"], ["4_mouse_forma2", "5_m5_mista
 INTACTAS = {"lote_cmd": "d5bb3138e24a7d04", "_caminhos": "64f71a63eeeb8595", "preparar": "539e2f9d37df2760", "_Fatiador": "0ddc417fe50fb112",
             "_CenaFatiada": "b4174a96f4de1130", "_forma_1": "f755f6e78f911dc8", "_forma_2": "6b98d53c60b27427", "_maior": "e0460bb707cd66ad",
             "resumo": "01448951e43bafbe", "main": "767c40caa9d53267", "base_pesada": "e3702a51a13ee328", "medir_pesada": "a18a297a6907c696",
-            "main_pesada": "b5a243299bd527d7", "medir*": "b4455d847876c220", "__main__": "13e66f06a3d11547", "fluxo_a.py": "4b185cd5d8ff5f99"}  # main de 2026-10-21 (0de3e74)
+            "main_pesada": "b5a243299bd527d7", "medir*": "b4455d847876c220", "__main__": "13e66f06a3d11547", "fluxo_a.py": "2ac5652b2842244d"}  # main de 2026-10-21 (0de3e74) + V1c de 2026-10-22
 
 
 def _h(t):

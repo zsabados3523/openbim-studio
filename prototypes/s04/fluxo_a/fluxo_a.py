@@ -26,6 +26,7 @@ CAMERA = {"orbitar": ("orbitar", "dx dy"), "camera_mover": ("mover", "dx dy"), "
           "animar_orbita": ("animar_orbita", "graus_por_s"), "parar_animacao": ("parar_animacao", "")}
 LIVRES = {"selecionar", "camera", "esperar", *CAMERA}  # sem trava e sem transação
 BLOCO = 500  # produtos por `malhas` na abertura
+SUBLOTE_CONTAINER = 100  # peças por chamada de spatial.assign_container (V1c); lido do módulo na hora da chamada
 
 
 def _modelo_novo():
@@ -297,7 +298,9 @@ class FluxoA:
                 api("material.assign_material", self.ifc, products=[w], type="IfcMaterialLayerSetUsage", material=conj)
             ws.append(w)
         api("type.assign_type", self.ifc, related_objects=ws, relating_type=tipo, should_map_representations=False)  # uma chamada só para o lote: evita custo quadrático (lote Opus 23 A1)
-        api("spatial.assign_container", self.ifc, products=ws, relating_structure=min(pavs, key=lambda s: s.Name or ""))
+        pav = min(pavs, key=lambda s: s.Name or "")
+        for i in range(0, len(ws), SUBLOTE_CONTAINER):  # sub-lotes: o `api` é o ponto de cessão entre eles; a relação continua uma só
+            api("spatial.assign_container", self.ifc, products=ws[i:i + SUBLOTE_CONTAINER], relating_structure=pav)
         u["criados"], u["geometria"] = [w.GlobalId for w in ws], [w.GlobalId for w in ws]
         u["dg"] = n
 

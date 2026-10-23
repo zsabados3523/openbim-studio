@@ -7,7 +7,7 @@ Autor: redator (sonnet, cartão T1 de documentos). Só junta o que já está esc
 1. A fatia S04 chegou ao fim técnico: a estrutura híbrida (Python mais núcleo em C++) e a forma mista das threads foram aceitas por você em 23/10 (ADR-001 e ADR-004).
 2. Na sua placa de vídeo, todas as metas de velocidade passaram, inclusive a troca de parede nos seus arquivos reais (cerca de 49 ms; antes 399 e 6.749) e o arquivo pesado (52 s e 5.858 MB contra 6.000).
 3. Duas coisas ficaram abaixo do que se queria, e você aceitou: o teste automático do Windows leva cerca de 12 min (meta 10, objetivo mantido para a F1) e a folga de memória do pesado é só de 42 MB no pior caso já visto.
-4. Fica aberto, com cartão e dono: a trava rara do Windows sem placa compatível (F1), o Windows com placa real (T28, seu), quatro números do ADR-004 sem medida e o encurtamento do CI do Linux (PR 275 em revisão).
+4. Fica aberto, com cartão e dono: a trava rara do Windows sem placa compatível (F1), o Windows com placa real (T28, seu), e quatro números do ADR-004 sem medida. O CI do Linux já foi encurtado (T23L, PR 275 mesclado: 9:15).
 5. Falta só o seu aceite pelo roteiro `docs/acceptance/S04.md`; depois disso a S04 pode ser marcada FECHADA.
 
 ## 1. Metas da S04 contra o medido final
@@ -29,7 +29,7 @@ Fonte principal: `reports/F0-S04-M1F.md` (placa real RTX 3070, Linux, `main` em 
 | Simples e detalhado no bloco 250 | mesmas 3 metas | simples 1,91 s, 955 MB, 14,4 ms; detalhado 26,7 s, 3.568 MB, 52,2 ms | detalhado 19,2 s, 5.063 MB (bloco 1.000) | atingida (detalhado 3,3 s mais lento e 1,4 GB mais leve) | `M1F` |
 | Forma mista das threads (V1) | réguas do ADR-004 §5.1 | `veredito` ok no Linux local e na placa; Windows (informativo) também ok; V1b no IFC de 25 MB: maior fatia 165,5 ms (forma 2) e 176,7 ms (mista), antes 1.018 e 1.082; V1m `lote` com 0,3% fora (aceito como ruído) | maior fatia acima de 1.000 ms | atingida, com 1 item aceito pelo PO | `F0-S04-V1.md` |
 | CI do Windows | 10 min | mediana 11:58 (11:57, 12:16, 11:58), antes 17:48 | 17:48 | **não atingida; PO aceitou cerca de 12 min** | `T23d.md` |
-| CI do Linux | 10 min | mediana 9:15 (7:20, 9:23, 9:15), antes 39:31 | 39:31 | atingida na mediana, com pouca folga; PR 275 em revisão | `T23L.md` (ramo `s04-t23l`) |
+| CI do Linux | 10 min | mediana 9:15 (7:20, 9:23, 9:15), antes 39:31 | 39:31 | atingida na mediana, com pouca folga; PR 275 mesclado | `T23L.md` |
 
 Observação sobre o Windows: tudo no Windows saiu do CI com desenho por software (WARP); Windows com placa real não foi medido (cartão T28).
 
@@ -55,7 +55,7 @@ Observação sobre o Windows: tudo no Windows saiu do CI com desenho por softwar
 | T29 e T34b parte (b) | `BOARD.md`, `cards` | só se a medida inconclusiva (`razao_exec` entre 0,3 e 0,8) voltar a aparecer; nenhuma ação agora |
 | `DadosCena::geracao()` sem uso | `BOARD.md` (T30b3) | sai no próximo cartão que mexer em `cena.h` |
 | Sugestão de incluir `<string>` no código do T07e | este relatório (sugestão passada pelo líder; sem registro anterior no repositório) | sem cartão; entra junto com o próximo cartão que mexer no código do T07e |
-| CI do Linux (T23L) | PR 275, relatório no ramo `s04-t23l` | em revisão; mediana 9:15 |
+| CI do Linux (T23L) | PR 275, relatório `reports/F0-S04-T23L.md` | mesclado; mediana 9:15 |
 | Termos do conda-forge, SINAPI | `BOARD.md` (S01) | já abertos antes, sem bloquear |
 
 ## 4. Riscos conhecidos

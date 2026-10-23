@@ -19,9 +19,14 @@ GUARDA (pula, nunca afrouxa): sem ifcopenshell ou sem o fluxo A, pula; com OBIM_
 CORREÇÃO (2026-10-22, CI do PR 261): o ifcopenshell guarda o histórico de desfazer de cada arquivo num dicionário da CLASSE (`ifcopenshell.file.registry`),
 que nunca solta: os ~10 modelos deste arquivo (~75 mil objetos cada) ficavam vivos e cada varredura do coletor do Python ficava mais longa, até uma pausa
 única de ~250-500 ms no teste seguinte (test_viewport_responsivo). Agora cada caso tira do registro os arquivos que ele mesmo criou e coleta o lixo ao
-terminar (`_limpa`, autouse); nenhum número nem caso mudou."""
+terminar (`_limpa`, autouse); nenhum número nem caso mudou.
+CORREÇÃO 2 (2026-10-22, windows-testes do PR 261 ainda lento depois da 1): nada do oráculo roda mais no processo do pytest. Cada caso `caso_*` roda num
+pytest FILHO (subprocesso, OBIM_S04_V1C_DENTRO=1) sobre este mesmo arquivo; o processo de fora só importa a biblioteca padrão e lê o resultado.
+Os casos, números e marcas são os mesmos; pulo dentro do filho vira pulo (ou falha, com OBRIGATORIO) fora."""
 import gc
 import itertools
+import subprocess
+import sys
 import math
 import os
 import tempfile
@@ -31,6 +36,8 @@ from pathlib import Path
 import pytest
 
 OBRIGATORIO = os.environ.get("OBIM_S04_V1C_OBRIGATORIO") == "1"
+DENTRO = os.environ.get("OBIM_S04_V1C_DENTRO") == "1"  # 1 = este é o pytest filho (o subprocesso que roda os casos)
+ESTE = Path(__file__).resolve()
 AINDA_NAO = pytest.mark.xfail(strict=True, reason="V1c: _paredes ainda faz uma chamada única de spatial.assign_container")
 SUBLOTE = 100  # o valor fixado acima (medido)
 N = 1000
@@ -43,6 +50,9 @@ def pular(msg):
 
 @pytest.fixture(autouse=True)
 def _limpa():  # solta o histórico dos modelos DESTE caso (registro da classe) e coleta aqui, não no teste seguinte de outro arquivo
+    if not DENTRO:  # de fora não há modelo nenhum (nem import do ifcopenshell)
+        yield
+        return
     try:
         import ifcopenshell
         reg = getattr(ifcopenshell.file, "registry", {})  # `ifcopenshell.file` é a CLASSE (o pacote reexporta), não o submódulo
@@ -108,7 +118,7 @@ def _uma_relacao_com_todas(f, guids):
 
 # ---------- (a) o IFC é o da chamada única ----------
 @pytest.mark.parametrize("modelo", ["base300", "novo"])  # "novo": pavimento SEM relação de contenção (a armadilha "uma relação por sub-lote")
-def test_a_ifc_igual_ao_da_chamada_unica(mods, monkeypatch, modelo):
+def caso_a_ifc_igual_ao_da_chamada_unica(mods, monkeypatch, modelo):
     base = mods["base"] if modelo == "base300" else None
     f1, g1, _ = _rodar(mods, monkeypatch, base, sublote=10**6)  # referência: um sub-lote só = a chamada única
     f2, g2, _ = _rodar(mods, monkeypatch, base)  # o valor do módulo
@@ -130,12 +140,12 @@ def _espia_ac(reg):
     return embrulho
 
 
-def test_b_constante_fixada(mods):
+def caso_b_constante_fixada(mods):
     assert getattr(mods["fluxo_a"], "SUBLOTE_CONTAINER", None) == SUBLOTE, "fluxo_a.SUBLOTE_CONTAINER deve ser 100 (valor medido, ver cabeçalho)"
 
 
 @pytest.mark.parametrize("n", [N, 1001, 250])  # 1001 e 250: o resto do último sub-lote
-def test_b_chamadas_em_sublotes(mods, monkeypatch, n):
+def caso_b_chamadas_em_sublotes(mods, monkeypatch, n):
     reg = []
     f, guids, _ = _rodar(mods, monkeypatch, mods["base"], n=n, espiao=_espia_ac(reg))
     assert len(reg) >= math.ceil(n / SUBLOTE), f"{len(reg)} chamadas de {AC} para {n} peças (mínimo {math.ceil(n / SUBLOTE)})"
@@ -147,7 +157,7 @@ def test_b_chamadas_em_sublotes(mods, monkeypatch, n):
 
 
 # ---------- (c) desfazer/refazer do lote é um passo só e inteiro ----------
-def test_c_desfazer_refazer_um_passo(mods, monkeypatch):
+def caso_c_desfazer_refazer_um_passo(mods, monkeypatch):
     reg = []
     f, guids, antes = _rodar(mods, monkeypatch, mods["base"], espiao=_espia_ac(reg))
     assert reg, f"{AC} não passou pelo `api` do módulo"
@@ -162,7 +172,7 @@ def test_c_desfazer_refazer_um_passo(mods, monkeypatch):
 
 
 # ---------- (d) o ponto de cessão passa entre sub-lotes ----------
-def test_d_cessao_entre_sublotes(mods, monkeypatch):
+def caso_d_cessao_entre_sublotes(mods, monkeypatch):
     lote, ev = mods["lote"], []
     fat = lote._Fatiador(lambda: ev.append("cessao"))
 
@@ -181,3 +191,26 @@ def test_d_cessao_entre_sublotes(mods, monkeypatch):
     sem = [(a, b) for a, b in zip(idx, idx[1:]) if "cessao" not in ev[a:b]]
     assert not sem, f"{len(sem)} pares de sub-lotes sem cessão entre eles"
     assert ev.count("cessao") >= len(idx) - 1
+
+
+# ---------- de fora: cada caso num pytest filho; nada de ifcopenshell, modelo ou monkeypatch neste processo ----------
+CASOS = sorted(k[5:] for k in list(globals()) if k.startswith("caso_"))
+if DENTRO:
+    for _k in CASOS:
+        globals()["test_" + _k] = globals()["caso_" + _k]
+else:
+    @pytest.mark.parametrize("caso", CASOS)
+    def test_v1c_em_subprocesso(caso):
+        env = dict(os.environ, OBIM_S04_V1C_DENTRO="1")
+        cmd = [sys.executable, "-m", "pytest", "-q", "-rsxX", "-p", "no:cacheprovider", f"{ESTE}::test_{caso}"]
+        try:
+            r = subprocess.run(cmd, cwd=str(ESTE.parent.parent), env=env, capture_output=True, text=True, timeout=900)
+        except subprocess.TimeoutExpired:
+            pytest.fail(f"caso {caso}: o pytest filho passou de 900 s")
+        saida = r.stdout + r.stderr
+        fim = saida.strip().splitlines()[-1] if saida.strip() else ""
+        if r.returncode == 0 and " passed" in fim and not any(x in fim for x in ("skipped", "xfail", "xpass", "error")):
+            return
+        if r.returncode == 0 and "skipped" in fim and " passed" not in fim:
+            pular(f"caso {caso} pulou no filho: {fim}")
+        pytest.fail(f"caso {caso}: pytest filho com código {r.returncode}\n{saida[-4000:]}")

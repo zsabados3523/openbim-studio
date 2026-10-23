@@ -1,6 +1,6 @@
 # Quadro da F0
 
-> Atualizado: 2026-10-23 (fechamento da S04: relatório `reports/F0-S04-fechamento.md`, aguarda aceite do PO; S05 aberta, T01 em revisão aguardando a P6 do PO). Só o que está **aberto**. Visão da máquina; o PO lê `docs/PAINEL_DO_PROJETO.md`. Fonte: `v2/03_fase0_especificacao.md`. Status de uma palavra: PRONTA · EM_ANDAMENTO · PAUSADA · BLOQUEADA · AGUARDA_PO · AGUARDA_OPUS · ABERTA · NAO_INICIADA · CONTINUA. Fatias e cartões fechados, com a história de cada um (lotes, reprovações, PRs): `arquivo/BOARD-historico-2026-10-15.md` e `LOG.md`.
+> Atualizado: 2026-10-23 (fechamento da S04: relatório `reports/F0-S04-fechamento.md`, aguarda aceite do PO; S05 aberta; T01 e T01b feitas; P6 decidida pelo PO em 23/10, mapa juntado ao painel). Só o que está **aberto**. Visão da máquina; o PO lê `docs/PAINEL_DO_PROJETO.md`. Fonte: `v2/03_fase0_especificacao.md`. Status de uma palavra: PRONTA · EM_ANDAMENTO · PAUSADA · BLOQUEADA · AGUARDA_PO · AGUARDA_OPUS · ABERTA · NAO_INICIADA · CONTINUA. Fatias e cartões fechados, com a história de cada um (lotes, reprovações, PRs): `arquivo/BOARD-historico-2026-10-15.md` e `LOG.md`.
 
 ## Fatias
 | Fatia | Nome | Tam. | Status | Nota |
@@ -9,7 +9,7 @@
 | F0-S02 | CI Windows+Linux e app esqueleto | G | FECHADA | Aceita pelo PO (2026-10-15). Resta o cartão F0-S02-T23 (antes do primeiro release) |
 | F0-S03 | Protótipo de viewport (Qt RHI) | M | FECHADA | Portão aprovado pelo PO. Restam T27 e T28 (abaixo). Relatório: `reports/F0-S03.md` |
 | F0-S04 | Ponte Python↔C++ (híbrido vs C++ puro) | G, crítica | AGUARDA ACEITE DO PO (roteiro `docs/acceptance/S04.md`) | Fechamento técnico em 2026-10-23: ADR-001 (híbrido) e ADR-004 (forma mista) aceitos pelo PO; M1F na placa atingiu M1 a M5, memória do pesado (5.858 MB, bloco 250) e M2b em IFC real (`reports/F0-S04-M1F.md`); CI do Windows em cerca de 12 min aceito (meta de 10 min vai à F1); WARP adiado à F1. Relatório de fechamento: `reports/F0-S04-fechamento.md`. Abertos fora da fatia: F1-D3D11, F1-CI-cadeia-instalador, T28 (Windows com placa). T23L já mesclado (PR 275) |
-| F0-S05 | Oplog, undo e merge | M | EM_ANDAMENTO | Plano e cartões T01 a T12 em `cards/F0-S05/README.md` (ordem, dependências, perguntas P1 a P6 ao PO; P1 a P5 aprovadas pelo PO em 2026-10-23, P6 aberta). Requisitos G1 a G6, M1 e M2 do T00 copiados nos cartões |
+| F0-S05 | Oplog, undo e merge | M | EM_ANDAMENTO | Plano e cartões T01 a T12 em `cards/F0-S05/README.md` (ordem, dependências, perguntas P1 a P6 ao PO; P1 a P6 decididas pelo PO em 2026-10-23). Requisitos G1 a G6, M1 e M2 do T00 copiados nos cartões |
 | F0-S06 | Planta e corte (HLR) + vista no `.obim` | G, crítica | NAO_INICIADA | Contém T3 |
 | F0-S07 | Tipo paramétrico por script | P | NAO_INICIADA | Depende da S04 |
 | F0-S08 | Corpus e gabaritos | P | CONTINUA | Downloads só com ok do PO |
@@ -66,7 +66,8 @@
 | F0-S04-T30c | Sondas de sub-lote nos dados reais (só números) | T2 | FEITA (PR 220; relatório PR 221) | T2_VALE nos 3 IFC do PO (`reports/F0-S04-T30c-dados-reais.md`) |
 | F0-S04-T30b3 | Expor `geracao` ao Python e limpar código morto (`proximo`, `Cursor`) | T3 | FEITA (PR 229 mesclado) | Aprovado pelo lote Opus 66. `DadosCena::geracao()` sem uso sai no próximo cartão que mexer em `cena.h` |
 | F0-S04-T29e | Medida `pos_emitir_mb` e critério novo (d′, e) do ensaio do pesado | T3 | FEITA (PRs 227 e 228 mesclados) | Aprovado pelo lote Opus 66 (oráculo no Linux: 104 passaram; 2 mutações reprovam). Ensaio do pesado em `reports/F0-S04-T29e-ensaio.md` |
-| F0-S05-T01 | Organização: quadro, mapa e painel | T1 | AGUARDA_PO | Três arquivos postos em dia; relatório `reports/F0-S05-T01-organizacao.md`; nada apagado nem fundido até a resposta P6 |
+| F0-S05-T01 | Organização: quadro, mapa e painel | T1 | FEITA | P6 decidida pelo PO em 23/10: quadro e painel ficam; mapa juntado ao painel e apagado em T01b. Relatório `reports/F0-S05-T01-organizacao.md` |
+| F0-S05-T01b | Juntar o mapa no painel e atualizar o CLAUDE.md (P6) | T0 | FEITA | Cartão `cards/F0-S05/F0-S05-T01b.md`; `docs/MAPA_DO_PROJETO.md` apagado; CLAUDE.md com o painel |
 | F0-S05-T02 | Sondas do ifcopenshell (só números) | T2 | PRONTA | Primeiro da S05; P3 aprovada |
 | F0-S05-T03 | ADR-002, rascunho | TA | NAO_INICIADA | Opus, lote A; depende de T02 e de P1 a P5 |
 | F0-S05-T04 | Transação única IFC + lateral, prova das 10.000 | T3 | NAO_INICIADA | Depende de T03; P1, P2 |

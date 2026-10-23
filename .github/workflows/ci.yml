@@ -82,7 +82,7 @@ jobs:
         run: |
           # Em caso de falha, as últimas linhas viram anotação pública (o log completo exige login no GitHub).
           set +e
-          QT_QPA_PLATFORM=offscreen pytest -q -rs tests > pytest.log 2>&1
+          QT_QPA_PLATFORM=offscreen pytest -q --durations=0 -rs tests > pytest.log 2>&1
           rc=$?
           cat pytest.log
           if [ $rc -ne 0 ]; then
@@ -100,7 +100,7 @@ jobs:
           command -v xvfb-run >/dev/null || sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0
           OBIM_TELA_OBRIGATORIA=1 OBIM_EXIGIR_DESENHO=1 OBIM_PNG_SAIDA=out/desenho LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe \
             QT_QPA_PLATFORM=xcb xvfb-run -a -s "-screen 0 1280x1024x24" \
-            pytest -q -rs tests/test_viewport_qrhi.py tests/test_viewport_camera.py tests/test_viewport_malha.py tests/test_viewport_adaptador.py tests/test_viewport_responsivo.py tests/test_viewport_selecao.py
+            pytest -q --durations=0 -rs tests/test_viewport_qrhi.py tests/test_viewport_camera.py tests/test_viewport_malha.py tests/test_viewport_adaptador.py tests/test_viewport_responsivo.py tests/test_viewport_selecao.py
           test -f out/desenho/cubo.png
       - name: Inventário de licenças e canal
         shell: bash -elo pipefail {0}
@@ -121,8 +121,8 @@ jobs:
           echo "obimcore ${RUNNER_OS}: limpo $(grep OBIMCORE "$RUNNER_TEMP/b1.txt") | incremental $(grep OBIMCORE "$RUNNER_TEMP/b2.txt")" >> "$GITHUB_STEP_SUMMARY"
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_CI=1  # liga todas as chaves de obrigatório (pulo vira falha; tests/conftest.py) (T04c entregou versao()["registro_ifc4"])
-          QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_ponte.py
-          OBIM_S04_P1_OBRIGATORIO=1 QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_p1_trava_oraculo.py tests/test_s04_p1_obimcore_oraculo.py
+          QT_QPA_PLATFORM=offscreen pytest -q --durations=0 -rs tests/test_s04_ponte.py
+          OBIM_S04_P1_OBRIGATORIO=1 QT_QPA_PLATFORM=offscreen pytest -q --durations=0 -rs tests/test_s04_p1_trava_oraculo.py tests/test_s04_p1_obimcore_oraculo.py
       - name: Entregar o módulo obimcore e o pytest ao job appimage (T17a; usa a ação de cache que já está fixada)
         shell: bash -elo pipefail {0}
         run: |
@@ -149,17 +149,17 @@ jobs:
         run: |
           # O oráculo abre a tela virtual sozinho em subprocesso (xvfb-run no Linux; no Windows, WARP). Nada na tela real.
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
-          OBIM_CI=1 pytest -q -rsP tests/test_s04_viewport.py tests/test_s04_viewport_b.py tests/test_s04_cena.py tests/test_s04_selecao.py tests/test_s04_selecao_c.py tests/test_s04_profundidade.py tests/test_s04_fluxo_a.py tests/test_s04_fluxo_a_camera_selecao.py tests/test_s04_metas.py tests/test_s04_abertura.py
-          OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15a_threads_fluxo_a.py
-          OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15b_formas.py
-          OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15c_conferencias.py
-          OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15d_parede_pesada.py
-          OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15e_painel_ausente.py
-          OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15g_postador.py
-          OBIM_CI=1 OBIM_S04_V1_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_v1_mista_oraculo.py tests/test_s04_v1_veredito_oraculo.py
-          OBIM_CI=1 OBIM_S04_V1C_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_v1c_sublotes_oraculo.py
-          OBIM_CI=1 OBIM_S04_T07E_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t07e_parar_oraculo.py
-          OBIM_CI=1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe pytest -q -rsP tests/test_s04_viewport_software.py  # aviso de desenho por software (F0-RG-13)
+          OBIM_CI=1 pytest -q --durations=0 -rsP tests/test_s04_viewport.py tests/test_s04_viewport_b.py tests/test_s04_cena.py tests/test_s04_selecao.py tests/test_s04_selecao_c.py tests/test_s04_profundidade.py tests/test_s04_fluxo_a.py tests/test_s04_fluxo_a_camera_selecao.py tests/test_s04_metas.py tests/test_s04_abertura.py
+          OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q --durations=0 -rsP tests/test_s04_t15a_threads_fluxo_a.py
+          OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q --durations=0 -rsP tests/test_s04_t15b_formas.py
+          OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q --durations=0 -rsP tests/test_s04_t15c_conferencias.py
+          OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q --durations=0 -rsP tests/test_s04_t15d_parede_pesada.py
+          OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q --durations=0 -rsP tests/test_s04_t15e_painel_ausente.py
+          OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q --durations=0 -rsP tests/test_s04_t15g_postador.py
+          OBIM_CI=1 OBIM_S04_V1_OBRIGATORIO=1 pytest -q --durations=0 -rsP tests/test_s04_v1_mista_oraculo.py tests/test_s04_v1_veredito_oraculo.py
+          OBIM_CI=1 OBIM_S04_V1C_OBRIGATORIO=1 pytest -q --durations=0 -rsP tests/test_s04_v1c_sublotes_oraculo.py
+          OBIM_CI=1 OBIM_S04_T07E_OBRIGATORIO=1 pytest -q --durations=0 -rsP tests/test_s04_t07e_parar_oraculo.py
+          OBIM_CI=1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe pytest -q --durations=0 -rsP tests/test_s04_viewport_software.py  # aviso de desenho por software (F0-RG-13)
       - name: Fluxo B, paredes em C++ (S04-T13; bloqueia o merge)
         shell: bash -elo pipefail {0}
         timeout-minutes: 20
@@ -167,7 +167,7 @@ jobs:
           # Sem janela: compara o IFC da biblioteca C++ com o do fluxo A (saída igual).
           bash prototypes/s04/fluxo_b/build.sh out/s04
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
-          OBIM_CI=1 pytest -q -rsP tests/test_s04_fluxo_b_paredes.py
+          OBIM_CI=1 pytest -q --durations=0 -rsP tests/test_s04_fluxo_b_paredes.py
       - name: Fluxo B, executável com janela (S04-T14c; bloqueia o merge)
         shell: bash -elo pipefail {0}
         timeout-minutes: 40
@@ -175,7 +175,7 @@ jobs:
           # O build.sh do passo anterior já gerou fluxo_b_janela ao lado do módulo. Tela virtual (xvfb-run no Linux; WARP no Windows), nada na tela real.
           # O oráculo roda o fluxo A de referência (roteiro R) e o executável de B com a mesma base; autotestes de localidade, `ler`, corrida e memória sem janela.
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
-          OBIM_CI=1 OBIM_S04_T14_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_fluxo_b_janela.py
+          OBIM_CI=1 OBIM_S04_T14_OBRIGATORIO=1 pytest -q --durations=0 -rsP tests/test_s04_fluxo_b_janela.py
       - name: Sonda da thread de desenho (S04-T05; informativo, não bloqueia)
         shell: bash -elo pipefail {0}
         continue-on-error: true
@@ -246,7 +246,7 @@ jobs:
         run: |
           # Em caso de falha, as últimas linhas viram anotação pública (o log completo exige login no GitHub).
           set +e
-          QT_QPA_PLATFORM=offscreen pytest -q -rs ${{ matrix.alvo }} > pytest.log 2>&1
+          QT_QPA_PLATFORM=offscreen pytest -q --durations=0 -rs ${{ matrix.alvo }} > pytest.log 2>&1
           rc=$?
           cat pytest.log
           if [ $rc -ne 0 ]; then
@@ -265,7 +265,7 @@ jobs:
           for modo in warp padrao; do
             if [ "$modo" = warp ]; then export QSG_RHI_PREFER_SOFTWARE_RENDERER=1; else unset QSG_RHI_PREFER_SOFTWARE_RENDERER; fi
             OBIM_EXIGIR_DESENHO=1 OBIM_PNG_SAIDA=out/desenho QT_QPA_PLATFORM=windows QSG_RHI_BACKEND=d3d11 \
-              pytest -q -s -rs tests/test_viewport_qrhi.py > "out/desenho/pytest-desenho-$modo.log" 2>&1
+              pytest -q --durations=0 -s -rs tests/test_viewport_qrhi.py > "out/desenho/pytest-desenho-$modo.log" 2>&1
             rc=$?
             cat "out/desenho/pytest-desenho-$modo.log"
             if [ $rc -eq 0 ] && [ -f out/desenho/cubo.png ]; then r="DESENHA no modo $modo ($(grep 'RHI backend' "out/desenho/pytest-desenho-$modo.log" | head -n 1))"; break; fi
@@ -275,7 +275,7 @@ jobs:
           echo "Desenho do cubo (Windows): ${r}" >> "$GITHUB_STEP_SUMMARY"
           # T27: reabertura da janela 3D (P17) no Windows, no mesmo modo gráfico em que o laço acima parou. Informativo: o resultado vai ao aviso e ao resumo, nunca bloqueia.
           OBIM_TELA_OBRIGATORIA=1 QT_QPA_PLATFORM=windows QSG_RHI_BACKEND=d3d11 \
-            pytest -q -s -rs tests/test_viewport_adaptador.py > out/desenho/pytest-reabertura.log 2>&1
+            pytest -q --durations=0 -s -rs tests/test_viewport_adaptador.py > out/desenho/pytest-reabertura.log 2>&1
           rc=$?
           cat out/desenho/pytest-reabertura.log
           if [ $rc -eq 0 ]; then r2="PASSOU no modo $modo"; else r2="FALHOU (código $rc, modo $modo): $(tail -n 3 out/desenho/pytest-reabertura.log | tr '\n' ' ' | cut -c1-300)"; fi
@@ -386,8 +386,8 @@ jobs:
         run: |
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_CI=1  # liga todas as chaves de obrigatório (pulo vira falha; tests/conftest.py) (T04c entregou versao()["registro_ifc4"])
-          QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_ponte.py
-          OBIM_S04_P1_OBRIGATORIO=1 QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_p1_trava_oraculo.py tests/test_s04_p1_obimcore_oraculo.py
+          QT_QPA_PLATFORM=offscreen pytest -q --durations=0 -rs tests/test_s04_ponte.py
+          OBIM_S04_P1_OBRIGATORIO=1 QT_QPA_PLATFORM=offscreen pytest -q --durations=0 -rs tests/test_s04_p1_trava_oraculo.py tests/test_s04_p1_obimcore_oraculo.py
       - name: Viewport C++ (parte A, dividida em 3 grupos (T23d); S04-T06/T07; bloqueia o merge)
         shell: bash -elo pipefail {0}
         timeout-minutes: 30
@@ -400,19 +400,19 @@ jobs:
           T15="OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1"
           case "$PARTE" in
             1)
-              OBIM_CI=1 pytest -q -rsP --durations=10 tests/test_s04_viewport_b.py
-              env $T15 pytest -q -rsP tests/test_s04_t15a_threads_fluxo_a.py ;;
+              OBIM_CI=1 pytest -q --durations=0 -rsP --durations=10 tests/test_s04_viewport_b.py
+              env $T15 pytest -q --durations=0 -rsP tests/test_s04_t15a_threads_fluxo_a.py ;;
             2)
-              OBIM_CI=1 pytest -q -rsP --durations=10 tests/test_s04_fluxo_a.py tests/test_s04_fluxo_a_camera_selecao.py tests/test_s04_profundidade.py
-              env $T15 pytest -q -rsP tests/test_s04_t15b_formas.py
-              env $T15 pytest -q -rsP tests/test_s04_t15d_parede_pesada.py
-              env $T15 pytest -q -rsP tests/test_s04_t15e_painel_ausente.py ;;
+              OBIM_CI=1 pytest -q --durations=0 -rsP --durations=10 tests/test_s04_fluxo_a.py tests/test_s04_fluxo_a_camera_selecao.py tests/test_s04_profundidade.py
+              env $T15 pytest -q --durations=0 -rsP tests/test_s04_t15b_formas.py
+              env $T15 pytest -q --durations=0 -rsP tests/test_s04_t15d_parede_pesada.py
+              env $T15 pytest -q --durations=0 -rsP tests/test_s04_t15e_painel_ausente.py ;;
             3)
-              env $T15 pytest -q -rsP tests/test_s04_t15c_conferencias.py
-              env $T15 pytest -q -rsP tests/test_s04_t15g_postador.py
-              OBIM_CI=1 OBIM_S04_V1_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_v1_mista_oraculo.py tests/test_s04_v1_veredito_oraculo.py
-              OBIM_CI=1 OBIM_S04_V1C_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_v1c_sublotes_oraculo.py
-              OBIM_CI=1 OBIM_S04_T07E_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t07e_parar_oraculo.py ;;
+              env $T15 pytest -q --durations=0 -rsP tests/test_s04_t15c_conferencias.py
+              env $T15 pytest -q --durations=0 -rsP tests/test_s04_t15g_postador.py
+              OBIM_CI=1 OBIM_S04_V1_OBRIGATORIO=1 pytest -q --durations=0 -rsP tests/test_s04_v1_mista_oraculo.py tests/test_s04_v1_veredito_oraculo.py
+              OBIM_CI=1 OBIM_S04_V1C_OBRIGATORIO=1 pytest -q --durations=0 -rsP tests/test_s04_v1c_sublotes_oraculo.py
+              OBIM_CI=1 OBIM_S04_T07E_OBRIGATORIO=1 pytest -q --durations=0 -rsP tests/test_s04_t07e_parar_oraculo.py ;;
           esac
       - name: Pacote do que o job gerou
         if: always()
@@ -515,7 +515,7 @@ jobs:
           # O oráculo abre a tela virtual sozinho em subprocesso (xvfb-run no Linux; no Windows, WARP). Nada na tela real.
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_S04_TELA_VIRTUAL=1 QSG_RHI_BACKEND=d3d11 QSG_RHI_PREFER_SOFTWARE_RENDERER=1  # WARP, como no passo do cubo
-          OBIM_CI=1 pytest -q -rsP --durations=10 ${{ matrix.alvo }}
+          OBIM_CI=1 pytest -q --durations=0 -rsP --durations=10 ${{ matrix.alvo }}
       - name: Pacote do que o job gerou
         if: always()
         shell: bash
@@ -561,7 +561,7 @@ jobs:
         run: |
           # Sem janela: compara o IFC da biblioteca C++ com o do fluxo A (saída igual).
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
-          OBIM_CI=1 pytest -q -rsP tests/test_s04_fluxo_b_paredes.py
+          OBIM_CI=1 pytest -q --durations=0 -rsP tests/test_s04_fluxo_b_paredes.py
       - name: Fluxo B, executável com janela (S04-T14c; bloqueia o merge; só na parte 2)
         if: matrix.parte == 2
         shell: bash -elo pipefail {0}
@@ -571,7 +571,7 @@ jobs:
           # O oráculo roda o fluxo A de referência (roteiro R) e o executável de B com a mesma base; autotestes de localidade, `ler`, corrida e memória sem janela.
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_S04_TELA_VIRTUAL=1  # WARP, como no passo do viewport
-          OBIM_CI=1 OBIM_S04_T14_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_fluxo_b_janela.py
+          OBIM_CI=1 OBIM_S04_T14_OBRIGATORIO=1 pytest -q --durations=0 -rsP tests/test_s04_fluxo_b_janela.py
       - name: Pacote do que o job gerou
         if: always()
         shell: bash
@@ -820,7 +820,7 @@ jobs:
         run: |
           # Em caso de falha, as últimas linhas viram anotação pública (o log completo exige login no GitHub).
           set +e
-          QT_QPA_PLATFORM=offscreen pytest -q -rs tests > pytest.log 2>&1
+          QT_QPA_PLATFORM=offscreen pytest -q --durations=0 -rs tests > pytest.log 2>&1
           rc=$?
           cat pytest.log
           if [ $rc -ne 0 ]; then

@@ -67,7 +67,7 @@
 | F0-S04-T30b3 | Expor `geracao` ao Python e limpar código morto (`proximo`, `Cursor`) | T3 | FEITA (PR 229 mesclado) | Aprovado pelo lote Opus 66. `DadosCena::geracao()` sem uso sai no próximo cartão que mexer em `cena.h` |
 | F0-S04-T29e | Medida `pos_emitir_mb` e critério novo (d′, e) do ensaio do pesado | T3 | FEITA (PRs 227 e 228 mesclados) | Aprovado pelo lote Opus 66 (oráculo no Linux: 104 passaram; 2 mutações reprovam). Ensaio do pesado em `reports/F0-S04-T29e-ensaio.md` |
 | F0-S05-T01 | Organização: quadro, mapa e painel | T1 | PRONTA | Pedido do PO; não bloqueia; corte só depois da P6 |
-| F0-S05-T02 | Sondas do ifcopenshell (só números) | T2 | PRONTA | Primeiro da S05; P3 |
+| F0-S05-T02 | Sondas do ifcopenshell (só números) | T2 | FEITA | Relatório `reports/F0-S05-T02.md`; PR aberto; Windows do CI não medido; achados para o T03: chaves de `inverses` em JSON e vazamento do `registry` |
 | F0-S05-T03 | ADR-002, rascunho | TA | NAO_INICIADA | Opus, lote A; depende de T02 e de P1 a P5 |
 | F0-S05-T04 | Transação única IFC + lateral, prova das 10.000 | T3 | NAO_INICIADA | Depende de T03; P1, P2 |
 | F0-S05-T05 | Diário de transações e recuperação | T3 | NAO_INICIADA | Depende de T04; P4, P5 |

@@ -3,7 +3,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 # LOTE_OPUS_77: revisão do ADR-004 com os números do V1 (PR 271, cartão F0-S04-T19)
 - Revisor: opus (médio), contexto fechado; não escreveu o texto revisto. Data: 2026-10-23.
-- Lido: diff do ramo `s04-t19-adr004` contra `main` (ADR-004 e LOG); `reports/F0-S04-V1.md`, `reports/F0-S04-T07c.md`, `cards/F0-S04/F0-S04-T07e.md`, `cards/F1-D3D11-dispositivo-unico.md`, `LOG.md` (linhas de 2026-10-21 a 2026-10-23); `reports/F0-S04-M1F.md` (ramo `s04-m1f-relatorio`, PR 273, aberto); `docs/acceptance/S04-medicao-oficial.md` (busca por N1 a N4).
+- Lido: diff do ramo `s04-t19-adr004` contra `main` (ADR-004 e LOG); `reports/F0-S04-V1.md`, `reports/F0-S04-T07c.md`, `arquivo/F0-S04/cartoes/F0-S04-T07e.md`, `cards/F1-D3D11-dispositivo-unico.md`, `LOG.md` (linhas de 2026-10-21 a 2026-10-23); `reports/F0-S04-M1F.md` (ramo `s04-m1f-relatorio`, PR 273, aberto); `docs/acceptance/S04-medicao-oficial.md` (busca por N1 a N4).
 
 ## Veredito: REPROVADO (2 correções só de texto; números sem divergência)
 

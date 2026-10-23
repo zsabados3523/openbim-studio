@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 Pedido do líder (2026-10-21), **classe T3, revisão Opus, esforço médio**. Responda **aprovado ou reprovado com lista numerada**. Escreva só `docs/state/lotes/LOTE_OPUS_67/resultado.md` (num worktree seu, sem commit; informe o caminho); não implemente, não faça merge, não leia `~/openbim-medicao` nem IFC. Você não escreveu este PR.
 
 ## Contexto fechado
-`LOTE_OPUS_66/resultado.md` §2 ponto 1 (seu parecer sobre a falha 29/30), cartão `docs/state/cards/F0-S04/F0-S04-T34b.md`, `docs/state/reports/F0-S04-T34.md`. Código no ramo remoto `s04-t34b-mensagem` (`git fetch origin`; `git diff origin/main...origin/s04-t34b-mensagem`):
+`LOTE_OPUS_66/resultado.md` §2 ponto 1 (seu parecer sobre a falha 29/30), cartão `docs/state/arquivo/F0-S04/cartoes/F0-S04-T34b.md`, `docs/state/reports/F0-S04-T34.md`. Código no ramo remoto `s04-t34b-mensagem` (`git fetch origin`; `git diff origin/main...origin/s04-t34b-mensagem`):
 - `tests/test_s04_t15c_conferencias.py` (+27): `registrar()` (print e `GITHUB_STEP_SUMMARY` só se definido) com as 5 razões (join, ocupada), as 3 janelas, `razao_exec` e `resposta`; `@guarda_mensagem` nos testes (i) e (iii) grava a mensagem inteira da falha antes de subir.
 - `docs/state/reports/F0-S04-T34b.md` (+9). Bateria de 10 execuções: 10/10 passaram; `razao_exec` 0,97 a 1,13, nenhuma entre 0,3 e 0,8; a parte (b) do cartão (mediana de `razao_exec`) **não foi feita**, por não ter sido necessária.
 

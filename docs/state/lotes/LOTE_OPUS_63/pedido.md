@@ -3,7 +3,7 @@
 Pedido do líder (2026-10-20), **classe T3, revisão Opus em lote, esforço médio**. Responda **aprovado ou reprovado com lista numerada** por PR. Escreva só `docs/state/lotes/LOTE_OPUS_63/resultado.md`; não edite mais nada, não implemente, não faça merge, não leia `~/openbim-medicao`, nenhum IFC.
 
 ## Contexto fechado
-`docs/state/lotes/LOTE_OPUS_62/resultado.md` (seu parecer anterior, §6), cartões `docs/state/cards/F0-S04/F0-S04-T30.md`, `T30a1.md`, `T30a2.md`, `T30d1.md`. Código nos ramos remotos (`git fetch origin`): PR 199 `s04-t30d1-oraculo` (só `tests/test_s04_t30a1_sem_oraculo.py`), PR 200 `s04-t30a1-sem` (só `prototypes/s04/obimcore/nucleo/cena.cpp`), PR 204 `s04-t30a2-sublotes` (`cena.cpp` e `cena.h`, parte do ramo do 200). CI verde nos três (`linux`, `windows`).
+`docs/state/lotes/LOTE_OPUS_62/resultado.md` (seu parecer anterior, §6), cartões `docs/state/arquivo/F0-S04/cartoes/F0-S04-T30.md`, `T30a1.md`, `T30a2.md`, `T30d1.md`. Código nos ramos remotos (`git fetch origin`): PR 199 `s04-t30d1-oraculo` (só `tests/test_s04_t30a1_sem_oraculo.py`), PR 200 `s04-t30a1-sem` (só `prototypes/s04/obimcore/nucleo/cena.cpp`), PR 204 `s04-t30a2-sublotes` (`cena.cpp` e `cena.h`, parte do ramo do 200). CI verde nos três (`linux`, `windows`).
 
 ## Pontos
 1. **Reescopo (a):** "troca não sobe `ger_`" e "instantâneo coerente" saíram do T30a1 e vão para o T30b (sozinhos quebrariam o motor, que só reenvia quando `ger_` sobe). Concorda? Algo do lote 62 §6.1 ficou sem dono?

@@ -6,7 +6,7 @@ Pedido do líder (2026-10-19), **classe T3, revisão Opus em lote; esforço méd
 Nada pode afrouxar meta, régua, limite ou teste existente (6.000 MB, 60 s, `limite_peca_s` 20, `limite_abrir_s` 600, `max_pecas_condenadas` 20, `max_espera_s` 120, M5). Produto de F0; aprovado provisoriamente é proibido.
 
 ## Contexto fechado (só leitura)
-- Especificação: `docs/state/lotes/LOTE_OPUS_59/resultado.md` §2 (R-A, G, isenção, matar no meio do bloco, oráculo §2.4) e o cartão `docs/state/cards/F0-S04/F0-S04-T29.md`.
+- Especificação: `docs/state/lotes/LOTE_OPUS_59/resultado.md` §2 (R-A, G, isenção, matar no meio do bloco, oráculo §2.4) e o cartão `docs/state/arquivo/F0-S04/cartoes/F0-S04-T29.md`.
 - Números de apoio: `docs/state/reports/F0-S04-T26.md`.
 - Código: três PRs empilhados no GitHub (base `main`): **PR 185** (`s04-t29b-oraculo`, só `tests/test_s04_t29b_reinicio_oraculo.py`), **PR 188** (`s04-t29a-reinicio`, `carregador.py`: bloco 250, caminho `reinicio`, resumo, gancho `OBIM_TESTE_REINICIO_BLOCO`) e **PR 189** (`s04-t29c-regra`, `carregador.py` e `processo_malhas.py`: regra de crescimento, mensagens `bloco` e `bloco_fim`, `G_CRESCIMENTO_MB = 1000`, gancho `OBIM_TESTE_CRESCER_MB`). Diff total: `git fetch origin && git diff origin/main...origin/s04-t29c-regra`; por PR: `gh pr diff 185|188|189`. Pode ler `prototypes/viewport_qrhi/carregador.py` e `processo_malhas.py` inteiros no ramo `origin/s04-t29c-regra` (`git show`). Você pode rodar o oráculo num worktree temporário sem editar nada: `QT_QPA_PLATFORM=offscreen ~/miniforge3/envs/openbim/bin/pytest tests/test_s04_t29b_reinicio_oraculo.py -q --runxfail` (o oráculo foi entregue com xfail estrito; ver item 1).
 - Nada fora disso. Não leia `~/openbim-medicao`; nenhum IFC do PO.

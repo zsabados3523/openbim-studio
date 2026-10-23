@@ -1,0 +1,3 @@
+# LOTE_OPUS_74: resultado (revisor opus, effort médio, 2026-10-22) — PR 262, cartão T07e
+Resumo do líder (o texto integral do revisor não foi guardado na hora; fica o que o LOG de 2026-10-22 registra).
+**REPROVADO** por 3 correções pequenas em `prototypes/s04/obimcore/nucleo/motor.h`: (1) `abandonada_.exchange(true)` e o `detach` no mesmo trecho protegido por `th_m_` (corrida em `abandonar`); (2) comentário da corrida mínima; (3) texto dos "5 s" derivado de `LIMITE_PARAR`. Aplicadas no commit c38dc94 e revisadas no lote 75. O laço de 300 voltas no Windows do CI deu 1 trava em 300 (critério não atingido); o PO decidiu em 2026-10-22 mesclar como proteção parcial e levar a correção de fundo à F1 (cartão `F1-D3D11-dispositivo-unico`).

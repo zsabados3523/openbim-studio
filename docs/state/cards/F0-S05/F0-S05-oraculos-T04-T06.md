@@ -1,0 +1,60 @@
+# F0-S05: especificação dos oráculos do T04 e do T06 (lote A, sem código)
+Autor: opus (cartão F0-S05-T03), 2026-10-23. Base: ADR-002 (rascunho) §4.2 a §4.5 e §4.8; cartões T04 e T06; T00 (G1 a G6); P1 e P2. O oráculo é escrito por **outro** subagente opus, em PR próprio, antes da implementação; quem implementa não edita `tests/`. Os nomes da API são os do ADR-002 §4.8; se o oráculo precisar de nome que não está lá, volta ao líder (não inventa).
+
+## Regras comuns
+- Arquivos: `tests/test_s05_t04_transacao_oraculo.py`, `tests/test_s05_t06_gravacao_oraculo.py`, régua `tests/s05_conteudo_aux.py` (P1). Cabeçalho com o contrato, como em `test_s04_t07e_parar_oraculo.py`.
+- `@AINDA_NAO` = `pytest.mark.xfail(strict=True)` em todo caso que importa `openbim_app.transacao`, `openbim_app.lateral` ou `openbim_app.gravacao_atomica`; sai pelo autor do oráculo, em commit próprio, depois da implementação (só as linhas `AINDA_NAO = ...` e `@AINDA_NAO`). Os autotestes da régua (R1 a R4) **não** levam `@AINDA_NAO`: valem já.
+- Guarda: sem `ifcopenshell`, pula via `tests/obrigatorio.py::pular(msg, "OBIM_S05_OBRIGATORIO")`; com `OBIM_S05_OBRIGATORIO=1`, falha. Mudar só a guarda não muda o oráculo (`CLAUDE.md`).
+- Semente fixa **20261023** (`random.Random`), escrita no nome do caso e na mensagem de falha. Nenhuma tolerância numérica: valores restaurados são exatos (T02 §1: 0 diferenças).
+- Modelo de teste: `scripts/gerar_modelo_grande.py <tmp>/base.ifc --paredes 300` (fixture de sessão; o sha256 do arquivo vai na mensagem). Cada caso abre o seu, e chama `Historico.encerrar()` no fim (registry, T02 §5).
+- Linux e Windows do CI, 0 pulos com `OBIM_S05_OBRIGATORIO=1`.
+
+## Régua de comparação por conteúdo (P1), `tests/s05_conteudo_aux.py`
+`foto(arquivo, lateral=None, sem_pset_obim=False)` devolve um objeto comparável e `diferencas(a, b)` uma lista legível (vazia = igual):
+- Para cada entidade com GlobalId: chave = GlobalId; valor = (classe, atributos na ordem do esquema).
+- Referência a entidade com GlobalId vira `("G", GlobalId)`; sem GlobalId vira `("E", classe, atributos)` recursivo (com memória por id dentro da foto; inversos fora).
+- Agregados: `SET` como multiconjunto (ordenado pela forma canônica), `LIST`/`ARRAY` em ordem; o tipo do agregado vem do esquema (`ifcopenshell.ifcopenshell_wrapper.schema_by_name`), nunca do tipo Python.
+- Entidades sem GlobalId: também um multiconjunto da forma canônica de **todas** (pega sobra e falta, inclusive órfãs).
+- Fora: ids STEP, cabeçalho; com `sem_pset_obim=True`, o pset `OBIM_Projeto` e a relação que o liga (para o T07).
+- Lateral: `lateral.canonico()` (bytes) igual.
+- **R1** foto de um arquivo = foto do mesmo arquivo gravado e reaberto; e = foto de uma cópia com ids STEP novos (arquivo vazio do mesmo esquema + `add` de cada entidade com GlobalId).
+- **R2** mudar um só `Name`, um só valor de propriedade, um só número de uma coordenada: cada um dá exatamente 1 diferença, que cita o GlobalId do dono.
+- **R3** desfazer "pela metade" de propósito (tirar uma operação de `edit` do `Transaction` antes do `undo`): diferença não vazia. É a prova de que "erro engolido pelo `rollback`" aparece como falha (ADR-002 §4.2).
+- **R4** trocar a ordem de um `SET` (ex.: `RelatedElements`) não dá diferença; trocar a ordem de uma `LIST` (ex.: `Coordinates` de um `IfcPolyline`) dá.
+
+## T04: transação única, desfazer e refazer (`tests/test_s05_t04_transacao_oraculo.py`)
+Montagem: `SessaoModelo(arquivo)`, `Lateral()`, `Historico(sessao, lateral, limite_bytes=None)`. Toda escrita dentro de `with sessao.escrever() as esc: with h.transacao(esc) as t:`; os comandos usam `ifcopenshell.api` sobre `t.ifc`.
+
+**Tipos de operação** (cada um pelo menos 500 vezes nas 10.000; o oráculo confere a própria contagem e falha se faltar):
+1. criar parede com representação, camadas e pavimento; 2. alterar `Name`/`Description`; 3. editar valor de pset existente; 4. criar pset novo; 5. mover (`geometry.edit_object_placement`, matriz sorteada); 6. apagar parede (`root.remove_product`, com inversos); 7. apagar 2 a 10 paredes entre `ifc.batch()` e `ifc.unbatch()`; 8. atribuir tipo (`type.assign_type`, tipos criados na montagem e alguns criados no meio); 9. trocar de pavimento (`spatial.assign_container`); 10. lateral criar (objeto com `ifc_guids` de 1 a 3 paredes vivas); 11. lateral alterar; 12. lateral apagar. Transação com 1 a 3 operações sorteadas; pelo menos 1.000 transações misturam IFC e lateral. Regra do sorteio: pesos iguais entre os 12 tipos; com menos de 150 paredes vivas, sorteia "criar parede"; o lote apaga no máximo o número de paredes vivas menos 100; sem objeto do lateral, sorteia "lateral criar". Memória esperada do histórico, limite desligado (T02 §2): cerca de 3.200 "criar" × 163 KB + 500 lotes × cerca de 300 KB ≈ 0,7 GB; o autor confere que cabe no executor do CI (7 GB no Linux e no Windows do GitHub) antes de fixar.
+
+Casos (numerados; todos `@AINDA_NAO` salvo onde dito):
+1. **10.000 operações.** Fase A: aplica as 10.000; guarda foto a cada 500 transações (`F0` antes, `F_j`, `F_fim`). Fase B: desfaz uma a uma; ao passar por cada ponto `j`, foto = `F_j`; no fim, foto = `F0` e `pode_desfazer` falso. Fase C: refaz tudo; nos mesmos pontos, foto = `F_j`; no fim = `F_fim`. Nada de gravar no meio. Número de operações **nunca** reduzido para caber no tempo do CI: se não couber, o caso falha com o tempo medido e vai ao líder.
+2. **Mistura com desfazer e refazer.** 2.000 passos sorteados: 70% transação, 20% desfazer de 1 a 3, 10% refazer de 1 a 3. Transação nova depois de desfazer zera o refazer (`refazer` devolve `None`). No fim, desfaz tudo = `F0`.
+3. **Exceção dentro da transação** (cada um uma vez por tipo 1 a 12, mais um misto): o comando levanta depois de aplicar parte no IFC **e** parte no lateral; foto igual à de antes; tamanho do histórico e `pode_refazer` iguais aos de antes; a exceção original sobe.
+4. **Lateral inválido no meio:** IFC alterado e depois `t.lado.criar` com `float("nan")` → `ObjetoInvalido`; os dois lados voltam (foto igual).
+5. **`UndoSystemError`:** fazer o `rollback` do `Transaction` levantar (troca do método naquele objeto); `h.desfazer(esc)` → `HistoricoQuebrado`; o lateral **não** mudou; depois `h.transacao(esc)`, `h.desfazer(esc)` e `h.refazer(esc)` levantam `HistoricoQuebrado`; `h.quebrado` verdadeiro.
+6. **Edição fora de transação** (dentro de `escrever()`, fora de `h.transacao`): `parede.Name = "x"` → `EdicaoForaDeTransacao` e o nome não muda; `esc.arquivo.remove(parede)` → recusa e a parede segue lá; `create_entity("IfcWall", ...)` → recusa e a contagem de `IfcWall` não muda. Depois disso o histórico **não** está quebrado e uma transação normal funciona.
+7. **Porta:** `h.transacao(esc)` com `esc` de um `escrever()` já fechado → `TravaNaoSegura`; idem `desfazer` e `refazer`; transação dentro de transação → `TransacaoAberta`; `h.desfazer(esc)` com transação aberta → `TransacaoAberta`.
+8. **Resumo por dono** (ADR-002 §4.1), um caso por linha, comparando como conjunto: criar parede → `criados = {g}`; `Name` → `alterados = {g}`; mover → `alterados = {g}` (a posição não tem GlobalId); editar pset → `{g}` de cada objeto que o pset define; trocar de pavimento → `alterados` contém a parede e **não** contém o GlobalId da relação; apagar → `apagados = {g}`; lateral → `lado_criados`/`lado_alterados`/`lado_apagados` com `(coleção, id)`. Desfazer de "criar" devolve `apagados = {g}`; refazer devolve `criados = {g}`.
+9. **Lateral canônico:** dois laterais com os mesmos objetos criados em ordem diferente dão `canonico()` igual; `obter` devolve cópia (mudar a cópia não muda o lateral).
+10. **Fechar:** depois de `h.encerrar()`, `int(arquivo.this)` não está em `ifcopenshell.file.registry` e `history`/`future` estão vazios.
+11. **Fora do histórico:** dentro de `h.fora_do_historico(esc)`, editar o `LadoId`/`Revisao` do pset `OBIM_Projeto` → `pode_desfazer` igual ao de antes; `h.desfazer(esc)` seguinte não volta o pset; fora do gerenciador, a mesma edição levanta `EdicaoForaDeTransacao`.
+12. **Limite desligado:** com `limite_bytes=None`, `descartados == 0` depois do caso 1 (o limite é do T08).
+
+## T06: gravação atômica de um arquivo (`tests/test_s05_t06_gravacao_oraculo.py`)
+API: `preparar(destino, escrever, conferir=None)` → `Preparado`; `confirmar(preparado)` → `Gravado`; `gravar_atomico(...)` = `confirmar(preparar(...))`; `escrever(tmp)` é passado pelo teste (grava os bytes que o caso quiser, ou `ifc.write(str(tmp))`); etapas `ETAPAS == ("escrever", "fsync", "conferir", "bak", "trocar", "fsync_pasta")`; falha = `FalhaGravacao` com `etapa`, `motivo` em `{"sem_permissao", "disco_cheio", "arquivo_em_uso", "conferencia", "outro"}`, `caminho`, `gravado` (booleano) e `str(e)` em português, não vazio, com o nome do arquivo. Todos os casos `@AINDA_NAO`. "Original intacto" = bytes iguais aos de antes.
+
+1. **Caminho feliz:** destino novo → existe, sha256 e tamanho de `Gravado` conferem com os bytes, sem `.bak`, sem `.tmp` nem `.bak.tmp` na pasta.
+2. **`.bak` de uma geração (G3):** gravar A, depois B, depois C → destino = C, `.bak` = B (A não existe em lugar nenhum).
+3. **Falha em cada etapa antes da troca** (`escrever`, `fsync`, `conferir`, `bak`; via `OBIM_S05_FALHA_EM=<etapa>` com `monkeypatch.setenv`): `FalhaGravacao.etapa` certa, `gravado` falso, original intacto, `.bak` anterior intacto, nenhum temporário sobrando.
+4. **Conferência (G5):** `escrever` grava um IFC cortado (sem `END-ISO-10303-21;`) com `conferir=conferir_ifc` → `motivo == "conferencia"`, original intacto, temporário apagado.
+5. **Disco cheio (G2):** `escrever` grava 1 MB e levanta `OSError(errno.ENOSPC)` → `motivo == "disco_cheio"`, original intacto, temporário apagado.
+6. **Troca recusada (G2):** (a) nos dois sistemas, `os.replace` trocado por um que levanta `PermissionError` 3 vezes e depois funciona → sucesso; (b) que sempre levanta → `etapa == "trocar"`, `motivo == "arquivo_em_uso"`, original intacto, **o `.tmp` continua** e a mensagem cita o caminho dele; o número de tentativas é 6. (c) **Só Windows:** outro processo (`subprocess` com `open(destino, "rb")` e espera) segura o destino; sem soltar → (b); soltando depois de 0,2 s → sucesso.
+7. **`.bak` sem link:** `os.link` trocado por um que levanta `OSError` → o caso 2 inteiro passa igual (caminho da cópia).
+8. **Pasta somente leitura (G6):** Linux: `chmod 0o555` na pasta; Windows: `icacls <pasta> /deny <usuário>:(W)` e `/remove:d` no fim (programa do próprio Windows, nada instalado) → `motivo == "sem_permissao"`, original intacto. Rodando como root no Linux (permissão ignorada): pula, e **falha** com `OBIM_S05_OBRIGATORIO=1`.
+9. **Acento e espaço (G6):** destino `<tmp>/Residência Nova/João/Casa.ifc`, IFC de 300 paredes gravado com `ifc.write` → reabrir e foto (régua) igual à do modelo em memória.
+10. **Temporário sobrando (G2):** pasta com destino, `Casa.ifc.tmp` e `Casa.ifc.bak.tmp` lixo → `limpar_temporarios(destino)` apaga os dois, devolve os dois caminhos, não toca no destino nem no `.bak`.
+11. **`fsync` da pasta:** `os.fsync` envolvido para registrar `os.fstat(fd).st_mode` → no Linux, pelo menos uma chamada em diretório **depois** da troca; no Windows, nenhuma em diretório e a gravação conclui. Falha forçada na etapa `fsync_pasta` → `gravado` verdadeiro e o destino já é o novo.
+12. **Duas chamadas:** depois de só `preparar`, destino com os bytes antigos, `Preparado.temporario` existe e `sha256`/`tamanho` conferem com ele; `confirmar` numa chamada separada termina igual ao caso 1 ou 2; falha em `conferir` dentro de `preparar` não deixa temporário.
+13. **Morte na etapa** (processo filho, `OBIM_S05_MORRER_EM=<etapa>`, cada etapa uma vez; a morte é no **começo** da etapa): código de saída 86; no pai, destino = o antigo inteiro para `escrever` a `trocar`, o novo inteiro para `fsync_pasta`; depois de `limpar_temporarios`, nenhum temporário. Linux e Windows.

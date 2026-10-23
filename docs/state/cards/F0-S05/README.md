@@ -48,3 +48,6 @@ T01 não bloqueia nada. Mesma ordem = pode correr junto (no máximo 2 implementa
 - **P4. O que é "transação confirmada" depois de uma queda.** Recomendo: cada edição é anotada no diário na hora (protege contra o programa fechar sozinho, que é o que a meta testa); forçar a gravação no disco a cada 2 segundos e ao gravar. Numa queda de energia pode-se perder até os últimos 2 segundos.
 - **P5. Recuperar e salvar automático.** Recomendo: ao reabrir depois de uma queda, perguntar "Recuperar o trabalho de HH:MM?" e abrir a cópia recuperada sem gravar por cima do seu `Casa.ifc`; salvamento automático do par a cada 5 minutos, na pasta local do programa.
 - **P6. Quadro, mapa e painel.** Pergunta do cartão T01, feita depois do levantamento.
+
+## Decisões do PO (2026-10-23, no chat)
+P1 a P5 **aprovadas como recomendadas** (comparação própria por conteúdo sem ifcdiff; `.obim` mínimo provisório; 5 ms = edição pequena em memória com desfazer, em modelo sintético de 50 MB; diário na hora com escrita forçada a cada 2 s e ao gravar; perguntar "Recuperar o trabalho de HH:MM?" e nunca gravar por cima do `Casa.ifc`, salvamento automático a cada 5 min). P6 (quadro, mapa e painel) segue aberta para depois do levantamento do T01. Ordem: T01 e T02 abrem agora.

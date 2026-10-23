@@ -224,6 +224,14 @@ jobs:
 
   # Windows em jobs paralelos (T25). O job `windows` no fim só junta o resultado: o nome é o usado na regra de bloqueio de merge.
   windows-testes:
+    name: windows-testes (${{ matrix.parte }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # T23d: parte 1 = tudo menos os 3 arquivos mais lentos; parte 2 = só esses 3. Arquivo de teste novo cai na parte 1 sozinho.
+          - {parte: 1, alvo: "tests --ignore=tests/test_s04_metas.py --ignore=tests/test_s04_abertura.py --ignore=tests/test_s04_t29b_reinicio_oraculo.py"}
+          - {parte: 2, alvo: "tests/test_s04_metas.py tests/test_s04_abertura.py tests/test_s04_t29b_reinicio_oraculo.py"}
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
@@ -237,7 +245,7 @@ jobs:
         run: |
           # Em caso de falha, as últimas linhas viram anotação pública (o log completo exige login no GitHub).
           set +e
-          QT_QPA_PLATFORM=offscreen pytest -q -rs tests > pytest.log 2>&1
+          QT_QPA_PLATFORM=offscreen pytest -q -rs ${{ matrix.alvo }} > pytest.log 2>&1
           rc=$?
           cat pytest.log
           if [ $rc -ne 0 ]; then
@@ -245,7 +253,8 @@ jobs:
             echo "::error title=pytest falhou::$msg"
           fi
           exit $rc
-      - name: Desenho do cubo com WARP do Direct3D 11 (T25; informativo, não bloqueia)
+      - name: Desenho do cubo com WARP do Direct3D 11 (T25; informativo, não bloqueia) (só na parte 1)
+        if: matrix.parte == 1
         shell: bash -elo pipefail {0}
         continue-on-error: true
         run: |
@@ -272,12 +281,14 @@ jobs:
           echo "::notice title=reabertura da janela 3D no Windows::${r2}"
           echo "Reabertura da janela 3D, P17 (Windows): ${r2}" >> "$GITHUB_STEP_SUMMARY"
           exit 0
-      - name: Inventário de licenças e canal
+      - name: Inventário de licenças e canal (só na parte 1)
+        if: matrix.parte == 1
         shell: bash -elo pipefail {0}
         run: |
           mkdir -p out
           python scripts/license_inventory.py out/license-inventory.md --informativo
-      - name: Gravação do roteiro (experimento T12; não bloqueia)
+      - name: Gravação do roteiro (experimento T12; não bloqueia) (só na parte 1)
+        if: matrix.parte == 1
         shell: bash -elo pipefail {0}
         continue-on-error: true
         run: |
@@ -293,7 +304,7 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: openbim-ci-windows-testes
+          name: openbim-ci-windows-testes-${{ matrix.parte }}
           path: out/
           retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
       - name: Tempo total
@@ -352,6 +363,11 @@ jobs:
           echo "### windows-obimcore: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
 
   windows-viewport-a:
+    name: windows-viewport-a (${{ matrix.parte }})
+    strategy:
+      fail-fast: false
+      matrix:
+        parte: [1, 2, 3]
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
@@ -363,30 +379,40 @@ jobs:
       - name: Módulo obimcore (só o build limpo, para os testes deste job; o incremental e a entrega ao instalador estão no job windows-obimcore)
         shell: bash -elo pipefail {0}
         run: CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04
-      - name: Testes da ponte (S04-T03; oráculo R1-a a R1-i; bloqueia o merge)
+      - name: Testes da ponte (S04-T03; oráculo R1-a a R1-i; bloqueia o merge; só na parte 1)
+        if: matrix.parte == 1
         shell: bash -elo pipefail {0}
         run: |
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_CI=1  # liga todas as chaves de obrigatório (pulo vira falha; tests/conftest.py) (T04c entregou versao()["registro_ifc4"])
           QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_ponte.py
           OBIM_S04_P1_OBRIGATORIO=1 QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_p1_trava_oraculo.py tests/test_s04_p1_obimcore_oraculo.py
-      - name: Viewport C++ (parte A; S04-T06/T07; bloqueia o merge)
+      - name: Viewport C++ (parte A, dividida em 3 grupos (T23d); S04-T06/T07; bloqueia o merge)
         shell: bash -elo pipefail {0}
         timeout-minutes: 30
+        env:
+          PARTE: ${{ matrix.parte }}
         run: |
           # O oráculo abre a tela virtual sozinho em subprocesso (xvfb-run no Linux; no Windows, WARP). Nada na tela real.
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_S04_TELA_VIRTUAL=1 QSG_RHI_BACKEND=d3d11 QSG_RHI_PREFER_SOFTWARE_RENDERER=1  # WARP, como no passo do cubo
-          OBIM_CI=1 pytest -q -rsP --durations=10 tests/test_s04_fluxo_a.py tests/test_s04_fluxo_a_camera_selecao.py tests/test_s04_profundidade.py tests/test_s04_viewport_b.py
-          OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15a_threads_fluxo_a.py
-          OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15b_formas.py
-          OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15c_conferencias.py
-          OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15d_parede_pesada.py
-          OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15e_painel_ausente.py
-          OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15g_postador.py
-          OBIM_CI=1 OBIM_S04_V1_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_v1_mista_oraculo.py tests/test_s04_v1_veredito_oraculo.py
-          OBIM_CI=1 OBIM_S04_V1C_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_v1c_sublotes_oraculo.py
-          OBIM_CI=1 OBIM_S04_T07E_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t07e_parar_oraculo.py
+          T15="OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1"
+          case "$PARTE" in
+            1)
+              OBIM_CI=1 pytest -q -rsP --durations=10 tests/test_s04_viewport_b.py
+              env $T15 pytest -q -rsP tests/test_s04_t15a_threads_fluxo_a.py ;;
+            2)
+              OBIM_CI=1 pytest -q -rsP --durations=10 tests/test_s04_fluxo_a.py tests/test_s04_fluxo_a_camera_selecao.py tests/test_s04_profundidade.py
+              env $T15 pytest -q -rsP tests/test_s04_t15b_formas.py
+              env $T15 pytest -q -rsP tests/test_s04_t15d_parede_pesada.py
+              env $T15 pytest -q -rsP tests/test_s04_t15e_painel_ausente.py ;;
+            3)
+              env $T15 pytest -q -rsP tests/test_s04_t15c_conferencias.py
+              env $T15 pytest -q -rsP tests/test_s04_t15g_postador.py
+              OBIM_CI=1 OBIM_S04_V1_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_v1_mista_oraculo.py tests/test_s04_v1_veredito_oraculo.py
+              OBIM_CI=1 OBIM_S04_V1C_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_v1c_sublotes_oraculo.py
+              OBIM_CI=1 OBIM_S04_T07E_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t07e_parar_oraculo.py ;;
+          esac
       - name: Pacote do que o job gerou
         if: always()
         shell: bash
@@ -396,7 +422,7 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: openbim-ci-windows-viewport-a
+          name: openbim-ci-windows-viewport-a-${{ matrix.parte }}
           path: out/
           retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
       - name: Tempo total
@@ -461,6 +487,15 @@ jobs:
           echo "### windows-medicoes: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
 
   windows-viewport-b:
+    name: windows-viewport-b (${{ matrix.parte }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # T23d: balanceado por tempo de pytest medido (metas é o arquivo mais lento)
+          - {parte: 1, alvo: "tests/test_s04_metas.py"}
+          - {parte: 2, alvo: "tests/test_s04_viewport.py tests/test_s04_selecao_c.py tests/test_s04_viewport_software.py"}
+          - {parte: 3, alvo: "tests/test_s04_abertura.py tests/test_s04_cena.py tests/test_s04_selecao.py"}
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
@@ -472,14 +507,14 @@ jobs:
       - name: Módulo obimcore (só o build, para os testes deste job; a ponte é testada no job windows-viewport-a)
         shell: bash -elo pipefail {0}
         run: CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04
-      - name: Viewport C++ (parte B; S04-T06/T07; bloqueia o merge)
+      - name: Viewport C++ (parte B, dividida em 3 grupos (T23d); S04-T06/T07; bloqueia o merge)
         shell: bash -elo pipefail {0}
         timeout-minutes: 30
         run: |
           # O oráculo abre a tela virtual sozinho em subprocesso (xvfb-run no Linux; no Windows, WARP). Nada na tela real.
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_S04_TELA_VIRTUAL=1 QSG_RHI_BACKEND=d3d11 QSG_RHI_PREFER_SOFTWARE_RENDERER=1  # WARP, como no passo do cubo
-          OBIM_CI=1 pytest -q -rsP --durations=10 tests/test_s04_viewport.py tests/test_s04_cena.py tests/test_s04_selecao.py tests/test_s04_selecao_c.py tests/test_s04_metas.py tests/test_s04_abertura.py tests/test_s04_viewport_software.py
+          OBIM_CI=1 pytest -q -rsP --durations=10 ${{ matrix.alvo }}
       - name: Pacote do que o job gerou
         if: always()
         shell: bash
@@ -489,7 +524,7 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: openbim-ci-windows-viewport-b
+          name: openbim-ci-windows-viewport-b-${{ matrix.parte }}
           path: out/
           retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
       - name: Tempo total
@@ -499,6 +534,11 @@ jobs:
           echo "### windows-viewport-b: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
 
   windows-fluxo-b:
+    name: windows-fluxo-b (${{ matrix.parte }})
+    strategy:
+      fail-fast: false
+      matrix:
+        parte: [1, 2]
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
@@ -510,15 +550,19 @@ jobs:
       - name: Módulo obimcore (só o build, para os testes deste job; a ponte é testada no job windows-viewport-a)
         shell: bash -elo pipefail {0}
         run: CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04
-      - name: Fluxo B, paredes em C++ (S04-T13; bloqueia o merge)
+      - name: Fluxo B, build (T23d, as duas partes precisam do executável e da biblioteca)
+        shell: bash -elo pipefail {0}
+        run: bash prototypes/s04/fluxo_b/build.sh out/s04
+      - name: Fluxo B, paredes em C++ (S04-T13; bloqueia o merge; só na parte 1)
+        if: matrix.parte == 1
         shell: bash -elo pipefail {0}
         timeout-minutes: 20
         run: |
           # Sem janela: compara o IFC da biblioteca C++ com o do fluxo A (saída igual).
-          bash prototypes/s04/fluxo_b/build.sh out/s04
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           OBIM_CI=1 pytest -q -rsP tests/test_s04_fluxo_b_paredes.py
-      - name: Fluxo B, executável com janela (S04-T14c; bloqueia o merge)
+      - name: Fluxo B, executável com janela (S04-T14c; bloqueia o merge; só na parte 2)
+        if: matrix.parte == 2
         shell: bash -elo pipefail {0}
         timeout-minutes: 40
         run: |
@@ -536,7 +580,7 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: openbim-ci-windows-fluxo-b
+          name: openbim-ci-windows-fluxo-b-${{ matrix.parte }}
           path: out/
           retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
       - name: Tempo total

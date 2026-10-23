@@ -2,7 +2,7 @@
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 # ADR-004: Processos, threads e trava do modelo
-- Status: perguntas 1 a 3 **decididas pelo PO** (2026-10-15, no chat do projeto: "Aprovar tudo"; opções 1C, 2C e 3C). Pergunta 4 (§5.1, em que thread roda um comando longo): **direção do PO** (2026-10-21, "forma mista"), **condicionada ao cartão de validação V1** (§5.1); texto da atualização de 2026-10-21 aprovado pelo PO no mesmo dia (resumo de 5 linhas). Os números N1 a N4 **seguem sem medida** (§2). Não passa a "aceito" antes do V1 e dessa aprovação. **Em 2026-10-23: forma mista 4C validada pelo V1 (com as ressalvas do §5.1, "Resultado do V1"); aguarda aprovação do PO.**
+- Status: perguntas 1 a 3 **decididas pelo PO** (2026-10-15, no chat do projeto: "Aprovar tudo"; opções 1C, 2C e 3C). Pergunta 4 (§5.1, em que thread roda um comando longo): **direção do PO** (2026-10-21, "forma mista"), **condicionada ao cartão de validação V1** (§5.1); texto da atualização de 2026-10-21 aprovado pelo PO no mesmo dia (resumo de 5 linhas). Os números N1 a N4 **seguem sem medida** (§2). **Aceito pelo PO em 2026-10-23, no chat** (forma mista 4C validada pelo V1, com as ressalvas do §5.1, "Resultado do V1"; o PO aceitou também o 0,3% do V1m como ruído). N1 a N4 seguem sem medida e entram como condição dos cartões que dependem deles.
 - Autor: opus (cartão F0-RG-01, TA) · Data: 2026-10-15
 - **Atualização de 2026-10-21 (opus, lote 68, cartão F0-S04-T19):** números da S04 em §2; pergunta 4 nova (§5.1); mapa do §6, consequências (§7), decisão (§8), gatilhos (§9) e "não verificado" (§10) revistos; o que deixa de valer em §11. Fontes novas: `reports/F0-S04.md`, `F0-S04-threads.md`, `F0-S04-T15f-diagnostico.md`, `T21`, `T24`, `T29-placa-memoria` (e `-2`), `T29e-ensaio`, `T30-placa`; lotes Opus 57, 62, 65, 66; `fluxo_a/CONTRATO.md` (T15).
 - **Atualização de 2026-10-23 (opus, cartão F0-S04-T19, parte "ADR-004 com os números do V1"):** resultado do V1 (V1m, V1b, V1c) e risco aberto do WARP no §5.1; §2, §6, §8, §9 e §10 ajustados. Fontes: `reports/F0-S04-V1.md`, `reports/F0-S04-T07c.md`, `cards/F0-S04/F0-S04-T07e.md`, `cards/F1-D3D11-dispositivo-unico.md`, `LOG.md` (2026-10-21 a 2026-10-23), lotes Opus 72, 73, 74 e 76.
@@ -169,7 +169,7 @@ Cuidados de leitura: (1) o postador de mouse é uma terceira thread Python e pio
 5. Nenhum objeto Qt é criado ou tocado fora da thread da janela (T15f: corrupção de memória reproduzida).
 6. A ordem das travas do §5 não muda.
 
-### Decisão (direção do PO, condicionada; validada pelo V1 em 2026-10-23, aguarda aprovação do PO)
+### Decisão (direção do PO, condicionada; validada pelo V1 em 2026-10-23 e aceita pelo PO no mesmo dia)
 **4C**, condicionada ao cartão **V1** (validação: protótipo da forma mista em `lote.py` e medição; classe **T3**, porque mexe em threads e na entrega ao C++; oráculo por subagente diferente; revisão Opus). Critérios de aceite do V1, todos com a mesma régua do T15 e sem mudar nenhum número:
 1. A 4C entra como **forma nova** em `lote.py` (forma "mista"); formas 1 e 2 seguem iguais, para os números antigos continuarem comparáveis; `fluxo_a.py` não muda (é régua, A29).
 2. Mesmas medidas e mesmas bases: lote de 1.000 paredes (base 3.000 na placa real; base 300 no Linux local e no Windows), 3 rodadas por forma, com e sem postador; parede de 150 aberturas na base 300, 3 rodadas.

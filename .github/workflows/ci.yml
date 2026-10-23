@@ -738,7 +738,7 @@ jobs:
           channels: conda-forge
           conda-remove-defaults: "true"
           channel-priority: strict
-          miniforge-version: latest
+          miniforge-version: "26.7.2-1"  # ver .github/actions/ambiente-windows/action.yml
       - name: Instalador Windows (ambiente de runtime e NSIS)
         if: steps.detecta.outputs.instalador == 'true'
         shell: bash -elo pipefail {0}

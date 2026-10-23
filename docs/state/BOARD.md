@@ -9,7 +9,7 @@
 | F0-S02 | CI Windows+Linux e app esqueleto | G | FECHADA | Aceita pelo PO (2026-10-15). Resta o cartão F0-S02-T23 (antes do primeiro release) |
 | F0-S03 | Protótipo de viewport (Qt RHI) | M | FECHADA | Portão aprovado pelo PO. Restam T27 e T28 (abaixo). Relatório: `reports/F0-S03.md` |
 | F0-S04 | Ponte Python↔C++ (híbrido vs C++ puro) | G, crítica | FECHADA | Aceita pelo PO em 2026-10-23 (roteiro `docs/acceptance/S04.md`). Relatório: `reports/F0-S04-fechamento.md` |
-| F0-S05 | Oplog, undo e merge | M | NAO_INICIADA | Depende da S04. Requisitos de gravação: `cards/F0-S05/F0-S05-T00-requisitos-gravacao.md` |
+| F0-S05 | Oplog, undo e merge | M | EM_ANDAMENTO | Plano e cartões T01 a T12 em `cards/F0-S05/README.md` (ordem, dependências, perguntas P1 a P6 ao PO; P1 a P5 aprovadas pelo PO em 2026-10-23, P6 aprovada pelo PO em 2026-10-23). Requisitos G1 a G6, M1 e M2 do T00 copiados nos cartões |
 | F0-S06 | Planta e corte (HLR) + vista no `.obim` | G, crítica | NAO_INICIADA | Contém T3 |
 | F0-S07 | Tipo paramétrico por script | P | NAO_INICIADA | Depende da S04 |
 | F0-S08 | Corpus e gabaritos | P | CONTINUA | Downloads só com ok do PO |
@@ -27,6 +27,18 @@
 | F0-S04-T04b | Registro local de mensagens e fim do mutex | T3 | PAUSADA | D1 |
 | F1-D3D11-dispositivo-unico | Um dispositivo D3D11 por processo (herdeiro do F0-S04-T07e) | T3 | NAO_INICIADA | Adiado à F1 pelo PO (2026-10-22); `cards/F1-D3D11-dispositivo-unico.md` |
 | F1-CI-cadeia-instalador | Cadeia do instalador no CI do Windows (meta de 10 min) | T3 | NAO_INICIADA | Adiado à F1 (2026-10-23); `cards/F1-CI-cadeia-instalador.md` |
+| F0-S05-T01 | Organização: quadro, mapa e painel | T1 | AGUARDA_PO | Três arquivos postos em dia; relatório `reports/F0-S05-T01-organizacao.md`; nada apagado nem fundido até a resposta P6 |
+| F0-S05-T02 | Sondas do ifcopenshell (só números) | T2 | PRONTA | Primeiro da S05; P3 aprovada |
+| F0-S05-T03 | ADR-002, rascunho | TA | NAO_INICIADA | Opus, lote A; depende de T02 e de P1 a P5 |
+| F0-S05-T04 | Transação única IFC + lateral, prova das 10.000 | T3 | NAO_INICIADA | Depende de T03; P1, P2 |
+| F0-S05-T05 | Diário de transações e recuperação | T3 | NAO_INICIADA | Depende de T04; P4, P5 |
+| F0-S05-T06 | Gravação atômica de um arquivo | T3 | NAO_INICIADA | Depende de T03 |
+| F0-S05-T07 | Gravação do par com diário | T3 | NAO_INICIADA | Depende de T04, T06; P2 |
+| F0-S05-T08 | Limite de memória do desfazer | T3 | NAO_INICIADA | Depende de T02, T04, T05 |
+| F0-S05-T09 | Autosave na pasta local | T3 | NAO_INICIADA | Depende de T05, T07; P5 |
+| F0-S05-T10 | Medição das metas (5 ms em 50 MB) | T2 | NAO_INICIADA | Depende de T04, T05, T07, T08; P3 |
+| F0-S05-T11 | Protótipo de merge (não é portão) | T3 | NAO_INICIADA | Depende de T04, T05 |
+| F0-S05-T12 | Fechamento: ADR-002 com números | TA + T1 | NAO_INICIADA | Depende de T10, T11 |
 
 ## Revisão geral da F0 (2026-10-15)
 Cartões F0-RG-01 a RG-25 (relatório `reports/F0-REVISAO-GERAL-2026-10-15.md`, Parte D). Andamento de cada um: `LOG.md` e os PRs no GitHub.

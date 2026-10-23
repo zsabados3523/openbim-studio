@@ -195,6 +195,8 @@ jobs:
 
   # Passos que só informam (nunca bloqueiam): ficam fora do needs do `linux`, como o windows-medicoes.
   linux-informativo:
+    needs: [linux-obimcore, linux-testes]  # só começa depois: não ocupa vaga de máquina (limite de trabalhos ao mesmo tempo) enquanto os obrigatórios esperam
+    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 30
     continue-on-error: true

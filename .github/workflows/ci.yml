@@ -74,8 +74,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Parte 1 = todo o resto (arquivo de teste novo cai nela sozinho); 2 = os mais lentos sem o módulo; 3 a 6 = os que usam o módulo.
-        parte: [1, 2, 3, 4, 5, 6]
+        # Parte 1 = todo o resto (arquivo de teste novo cai nela sozinho); 2 = os mais lentos sem o módulo; 3 a 7 = os que usam o módulo.
+        parte: [1, 2, 3, 4, 5, 6, 7]
         include:
           - {parte: 1, modulo: false}
           - {parte: 2, modulo: false}
@@ -83,6 +83,7 @@ jobs:
           - {parte: 4, modulo: true}
           - {parte: 5, modulo: true}
           - {parte: 6, modulo: true}
+          - {parte: 7, modulo: true}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -153,7 +154,14 @@ jobs:
         timeout-minutes: 30
         run: |
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
-          OBIM_CI=1 pytest -q -rsP tests/test_s04_viewport_b.py tests/test_s04_cena.py tests/test_s04_selecao.py tests/test_s04_selecao_c.py tests/test_s04_profundidade.py tests/test_s04_fluxo_a.py tests/test_s04_fluxo_a_camera_selecao.py tests/test_s04_abertura.py
+          OBIM_CI=1 pytest -q -rsP tests/test_s04_viewport_b.py tests/test_s04_cena.py tests/test_s04_selecao.py tests/test_s04_profundidade.py tests/test_s04_fluxo_a.py tests/test_s04_fluxo_a_camera_selecao.py
+      - name: Viewport C++, parte 7 (S04-T06/T07; bloqueia o merge)
+        if: matrix.parte == 7
+        shell: bash -elo pipefail {0}
+        timeout-minutes: 30
+        run: |
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          OBIM_CI=1 pytest -q -rsP tests/test_s04_selecao_c.py tests/test_s04_abertura.py
       - name: Viewport C++, parte 5 (T15, V1 e desenho por software; bloqueia o merge)
         if: matrix.parte == 5
         shell: bash -elo pipefail {0}

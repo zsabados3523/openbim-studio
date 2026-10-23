@@ -1,6 +1,6 @@
 # Quadro da F0
 
-> Atualizado: 2026-10-23 (S04 fechada: aceite do PO pelo roteiro `docs/acceptance/S04.md`; relatório `reports/F0-S04-fechamento.md`). Só o que está **aberto**. Visão da máquina; o PO lê `docs/PAINEL_DO_PROJETO.md`. Fonte: `v2/03_fase0_especificacao.md`. Status de uma palavra: PRONTA · EM_ANDAMENTO · PAUSADA · BLOQUEADA · AGUARDA_PO · AGUARDA_OPUS · ABERTA · NAO_INICIADA · CONTINUA. Fatias e cartões fechados, com a história de cada um (lotes, reprovações, PRs): `arquivo/BOARD-historico-2026-10-15.md` e `LOG.md`.
+> Atualizado: 2026-10-23 (S04 fechada: aceite do PO pelo roteiro `docs/acceptance/S04.md`; relatório `reports/F0-S04-fechamento.md`; S05 aberta; T01 e T01b feitas; P6 decidida, mapa juntado ao painel). Só o que está **aberto**. Visão da máquina; o PO lê `docs/PAINEL_DO_PROJETO.md`. Fonte: `v2/03_fase0_especificacao.md`. Status de uma palavra: PRONTA · EM_ANDAMENTO · PAUSADA · BLOQUEADA · AGUARDA_PO · AGUARDA_OPUS · ABERTA · NAO_INICIADA · CONTINUA. Fatias e cartões fechados, com a história de cada um (lotes, reprovações, PRs): `arquivo/BOARD-historico-2026-10-15.md` e `LOG.md`.
 
 ## Fatias
 | Fatia | Nome | Tam. | Status | Nota |
@@ -27,7 +27,8 @@
 | F0-S04-T04b | Registro local de mensagens e fim do mutex | T3 | PAUSADA | D1 |
 | F1-D3D11-dispositivo-unico | Um dispositivo D3D11 por processo (herdeiro do F0-S04-T07e) | T3 | NAO_INICIADA | Adiado à F1 pelo PO (2026-10-22); `cards/F1-D3D11-dispositivo-unico.md` |
 | F1-CI-cadeia-instalador | Cadeia do instalador no CI do Windows (meta de 10 min) | T3 | NAO_INICIADA | Adiado à F1 (2026-10-23); `cards/F1-CI-cadeia-instalador.md` |
-| F0-S05-T01 | Organização: quadro, mapa e painel | T1 | AGUARDA_PO | Três arquivos postos em dia; relatório `reports/F0-S05-T01-organizacao.md`; nada apagado nem fundido até a resposta P6 |
+| F0-S05-T01 | Organização: quadro, mapa e painel | T1 | FEITA | P6 decidida pelo PO em 23/10: quadro e painel ficam; mapa juntado ao painel e apagado em T01b. Relatório `reports/F0-S05-T01-organizacao.md` |
+| F0-S05-T01b | Juntar o mapa no painel e atualizar o CLAUDE.md (P6) | T0 | FEITA | Cartão `cards/F0-S05/F0-S05-T01b.md`; `docs/MAPA_DO_PROJETO.md` apagado; CLAUDE.md com o painel |
 | F0-S05-T02 | Sondas do ifcopenshell (só números) | T2 | PRONTA | Primeiro da S05; P3 aprovada |
 | F0-S05-T03 | ADR-002, rascunho | TA | NAO_INICIADA | Opus, lote A; depende de T02 e de P1 a P5 |
 | F0-S05-T04 | Transação única IFC + lateral, prova das 10.000 | T3 | NAO_INICIADA | Depende de T03; P1, P2 |

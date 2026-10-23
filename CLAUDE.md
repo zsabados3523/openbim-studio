@@ -12,11 +12,12 @@ Programa BIM aberto (AGPL v3), instalável no Windows e no Linux, geral (núcleo
 - Ambiguidade ou conflito nos documentos: listar e perguntar ao PO. Não inventar.
 
 ## Onde está o estado
+- `docs/PAINEL_DO_PROJETO.md` visão do PO (fases, fatias, decisões e perguntas abertas); o quadro é a visão da máquina.
 - `docs/state/BOARD.md` quadro (fatia, tarefa, classe, modelo, status) · `cards/` cartões (uma pasta por fatia aberta; fatias fechadas em `arquivo/`) · `LOG.md` uma linha por tarefa concluída ou escalada
 - `docs/state/QUOTA.md` cota por sessão · `QUEUE_OPUS.md` fila do lote Opus · `PO.md` perguntas e respostas · `reports/` relatórios de fatia e de revisão · `lotes/LOTE_OPUS_N/` pedido e resultado de cada lote Opus · `arquivo/` o que já fechou
 - `docs/adr/` decisões · `docs/research/` fichas de pesquisa · `docs/acceptance/` roteiros do PO
 - Início de sessão ("Leia docs/state e continue"): ler BOARD, PO, QUEUE_OPUS e as últimas linhas de QUOTA.
-- Fim de sessão: atualizar BOARD, LOG, QUOTA (pedir ao PO os percentuais de `/usage`) e o "próximo passo" do cartão em curso.
+- Fim de sessão: atualizar BOARD, LOG, QUOTA (pedir ao PO os percentuais de `/usage`), o PAINEL (seções 1, 3 e 6) e o 'próximo passo' do cartão em curso.
 
 ## Papéis e matriz de modelos (aliases sempre: haiku, sonnet, opus)
 | Tipo | Implementa | Testes/oráculo | Revisa |

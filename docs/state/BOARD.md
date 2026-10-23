@@ -69,7 +69,7 @@
 | F0-S05-T01 | Organização: quadro, mapa e painel | T1 | FEITA | P6 decidida pelo PO em 23/10: quadro e painel ficam; mapa juntado ao painel e apagado em T01b. Relatório `reports/F0-S05-T01-organizacao.md` |
 | F0-S05-T01b | Juntar o mapa no painel e atualizar o CLAUDE.md (P6) | T0 | FEITA | Cartão `cards/F0-S05/F0-S05-T01b.md`; `docs/MAPA_DO_PROJETO.md` apagado; CLAUDE.md com o painel |
 | F0-S05-T02 | Sondas do ifcopenshell (só números) | T2 | PRONTA | Primeiro da S05; P3 aprovada |
-| F0-S05-T03 | ADR-002, rascunho | TA | NAO_INICIADA | Opus, lote A; depende de T02 e de P1 a P5 |
+| F0-S05-T03 | ADR-002, rascunho | TA | EM_REVISAO (PR 283) | Opus lote 78 escreveu; lote 79 reprovou (14 problemas) e o autor corrigiu; falta nova revisão (janela de 5 h acima de 70%) e o aceite do PO |
 | F0-S05-T04 | Transação única IFC + lateral, prova das 10.000 | T3 | NAO_INICIADA | Depende de T03; P1, P2 |
 | F0-S05-T05 | Diário de transações e recuperação | T3 | NAO_INICIADA | Depende de T04; P4, P5 |
 | F0-S05-T06 | Gravação atômica de um arquivo | T3 | NAO_INICIADA | Depende de T03 |

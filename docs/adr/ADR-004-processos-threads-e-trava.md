@@ -211,7 +211,7 @@ Fonte de todos os números desta seção: `docs/state/reports/F0-S04-V1.md` (sal
 ## 6. Mapa de threads e processos proposto (com 1C, 2C, 3C e 4C; revisto em 2026-10-21)
 | Onde | O que faz | Toca no Python? | Toca no modelo? |
 |---|---|---|---|
-| Thread da janela (Qt) | Interface, eventos, comandos curtos; comandos longos em fatias de 8 ms (4C, validada pelo V1; aguarda aprovação do PO) | Sim | Só por `ler()`/`escrever()`; nunca espera geometria parada; leitura de painel só sem espera |
+| Thread da janela (Qt) | Interface, eventos, comandos curtos; comandos longos em fatias de 8 ms (4C, validada pelo V1 e aceita pelo PO em 2026-10-23) | Sim | Só por `ler()`/`escrever()`; nunca espera geometria parada; leitura de painel só sem espera |
 | Thread de desenho (C++) | Desenha a cena imutável; no Windows com WARP, destruir o dispositivo nela pode travar (§5.1, risco aberto; F1-D3D11) | Nunca | Nunca (já é assim: `motor.h`, `cena.cpp`) |
 | Thread de geometria (thread à parte que chama o `obimcore`; o trabalho roda em C++ com o interpretador solto) | Toda malha das edições, 1 passada por vez | Só para entrar e sair da chamada | Lê enquanto o comando dono de `escrever()` espera, sem escrever (§5.1, regra 3) |
 | Thread de arquivo (Python) | Abrir, gravar, cópia de segurança (fora da janela: B22, RG-05, RG-06); gravar não solta o bloqueio (§2.1) | Sim | `ler()` para gravar; `escrever()` para trocar o modelo aberto |
@@ -231,7 +231,7 @@ Nenhuma thread fora da janela cria ou toca objeto Qt (§5.1, regra 5).
 | 1. Onde a geometria roda | 1A dentro · 1B sempre separado · 1C misto | **1C** | **1C** (PO, 2026-10-15) |
 | 2. Várias peças ao mesmo tempo | 2A uma por vez · 2B várias passadas · 2C várias threads numa passada | **2C** | **2C** (PO, 2026-10-15) |
 | 3. Trava do modelo | 3A combinação · 3B dono único · 3C porta única | **3C** | **3C** (PO, 2026-10-15) |
-| 4. Thread do comando longo (§5.1) | 4A forma 1 · 4B forma 2 · 4C mista | 4C só com o V1; se o V1 reprovar, volta ao PO (4A ou 4B) | **4C como direção** (PO, 2026-10-21), condicionada ao V1; antes, 17/10: "reforçar a forma 1". V1 aprovado pela régua (2026-10-23, com o 0,3% aceito como ruído pelo PO): **validada; aguarda aprovação do PO** |
+| 4. Thread do comando longo (§5.1) | 4A forma 1 · 4B forma 2 · 4C mista | 4C só com o V1; se o V1 reprovar, volta ao PO (4A ou 4B) | **4C como direção** (PO, 2026-10-21), condicionada ao V1; antes, 17/10: "reforçar a forma 1". V1 aprovado pela régua (2026-10-23, com o 0,3% aceito como ruído pelo PO): **validada e aceita pelo PO em 2026-10-23** |
 
 Próximos passos: os números N1 a N4 seguem sem medida (o RG-02 fechou a S04 sem eles; o T04b está pausado) e entram como condição dos cartões que dependem deles (2B, e as várias threads da 2C dentro do processo). O V1 passou (§5.1, "Resultado do V1"); a pergunta 4 espera só a aprovação do PO. Este ADR é revisto por um Opus que não escreveu a parte revista (regra 6 do `CLAUDE.md`) e passa a "aceito" depois do V1 e da aprovação do PO. A frase nova de `v2/02 §5` sobre o processo auxiliar vai no cartão RG-24, com aprovação do PO.
 

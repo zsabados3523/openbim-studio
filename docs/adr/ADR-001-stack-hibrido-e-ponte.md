@@ -2,7 +2,8 @@
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 # ADR-001: Stack (híbrido Python + C++ ou C++ puro), ponte, pythonocc e Rust
-- Status: **proposto; direção decidida pelo PO** (2026-10-21, no chat: "manter a estrutura híbrida; C++ puro rejeitado como não necessário"). Texto aprovado pelo PO em 2026-10-21 (resumo de 5 linhas). Passa a "aceito" só com essa aprovação **e** com a medição de fechamento da S04 (§7, itens A1 e A2).
+- Status: **aceito pelo PO em 2026-10-23, no chat** (direção decidida em 2026-10-21; medição de fechamento feita em 2026-10-23) (direção: 2026-10-21, no chat: "manter a estrutura híbrida; C++ puro rejeitado como não necessário"; texto de 2026-10-21 aprovado pelo PO no mesmo dia). A medição de fechamento (M1F, `reports/F0-S04-M1F.md`) fechou o A1 e mediu o A2 (§7).
+- **Atualização de 2026-10-23 (opus, cartão F0-S04-T19):** números da M1F em §3.1 a §3.4 e §7; resumo de 5 linhas revisto. Fontes: `reports/F0-S04-M1F.md` (PR 273), `reports/F0-S04-T23d.md`, `cards/F1-CI-cadeia-instalador.md`, `LOG.md` (2026-10-23).
 - Autor: opus (cartão F0-S04-T19, classe TA, lote Opus 68) · Data: 2026-10-21
 - Base: especificação da S04 (`docs/state/arquivo/lotes-1-a-28/LOTE_OPUS_9/resultado.md` §1 a §6: casos R1, metas M1 a M7, regra de leitura §3, esqueleto §5.1); `v2/03` F0-S04 e §3; ADR-005 §7.1 e §10; relatórios `docs/state/reports/F0-S04.md` (medição oficial de 2026-10-17), `F0-S04-T21`, `T22`, `T24`, `T29-placa-memoria` (e `-2`), `T29e-ensaio`, `T30-placa`, `T30c-dados-reais`, `T23`, `F0-S04-threads.md`; lotes Opus 57, 62, 65 e 66; `PO.md` (decisões de 17 e 18/10).
 - Escopo: o tema "Stack, ponte, papel do pythonocc, Rust" de `v2/03 §3`. Threads e trava do modelo ficam no ADR-004. Não muda `v2/` nem `CLAUDE.md`.
@@ -10,9 +11,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 ## Resumo para o PO (5 linhas)
 1. O programa fica como planejado: janelas e comandos em Python, desenho 3D e cálculo das peças num núcleo próprio em C++, os dois lendo o mesmo modelo na memória, sem cópia, no Windows e no Linux.
 2. As metas de velocidade ao criar e editar paredes passam com folga de 2,6 vezes ou mais; o que reprovou em 17/10 (memória do arquivo pesado e troca de parede em arquivo real) estava no núcleo C++ e no processo de abertura, partes iguais nos dois caminhos, e foi corrigido lá.
-3. Na sua placa de vídeo a memória do arquivo pesado ficou em 5,96 gigabytes no pior de 6 aberturas (meta 6,0: passa por só 42 megabytes) e a troca de parede ficou abaixo de 83 milésimos de segundo (meta 200).
+3. A medição final na sua placa (23/10) passou em todas as metas: a troca de parede nos seus arquivos reais ficou em cerca de 50 milésimos de segundo (meta 200; antes 399 e 6.749) e o arquivo pesado abriu em 52 segundos com 5,86 gigabytes (meta 6,0); o pior já visto segue 5,96, folga de só 42 megabytes.
 4. Escrever tudo em C++ não resolveria nenhuma meta que falhou e custaria de 20% a 40% a mais de calendário; por isso fica rejeitado, como você decidiu.
-5. Ainda faltam: a medição final completa na placa, conferir que os arquivos simples e detalhado não pioraram, o Windows com placa real, e o teste automático do Windows, que caiu de 34 para 17 minutos mas não chegou aos 10.
+5. Ainda falta o Windows com placa real; o teste automático do Windows ficou em cerca de 12 minutos em vez de 10 (você aceitou em 23/10; a meta foi para a fase 1); e, na configuração nova, o arquivo detalhado abre 3,3 segundos mais devagar e usa 1,4 gigabyte a menos, dentro das metas: peço seu ok para isso.
 
 ## 1. Contexto
 `v2/03` (F0-S04) manda construir o mesmo fluxo de duas formas e decidir a stack com números:
@@ -43,13 +44,16 @@ Linux oficial = máquina do PO, Intel Core i5-12600KF, 23 GB, NVIDIA GeForce RTX
 | Saída igual (A e B gravam o mesmo IFC) | juiz estrito | aprovado | — (juiz roda na máquina do PO) | atingida |
 | M7. Linhas sem comentários e sem linhas vazias | registrar | `obimcore` 1.259; fluxo A 1.013; fluxo B 1.278 | — | registrada; tempo de agente **não medido** |
 
+**Medição de fechamento (M1F, placa, 2026-10-23, `main` em 67cbd70 com V1c, T07e e T23d; `reports/F0-S04-M1F.md`):** juiz estrito (`OBIM_S04_ESTRITO=1`) aprovado, saída igual. M2 33,1 / 49,7 (máx 50,4); M2b 32,8 / 49,4 (máx 49,8); M3 0,7 / 2,4 (máx 64,5; o limite é do p95); M4 2,16 s; M5 17,3 ms; M6 razões 1,00 / 1,00 / 0,31 / 14,6, folga mínima 4,02, não pesa; M7 `obimcore` 1.407, fluxo A 1.170, fluxo B 1.278. Todas atingidas. Uma execução, sem repetir.
+
 ### 3.2 Troca de geometria de uma parede (M2b, alvo p95 < 200 ms; vale também para parede vinda do arquivo, A30)
 | Caso | 2026-10-17 (oficial) | Depois da T-2 (sub-lotes de até 8 MiB e reenvio só do sub-lote trocado), placa real, 2026-10-20 (`T30-placa`) |
 |---|---|---|
 | Sintética 3.000 | 49,3 / 65,9 (máx 82,8) | mediana 32,7; pior 49,7 (parede do arquivo) e 82,8 (parede criada) |
 | 25 MB | 399 / 414,6 | mediana 32,6; pior 49,6 e 81,6 |
 | Detalhado | 6.749 / 6.764 | mediana 48,9; pior 65,2 e 78,4 |
-Leitura: a troca passou a custar 2 a 3 quadros em qualquer tamanho; o p95 de qualquer caso fica abaixo do pior valor, 82,8 ms. Em dados reais, nenhuma parede caiu em sub-lote acima de 8 MiB nos três arquivos do PO (`T30c-dados-reais`). Medido pela sonda `sonda_m2b`, não pela medição oficial completa (ver A1).
+Leitura: a troca passou a custar 2 a 3 quadros em qualquer tamanho; o p95 de qualquer caso fica abaixo do pior valor, 82,8 ms. Em dados reais, nenhuma parede caiu em sub-lote acima de 8 MiB nos três arquivos do PO (`T30c-dados-reais`). Medido pela sonda `sonda_m2b`, não pela medição oficial completa.
+- **M1F (2026-10-23, roteiro oficial, passo 9, `roteiro_ifc`, informativo):** M2b p95 em IFC real **49,6 ms** no detalhado (antes 6.749) e **48,9 ms** no 25 MB (antes 399); no mesmo passo M2 p95 49,7 e 49,6 ms, M3 p95 1,4 ms, M4 2,71 e 2,61 s, M5 17,6 e 16,8 ms. M2b em IFC real **atingido** (`F0-S04-M1F.md`).
 
 ### 3.3 Abertura do arquivo pesado (meta herdada da S03: pico somado < 6,0 GB e abrir ≤ 60 s; régua A28: 5 aberturas, ou 3 em dois dias, vale a pior)
 | Medida | 2026-10-17 (oficial, bloco 1.000) | 2026-10-21, placa real, bloco 250 e reinício planejado do processo auxiliar (T29) |
@@ -60,6 +64,7 @@ Leitura: a troca passou a custar 2 a 3 quadros em qualquer tamanho; o p95 de qua
 | Peças simplificadas / filhos sobrando | 0 / 0 | 0 / 0 |
 - As 6 aberturas foram no mesmo dia, em dois `main` seguidos (o módulo nativo não mudou). Pela régua A28 (5 aberturas, vale a pior) a meta **passa**, com folga de **42 MB** (0,7%).
 - Ensaio em tela virtual do mesmo dia (`T29e`): uma das 3 aberturas deu 6.028 MB. Não é oficial, mas mostra que a folga é da ordem da variação entre rodadas (até 100 MB entre dias, T24).
+- **M1F (2026-10-23, placa, 3 rodadas, 8 fios):** bloco 250 = abrir 52,2 s (52,5 / 52,2 / 52,5), pico somado **5.858 MB** de mediana (5.859 / 5.858 / 5.821; pior 5.859), atraso máx 61,7 ms, 1 reinício por abertura (bloco 22). Bloco 1.000 = 45,8 s e **6.354 MB** (6.337 a 6.358), acima da meta, como já se sabia: a meta depende do bloco 250 e do reinício planejado. Somando as séries de 2026-10-21 e 2026-10-23, o pior pico do bloco 250 segue 5.958 MB (folga de 42 MB). Simples e detalhado (mesma tarde, autorizado pelo PO, 3 rodadas cada): bloco 1.000 = simples 1,80 s e 968 MB, detalhado 23,4 s e 5.011 MB; bloco 250 = simples 1,91 s, 955 MB, atraso 14,4 ms; detalhado 26,7 s, 3.568 MB, atraso 52,2 ms, 1 reinício por abertura. O detalhado fica 3,3 s mais lento e com 1,4 GB a menos; os dois dentro das três metas (abrir, memória, atraso) (`F0-S04-M1F.md`).
 - A memória está no processo auxiliar de abertura (caminho da S03), igual para A e para B.
 
 ### 3.4 Ponte, build e pacote
@@ -67,7 +72,7 @@ Leitura: a troca passou a custar 2 a 3 quadros em qualquer tamanho; o p95 de qua
 |---|---|---|
 | nanobind com GCC (conda-forge) e MSVC | compila e passa R1 nos dois | T03; CI |
 | Módulo `obimcore`, build limpo / incremental | Linux 21,7 s / 5,6 s; Windows 87,5 s / 16,9 s | `F0-S04.md` |
-| Cadeia de testes do Windows no CI (meta 10 min, ADR-005 §10 item 7) | 34 min 05 s → mediana 17 min 08 s (pior 17 min 13 s) em 3 rodadas; **não atingida** | `T23` |
+| Cadeia de testes do Windows no CI (meta 10 min, ADR-005 §10 item 7) | 34 min 05 s → mediana 17 min 08 s (pior 17 min 13 s) em 3 rodadas (T23) → mediana 11:58 (pior 12:16) em 3 rodadas, testes em 11 partes (T23d); **não atingida**; PO aceitou cerca de 12 min para fechar a S04 (2026-10-23); meta de 10 min segue como objetivo da F1. As duas bases "antes" não se contradizem: 17:08 é a mediana das 3 rodadas do T23; 17:48 é a base que o T23d mediu depois, no `main`, já com os testes que entraram em seguida (V1, V1c, T07e) | `T23`, `T23d`, `LOG.md` 2026-10-23, `cards/F1-CI-cadeia-instalador.md` |
 | Pacotes | AppImage 390 MB; instalador 310,6 MB (meta ≤ 600 MB) | `F0-S04.md` |
 | Custo da ponte por chamada (ADR-005 §7.1 prova 5) | **não medido** como prova separada | — |
 | pythonocc | fora do ambiente (`environment.yml`) e fora dos protótipos | leitura do repositório |
@@ -99,13 +104,13 @@ Leitura: a troca passou a custar 2 a 3 quadros em qualquer tamanho; o p95 de qua
 ## 7. O que ficou aberto
 | # | Ponto | Situação | Quem fecha |
 |---|---|---|---|
-| A1 | Medição oficial completa da S04 (juiz estrito, roteiro inteiro) depois de T29 e T30 | não refeita; os números de §3.2 e §3.3 são de sondas | medição de fechamento da S04, na placa, com ok e horário do PO |
-| A2 | Condição A25: com bloco 250, os arquivos simples e detalhado não podem piorar na medida oficial | **não medido** (T29 só mediu o pesado) | mesma sessão do A1 |
+| A1 | Medição oficial completa da S04 (juiz estrito, roteiro inteiro) depois de T29 e T30 | **FEITA em 2026-10-23** (M1F, placa, `main` em 67cbd70): juiz estrito aprovado; M2 a M5 atingidas na base sintética; M2b em IFC real atingido (49,6 e 48,9 ms); memória do pesado 5.858 MB no bloco 250 (§3.1 a §3.3) | fechado (`reports/F0-S04-M1F.md`) |
+| A2 | Condição A25: com bloco 250, os arquivos simples e detalhado não podem piorar na medida oficial | **FEITA em 2026-10-23** (complemento da M1F, autorizado pelo PO, 3 rodadas cada): simples 1,91 s / 955 MB / 14,4 ms (bloco 1.000: 1,80 s / 968 MB); detalhado 26,7 s / 3.568 MB / 52,2 ms (bloco 1.000: 23,4 s / 5.011 MB), ou seja, 3,3 s mais lento (cerca de 14%) e 1,4 GB mais leve; os dois dentro das três metas (§3.3). O simples fica igual; no detalhado o tempo piorou e a memória melhorou: se isso cumpre o "não piorar" do A25 é decisão do PO | fechado (`reports/F0-S04-M1F.md`) |
 | A3 | Folga de 42 MB na memória do pesado | passa pela régua A28; ensaio virtual com 6.028 MB em 1 de 3 | vigiar: toda mudança no carregador ou no processo auxiliar remede o pesado (5 aberturas, vale a pior) |
 | A4 | Windows com placa real | não medido | cartão F0-S03-T28 (PO) |
-| A5 | Tela e mouse durante operação longa em IFC real (M5 e M5b) | não medidos (`lote.py` não aceita IFC) | cartão de validação do ADR-004 |
-| A6 | Cadeia do Windows no CI: 17 min contra 10 | não atingida | PO decidiu (21/10): (a) cartão do instalador, depois (b) dividir os quatro trabalhos de teste; ADR-005 §10 item 7 |
-| A7 | Custo da ponte por chamada e tempo de agente (M7) | não medidos | registrar na S10 (calibração); não decide a stack |
+| A5 | Tela e mouse durante operação longa em IFC real (M5 e M5b) | maior fatia medida no IFC real de 25 MB (V1b e V1c, Linux em tela virtual: 165,5 e 176,7 ms depois dos sub-lotes); detalhe no ADR-004 §5.1. M5 em IFC real na M1F (placa, roteiro curto, não durante operação longa): 17,6 ms no detalhado e 16,8 ms no 25 MB (§3.2) | ADR-004 (V1) |
+| A6 | Cadeia do Windows no CI: 10 min | não atingida: mediana 11:58 depois do T23d (antes 17:48) | PO aceitou cerca de 12 min para fechar a S04 (2026-10-23); a meta segue como objetivo da F1, cartão `F1-CI-cadeia-instalador`; ADR-005 §10 item 7 |
+| A7 | Custo da ponte por chamada e tempo de agente (M7) | não medidos (as linhas de M7 foram registradas de novo na M1F, §3.1) | registrar na S10 (calibração); não decide a stack |
 | A8 | Fluxo B em IFC real | não medido | não será medido: o núcleo é comum (§4) |
 
 ## 8. O que deixa de valer
@@ -115,7 +120,7 @@ Leitura: a troca passou a custar 2 a 3 quadros em qualquer tamanho; o p95 de qua
 
 ## 9. O que nos faria mudar de ideia
 - R1-d, R1-e, R1-f ou R1-g reprovando de forma estável em algum sistema ou pacote, ou um pacote novo do IfcOpenShell sem biblioteca compartilhada ou sem `file_pointer()`: plano B do ADR-005 §10 item 1; se também reprovar, C++ puro, levando ao PO.
-- A medição de fechamento (A1) reprovando M2 a M5 por causa da camada Python (e não do núcleo comum).
+- Uma medição oficial nova reprovando M2 a M5 por causa da camada Python (e não do núcleo comum). A de fechamento (A1, 2026-10-23) passou em todas.
 - Folga de M6 abaixo de 2 vezes em alguma meta absoluta, em medição nova.
 - Janela surda por mais de 1 s em operação comum que nenhuma das formas do ADR-004 resolva (lote 9 §5.1).
 - O oplog da S05 mais de 10 vezes fora da meta: abre a linha opcional de Rust.

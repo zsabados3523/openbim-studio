@@ -2,9 +2,17 @@
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 # ADR-004: Processos, threads e trava do modelo
-- Status: perguntas 1 a 3 **decididas pelo PO** (2026-10-15, no chat do projeto: "Aprovar tudo"; opções 1C, 2C e 3C). Pergunta 4 (§5.1, em que thread roda um comando longo): **direção do PO** (2026-10-21, "forma mista"), **condicionada ao cartão de validação V1** (§5.1); texto da atualização de 2026-10-21 aprovado pelo PO no mesmo dia (resumo de 5 linhas). Os números N1 a N4 **seguem sem medida** (§2). Não passa a "aceito" antes do V1 e dessa aprovação.
+- Status: perguntas 1 a 3 **decididas pelo PO** (2026-10-15, no chat do projeto: "Aprovar tudo"; opções 1C, 2C e 3C). Pergunta 4 (§5.1, em que thread roda um comando longo): **direção do PO** (2026-10-21, "forma mista"), **condicionada ao cartão de validação V1** (§5.1); texto da atualização de 2026-10-21 aprovado pelo PO no mesmo dia (resumo de 5 linhas). Os números N1 a N4 **seguem sem medida** (§2). **Aceito pelo PO em 2026-10-23, no chat** (forma mista 4C validada pelo V1, com as ressalvas do §5.1, "Resultado do V1"; o PO aceitou também o 0,3% do V1m como ruído). N1 a N4 seguem sem medida e entram como condição dos cartões que dependem deles.
 - Autor: opus (cartão F0-RG-01, TA) · Data: 2026-10-15
 - **Atualização de 2026-10-21 (opus, lote 68, cartão F0-S04-T19):** números da S04 em §2; pergunta 4 nova (§5.1); mapa do §6, consequências (§7), decisão (§8), gatilhos (§9) e "não verificado" (§10) revistos; o que deixa de valer em §11. Fontes novas: `reports/F0-S04.md`, `F0-S04-threads.md`, `F0-S04-T15f-diagnostico.md`, `T21`, `T24`, `T29-placa-memoria` (e `-2`), `T29e-ensaio`, `T30-placa`; lotes Opus 57, 62, 65, 66; `fluxo_a/CONTRATO.md` (T15).
+- **Atualização de 2026-10-23 (opus, cartão F0-S04-T19, parte "ADR-004 com os números do V1"):** resultado do V1 (V1m, V1b, V1c) e risco aberto do WARP no §5.1; §2, §6, §8, §9 e §10 ajustados. Fontes: `reports/F0-S04-V1.md`, `reports/F0-S04-T07c.md`, `cards/F0-S04/F0-S04-T07e.md`, `cards/F1-D3D11-dispositivo-unico.md`, `LOG.md` (2026-10-21 a 2026-10-23), lotes Opus 72, 73, 74 e 76.
+
+## Resumo da atualização de 2026-10-23 para o PO (5 linhas)
+1. A forma mista passou na validação nas três máquinas (Linux sem placa, sua placa de vídeo e Windows): com a parede pesada o mouse respondeu em 18,6 a 26,5 milésimos de segundo, contra limites de 102 a 145, e, na base de teste, a janela nunca ficou parada por mais de 1 segundo.
+2. No seu arquivo real de 25 megabytes, uma única operação (pôr as paredes no pavimento) passou um pouco de 1 segundo; ela foi partida em pedaços de 100 paredes e caiu para cerca de 0,17 segundo.
+3. Algumas folgas são pequenas (1% a 4%), porque a mista e a forma em fatias quase empatam; num item a mista ficou 0,3% acima e você aceitou como ruído em 23/10, sem mudar a régua.
+4. Fica um risco aberto só no Windows sem placa de vídeo compatível: fechar uma vista 3D trava raramente (1 vez em 300); o programa já não congela ao sair, mas a correção de fundo (um só dispositivo de desenho por programa) ficou para a fase 1.
+5. Peço sua aprovação da forma mista; quatro números antigos (abrir o arquivo duas vezes, mandar edição ao auxiliar, várias linhas dentro de um cálculo, teste da queda) seguem sem medida: a medição final na sua placa, feita hoje, não os mede, e eles dependem de cartões próprios.
 
 ## Resumo da atualização de 2026-10-21 para o PO (5 linhas)
 1. Sua ideia mista tem metade comprovada: mandar o cálculo de uma peça pesada para uma linha de trabalho à parte deixou o mouse livre nas três máquinas medidas (até 16 milésimos de segundo, contra 200 a 250 quando o cálculo roda na janela).
@@ -58,15 +66,19 @@ Essas três escolhas foram feitas em lotes Opus (6, 9 e 10) sem ADR. A regra do 
 
 **Situação em 2026-10-21:** N1 a N4 **continuam sem medida**. O T04b está PAUSADO (`BOARD.md`); `malha.cpp` ainda tem o `std::mutex uma_geometria_por_vez` e cria o iterador com 1 thread; o fluxo A ainda usa um `threading.Lock` simples (a porta única 3C não foi feita). Correções da tabela acima: a maior peça tem dois tempos por métodos diferentes, 11,5 s (lote 6) e 15,1 s sozinha (T21 §5), e nenhum dos dois é o tempo dela dentro do carregador (lote 57 §1 item 4); o "6,8 GB" foi substituído pelos números abaixo.
 
+**Situação em 2026-10-23:** N1 a N4 **seguem sem medida**. O V1 (§5.1) não mede nenhum deles, e a medição final na placa (M1F, feita em 2026-10-23, `reports/F0-S04-M1F.md`, PR 273) também não. Eles continuam condição dos cartões que dependem deles (T04b, e os que usam 2B ou as várias threads da 2C dentro do processo; §8).
+
 ### 2.1 Números da S04 (Linux oficial = máquina do PO, RTX 3070, tela real; Windows = CI, desenho por software)
 | Fato | Número | Fonte |
 |---|---|---|
 | Desenho com thread própria do C++ | M5, maior intervalo entre quadros 16,7 a 17,8 ms nas formas 1 e 2 (Linux oficial); 32 a 33 ms no Windows, igual ao parado; com o bloqueio do interpretador preso 771 ms, 46 quadros e maior intervalo 18 ms | `F0-S04-threads.md`, conferência (iii) |
 | Forma 3 (desenho em Python, referência) | maior intervalo 555 a 1.196 ms (oficial) | idem |
 | `QEventLoop.exec()` ocioso solta o bloqueio | sim (razão 1,07 oficial; 0,97 Linux local; 1,01 Windows) | idem, conferência (i) |
-| Abrir IFC solta o bloqueio; gravar IFC não solta | taxa da outra thread 0,993 contra 0,019 (oficial) | idem, conferência (ii) |
+| Abrir IFC solta o bloqueio; gravar IFC não solta | taxa da outra thread 0,993 contra 0,019 (oficial); reconfirmado na M1F (`exec` solta em `ifcopenshell.open`, não em `file.write`) | idem, conferência (ii); `F0-S04-M1F.md`, passo 5 |
 | Abertura do pesado, bloco 250 e 1 reinício planejado do auxiliar (bloco 22, pela vigia) | pico somado pior 5.958 MB em 6 aberturas (meta < 6.000); abrir 50,8 a 51,7 s (meta ≤ 60); atraso máx da janela 45 a 62,7 ms | `T29-placa-memoria` e `-2` |
 | Troca de parede depois da T-2 (sub-lotes de até 8 MiB, reenvio só do sub-lote trocado, dentro de `cena`) | pior 82,8 ms em qualquer caso (meta 200); antes 399 e 6.749 ms em IFC real | `T30-placa` |
+| M1F, placa, código final (`main` em 67cbd70, com V1c, T07e e T23d; 2026-10-23) | M2b em IFC real atingido: p95 49,6 ms no detalhado (antes 6.749) e 48,9 ms no `casa25` (antes 399); M5 17,3 ms; pesado com bloco 250: abrir 52,2 s, pico somado 5.858 MB (pior 5.859), atraso máx 61,7 ms; com bloco 1.000: 6.354 MB (acima da meta, como já se sabia); 8 fios | `F0-S04-M1F.md` (PR 273) |
+| Threads na M1F (placa, base 3.000) | forma 1: maior pulso do lote 1.148 / 1.507 / 1.604 ms (surda > 1 s, como antes); forma 2 já com os sub-lotes do V1c: controle 70 a 124 ms (antes 698 a 765), M5b mediana 12,5 a 13,7 ms; parede pesada (base 300, `malha_ms` 204,8, portão 102,4 ms): forma 1 1,3 a 1,9 ms, forma 2 200,7 a 205,3 ms; a mista não foi medida na M1F | idem, passos 4 a 6 |
 | Objeto Qt construído fora da thread da janela (postador de mouse da medição) | corrupção de memória reproduzida no Linux (3 de 3) e compatível com a queda 0xC0000374 do Windows | `F0-S04-T15f-diagnostico.md`, lote 43 |
 
 ## 3. Pergunta 1: onde a geometria roda
@@ -157,7 +169,7 @@ Cuidados de leitura: (1) o postador de mouse é uma terceira thread Python e pio
 5. Nenhum objeto Qt é criado ou tocado fora da thread da janela (T15f: corrupção de memória reproduzida).
 6. A ordem das travas do §5 não muda.
 
-### Decisão (direção do PO, condicionada)
+### Decisão (direção do PO, condicionada; validada pelo V1 em 2026-10-23 e aceita pelo PO no mesmo dia)
 **4C**, condicionada ao cartão **V1** (validação: protótipo da forma mista em `lote.py` e medição; classe **T3**, porque mexe em threads e na entrega ao C++; oráculo por subagente diferente; revisão Opus). Critérios de aceite do V1, todos com a mesma régua do T15 e sem mudar nenhum número:
 1. A 4C entra como **forma nova** em `lote.py` (forma "mista"); formas 1 e 2 seguem iguais, para os números antigos continuarem comparáveis; `fluxo_a.py` não muda (é régua, A29).
 2. Mesmas medidas e mesmas bases: lote de 1.000 paredes (base 3.000 na placa real; base 300 no Linux local e no Windows), 3 rodadas por forma, com e sem postador; parede de 150 aberturas na base 300, 3 rodadas.
@@ -169,11 +181,38 @@ Cuidados de leitura: (1) o postador de mouse é uma terceira thread Python e pio
 8. Em separado: maior fatia da forma 2 (e da mista) num IFC real do PO; exige `--ifc` em `lote.py` e a liberação do arquivo no chat. Se passar de 1 s, o V1 reprova a parte "comandos em fatias" e vai ao PO.
 Se o V1 reprovar: **a pergunta 4 volta ao PO** com 4A e 4B lado a lado e os números do V1. A 4A não é volta automática: na placa real, com uma terceira thread Python (o programa terá a thread de arquivo, §6), a forma 1 deixou a janela surda por mais de 1 s nas três rodadas (pulso 1.155 a 1.876 ms; controle até 1.363 ms numa rodada), o que fere o critério do lote 9 §5.1. Se só o item 8 reprovar: levar ao PO com as opções (4A, ou partir a chamada longa da `api`).
 
+### Resultado do V1 (2026-10-21 a 2026-10-23)
+Fonte de todos os números desta seção: `docs/state/reports/F0-S04-V1.md` (salvo onde indicado). Código: `lote.main_mista` (PR 250). Uma execução por parte, sem repetir; nenhum número, base, quantidade ou rodada mudou. Relatório conferido pelo lote Opus 72 (números sem divergência nas 3 máquinas).
+
+**V1m, base sintética (itens 3 a 7).** `veredito["ok"]` verdadeiro nas duas partes (`lote` e `pesada`) nas três máquinas. Linux local = tela virtual, base 300, régua do T15b em 100 ms; placa = RTX 3070, tela real, `OBIM_S04_ESTRITO=1`, lote na base 3.000, régua em 200 ms (sessão autorizada pelo PO em 2026-10-21); Windows = CI, WARP, base 300, régua em 100 ms, **informativo** (item 7).
+| Item | Chave | Linux local | Placa | Windows (informativo) |
+|---|---|---|---|---|
+| 3 | `3_parede` (maior atraso do mouse da mista, contra metade de `malha_ms`) | 19,04 contra 102,87 ms | 18,63 contra 102,10 ms (margem 81,8%) | 26,51 contra 144,73 ms (81,7%) |
+| 4 | `4_controle_1s` (contra 1.000 ms) | 714,5 ms | 657,11 ms (34,3%) | 747,97 ms (25,2%) |
+| 4 | `4_controle_forma2` (contra a pior rodada da forma 2) | 714,5 contra 722,0 ms (**1,0%**) | 657,11 contra 708,49 ms (7,3%) | 747,97 contra 899,82 ms (16,9%) |
+| 4 | `4_mouse_forma2` (contra a pior rodada da forma 2) | 13,87 contra 14,17 ms (**2,1%**) | 13,68 contra 14,30 ms (**4,3%**) | 14,64 contra 14,87 ms (**1,6%**) |
+| 4 | `4_surda` lote / pesada (contra 1.000 ms) | 763,5 / 385,7 ms | 715,64 / 378,41 ms (28,4% / 62,2%) | 978,30 / 607,77 ms (**2,2%** / 39,2%) |
+| 5 | `5_m5_1` / `5_m5_2` / `5_m5_mista` | 17,14 / 16,82 / 17,87 ms (contra 100) | 16,90 / 17,22 / 17,25 ms (contra 200) | 32,37 / 32,52 / 32,45 ms (contra 100) |
+| 6 | `6_longo` (parede no meio do lote, contra metade de `malha_ms`) | -29,35 ms | -17,24 ms | -72,19 ms |
+- Margens abaixo de 5% (Linux 1,0% e 2,1%; placa 4,3%; Windows 1,6% e 2,2%). Em `4_controle_forma2` e `4_mouse_forma2` o limite vem da forma 2 da mesma sessão: é empate com a forma 2, e outra execução pode cair do outro lado. Em `4_surda` do Windows o limite é absoluto: margem real de 2,2% com WARP, nas rodadas com mouse (887,9 / 941,2 / 978,3 ms). O Windows com placa real (T28) decide ali (§9).
+- Leitura do item 3 na pesada do Windows: forma 1 = 5,9 / 2,6 / 10,0 ms; forma 2 = 258,7 / 293,3 / 307,0 ms; mista = 26,5 / 26,0 / 31,5 ms (malha 289,46 ms). A mista fica perto da forma 1 na parede, como a 4C previa.
+
+**V1b, maior fatia num IFC real (item 8).** Arquivo `casa25` (25 MB, IFC4), liberado pelo PO no chat em 2026-10-21; Linux, tela virtual. Mediana da maior fatia com mouse: forma 2 = **1.018 ms**, mista = **1.082 ms** (controle: 984 e 985 ms); em todas as rodadas a maior fatia foi `spatial.assign_container`, uma chamada só com as 1.000 paredes. Passou de 1.000 ms: o item 8 reprovou a parte "comandos em fatias". **Decisão do PO (2026-10-22, `LOG.md`): partir a chamada (cartão V1c) e manter a 4C.**
+
+**V1c, `spatial.assign_container` em sub-lotes de 100 (PR 261; lotes Opus 73 e 76).** `fluxo_a.SUBLOTE_CONTAINER = 100`; o modelo gravado, o desfazer e as réguas não mudaram. Medição de 2026-10-23 (`main` em 60c9106), só no Linux, tela virtual, uma execução de cada:
+- V1b repetido (`casa25`, mesmos parâmetros): mediana da maior fatia com mouse forma 2 = **165,5 ms** e mista = **176,7 ms** (antes 1.018 e 1.082); controle 92,5 e 93,7 ms. Item 8 atingido. A maior fatia segue em `spatial.assign_container`, agora com 100 peças.
+- V1m sintético (base 300): parte `pesada` com `ok` verdadeiro (`3_parede` 19,2 contra 106,0 ms; `6_longo` -32,3 contra 106,0 ms; `4_surda` 113,5 contra 1.000 ms). Parte `lote` com `ok` falso por um item, `4_controle_forma2`: **124,59 contra 124,25 ms (0,3%)**; os outros itens passam (`4_mouse_forma2` 13,77 contra 14,39 ms; `4_surda` 127,9 contra 1.000 ms; `5_m5_*` 16,6 a 16,8 contra 100 ms). Maior fatia da base sintética: 119 a 130 ms (era 639 a 668 ms). Depois da divisão as duas formas cedem entre sub-lotes e quase empatam. **Decisão do PO (2026-10-23, no chat): aceitar o 0,3% como ruído; a régua não foi alterada; sem repetição.**
+- Depois do V1c a mista não foi medida na placa nem no Windows; os números dessas duas máquinas acima são de antes da divisão. A M1F (placa, 2026-10-23, `F0-S04-M1F.md`) mediu só as formas 1 e 2 depois da divisão: forma 2 no controle 70 a 124 ms (antes 698 a 765); forma 1 com maior pulso de 1.148 a 1.604 ms (surda > 1 s) e parede pesada na forma 2 em 200,7 a 205,3 ms contra o portão de 102,4 ms. Isso reforça por que a 4A não é volta automática e por que a mista usa a forma 1 na geometria (§2.1).
+
+**Risco aberto do WARP (fora da régua do V1, mas no mapa do §6).** Fontes: `reports/F0-S04-T07c.md`, `cards/F0-S04/F0-S04-T07e.md`, `cards/F1-D3D11-dispositivo-unico.md`. No Windows com desenho por software (WARP), destruir o dispositivo D3D11 na thread de desenho trava dentro do WARP (`~QRhi` → `d3d10warp!UMContext::Flush`), cerca de 1 em 112 voltas isoladas do caso `destruir janela`. O T07e (PR 262, mesclado) pôs limite de 5 s em `Motor::parar()`, abandono controlado da thread e o contador `paradas_atrasadas`: é **proteção parcial**. No laço de 300 voltas ficou **1 trava em 300** (critério "nenhuma trava" não atingido), porque a thread presa segura uma trava global do WARP e para a criação de qualquer dispositivo novo no mesmo processo. **Decisão do PO (2026-10-22): mesclar o T07e como proteção parcial e adiar a correção de fundo à F1, no cartão F1-D3D11 (um dispositivo D3D11 por processo, reaproveitado entre viewports; aceite: 1.000 voltas sem trava).** Até lá, a instabilidade do `destruir-janela` no CI do Windows segue com repetição manual (até 5 tentativas por ocorrência). Com placa real o problema não apareceu.
+
+**Estado da pergunta 4:** forma mista **4C validada pelo V1**, com as ressalvas acima (margens apertadas por empate com a forma 2; um item 0,3% fora aceito como ruído pelo PO; V1c medido só no Linux em tela virtual; Windows só informativo, com WARP; risco do WARP aberto até o F1-D3D11). **Aguarda aprovação do PO.**
+
 ## 6. Mapa de threads e processos proposto (com 1C, 2C, 3C e 4C; revisto em 2026-10-21)
 | Onde | O que faz | Toca no Python? | Toca no modelo? |
 |---|---|---|---|
-| Thread da janela (Qt) | Interface, eventos, comandos curtos; comandos longos em fatias de 8 ms (4C, se o V1 passar; senão o PO decide entre 4A e 4B) | Sim | Só por `ler()`/`escrever()`; nunca espera geometria parada; leitura de painel só sem espera |
-| Thread de desenho (C++) | Desenha a cena imutável | Nunca | Nunca (já é assim: `motor.h`, `cena.cpp`) |
+| Thread da janela (Qt) | Interface, eventos, comandos curtos; comandos longos em fatias de 8 ms (4C, validada pelo V1 e aceita pelo PO em 2026-10-23) | Sim | Só por `ler()`/`escrever()`; nunca espera geometria parada; leitura de painel só sem espera |
+| Thread de desenho (C++) | Desenha a cena imutável; no Windows com WARP, destruir o dispositivo nela pode travar (§5.1, risco aberto; F1-D3D11) | Nunca | Nunca (já é assim: `motor.h`, `cena.cpp`) |
 | Thread de geometria (thread à parte que chama o `obimcore`; o trabalho roda em C++ com o interpretador solto) | Toda malha das edições, 1 passada por vez | Só para entrar e sair da chamada | Lê enquanto o comando dono de `escrever()` espera, sem escrever (§5.1, regra 3) |
 | Thread de arquivo (Python) | Abrir, gravar, cópia de segurança (fora da janela: B22, RG-05, RG-06); gravar não solta o bloqueio (§2.1) | Sim | `ler()` para gravar; `escrever()` para trocar o modelo aberto |
 | Processo auxiliar (descartável) | Tesselação da abertura (bloco de 250 peças, até 1 reinício planejado pela vigia de crescimento) e de peças suspeitas | O seu próprio | Tem a sua cópia só de leitura, enquanto vive |
@@ -192,9 +231,9 @@ Nenhuma thread fora da janela cria ou toca objeto Qt (§5.1, regra 5).
 | 1. Onde a geometria roda | 1A dentro · 1B sempre separado · 1C misto | **1C** | **1C** (PO, 2026-10-15) |
 | 2. Várias peças ao mesmo tempo | 2A uma por vez · 2B várias passadas · 2C várias threads numa passada | **2C** | **2C** (PO, 2026-10-15) |
 | 3. Trava do modelo | 3A combinação · 3B dono único · 3C porta única | **3C** | **3C** (PO, 2026-10-15) |
-| 4. Thread do comando longo (§5.1) | 4A forma 1 · 4B forma 2 · 4C mista | 4C só com o V1; se o V1 reprovar, volta ao PO (4A ou 4B) | **4C como direção** (PO, 2026-10-21), condicionada ao V1; antes, 17/10: "reforçar a forma 1" |
+| 4. Thread do comando longo (§5.1) | 4A forma 1 · 4B forma 2 · 4C mista | 4C só com o V1; se o V1 reprovar, volta ao PO (4A ou 4B) | **4C como direção** (PO, 2026-10-21), condicionada ao V1; antes, 17/10: "reforçar a forma 1". V1 aprovado pela régua (2026-10-23, com o 0,3% aceito como ruído pelo PO): **validada e aceita pelo PO em 2026-10-23** |
 
-Próximos passos: os números N1 a N4 seguem sem medida (o RG-02 fechou a S04 sem eles; o T04b está pausado) e entram como condição dos cartões que dependem deles (2B, e as várias threads da 2C dentro do processo). O V1 decide a pergunta 4. Este ADR é revisto por um Opus que não escreveu a parte revista (regra 6 do `CLAUDE.md`) e passa a "aceito" depois do V1 e da aprovação do PO. A frase nova de `v2/02 §5` sobre o processo auxiliar vai no cartão RG-24, com aprovação do PO.
+Próximos passos: os números N1 a N4 seguem sem medida (o RG-02 fechou a S04 sem eles; o T04b está pausado) e entram como condição dos cartões que dependem deles (2B, e as várias threads da 2C dentro do processo). O V1 passou (§5.1, "Resultado do V1"); a pergunta 4 espera só a aprovação do PO. Este ADR é revisto por um Opus que não escreveu a parte revista (regra 6 do `CLAUDE.md`) e passa a "aceito" depois do V1 e da aprovação do PO. A frase nova de `v2/02 §5` sobre o processo auxiliar vai no cartão RG-24, com aprovação do PO.
 
 ## 9. O que nos faria mudar de ideia
 - N2 mostrar que mandar uma edição ao auxiliar custa bem menos de 200 ms → 1B fica viável e mais segura.
@@ -203,16 +242,18 @@ Próximos passos: os números N1 a N4 seguem sem medida (o RG-02 fechou a S04 se
 - T04b provar a causa da queda e a correção → tirar o mutex (2B).
 - N3 com qualquer queda em 200 rodadas → 2A dentro do processo; paralelismo só no auxiliar.
 - V1 reprovado em qualquer critério de 2 a 6 do §5.1 → volta ao PO com 4A e 4B lado a lado (4A já fere o lote 9 §5.1 na placa com uma terceira thread Python).
-- Maior chamada única da `api` acima de 1 s num IFC real (V1, item 8) → a parte "comandos em fatias" cai; levar ao PO (4A, ou partir a chamada).
+- Maior chamada única da `api` acima de 1 s num IFC real (V1, item 8) → a parte "comandos em fatias" cai; levar ao PO (4A, ou partir a chamada). **Aconteceu no V1b (1.018 e 1.082 ms); o PO mandou partir a chamada (V1c: 165,5 e 176,7 ms).** Outra chamada única da `api` acima de 1 s num IFC real reabre este gatilho.
+- A correção de fundo do WARP (F1-D3D11, um dispositivo por processo) não chegar a 1.000 voltas sem trava → rever o desenho por software no Windows com o PO.
 - Placa real no Windows (T28) mostrando o controle da forma 2 acima de 1 s → rever a 4C para o Windows.
-- Memória do pesado acima de 6.000 MB em qualquer abertura oficial nova → voltar às opções do lote 57 (1-A alocador, 1-C peça por partes) com o PO.
+- Memória do pesado acima de 6.000 MB em qualquer abertura oficial nova **na configuração final (bloco 250 com 1 reinício planejado)** → voltar às opções do lote 57 (1-A alocador, 1-C peça por partes) com o PO. Na M1F, bloco 250 = 5.858 MB (abaixo); o bloco 1.000 deu 6.354 MB, o esperado, e não dispara o gatilho (`F0-S04-M1F.md`).
 
 ## 10. Não verificado
 - A causa da queda com passadas simultâneas (leitura dos cabeçalhos, não experimento).
 - Se o `num_threads` do iterador é seguro dentro do processo do `obimcore` (a S03 só usou no processo filho, que pode cair sem dano).
 - O custo real das opções 1B e 1C (N1, N2).
-- A forma mista 4C inteira (§5.1): nenhum número dela existe; só das partes.
-- Forma 1 e forma 2 em IFC real e com placa real no Windows.
+- A forma mista 4C fora da base sintética e do `casa25`: o V1c (sub-lotes de 100) só foi medido no Linux em tela virtual; na placa e no Windows os números são de antes da divisão. Nenhuma forma foi medida no produto (cartão I1); o V1 mede o protótipo em `lote.py`.
+- Forma 1 em IFC real; forma 2 e mista em IFC real só na maior fatia (V1b e V1c, Linux em tela virtual); as três com placa real no Windows (T28).
+- O impasse do WARP ao destruir o dispositivo D3D11 (T07c): a causa é interna do WARP e a correção de fundo (F1-D3D11) ainda não existe; com o T07e o programa não congela ao sair, mas a thread presa segura uma trava global do WARP e para a criação de dispositivo novo no mesmo processo.
 - Por que a forma 1 piora com uma terceira thread Python (o T15 mediu o efeito, não a causa).
 
 ## 11. O que deixa de valer (2026-10-21)

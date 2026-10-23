@@ -82,7 +82,7 @@ jobs:
         run: |
           # Em caso de falha, as últimas linhas viram anotação pública (o log completo exige login no GitHub).
           set +e
-          QT_QPA_PLATFORM=offscreen pytest -q -rs tests > pytest.log 2>&1
+          QT_QPA_PLATFORM=offscreen pytest -q -rs --durations=0 tests > pytest.log 2>&1
           rc=$?
           cat pytest.log
           if [ $rc -ne 0 ]; then
@@ -167,7 +167,7 @@ jobs:
           # Sem janela: compara o IFC da biblioteca C++ com o do fluxo A (saída igual).
           bash prototypes/s04/fluxo_b/build.sh out/s04
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
-          OBIM_CI=1 pytest -q -rsP tests/test_s04_fluxo_b_paredes.py
+          OBIM_CI=1 pytest -q -rsP --durations=0 tests/test_s04_fluxo_b_paredes.py
       - name: Fluxo B, executável com janela (S04-T14c; bloqueia o merge)
         shell: bash -elo pipefail {0}
         timeout-minutes: 40
@@ -175,7 +175,7 @@ jobs:
           # O build.sh do passo anterior já gerou fluxo_b_janela ao lado do módulo. Tela virtual (xvfb-run no Linux; WARP no Windows), nada na tela real.
           # O oráculo roda o fluxo A de referência (roteiro R) e o executável de B com a mesma base; autotestes de localidade, `ler`, corrida e memória sem janela.
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
-          OBIM_CI=1 OBIM_S04_T14_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_fluxo_b_janela.py
+          OBIM_CI=1 OBIM_S04_T14_OBRIGATORIO=1 pytest -q -rsP --durations=0 tests/test_s04_fluxo_b_janela.py
       - name: Sonda da thread de desenho (S04-T05; informativo, não bloqueia)
         shell: bash -elo pipefail {0}
         continue-on-error: true
@@ -237,7 +237,7 @@ jobs:
         run: |
           # Em caso de falha, as últimas linhas viram anotação pública (o log completo exige login no GitHub).
           set +e
-          QT_QPA_PLATFORM=offscreen pytest -q -rs tests > pytest.log 2>&1
+          QT_QPA_PLATFORM=offscreen pytest -q -rs --durations=0 tests > pytest.log 2>&1
           rc=$?
           cat pytest.log
           if [ $rc -ne 0 ]; then
@@ -377,7 +377,7 @@ jobs:
           # O oráculo abre a tela virtual sozinho em subprocesso (xvfb-run no Linux; no Windows, WARP). Nada na tela real.
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_S04_TELA_VIRTUAL=1 QSG_RHI_BACKEND=d3d11 QSG_RHI_PREFER_SOFTWARE_RENDERER=1  # WARP, como no passo do cubo
-          OBIM_CI=1 pytest -q -rsP --durations=10 tests/test_s04_fluxo_a.py tests/test_s04_fluxo_a_camera_selecao.py tests/test_s04_profundidade.py tests/test_s04_viewport_b.py
+          OBIM_CI=1 pytest -q -rsP --durations=0 tests/test_s04_fluxo_a.py tests/test_s04_fluxo_a_camera_selecao.py tests/test_s04_profundidade.py tests/test_s04_viewport_b.py
           OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15a_threads_fluxo_a.py
           OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15b_formas.py
           OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15c_conferencias.py
@@ -479,7 +479,7 @@ jobs:
           # O oráculo abre a tela virtual sozinho em subprocesso (xvfb-run no Linux; no Windows, WARP). Nada na tela real.
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_S04_TELA_VIRTUAL=1 QSG_RHI_BACKEND=d3d11 QSG_RHI_PREFER_SOFTWARE_RENDERER=1  # WARP, como no passo do cubo
-          OBIM_CI=1 pytest -q -rsP --durations=10 tests/test_s04_viewport.py tests/test_s04_cena.py tests/test_s04_selecao.py tests/test_s04_selecao_c.py tests/test_s04_metas.py tests/test_s04_abertura.py tests/test_s04_viewport_software.py
+          OBIM_CI=1 pytest -q -rsP --durations=0 tests/test_s04_viewport.py tests/test_s04_cena.py tests/test_s04_selecao.py tests/test_s04_selecao_c.py tests/test_s04_metas.py tests/test_s04_abertura.py tests/test_s04_viewport_software.py
       - name: Pacote do que o job gerou
         if: always()
         shell: bash
@@ -517,7 +517,7 @@ jobs:
           # Sem janela: compara o IFC da biblioteca C++ com o do fluxo A (saída igual).
           bash prototypes/s04/fluxo_b/build.sh out/s04
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
-          OBIM_CI=1 pytest -q -rsP tests/test_s04_fluxo_b_paredes.py
+          OBIM_CI=1 pytest -q -rsP --durations=0 tests/test_s04_fluxo_b_paredes.py
       - name: Fluxo B, executável com janela (S04-T14c; bloqueia o merge)
         shell: bash -elo pipefail {0}
         timeout-minutes: 40
@@ -526,7 +526,7 @@ jobs:
           # O oráculo roda o fluxo A de referência (roteiro R) e o executável de B com a mesma base; autotestes de localidade, `ler`, corrida e memória sem janela.
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_S04_TELA_VIRTUAL=1  # WARP, como no passo do viewport
-          OBIM_CI=1 OBIM_S04_T14_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_fluxo_b_janela.py
+          OBIM_CI=1 OBIM_S04_T14_OBRIGATORIO=1 pytest -q -rsP --durations=0 tests/test_s04_fluxo_b_janela.py
       - name: Pacote do que o job gerou
         if: always()
         shell: bash
@@ -775,7 +775,7 @@ jobs:
         run: |
           # Em caso de falha, as últimas linhas viram anotação pública (o log completo exige login no GitHub).
           set +e
-          QT_QPA_PLATFORM=offscreen pytest -q -rs tests > pytest.log 2>&1
+          QT_QPA_PLATFORM=offscreen pytest -q -rs --durations=0 tests > pytest.log 2>&1
           rc=$?
           cat pytest.log
           if [ $rc -ne 0 ]; then

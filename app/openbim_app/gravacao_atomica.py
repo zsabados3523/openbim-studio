@@ -186,7 +186,11 @@ def confirmar(preparado):
                 os.close(fd)
     except Exception as e:  # noqa: BLE001
         if etapa == "trocar":
-            raise _falha(e, etapa, destino, extra=f" O arquivo novo ficou salvo em {tmp}.") from e
+            if tmp.exists():
+                extra = f" O arquivo novo ficou salvo em {tmp}."
+            else:
+                extra = f" O arquivo temporário {tmp} não foi encontrado no disco."
+            raise _falha(e, etapa, destino, extra=extra) from e
         if not gravado:
             _apagar(tmp, btmp)
         raise _falha(e, etapa, destino, gravado) from e

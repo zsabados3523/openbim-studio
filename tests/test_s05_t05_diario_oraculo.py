@@ -52,7 +52,6 @@ import s05_t05_aux as X
 from s05_conteudo_aux import _limpa, base_ifc  # noqa: F401  (fixtures)
 from s05_t05_aux import LADO, Sessao, caminho_diario, mod, sha
 
-AINDA_NAO = pytest.mark.xfail(strict=True, raises=ImportError, reason="T05: openbim_app.diario ainda não existe")
 WIN = sys.platform == "win32"
 
 
@@ -93,7 +92,6 @@ def registros_crus(caminho):  # confere o formato linha a linha e devolve os dic
     return out
 
 
-@AINDA_NAO
 def test_1_registro_por_passo_formato_e_base(local, casa, sessoes):
     D = mod()
     s = sessoes(casa)
@@ -116,7 +114,6 @@ def test_1_registro_por_passo_formato_e_base(local, casa, sessoes):
     assert D.ler_diario(str(cam)) == (regs, []), "ler_diario de um diário inteiro: todos os registros e nenhum aviso"
 
 
-@AINDA_NAO
 def test_1b_pastas_e_lado_id(tmp_path, monkeypatch, casa, base_ifc):
     D = mod()
     monkeypatch.setenv("OBIM_PASTA_LOCAL", str(tmp_path / "x"))
@@ -138,7 +135,6 @@ def test_1b_pastas_e_lado_id(tmp_path, monkeypatch, casa, base_ifc):
     assert uuid.UUID(v).version == 5 and v == D.lado_id_de(g, "a" * 64) != D.lado_id_de(g, "b" * 64)
 
 
-@AINDA_NAO
 def test_3_codificar_e_decodificar_cada_tipo(base_ifc):
     D = mod()
     from ifcopenshell.file import Transaction
@@ -164,7 +160,6 @@ def test_3_codificar_e_decodificar_cada_tipo(base_ifc):
         X.igual(X.R.foto(f), depois, f"{t}: redo nativo depois da ida e volta")
 
 
-@AINDA_NAO
 def test_3b_operacao_nao_serializavel_descarta(local, casa, sessoes):
     D = mod()
     for v in (b"\x00bytes", float("nan"), float("inf")):
@@ -182,7 +177,6 @@ def test_3b_operacao_nao_serializavel_descarta(local, casa, sessoes):
     assert len(X.linhas(caminho_diario(local))) == n0 and s.r.h.pode_desfazer and not s.r.h.quebrado
 
 
-@AINDA_NAO
 def test_6_ordem_codificar_end_transaction_anotar(local, casa):
     D = mod()
     from ifcopenshell.file import Transaction
@@ -213,7 +207,6 @@ def test_6_ordem_codificar_end_transaction_anotar(local, casa):
     assert ev[-2:] == [("anotar", False, 1, 3), ("depois", None, 1, 4)], ev
 
 
-@AINDA_NAO
 def test_6b_fsync_temporizador_sincronizar_e_fechar(local, casa, monkeypatch):
     D = mod()
     ev, real, fios = [], os.fsync, set(threading.enumerate())
@@ -246,7 +239,6 @@ def test_6b_fsync_temporizador_sincronizar_e_fechar(local, casa, monkeypatch):
     assert not set(threading.enumerate()) - fios, f"thread do diário viva depois de fechar(): {set(threading.enumerate()) - fios}"
 
 
-@AINDA_NAO
 def test_7_sem_ligacao_ao_par():
     D = mod()
     import openbim_app.transacao as T

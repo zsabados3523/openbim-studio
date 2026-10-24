@@ -20,7 +20,6 @@ from s05_conteudo_aux import _limpa, base_ifc  # noqa: F401  (fixtures)
 from s05_t05_aux import M_ACOES, N_MORTES, PONTOS, SEMENTE, acoes, caminho_diario, igual, mod, recuperar
 from test_s05_t05_diario_oraculo import _sem_injecao, casa, local, sessoes  # noqa: F401  (fixtures)
 
-AINDA_NAO = pytest.mark.xfail(strict=True, raises=ImportError, reason="T05: openbim_app.diario ainda não existe")
 KINDS = ("transacao", "desfazer", "refazer")
 
 
@@ -43,7 +42,6 @@ def test_regua_filho_chega_ao_mesmo_modelo(casa, tmp_path):  # sem diário: o fi
     assert (cod, n_ok) == (0, M_ACOES) and out[-1] == "fim " + X.digest(X.esperadas(casa, acoes(M_ACOES))[-1]), out[-1:]
 
 
-@AINDA_NAO
 def test_3_recupera_cada_tipo_e_sequencia_longa(local, casa, sessoes):
     D = mod()
     from openbim_app.sessao_modelo import SessaoModelo
@@ -77,7 +75,6 @@ def _hora_trocada(linha):  # mesmo JSON válido, um dígito da hora trocado: o c
     return linha[:m.start(1)] + (b"3" if m[1] != b"3" else b"4") + linha[m.end(1):]
 
 
-@AINDA_NAO
 def test_2c_registro_cortado_ou_ruim_nunca_aplicado(local, casa, sessoes, tmp_path):
     D = mod()
     s, kinds = sessoes(casa), acoes(8)
@@ -110,7 +107,6 @@ def test_2c_registro_cortado_ou_ruim_nunca_aplicado(local, casa, sessoes, tmp_pa
     caso(bruto[:ini[j]] + bruto[ini[j + 1]:], j, fotos[j - 1], True, f"buraco no seq (sem a linha {j})")
 
 
-@AINDA_NAO
 def test_4_base_de_outro_arquivo_nao_aplica(local, casa, sessoes, tmp_path):
     D = mod()
     from openbim_app.lateral import Lateral
@@ -130,7 +126,6 @@ def test_4_base_de_outro_arquivo_nao_aplica(local, casa, sessoes, tmp_path):
     assert av == [] and D.ler_diario(str(caminho_diario(local)))[1] == []
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("ponto", PONTOS)
 @pytest.mark.parametrize("kind", KINDS)
 def test_2_morte_em_ponto_fixo(casa, tmp_path, ponto, kind):
@@ -150,7 +145,6 @@ def test_2_morte_em_ponto_fixo(casa, tmp_path, ponto, kind):
     assert bool(av) == bool(av2) == cortado, f"{ponto}: avisos {av} / {av2}"
 
 
-@AINDA_NAO
 def test_2b_morte_em_hora_aleatoria(casa, tmp_path):
     D = mod()
     t0, kinds = time.monotonic(), acoes(M_ACOES)
@@ -184,7 +178,6 @@ def test_2b_morte_em_hora_aleatoria(casa, tmp_path):
     assert len(vistos) >= 5 and any(0 < k < M_ACOES for k in vistos), f"as mortes não se espalharam: {sorted(vistos.items())}"
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("ponto", PONTOS[:2])
 @pytest.mark.parametrize("kind", KINDS)
 def test_6_falha_do_anotar_volta_e_nao_suja_o_diario(local, casa, sessoes, monkeypatch, ponto, kind):
@@ -216,7 +209,6 @@ class _Erro(Exception):
     pass
 
 
-@AINDA_NAO
 def test_6c_lateral_falha_no_meio_do_desfazer(local, casa, sessoes):  # achado do lote 80: o KeyError do `_repor` não pode esconder o erro
     D = mod()
     s = sessoes(casa)
@@ -246,7 +238,6 @@ def test_6c_lateral_falha_no_meio_do_desfazer(local, casa, sessoes):  # achado d
     assert av == []
 
 
-@AINDA_NAO
 def test_6d_add_fora_da_transacao_recupera_pelo_diario(local, casa, sessoes):  # achado do lote 80: `file.add` deixa sobra; o diário refaz
     D = mod()
     import openbim_app.transacao as T

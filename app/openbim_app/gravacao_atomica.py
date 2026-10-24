@@ -111,7 +111,8 @@ def limpar_temporarios(destino):
     for c in (tmp, btmp):
         if c.exists():
             _apagar(c)
-            apagados.append(c)
+            if not c.exists():
+                apagados.append(c)
     return apagados
 
 
@@ -145,6 +146,8 @@ def _fazer_bak(destino, bak, btmp):
         os.link(destino, btmp)
     except OSError:
         shutil.copy2(destino, btmp)
+        with open(btmp, "rb+") as f:
+            os.fsync(f.fileno())
     os.replace(btmp, bak)
 
 

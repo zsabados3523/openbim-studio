@@ -102,7 +102,7 @@ jobs:
           else
             ALVO="tests/test_s04_metas.py tests/test_s04_t29b_reinicio_oraculo.py tests/test_s04_abertura.py"
           fi
-          QT_QPA_PLATFORM=offscreen pytest -q -rs $ALVO > pytest.log 2>&1
+          OBIM_S05_OBRIGATORIO=1 QT_QPA_PLATFORM=offscreen pytest -q -rs $ALVO > pytest.log 2>&1  # S05: pulo vira falha (só guarda)
           rc=$?
           cat pytest.log
           if [ $rc -ne 0 ]; then
@@ -282,7 +282,7 @@ jobs:
         run: |
           # Em caso de falha, as últimas linhas viram anotação pública (o log completo exige login no GitHub).
           set +e
-          QT_QPA_PLATFORM=offscreen pytest -q -rs ${{ matrix.alvo }} > pytest.log 2>&1
+          OBIM_S05_OBRIGATORIO=1 QT_QPA_PLATFORM=offscreen pytest -q -rs ${{ matrix.alvo }} > pytest.log 2>&1  # S05: pulo vira falha (só guarda)
           rc=$?
           cat pytest.log
           if [ $rc -ne 0 ]; then

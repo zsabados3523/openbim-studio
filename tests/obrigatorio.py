@@ -26,10 +26,11 @@ CHAVES_S04 = (
     "OBIM_S04_T11_OBRIGATORIO", "OBIM_S04_T11B_OBRIGATORIO", "OBIM_S04_T11C_OBRIGATORIO", "OBIM_S04_T12_OBRIGATORIO",
     "OBIM_S04_T13_OBRIGATORIO", "OBIM_S04_T14A_OBRIGATORIO", "OBIM_S04_T16_OBRIGATORIO",
 )
+CHAVES_S05 = ("OBIM_S05_OBRIGATORIO",)  # S05 (T06 em diante): uma chave para a fatia toda
 
 
 def ligar_ci():
-    """Com OBIM_CI=1, cada chave de CHAVES_S04 que não foi definida passa a valer 1 (uma chave definida à mão vence)."""
+    """Com OBIM_CI=1, cada chave de CHAVES_S04 e CHAVES_S05 que não foi definida passa a valer 1 (uma chave definida à mão vence)."""
     if os.environ.get("OBIM_CI") == "1":
-        for chave in CHAVES_S04:
+        for chave in CHAVES_S04 + CHAVES_S05:
             os.environ.setdefault(chave, "1")

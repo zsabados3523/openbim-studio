@@ -21,7 +21,9 @@ CONTRATO de `app/openbim_app/gravacao_par.py` (sem Qt, sem obimcore). O ADR-002 
    carimbo de volta ao valor anterior, `ao_concluir` não é chamado. Depois dele: o resolvedor roda na hora (ADR-002 §4.5); se não conseguir, o
    `gravacao.json` fica e a mensagem diz onde está o temporário.
 6. `resolver_gravacao_pendente(pasta_projeto=, destino=, ao_concluir=None)`: estados E1 a E10 do ADR-002 §4.5 (parte 2). O valor devolvido não é
-   conferido (o "avisa" do E9/E10 está em PERGUNTA_LIDER); o oráculo confere o disco e as chamadas de `ao_concluir`.
+   conferido (o "avisa" do E9/E10 está em PERGUNTA_LIDER); o oráculo confere o disco e as chamadas de `ao_concluir`. Depois de concluir ou
+   desfazer não sobra `Casa.*.tmp`, `Casa.*.bak.tmp` nem `gravacao*` (o resolvedor limpa com `limpar_temporarios`; `confirmar` de novo com o
+   `.bak` já ligado ao destino por `os.link` deixa `Casa.ifc.bak.tmp`, porque `os.replace` entre dois nomes do mesmo arquivo não faz nada).
 GUARDA: sem ifcopenshell, pula; com OBIM_S05_OBRIGATORIO=1 todo pulo vira falha. Régua: `s05_t07_aux.py` (provada em `test_s05_t07_regua_oraculo.py`)."""
 import ast
 import errno

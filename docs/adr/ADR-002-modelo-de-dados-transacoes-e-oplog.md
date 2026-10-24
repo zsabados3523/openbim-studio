@@ -2,9 +2,9 @@
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 # ADR-002: Modelo de dados, transações e oplog
-- Status: **rascunho (aguarda PO)**. Versão final com os números do T10 e do T11: cartão T12.
+- Status: **aceito pelo PO em 2026-10-23** (desfazer vale depois de gravar; limite de 256 MB a confirmar no T08 e no T10; desfazer começa vazio depois de recuperar uma queda). Versão final com os números do T10 e do T11: cartão T12.
 - Autor: opus (cartão F0-S05-T03, classe TA, lote A) · Data: 2026-10-23
-- Base: `v2/02` §6.1 a §6.7; `v2/03` F0-S05 e §3; T00 (G1 a G6, M1, M2); decisões P1 a P5 do PO (`cards/F0-S05/README.md`, 2026-10-23); relatório do T02 (`reports/F0-S05-T02.md`, PR 282, ainda fora do `main`); ADR-001 §9; ADR-004 §5 (porta 3C) e §5.1; `app/openbim_app/sessao_modelo.py`; `prototypes/s04/fluxo_a/fluxo_a.py` (`_transacao` linhas 204 a 226, `_desfaz_ou_refaz` 350 a 370, `_c_gravar` 383 a 389, `set_history_size` 61); ifcopenshell 0.9.0, `ifcopenshell/file.py` (citado como `file.py:N`).
+- Base: `v2/02` §6.1 a §6.7; `v2/03` F0-S05 e §3; T00 (G1 a G6, M1, M2); decisões P1 a P5 do PO (`cards/F0-S05/README.md`, 2026-10-23); relatório do T02 (`reports/F0-S05-T02.md`); ADR-001 §9; ADR-004 §5 (porta 3C) e §5.1; `app/openbim_app/sessao_modelo.py`; `prototypes/s04/fluxo_a/fluxo_a.py` (`_transacao` linhas 204 a 226, `_desfaz_ou_refaz` 350 a 370, `_c_gravar` 383 a 389, `set_history_size` 61); ifcopenshell 0.9.0, `ifcopenshell/file.py` (citado como `file.py:N`).
 - Escopo: o tema "Modelo de dados, transações e oplog" de `v2/03` §3. Fora: formato final do `.obim` (ADR-003, S06), `.obimpack`, HLC e CRDT. Não muda `v2/` nem `CLAUDE.md`.
 
 ## Resumo para o PO (5 linhas)

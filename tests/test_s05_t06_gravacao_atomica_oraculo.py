@@ -39,7 +39,6 @@ import pytest
 from obrigatorio import pular as _pular
 
 RAIZ = Path(__file__).resolve().parent.parent
-AINDA_NAO = pytest.mark.xfail(strict=True, raises=ImportError, reason="T06: openbim_app.gravacao_atomica ainda não existe")
 ETAPAS = ("escrever", "fsync", "conferir", "bak", "trocar", "fsync_pasta")
 MOTIVOS = {"sem_permissao", "disco_cheio", "arquivo_em_uso", "conferencia", "outro"}
 WIN = sys.platform == "win32"
@@ -201,7 +200,6 @@ def test_regua_somente_leitura(tmp_path):
     (tmp_path / "depois").write_bytes(A)  # a permissão voltou
 
 # ---------- casos do T06 (especificação, casos 1 a 13) ----------
-@AINDA_NAO
 def test_01_caminho_feliz_sem_destino_antigo(tmp_path):
     m = ga()
     assert tuple(m.ETAPAS) == ETAPAS
@@ -210,7 +208,6 @@ def test_01_caminho_feliz_sem_destino_antigo(tmp_path):
     assert mesmo(g.caminho, d) and g.sha256 == sha(A) and g.tamanho == len(A) and g.bak is None
     assert problemas(tmp_path, destino=A) == []
 
-@AINDA_NAO
 @pytest.mark.parametrize("sem_link", [False, True], ids=["link", "caso07_sem_link"])
 def test_02_bak_de_uma_geracao(tmp_path, monkeypatch, sem_link):
     m = ga()
@@ -223,7 +220,6 @@ def test_02_bak_de_uma_geracao(tmp_path, monkeypatch, sem_link):
         assert mesmo(g.bak, tmp_path / "Casa.ifc.bak") and g.sha256 == sha(x)
     assert problemas(tmp_path, destino=C, bak=B) == []
 
-@AINDA_NAO
 @pytest.mark.parametrize("etapa", ["escrever", "fsync", "conferir", "bak", "trocar"])
 def test_03_falha_em_cada_etapa(casa, monkeypatch, etapa):
     m = ga()
@@ -237,7 +233,6 @@ def test_03_falha_em_cada_etapa(casa, monkeypatch, etapa):
     else:
         assert problemas(casa.parent, destino=B, bak=A) == []
 
-@AINDA_NAO
 def test_04_conferencia_recusa_ifc_cortado(casa):
     m = ga()
     with pytest.raises(m.FalhaGravacao) as ei:
@@ -245,7 +240,6 @@ def test_04_conferencia_recusa_ifc_cortado(casa):
     confere_falha(ei.value, "conferir", "conferencia")
     assert problemas(casa.parent, destino=B, bak=A) == []
 
-@AINDA_NAO
 def test_05_disco_cheio(casa):
     m = ga()
     def escrever(tmp):
@@ -257,7 +251,6 @@ def test_05_disco_cheio(casa):
     confere_falha(ei.value, "escrever", "disco_cheio")
     assert problemas(casa.parent, destino=B, bak=A) == []
 
-@AINDA_NAO
 def test_06a_troca_recusada_tres_vezes_depois_passa(casa, monkeypatch):
     m = ga()
     falso = TrocaRecusada(casa, 3)
@@ -266,7 +259,6 @@ def test_06a_troca_recusada_tres_vezes_depois_passa(casa, monkeypatch):
     assert falso.tentativas == 4
     assert problemas(casa.parent, destino=C, bak=B) == []
 
-@AINDA_NAO
 def test_06b_troca_sempre_recusada(casa, monkeypatch):
     m = ga()
     falso = TrocaRecusada(casa, 10**6)
@@ -278,7 +270,6 @@ def test_06b_troca_sempre_recusada(casa, monkeypatch):
     assert "Casa.ifc.tmp" in str(ei.value)
     assert problemas(casa.parent, destino=B, bak=B, tmp=C) == []
 
-@AINDA_NAO
 def test_06c_outro_processo_com_o_destino_aberto(casa):
     m = ga()
     p = segurar(casa, 30)
@@ -298,7 +289,6 @@ def test_06c_outro_processo_com_o_destino_aberto(casa):
         p.wait()
     assert g.sha256 == sha(A) and casa.read_bytes() == A
 
-@AINDA_NAO
 def test_08_pasta_somente_leitura(casa):
     m = ga()
     with somente_leitura(casa.parent):
@@ -307,7 +297,6 @@ def test_08_pasta_somente_leitura(casa):
     confere_falha(ei.value, "escrever", "sem_permissao")
     assert problemas(casa.parent, destino=B, bak=A) == []
 
-@AINDA_NAO
 def test_09a_caminho_com_acento_e_espaco(tmp_path):
     m = ga()
     pasta = tmp_path / "Residência Nova" / "João"
@@ -317,7 +306,6 @@ def test_09a_caminho_com_acento_e_espaco(tmp_path):
     assert g.sha256 == sha(IFC_OK) and mesmo(g.bak, pasta / "Casa.ifc.bak")
     assert problemas(pasta, destino=IFC_OK, bak=A) == []
 
-@AINDA_NAO
 def test_09b_ifc_de_300_paredes_no_caminho_com_acento(tmp_path):
     m = ga()
     try:
@@ -337,7 +325,6 @@ def test_09b_ifc_de_300_paredes_no_caminho_com_acento(tmp_path):
     assert len(linhas[0]) == len(list(ifc)) and linhas[0] == linhas[1], f"sha256 da base {sha(base.read_bytes())}"
     assert problemas(d.parent, destino=d.read_bytes()) == []
 
-@AINDA_NAO
 def test_10_temporario_sobrando_achado_na_abertura(casa):
     m = ga()
     tmp, btmp = casa.parent / "Casa.ifc.tmp", casa.parent / "Casa.ifc.bak.tmp"
@@ -346,7 +333,6 @@ def test_10_temporario_sobrando_achado_na_abertura(casa):
     assert apagados == {tmp.resolve(), btmp.resolve()}
     assert problemas(casa.parent, destino=B, bak=A) == []
 
-@AINDA_NAO
 def test_11_fsync_da_pasta_depois_da_troca(casa, monkeypatch):
     m = ga()
     r = Registro(casa, monkeypatch)
@@ -363,7 +349,6 @@ def test_11_fsync_da_pasta_depois_da_troca(casa, monkeypatch):
     confere_falha(ei.value, "fsync_pasta", "outro", gravado=True)
     assert problemas(casa.parent, destino=A, bak=C) == []
 
-@AINDA_NAO
 def test_12_duas_chamadas(casa):
     m = ga()
     p = m.preparar(casa, esc(C))
@@ -383,7 +368,6 @@ from openbim_app import gravacao_atomica as g
 g.gravar_atomico(sys.argv[1], lambda tmp: Path(tmp).write_bytes(sys.argv[2].encode()))
 """
 
-@AINDA_NAO
 @pytest.mark.parametrize("etapa", ETAPAS)
 def test_13_morte_no_comeco_de_cada_etapa(casa, etapa):
     m = ga()

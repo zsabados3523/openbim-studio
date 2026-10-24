@@ -8,7 +8,7 @@ CONTRATO (`app/openbim_app/gravacao_atomica.py`, sem Qt, sem obimcore; nomes do 
 2. `preparar(destino, escrever, conferir=None) -> Preparado(destino, temporario, sha256, tamanho)`: chama `escrever(temporario)` com
    `temporario` = `Casa.ifc.tmp` na pasta do destino, faz `flush` + `os.fsync` dele (sha256 hexadecimal, tamanho em bytes) e
    `conferir(temporario)` se dado. `confirmar(preparado) -> Gravado(caminho, sha256, tamanho, bak)`: etapa
-   `bak` (com destino antigo: `os.link` do destino para `Casa.ifc.bak.tmp`, ou cópia se o link falhar, e `os.replace` para
+   `bak` (com destino antigo: `os.link` do destino para `Casa.ifc.bak.tmp`, ou cópia com `os.fsync` se o link falhar, e `os.replace` para
    `Casa.ifc.bak`; o destino nunca deixa de existir; sem destino antigo não faz nada e `bak is None`), `trocar` (`os.replace` do
    temporário para o destino; `PermissionError`: 6 tentativas ao todo, espera de 0,05 s dobrando) e `fsync_pasta` (`os.fsync` de um
    descritor da pasta, depois da troca; Linux e macOS; no Windows nenhum `fsync` de pasta). `gravar_atomico(...) = confirmar(preparar(...))`.
@@ -19,7 +19,8 @@ CONTRATO (`app/openbim_app/gravacao_atomica.py`, sem Qt, sem obimcore; nomes do 
    arquivo. Falha antes de `trocar`: `Casa.ifc.tmp` e `Casa.ifc.bak.tmp` apagados, destino e `.bak` antigos intactos. Falha em
    `trocar`: o `.tmp` FICA e `str(e)` cita o caminho dele (G2).
 4. `conferir_ifc(caminho)`: recusa o IFC que não começa com `ISO-10303-21;` ou não termina com `END-ISO-10303-21;` (G5).
-   `limpar_temporarios(destino)`: apaga `Casa.ifc.tmp` e `Casa.ifc.bak.tmp` que existirem e devolve os caminhos apagados (iterável).
+   `limpar_temporarios(destino)`: apaga `Casa.ifc.tmp` e `Casa.ifc.bak.tmp` que existirem e devolve os caminhos apagados (iterável); erro ao apagar não
+   sobe, e o caminho que não saiu não entra na lista.
 Fora deste módulo (ADR-002 §4.5): o modo "sem carimbo" e o carimbo do pset `OBIM_Projeto` são do par (T07); nenhum caso aqui.
 DESVIOS DA ESPECIFICAÇÃO (não afrouxam nada): nome do arquivo pedido pelo líder; caso 6(c) e 11 sem `skipif`, cada sistema com a
 própria conferência (critério "0 pulos"); caso 9 compara as linhas de entidade depois de reabrir (a régua `s05_conteudo_aux.py` é do
@@ -83,11 +84,12 @@ class TrocaRecusada:
         return self.real(src, dst, *a, **k)
 
 class Registro:
-    """Anota, em ordem, cada `os.fsync` ("arq" ou "dir", por `os.fstat`) e cada `os.replace` cujo destino é `alvo` ("troca")."""
+    """Anota, em ordem, cada `os.fsync` ("arq" ou "dir", por `os.fstat`) e cada `os.replace` cujo destino é `alvo` ("troca"); `inodos`: st_ino -> posição do 1o fsync."""
     def __init__(self, alvo, monkeypatch):
-        self.alvo, self.eventos, fs, rp = alvo, [], os.fsync, os.replace
+        self.alvo, self.eventos, self.inodos, fs, rp = alvo, [], {}, os.fsync, os.replace
 
         def fsync(fd):
+            self.inodos.setdefault(os.fstat(fd).st_ino, len(self.eventos))
             self.eventos.append("dir" if stat.S_ISDIR(os.fstat(fd).st_mode) else "arq")
             return fs(fd)
 
@@ -325,13 +327,29 @@ def test_09b_ifc_de_300_paredes_no_caminho_com_acento(tmp_path):
     assert len(linhas[0]) == len(list(ifc)) and linhas[0] == linhas[1], f"sha256 da base {sha(base.read_bytes())}"
     assert problemas(d.parent, destino=d.read_bytes()) == []
 
-def test_10_temporario_sobrando_achado_na_abertura(casa):
+@pytest.mark.parametrize("preso", [False, True], ids=["livre", "bak_tmp_preso"])
+def test_10_temporario_sobrando_achado_na_abertura(casa, monkeypatch, preso):
     m = ga()
     tmp, btmp = casa.parent / "Casa.ifc.tmp", casa.parent / "Casa.ifc.bak.tmp"
     tmp.write_bytes(C[:50]), btmp.write_bytes(B[:50])
+    def unlink(c, *a, real=os.unlink, **k):  # preso: o unlink do .bak.tmp falha (ex.: antivírus no Windows); não pode entrar na lista
+        if preso and mesmo(c, btmp):
+            raise PermissionError(errno.EACCES, "preso (teste)", str(c))
+        return real(c, *a, **k)
+    monkeypatch.setattr(os, "unlink", unlink), monkeypatch.setattr(os, "remove", unlink)
     apagados = {Path(p).resolve() for p in m.limpar_temporarios(casa)}
-    assert apagados == {tmp.resolve(), btmp.resolve()}
+    assert apagados == {tmp.resolve()} | (set() if preso else {btmp.resolve()}) and btmp.exists() is preso
+    preso and (monkeypatch.undo(), btmp.unlink())  # solta o preso para conferir o resto da pasta
     assert problemas(casa.parent, destino=B, bak=A) == []
+
+def test_07b_bak_por_copia_vai_ao_disco_antes_da_troca(casa, monkeypatch):
+    m = ga()
+    monkeypatch.setattr(os, "link", link_quebrado)
+    r = Registro(casa, monkeypatch)
+    m.gravar_atomico(casa, esc(C))
+    pos = r.inodos.get(os.stat(casa.parent / "Casa.ifc.bak").st_ino)
+    assert pos is not None and pos < r.eventos.index("troca"), f"ADR §4.5: cópia do .bak sem fsync antes da troca: {r.eventos}"
+    assert problemas(casa.parent, destino=C, bak=B) == []
 
 def test_11_fsync_da_pasta_depois_da_troca(casa, monkeypatch):
     m = ga()

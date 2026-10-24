@@ -142,6 +142,7 @@ def test_3_excecao_dentro_volta_os_dois_lados(novo):
     d, plano = novo()
     d.tx([plano.op("pset_criar"), plano.op("lado_criar"), plano.op("parede")])
     d.tx([plano.op("nome")])
+    f_refazer = d.foto()  # o que o refazer tem de trazer de volta depois de cada exceção (o passo "nome", nunca a transação abortada)
     d.desfazer()
     for t in TIPOS + ("misto",):
         f0, p0, est = d.foto(), _pilhas(d), plano.estado()
@@ -154,6 +155,11 @@ def test_3_excecao_dentro_volta_os_dois_lados(novo):
                 raise Erro(t)
         igual(d, f0, f"exceção dentro ({t})")
         assert _pilhas(d) == p0 == (1, 1, True), f"{t}: histórico ou refazer mudou"
+        assert d.refazer() is not None
+        igual(d, f_refazer, f"exceção dentro ({t}): o refazer não é mais o passo de antes")
+        assert d.desfazer() is not None
+        igual(d, f0, f"exceção dentro ({t}): desfazer depois do refazer")
+        assert _pilhas(d) == p0, f"{t}: pilhas depois de refazer e desfazer"
         plano.restaurar(est)
 
 

@@ -29,8 +29,8 @@ Resumo = namedtuple("Resumo", "criados alterados apagados lado_criados lado_alte
 
 
 class _Sentinela:  # repete o filtro da biblioteca: só entidade com id() diferente de 0 conta (file.py:136 a :149)
-    def __init__(self, arquivo):
-        self.arquivo = arquivo
+    def __init__(self, arquivo, historico):
+        self.arquivo, self._h = arquivo, historico
 
     @staticmethod
     def _recusar():
@@ -51,6 +51,8 @@ class _Sentinela:  # repete o filtro da biblioteca: só entidade com id() difere
                 a.remove(element)
             finally:
                 a.transaction = self
+            if sys._getframe(1).f_code.co_name == "add":  # file.add (file.py:722): as dependências criadas não dá para limpar
+                self._h._quebrar(a, "file.add fora de uma transação deixou entidades soltas")
             self._recusar()
 
 
@@ -64,7 +66,7 @@ class _Lado:  # o lateral dentro da transação: aplica na hora e guarda (coleç
 
         def aplicar(c, i, *obj):
             antigo = self._lat.obter(c, i)
-            getattr(self._lat, nome)(c, i, *obj)
+            getattr(self._lat, "_" + nome)(c, i, *obj)
             self.ops.append((c, i, antigo, self._lat.obter(c, i)))
         return aplicar
 
@@ -173,12 +175,12 @@ class Historico:
     def __init__(self, sessao, lateral, limite_bytes=None, codificar=None, anotar=None):
         self._lat, self.limite_bytes, self._codificar, self._anotar = lateral, limite_bytes, codificar, anotar
         self._lh, self._lf, self._aberta, self._quebrado = [], [], False, False  # lateral: histórico e refazer (o IFC guarda as dele)
-        with sessao.escrever() as esc:
+        with sessao.escrever() as esc:  # abre escrever() próprio: dentro de outro escrever() da mesma thread dá ReentradaProibida
             a = self._arquivo = esc.arquivo
             if a.transaction is not None:
                 raise TransacaoAberta("o arquivo já tem uma transação aberta")
             a.set_history_size(sys.maxsize)  # só o nosso limite (T08) descarta passos, nunca o silencioso da biblioteca
-            self._sent = a.transaction = _Sentinela(a)
+            self._sent = a.transaction = _Sentinela(a, self)
 
     def _cod(self, ops):
         return self._codificar(ops) if self._codificar else None
@@ -190,10 +192,8 @@ class Historico:
 
     def _pre(self, esc):
         a = esc.arquivo  # TravaNaoSegura se vencido
-        if self._aberta:
-            raise TransacaoAberta("já há uma transação aberta")
-        if self._quebrado:
-            raise HistoricoQuebrado("histórico quebrado; reabra pela recuperação")
+        if self._aberta or self._quebrado:
+            raise TransacaoAberta("já há uma transação aberta") if self._aberta else HistoricoQuebrado("histórico quebrado; reabra pela recuperação")
         if a.transaction is not self._sent:
             self._quebrar(a, "a transação do arquivo foi trocada por terceiros")
         return a

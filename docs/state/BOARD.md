@@ -31,9 +31,9 @@
 | F0-S05-T01b | Juntar o mapa no painel e atualizar o CLAUDE.md (P6) | T0 | FEITA | Cartão `cards/F0-S05/F0-S05-T01b.md`; `docs/MAPA_DO_PROJETO.md` apagado; CLAUDE.md com o painel |
 | F0-S05-T02 | Sondas do ifcopenshell (só números) | T2 | FEITA | Relatório `reports/F0-S05-T02.md`; PR 282 mesclado; Windows do CI não medido (PO: fica para o T10); achados para o T03: chaves de `inverses` em JSON e vazamento do `registry` |
 | F0-S05-T03 | ADR-002, rascunho | TA | FEITA (PR 283) | Opus lote 78 escreveu; lote 79 reprovou (14 problemas) e o autor corrigiu; lote 79b aprovou; ADR-002 aceito pelo PO em 2026-10-23 |
-| F0-S05-T04 | Transação única IFC + lateral, prova das 10.000 | T3 | NAO_INICIADA | Depende de T03; P1, P2 |
+| F0-S05-T04 | Transação única IFC + lateral, prova das 10.000 | T3 | EM_REVISAO | Oráculo em 4 PRs (286, 287, 288, 290, verdes, com marcadores). Falta: implementação em `s05-t04-impl-2` (sobre `s05-t04-marcadores`, cabe em 378 linhas), nova revisão Opus curta (lote 80 reprovou o oráculo por 2 mutantes vivos; reforçado) |
 | F0-S05-T05 | Diário de transações e recuperação | T3 | NAO_INICIADA | Depende de T04; P4, P5 |
-| F0-S05-T06 | Gravação atômica de um arquivo | T3 | NAO_INICIADA | Depende de T03 |
+| F0-S05-T06 | Gravação atômica de um arquivo | T3 | EM_REVISAO | Oráculo PR 284, implementação PR 285 (36 de 36 passam). Lote 80 reprovou o oráculo por 4 mutantes vivos; reforçado (`dc6a67d`). Falta nova revisão Opus curta, corrigir a mensagem de `gravacao_atomica.py:189` e a chave de CI para o T04 |
 | F0-S05-T07 | Gravação do par com diário | T3 | NAO_INICIADA | Depende de T04, T06; P2 |
 | F0-S05-T08 | Limite de memória do desfazer | T3 | NAO_INICIADA | Depende de T02, T04, T05 |
 | F0-S05-T09 | Autosave na pasta local | T3 | NAO_INICIADA | Depende de T05, T07; P5 |

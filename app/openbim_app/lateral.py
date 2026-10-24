@@ -41,12 +41,6 @@ def json_canonico(obj):  # bytes UTF-8
     return json.dumps(obj, sort_keys=True, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode()
 
 
-def _objeto(o):  # objeto do lateral = objeto JSON (dict)
-    if not isinstance(o, dict):
-        raise ObjetoInvalido("o objeto do lateral é um objeto JSON (dict)")
-    return o
-
-
 def _chave(c, i):
     if not _COLECAO.fullmatch(c) or c == "manifest" or not _ID.fullmatch(i):
         raise ObjetoInvalido(f"coleção ou id inválido: {c!r}, {i!r}")
@@ -72,21 +66,23 @@ class Lateral:
     def canonico(self):
         return json_canonico(self._d)
 
-    def _mudar(self, c, i, obj, existe):
+    def _mudar(self, c, i, obj, existe, apagar=False):  # fora de apagar, o objeto tem de ser um objeto JSON (dict)
         _chave(c, i)
-        obj is None or json_canonico(obj)
+        if not apagar and not isinstance(obj, dict):
+            raise ObjetoInvalido("o objeto do lateral é um objeto JSON (dict)")
+        apagar or json_canonico(obj)
         if (i in self._d.get(c, {})) != existe:
             raise (IdInexistente if existe else IdRepetido)((c, i))
         self._repor(c, i, obj)
 
     def _criar(self, c, i, obj):
-        self._mudar(c, i, _objeto(obj), False)
+        self._mudar(c, i, obj, False)
 
     def _alterar(self, c, i, obj):  # troca o objeto inteiro
-        self._mudar(c, i, _objeto(obj), True)
+        self._mudar(c, i, obj, True)
 
     def _apagar(self, c, i):
-        self._mudar(c, i, None, True)
+        self._mudar(c, i, None, True, True)
 
     def _repor(self, c, i, obj):  # sem checagem: desfazer e refazer do Historico (obj None = sem o objeto)
         if obj is None:

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Transação única IFC + lateral, desfazer e refazer (F0-S05-T04; ADR-002 §4.1, §4.2 e §4.8). Sem Qt, sem `obimcore`.
 Uma transação nossa = um `Transaction` do ifcopenshell + as operações do lateral; fora dela `arquivo.transaction` é uma sentinela que recusa edição.
-Tudo roda dentro de `SessaoModelo.escrever()`. O limite de memória é do T08 (`limite_bytes` é guardado; `descartados` fica em 0)."""
+Tudo roda em `SessaoModelo.escrever()`. Limite de memória: T08 (`limite_bytes` só guardado; `descartados` = 0)."""
 import sys
 from collections import namedtuple
 from contextlib import contextmanager
@@ -45,14 +45,10 @@ class _Sentinela:  # repete o filtro da biblioteca: só entidade com id() difere
 
     def store_create(self, element):  # chamado depois de criar (file.py:661): o objeto criado sai
         if element.id():
-            a = self.arquivo
-            a.transaction = None
-            try:
-                a.remove(element)
-            finally:
-                a.transaction = self
-            if sys._getframe(1).f_code.co_name == "add":  # file.add (file.py:722): as dependências criadas não dá para limpar
-                self._h._quebrar(a, "file.add fora de uma transação deixou entidades soltas")
+            with self._h._livre(self.arquivo):
+                self.arquivo.remove(element)
+            if sys._getframe(1).f_code is ifcopenshell.file.add.__code__:  # file.add (file.py:722; Python 3.12): as dependências criadas não dá para limpar
+                self._h._quebrar(self.arquivo, "file.add fora de uma transação deixou entidades soltas")
             self._recusar()
 
 
@@ -101,7 +97,6 @@ def _resumo_ifc(a, ops, avanco):  # ADR-002 §4.1: criados, alterados e apagados
     nc, nd = cria - apaga, apaga - cria  # criada e apagada na mesma transação não conta
     if not avanco:
         nc, nd = nd, nc
-    esq = a.schema_identifier
 
     def ent(i):
         try:
@@ -113,7 +108,7 @@ def _resumo_ifc(a, ops, avanco):  # ADR-002 §4.1: criados, alterados e apagados
         e, v = ent(i), info.get(i)
         if e is not None:
             return e.GlobalId if e.is_a("IfcObjectDefinition") else None
-        return v["GlobalId"] if v and _subtipo(esq, v["type"], "IfcObjectDefinition") else None
+        return v["GlobalId"] if v and _subtipo(a.schema_identifier, v["type"], "IfcObjectDefinition") else None
 
     def gids(ids):
         return {g for g in map(objeto, ids) if g}
@@ -121,42 +116,31 @@ def _resumo_ifc(a, ops, avanco):  # ADR-002 §4.1: criados, alterados e apagados
     donos, visto = set(), set()
 
     def sobe(e):
-        if e.id() in visto:
-            return
+        if e.id() in visto: return
         visto.add(e.id())
         if e.is_a("IfcObjectDefinition"):
             donos.add(e.GlobalId)
             return
         for i in a.get_inverse(e):
             if i.is_a("IfcRelationship"):  # a relação nunca é dona; só os objetos das listas dela
-                for x in i:
-                    xs = x if isinstance(x, tuple) else ()
-                    donos.update(o.GlobalId for o in xs if o.id() and o.is_a("IfcObjectDefinition"))
+                donos.update(o.GlobalId for x in i if isinstance(x, tuple) for o in x if o.id() and o.is_a("IfcObjectDefinition"))
             else:
                 sobe(i)
 
     for i in nc | nd:
-        if _subtipo(esq, info[i]["type"], "IfcRelationship"):
-            achados = set()  # relação criada ou apagada: todos os objetos dela
-            for k, v in info[i].items():
-                k in ("id", "type") or _ids(v, achados)
-            donos.update(gids(achados))
+        if _subtipo(a.schema_identifier, info[i]["type"], "IfcRelationship"):
+            donos.update(gids(_ids([v for k, v in info[i].items() if k not in ("id", "type")], set())))  # relação criada ou apagada: todos os objetos dela
         elif (e := ent(i)) is not None:
             sobe(e)
-    for i, lista in edits.items():
+    for i in set(edits) | inv:  # editados e atingidos pelos inversos de um apagado (a relação aí só perdeu o próprio apagado)
         e = ent(i)
-        if i in nc or i in nd or e is None:
-            continue
+        if i in nc or i in nd or e is None: continue
         if e.is_a("IfcRelationship"):  # objetos que entraram ou saíram das listas dela
             antes, depois = set(), set()
-            for op in lista:
+            for op in edits.get(i, ()):
                 _ids(op["old"], antes), _ids(op["new"], depois)
             donos.update(gids(antes ^ depois))
         else:
-            sobe(e)
-    for i in inv - nc - nd - set(edits):  # atingidos pelos inversos de um apagado (a relação aí só perdeu o próprio apagado)
-        e = ent(i)
-        if e is not None and not e.is_a("IfcRelationship"):
             sobe(e)
     criados, apagados = gids(nc), gids(nd)
     return tuple(sorted(criados)), tuple(sorted(donos - criados - apagados)), tuple(sorted(apagados))
@@ -173,7 +157,7 @@ def _resumo_lado(ops, avanco):
 
 class Historico:
     def __init__(self, sessao, lateral, limite_bytes=None, codificar=None, anotar=None):
-        self._lat, self.limite_bytes, self._codificar, self._anotar = lateral, limite_bytes, codificar, anotar
+        self._lat, self.limite_bytes, self._codificar, self._anotar = lateral, limite_bytes, codificar or (lambda ops: None), anotar
         self._lh, self._lf, self._aberta, self._quebrado = [], [], False, False  # lateral: histórico e refazer (o IFC guarda as dele)
         with sessao.escrever() as esc:  # abre escrever() próprio: dentro de outro escrever() da mesma thread dá ReentradaProibida
             a = self._arquivo = esc.arquivo
@@ -181,9 +165,6 @@ class Historico:
                 raise TransacaoAberta("o arquivo já tem uma transação aberta")
             a.set_history_size(sys.maxsize)  # só o nosso limite (T08) descarta passos, nunca o silencioso da biblioteca
             self._sent = a.transaction = _Sentinela(a, self)
-
-    def _cod(self, ops):
-        return self._codificar(ops) if self._codificar else None
 
     pode_desfazer = property(lambda s: bool(s._lh))
     pode_refazer = property(lambda s: bool(s._lf))
@@ -223,16 +204,23 @@ class Historico:
             self._lat._repor(c, i, novo if avanco else antigo)
 
     @contextmanager
-    def transacao(self, esc):
+    def _aberto(self, esc):  # marca "transação aberta" (transação e fora_do_historico não se aninham)
         a = self._pre(esc)
         self._aberta = True
         try:
+            yield a
+        finally:
+            self._aberta = False
+
+    @contextmanager
+    def transacao(self, esc):
+        with self._aberto(esc) as a:
             a.transaction = None
             a.begin_transaction()
             tx, t = a.transaction, SimpleNamespace(ifc=a, lado=_Lado(self._lat), resumo=None)
             try:
                 yield t
-                enc = self._cod(tx.operations)
+                enc = self._codificar(tx.operations)
                 if a.transaction is not tx:
                     raise RuntimeError("a transação do arquivo foi trocada por terceiros")
             except BaseException as e:
@@ -250,8 +238,6 @@ class Historico:
                 self._ifc(a, True)
                 a.future.pop()
                 raise
-        finally:
-            self._aberta = False
 
     def _abortar(self, a, tx, t, causa):  # antes do end_transaction: discard (nunca undo) e o lateral volta
         self._lado(t.lado.ops, False)
@@ -266,14 +252,13 @@ class Historico:
     def _mover(self, esc, desfazer):
         a = self._pre(esc)
         de, para = (self._lh, self._lf) if desfazer else (self._lf, self._lh)
-        if not de:
-            return None
+        if not de: return None
         lado_ops, tr = de[-1], (a.history if desfazer else a.future)[-1]
         self._ifc(a, desfazer)  # IFC primeiro; se falhar o lateral não é mexido
         try:
             self._lado(lado_ops, not desfazer)
             resumo = Resumo(*_resumo_ifc(a, tr.operations, not desfazer), *_resumo_lado(lado_ops, not desfazer))
-            self._anotar and self._anotar("desfazer" if desfazer else "refazer", self._cod(tr.operations), lado_ops)
+            self._anotar and self._anotar("desfazer" if desfazer else "refazer", self._codificar(tr.operations), lado_ops)
             para.append(de.pop())
         except BaseException:  # tudo volta: modelo e lateral
             self._lado(lado_ops, desfazer)
@@ -289,13 +274,8 @@ class Historico:
 
     @contextmanager
     def fora_do_historico(self, esc):  # só para o carimbo do pset OBIM_Projeto (T07): edição livre, sem desfazer nem diário
-        a = self._pre(esc)
-        self._aberta = True
-        try:
-            with self._livre(a):
-                yield
-        finally:
-            self._aberta = False
+        with self._aberto(esc) as a, self._livre(a):
+            yield
 
     def encerrar(self):
         a = self._arquivo

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Lateral provisório em memória (F0-S05-T04; ADR-002 §4.3 e §4.8). Sem Qt, sem ifcopenshell.
 Coleções (`[a-z_]{1,32}`, nunca `manifest`) de objetos JSON por id (`[A-Za-z0-9_-]{1,64}`); referência ao modelo só por GlobalId. Dentro de
-uma transação, edita-se por `t.lado` do `Historico`; `_repor` é só dele."""
+uma transação, edita-se por `t.lado` do `Historico`; `_criar`, `_alterar`, `_apagar` e `_repor` são só dele."""
 import copy
 import json
 import math
@@ -56,7 +56,7 @@ class Lateral:
     def __init__(self, objetos=None):
         self._d = {}
         for c, i, o in ((c, i, o) for c, objs in (objetos or {}).items() for i, o in objs.items()):
-            self.criar(c, i, o)
+            self._criar(c, i, o)
 
     json_canonico = staticmethod(json_canonico)
 
@@ -79,13 +79,13 @@ class Lateral:
             raise (IdInexistente if existe else IdRepetido)((c, i))
         self._repor(c, i, obj)
 
-    def criar(self, c, i, obj):
+    def _criar(self, c, i, obj):
         self._mudar(c, i, _objeto(obj), False)
 
-    def alterar(self, c, i, obj):  # troca o objeto inteiro
+    def _alterar(self, c, i, obj):  # troca o objeto inteiro
         self._mudar(c, i, _objeto(obj), True)
 
-    def apagar(self, c, i):
+    def _apagar(self, c, i):
         self._mudar(c, i, None, True)
 
     def _repor(self, c, i, obj):  # sem checagem: desfazer e refazer do Historico (obj None = sem o objeto)

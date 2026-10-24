@@ -17,3 +17,7 @@ Problemas (14):
 14. §8: listar G5 (conferir começo e fim do IFC sem reabrir) como escolha sem número.
 Ajustes de cartões: T04 (`fora_do_historico`, transação aninhada), T05 (sem ligação ao par, ordem codificar/anotar), T07 (gancho, pasta por parâmetro, carimbo, sem carimbo, estados), T09 (liga `ao_concluir`, dono da ordem ao abrir), T08 nada.
 Correção: autor aplicou os 14 itens e os ajustes de cartão no commit 9a171ec (diff 221 a mais, 2 a menos), acrescentando `Historico(..., codificar=None, anotar=None)`, estados E9 e E10 e nova regra de sorteio (peso 3 para criar parede, lote de 2 a 4). Faltam: nova revisão do lote 79 sobre as correções (aguarda janela de 5 h abaixo de 70%) e o aceite do PO. Fator "7 a 12" corrigido no relatório do T02 (PR 282).
+
+## Lote 79b (2026-10-23, mesmo revisor, HEAD 7bef053): APROVADO
+Os 14 itens corrigidos e conferidos. Acréscimos do autor ok (`Historico(..., codificar=None, anotar=None)`, E9 e E10, sorteio com peso 3 para criar parede e lote de 2 a 4). Simulação do revisor em 101 sementes: menor contagem por tipo 555, mistas no mínimo 1.336, memória no máximo 0,52 GB; pisos 500, 1.000 e 10.000 mantidos (semente oficial: 589, 1.420, 0,52 GB). Diff do PR 262 a mais e 7 a menos.
+Observações sem bloqueio, aplicadas pelo líder: (1) falha depois do passo 2 também zera o refazer anterior (`file.py:562`); caso 5c com `pode_refazer` falso. (2) Decisão sobre medir o Windows no T10: dada pelo PO no chat em 2026-10-23 ("siga com o recomendado"); registrada no LOG.

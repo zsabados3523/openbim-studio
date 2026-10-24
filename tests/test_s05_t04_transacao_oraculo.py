@@ -31,7 +31,6 @@ import s05_t04_aux as A
 from s05_conteudo_aux import _limpa, base_ifc  # noqa: F401  (fixtures)
 from s05_t04_aux import SEMENTE, TIPOS, aplicar, igual, montar
 
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="T04: openbim_app.transacao e openbim_app.lateral ainda não existem")
 
 
 class Real:  # o módulo do T04
@@ -80,7 +79,6 @@ def novo(base_ifc):  # fábrica: (Real, plano) sobre um modelo montado; encerra 
             pass
 
 
-@AINDA_NAO
 def pesado_1_dez_mil_e_12_limite_desligado():
     f, c, plano = montar(os.environ["OBIM_S05_T04_BASE"])
     d = Real(f, c, limite_bytes=None)
@@ -89,7 +87,6 @@ def pesado_1_dez_mil_e_12_limite_desligado():
     d.h.encerrar()
 
 
-@AINDA_NAO
 def pesado_2_mistura_com_desfazer_e_refazer():
     f, c, plano = montar(os.environ["OBIM_S05_T04_BASE"])
     d, r, pilha, fut = Real(f, c), random.Random(SEMENTE + 2), [], []
@@ -137,7 +134,6 @@ def _pilhas(d):
         return len(f.history), len(f.future), d.h.pode_refazer
 
 
-@AINDA_NAO
 def test_3_excecao_dentro_volta_os_dois_lados(novo):
     d, plano = novo()
     d.tx([plano.op("pset_criar"), plano.op("lado_criar"), plano.op("parede")])
@@ -157,7 +153,6 @@ def test_3_excecao_dentro_volta_os_dois_lados(novo):
         plano.restaurar(est)
 
 
-@AINDA_NAO
 def test_4_lateral_invalido_volta_o_ifc(novo):
     T, L, _ = _mods()
     d, plano = novo()
@@ -169,7 +164,6 @@ def test_4_lateral_invalido_volta_o_ifc(novo):
     igual(d, f0, "lateral inválido")
 
 
-@AINDA_NAO
 def test_5_undo_system_error_quebra_o_historico(novo):
     T, _, _ = _mods()
     d, plano = novo()
@@ -185,7 +179,6 @@ def test_5_undo_system_error_quebra_o_historico(novo):
                 fn()
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("como", ["begin", "begin_discard", "sentinela_sumiu"])
 def test_5b_transacao_de_terceiros_detectada(novo, como):
     T, _, _ = _mods()
@@ -202,7 +195,6 @@ def test_5b_transacao_de_terceiros_detectada(novo, como):
         assert d.h.quebrado
 
 
-@AINDA_NAO
 def test_5c_falha_do_anotar_desfaz_o_passo(novo):
     class Anotar:
         falhar, n = False, 0
@@ -229,7 +221,6 @@ def test_5c_falha_do_anotar_desfaz_o_passo(novo):
     assert _pilhas(d)[0] == nh + 1
 
 
-@AINDA_NAO
 def test_6_edicao_fora_de_transacao_recusada(novo):
     T, _, _ = _mods()
     d, plano = novo()
@@ -245,7 +236,6 @@ def test_6_edicao_fora_de_transacao_recusada(novo):
     assert d.h.pode_desfazer
 
 
-@AINDA_NAO
 def test_7_porta_e_transacao_aberta(novo):
     T, _, S = _mods()
     d, plano = novo()
@@ -261,7 +251,6 @@ def test_7_porta_e_transacao_aberta(novo):
                 fn()
 
 
-@AINDA_NAO
 def test_8_resumo_por_dono(novo):
     d, plano = novo()
     G = d.c["g"]
@@ -285,7 +274,6 @@ def test_8_resumo_por_dono(novo):
     assert s(d.tx([("lado_apagar", "notas", "oz")]), "lado_apagados") == {("notas", "oz")}
 
 
-@AINDA_NAO
 def test_9_lateral_canonico_e_obter_copia(novo):
     d, _ = novo()
     objs = [("notas", "a", {"ifc_guid": "x", "n": 1}), ("cotas", "b", {"ifc_guids": ["y", "z"], "t": "ção"}), ("notas", "c", {"v": [1, 2.5, None]})]
@@ -305,7 +293,6 @@ def test_9_lateral_canonico_e_obter_copia(novo):
     assert d.lat.obter("notas", "a") == {"ifc_guid": "x", "n": 1} and d.lat.canonico() == c1, "obter() não devolveu cópia"
 
 
-@AINDA_NAO
 def test_10_encerrar_solta_o_registry(novo):
     import ifcopenshell
     d, plano = novo()
@@ -316,7 +303,6 @@ def test_10_encerrar_solta_o_registry(novo):
     assert (list(d.f.history), list(d.f.future)) == ([], []) and int(d.f.this) not in ifcopenshell.file.registry
 
 
-@AINDA_NAO
 def test_11_fora_do_historico(novo):
     T, _, _ = _mods()
     _, api, _, _ = A._api()

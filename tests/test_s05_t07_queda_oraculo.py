@@ -15,7 +15,6 @@ import s05_t07_aux as X
 from s05_conteudo_aux import _limpa, base_ifc, exigir  # noqa: F401  (fixtures)
 from s05_t07_aux import SEQ, SEMENTE, gp
 
-AINDA_NAO = pytest.mark.xfail(strict=True, raises=ImportError, reason="T07: openbim_app.gravacao_par ainda não existe")
 N_LACO = 50
 NOMEADOS = {  # cartão T07 item 1 (lista mínima), com o estado do ADR-002 §4.5 e o par esperado
     "E1_antes_dos_temporarios": (["etapa", "escrever", "Casa.ifc.tmp"], "antigo"),
@@ -87,7 +86,6 @@ def virar(c, nome):
     p.write_bytes(bytes(b))
 
 
-@AINDA_NAO
 def test_q1_morte_antes_de_cada_evento(cena):
     gp()
     cod, traco = cena.gravar()
@@ -100,7 +98,6 @@ def test_q1_morte_antes_de_cada_evento(cena):
         cena.conferir(esperado, cena.resolver(), f"morte antes do evento {k} {traco[k]}")
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("nome", NOMEADOS)
 def test_q2_estados_com_nome(cena, nome):
     gp()
@@ -117,7 +114,6 @@ RUINS = {  # (morte, mexida depois da morte, esperado): temporário que não con
 }
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("nome", RUINS)
 def test_q3_temporario_que_nao_confere_desfaz(cena, nome):
     gp()
@@ -136,7 +132,6 @@ E9 = {
 }
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("nome", E9)
 @pytest.mark.parametrize("lado_ruim", [False, True], ids=["lado_tmp_bom", "lado_tmp_ruim"])
 def test_q4_e9_destino_mudado_por_outro_programa(cena, nome, lado_ruim):
@@ -152,7 +147,6 @@ def test_q4_e9_destino_mudado_por_outro_programa(cena, nome, lado_ruim):
         assert X.foto_pastas(cena.destino.parent, cena.pasta) == antes, f"{nome}: E9 mexeu em algo (tem de manter tudo e o gravacao.json)"
 
 
-@AINDA_NAO
 def test_q5_e10_gravacao_json_de_outro_caminho(cena):
     gp()
     assert cena.gravar(morte=NOMEADOS["E6_ifc_trocado_lado_nao"][0])[0] == 86
@@ -166,7 +160,6 @@ def test_q5_e10_gravacao_json_de_outro_caminho(cena):
 PARA_RESOLVER = {"E5_conclui": ("E5_bak_do_ifc_feito", None, "novo"), "E6_desfaz": ("E6_ifc_trocado_lado_nao", "Casa.obim.tmp", "antigo")}
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("nome", PARA_RESOLVER)
 def test_q6_morte_dentro_do_resolvedor(cena, nome):
     """Recuperar é idempotente: o resolvedor morto antes de cada evento dele; a reabertura seguinte termina igual."""
@@ -184,7 +177,6 @@ def test_q6_morte_dentro_do_resolvedor(cena, nome):
         cena.conferir(esperado, cena.resolver(), f"{nome}: resolvedor morto antes de {k} {traco[k]}")
 
 
-@AINDA_NAO
 def test_q7_morte_em_hora_sorteada(segunda):
     gp()
     c, rng, medidas, contagem = segunda, random.Random(SEMENTE), [], {}

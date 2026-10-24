@@ -36,7 +36,6 @@ import s05_t07_aux as X
 from s05_conteudo_aux import _limpa, base_ifc, exigir  # noqa: F401  (fixtures)
 from s05_t07_aux import LADO, SEQ, gp
 
-AINDA_NAO = pytest.mark.xfail(strict=True, raises=ImportError, reason="T07: openbim_app.gravacao_par ainda não existe")
 
 
 class Proj:
@@ -128,7 +127,6 @@ def virar_byte(caminho):  # mesmo tamanho, um byte diferente (conferir só o tam
     caminho.write_bytes(bytes(b))
 
 
-@AINDA_NAO
 def test_01_primeira_gravacao(proj):
     novo = proj.novo(1)
     proj.gravar()
@@ -142,7 +140,6 @@ def test_01_primeira_gravacao(proj):
     assert R.diferencas(R.foto(ifcopenshell.open(str(proj.destino))), R.foto(proj.f)) == [], "reaberto difere do modelo em memória"
 
 
-@AINDA_NAO
 def test_02_segunda_gravacao_bak_e_desfazer(proj):
     proj.gravar()
     um = proj.antigo()
@@ -158,7 +155,6 @@ def test_02_segunda_gravacao_bak_e_desfazer(proj):
     assert proj.pset() == (LADO, 2), "desfazer voltou o carimbo (ele é fora do histórico)"
 
 
-@AINDA_NAO
 def test_03_desenho_portas_e_ordem(proj, monkeypatch):
     portas, fora = [], []
     esc_real, fora_real = proj.s.escrever, proj.h.fora_do_historico
@@ -179,7 +175,6 @@ def test_03_desenho_portas_e_ordem(proj, monkeypatch):
     assert mexe[-1] == ("unlink", "gravacao.json"), f"gravacao.json não foi o último a sair: {mexe[-4:]}"
 
 
-@AINDA_NAO
 def test_04_sem_carimbo_autosave(proj, monkeypatch):
     proj.gravar()
     um, rev = proj.antigo(), proj.pset()
@@ -197,7 +192,6 @@ def test_04_sem_carimbo_autosave(proj, monkeypatch):
     assert R.diferencas(R.foto(ifcopenshell.open(str(auto))), R.foto(proj.f)) == []
 
 
-@AINDA_NAO
 def test_05_nao_importa_diario():
     m = gp()
     arvore = ast.parse(open(m.__file__, encoding="utf-8").read())
@@ -206,7 +200,6 @@ def test_05_nao_importa_diario():
     assert not [x for x in nomes if "diario" in x or "autosave" in x], f"ADR §4.5: o par não importa diario.py: {nomes}"
 
 
-@AINDA_NAO
 def test_06_acento_e_espaco_e_conteudo(tmp_path, base_ifc, monkeypatch):  # noqa: F811
     exigir()
     gp()
@@ -221,7 +214,6 @@ def test_06_acento_e_espaco_e_conteudo(tmp_path, base_ifc, monkeypatch):  # noqa
     p.h.encerrar()
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("ponto", [("escrever", "Casa.ifc.tmp"), ("conferir", "Casa.ifc.tmp"), ("escrever", "Casa.obim.tmp"), ("fsync", "Casa.obim.tmp")])
 def test_07_falha_antes_do_diario(proj, monkeypatch, ponto):
     proj.gravar()
@@ -240,7 +232,6 @@ def test_07_falha_antes_do_diario(proj, monkeypatch, ponto):
     assert (proj.chamadas, len(proj.f.history)) == ([], hist)
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("quando,alvo", [(("etapa", "escrever", "Casa.obim.tmp"), "Casa.ifc.tmp"), (("replace", "gravacao.json", "depois"), "Casa.ifc.tmp"),
                                          (("etapa", "trocar", "Casa.ifc"), "Casa.obim.tmp")], ids=["ifc_antes_do_diario", "ifc_depois_do_diario", "lado_depois_do_bak"])
 def test_08_d4_temporario_mudado_antes_de_confirmar(proj, monkeypatch, quando, alvo):
@@ -259,7 +250,6 @@ def test_08_d4_temporario_mudado_antes_de_confirmar(proj, monkeypatch, quando, a
     assert proj.chamadas == []
 
 
-@AINDA_NAO
 def test_09_troca_do_lateral_recusada_com_o_programa_vivo(proj, monkeypatch):
     from test_s05_t06_gravacao_atomica_oraculo import TrocaRecusada
     proj.gravar()
@@ -280,7 +270,6 @@ def test_09_troca_do_lateral_recusada_com_o_programa_vivo(proj, monkeypatch):
     assert [e for e in t.ev if e[0] in ("replace", "unlink")][-1] == ("unlink", "gravacao.json"), t.ev
 
 
-@AINDA_NAO
 def test_10_ao_concluir_que_falha_deixa_o_diario(proj):
     gp()
 
@@ -297,7 +286,6 @@ def test_10_ao_concluir_que_falha_deixa_o_diario(proj):
     assert [c[0] for c in proj.chamadas] == [SEQ] and X.estado_par(proj.destino, None, novo, proj.pasta) == ("novo", [])
 
 
-@AINDA_NAO
 def test_11_resolver_sem_pendencia_nao_mexe(proj):
     proj.gravar()
     antes = X.foto_pastas(proj.destino.parent, proj.pasta)

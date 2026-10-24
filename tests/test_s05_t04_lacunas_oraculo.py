@@ -12,10 +12,9 @@ L6 (§4.2 "Se o próprio rollback do descarte levantar: HistoricoQuebrado"): exc
 import pytest
 import s05_t04_aux as A
 from s05_conteudo_aux import _limpa, base_ifc  # noqa: F401  (fixtures)
-from test_s05_t04_transacao_oraculo import AINDA_NAO, Real, _mods, _pilhas, novo  # noqa: F401  (fixture `novo`)
+from test_s05_t04_transacao_oraculo import Real, _mods, _pilhas, novo  # noqa: F401  (fixture `novo`)
 
 
-@AINDA_NAO
 def test_l1_add_fora_da_transacao_quebra_o_historico(novo):
     T, _, _ = _mods()
     d, _ = novo()
@@ -28,7 +27,6 @@ def test_l1_add_fora_da_transacao_quebra_o_historico(novo):
     assert d.h.quebrado, "file.add fora da transação deixou dependências soltas sem marcar o histórico quebrado (ADR-002 §4.2)"
 
 
-@AINDA_NAO
 def test_l2_lateral_fora_da_transacao_recusado(novo):
     d, _ = novo()
     c0 = d.lat.canonico()
@@ -50,7 +48,6 @@ class _Anotar:
         s.tipos.append(tipo)
 
 
-@AINDA_NAO
 def test_l3_anotar_em_desfazer_e_refazer(novo):
     an = _Anotar()
     d, plano = novo(anotar=an)
@@ -74,7 +71,6 @@ def test_l3_anotar_em_desfazer_e_refazer(novo):
     assert d.desfazer() is None and len(an.tipos) == n, "desfazer sem nada a fazer foi anotado"
 
 
-@AINDA_NAO
 def test_l4_codificar_que_falha_descarta(novo):
     T, _, _ = _mods()
     an, falha = _Anotar(), [False]
@@ -95,7 +91,6 @@ def test_l4_codificar_que_falha_descarta(novo):
     assert (_pilhas(d), len(an.tipos)) == (p0, n0) and p0[2] and not d.h.quebrado
 
 
-@AINDA_NAO
 def test_l5_end_transaction_de_terceiros_detectado(novo):
     T, _, _ = _mods()
     d, plano = novo()
@@ -112,7 +107,6 @@ class _Erro(Exception):
     pass
 
 
-@AINDA_NAO
 def test_l6_rollback_do_descarte_falha_quebra_o_historico(novo):
     T, _, _ = _mods()
     d, plano = novo()

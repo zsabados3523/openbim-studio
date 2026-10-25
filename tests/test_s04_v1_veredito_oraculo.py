@@ -124,7 +124,7 @@ def _h(t):
 
 def test_v1_criterio_1_formas_1_e_2_fluxo_a_e_resto_do_lote_intactos():  # passa hoje e tem de continuar passando
     if not (aux.PASTA / "lote.py").is_file():
-        pular("prototypes/s04/fluxo_a/lote.py ausente")
+        pular("tools/s04/fluxo_a/lote.py ausente")
     import lote
     h = {k: _h(inspect.getsource(getattr(lote, k))) for k in INTACTAS if k.isidentifier() and not k.startswith("__")}
     h["medir*"] = _h("\n".join(x for x in inspect.getsource(lote.medir).splitlines() if not any(s in x.lower() for s in ("_forma", "geometria", "mista"))))

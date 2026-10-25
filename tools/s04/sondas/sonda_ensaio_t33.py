@@ -13,7 +13,7 @@ from pathlib import Path
 
 AQUI = Path(__file__).resolve().parent
 RAIZ = AQUI.parents[2]
-for p in (AQUI.parents[1] / "viewport_qrhi", AQUI.parents[1]):
+for p in (RAIZ / "viewport" / "viewport_qrhi", RAIZ / "viewport"):
     sys.path.insert(0, str(p))
 
 BLOCO_ALVO = 22  # bloco das 3 peças pesadas do arquivo pesado

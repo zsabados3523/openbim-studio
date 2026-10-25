@@ -29,7 +29,7 @@ import ifcopenshell
 import ifcopenshell.api
 
 RAIZ = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(RAIZ / "prototypes"))
+sys.path.insert(0, str(RAIZ / "viewport"))
 sys.path.insert(0, str(RAIZ / "scripts"))
 
 from gerar_modelo_grande import gerar  # noqa: E402

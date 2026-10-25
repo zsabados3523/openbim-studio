@@ -15,6 +15,6 @@ for k in $(seq 1 "$N"); do
   [ -e "$O/t33_r$k.json" ] && { echo "já existe $O/t33_r$k.json: use outra pasta (SAIDA_T33)" >&2; exit 2; }
   uptime > "$O/t33_r$k.uptime"  # carga da máquina compartilhada ao pedir a vez
   flock "$HOME/openbim-medicao/medicao.lock" env -u DISPLAY -u WAYLAND_DISPLAY xvfb-run -a -s "-screen 0 1280x800x24" env QT_QPA_PLATFORM=xcb LIBGL_ALWAYS_SOFTWARE=1 LC_ALL=C \
-    TMPDIR="$O/tmp" timeout "${LIM:-3600}" "$HOME/miniforge3/envs/openbim/bin/python" "$R/prototypes/s04/sondas/sonda_ensaio_t33.py" rodar "$IFC" \
+    TMPDIR="$O/tmp" timeout "${LIM:-3600}" "$HOME/miniforge3/envs/openbim/bin/python" "$R/tools/s04/sondas/sonda_ensaio_t33.py" rodar "$IFC" \
     --rotulo "t33_r$k" --saida "$O/t33_r$k.json" "$@" > "$O/t33_r$k.out" 2> "$O/t33_r$k.err" || echo "abertura $k terminou com erro (ver $O/t33_r$k.err; não colar no relatório)" >&2
 done

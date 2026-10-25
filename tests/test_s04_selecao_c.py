@@ -370,7 +370,7 @@ def test_bytes_da_copia_inclui_o_texto_dos_globalid(sel):
     assert r["curto"] > 0 and extra >= 20, f"bytes_copia não cresce com o tamanho dos GlobalId: {extra:.1f} B/objeto"
 
 if __name__ == "__main__":
-    sys.path.insert(0, str(RAIZ / "prototypes"))
+    sys.path.insert(0, str(RAIZ / "viewport"))
     nome, *resto = sys.argv[1:]
     assert not {"obimcore", "PySide6.QtCore"} & sys.modules.keys(), "o teste importou Qt ou obimcore antes da ordem pedida"
     [importlib.import_module(m) for m in ("ifcopenshell", "obimcore")]

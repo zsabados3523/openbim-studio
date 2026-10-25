@@ -4,7 +4,7 @@
 # Uso: OBIMCORE_DIR=pasta/obimcore build_installer.sh RUNTIME_ENV SAIDA_DIR   (rodar no bash do Git for Windows, com makensis no PATH)
 #   RUNTIME_ENV  ambiente criado com: conda env create -f packaging/runtime-environment.yml -p <pasta>
 #   SAIDA_DIR    pasta de trabalho/saída (fora do repositório); recebe pacote/ e OpenBIM-Studio-Setup.exe
-#   OBIMCORE_DIR (obrigatória): a pasta obimcore/ (com __init__.py e UM _obimcore*.pyd) que prototypes/s04/obimcore/build.sh gera.
+#   OBIMCORE_DIR (obrigatória): a pasta obimcore/ (com __init__.py e UM _obimcore*.pyd) que native/obimcore/build.sh gera.
 #   O pacote não tem compilador: o módulo vem pronto do ambiente de desenvolvimento e entra em app\obimcore\.
 set -euo pipefail
 export PYTHONUTF8=1
@@ -22,7 +22,7 @@ START=$(date +%s)
 OBIMCORE_DIR="${OBIMCORE_DIR:-}"
 shopt -s nullglob; PYDS=("$OBIMCORE_DIR"/_obimcore*.pyd); shopt -u nullglob
 if [ ! -f "$OBIMCORE_DIR/__init__.py" ] || [ "${#PYDS[@]}" -ne 1 ]; then
-  echo "Falta o módulo obimcore: defina OBIMCORE_DIR com a pasta obimcore/ (__init__.py e exatamente um _obimcore*.pyd) gerada por prototypes/s04/obimcore/build.sh (valor atual: '${OBIMCORE_DIR}', .pyd achados: ${#PYDS[@]})" >&2
+  echo "Falta o módulo obimcore: defina OBIMCORE_DIR com a pasta obimcore/ (__init__.py e exatamente um _obimcore*.pyd) gerada por native/obimcore/build.sh (valor atual: '${OBIMCORE_DIR}', .pyd achados: ${#PYDS[@]})" >&2
   exit 1
 fi
 # R-ABI: o módulo foi compilado no ambiente de desenvolvimento; as travas dos dois ambientes (e o ambiente de runtime de verdade) têm de ter a MESMA

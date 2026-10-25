@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 # Contrato do fluxo A (testes em `tests/test_s04_fluxo_a.py`)
 Os testes nao editam o `roteiro_r.json`, que e a referencia dos numeros.
-Arquivo: `prototypes/s04/fluxo_a/fluxo_a.py` (os testes colocam SO esta pasta no `sys.path` e faz `import fluxo_a`; `app/` e `prototypes/` tambem). Nomes em portugues.
+Arquivo: `tools/s04/fluxo_a/fluxo_a.py` (os testes colocam SO esta pasta no `sys.path` e faz `import fluxo_a`; `app/` e `viewport/` tambem). Nomes em portugues.
 
 ## Classe `FluxoA(caminho_ifc=None, janela=True, saida=None)`
 - `__init__` chama `ifc.set_history_size(100000)`: o padrao do ifcopenshell e 64 desfazeres (medido) e o roteiro R tem ~600 transacoes.

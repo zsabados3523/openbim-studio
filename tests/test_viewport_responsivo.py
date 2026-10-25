@@ -22,7 +22,7 @@ import ifcopenshell
 import ifcopenshell.geom
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "prototypes"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "viewport"))
 
 from test_viewport_carregador import (  # noqa: E402,F401  (modelos, M1M e fixtures compartilhados)
     CarregadorMalhas, LoteMalha, ResumoCarga, _m1m_ou_pular, m3000, mab,

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Apoio do teste do fluxo B, parte 2 (tests/test_s04_fluxo_b_janela.py; contrato: prototypes/s04/fluxo_b/CONTRATO.md, "Parte 2"):
+"""Apoio do teste do fluxo B, parte 2 (tests/test_s04_fluxo_b_janela.py; contrato: tools/s04/fluxo_b/CONTRATO.md, "Parte 2"):
 como achar e rodar o executável (sob xvfb-run, nunca na tela real), validação estrutural do `medicao.json`, assinatura de IFC sem GlobalId nem posição."""
 import json
 import math
@@ -10,7 +10,7 @@ from collections import Counter
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent.parent
-ROTEIRO = RAIZ / "prototypes" / "s04" / "fluxo_a" / "roteiro_r.json"
+ROTEIRO = RAIZ / "tools" / "s04" / "fluxo_a" / "roteiro_r.json"
 NOME = "fluxo_b_janela" + (".exe" if sys.platform == "win32" else "")
 
 def achar_exe():  # None se não existe (o teste pula ou falha, conforme OBIM_S04_T14_OBRIGATORIO)

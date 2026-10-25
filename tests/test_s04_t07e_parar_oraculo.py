@@ -160,7 +160,7 @@ def c_sair(res):
 
 
 if __name__ == "__main__":
-    sys.path.insert(0, str(RAIZ / "prototypes"))
+    sys.path.insert(0, str(RAIZ / "viewport"))
     nome, *resto = sys.argv[1:]
     import ifcopenshell  # noqa: F401  (mesma ordem do test_s04_viewport)
     import obimcore  # noqa: F401

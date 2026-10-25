@@ -36,7 +36,7 @@ message(STATUS "ifcopenshell ${IFC_VERSAO} build ${IFC_BUILD}")
 # O .pyd/.so fica dentro do pacote `obimcore` (a pasta de saída), ao lado do __init__.py gerado pelo build.sh.
 file(TO_CMAKE_PATH "${OBIM_SAIDA}" OBIM_SAIDA)
 # Shaders do viewport Python (QSB já compilados) embutidos como bytes: o módulo não procura arquivo em tempo de execução.
-set(OBIM_SHADERS "${CMAKE_CURRENT_SOURCE_DIR}/../../viewport_qrhi/shaders" CACHE PATH "shaders QSB do viewport Python")
+set(OBIM_SHADERS "${CMAKE_CURRENT_SOURCE_DIR}/../../viewport/viewport_qrhi/shaders" CACHE PATH "shaders QSB do viewport Python")
 foreach(sh malha_vert malha_frag)
   string(REPLACE "_" "." arq "${sh}")
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${OBIM_SHADERS}/${arq}.qsb")

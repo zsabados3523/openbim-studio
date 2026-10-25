@@ -330,7 +330,7 @@ def test_memoria_do_pico_ao_adicionar_lote_de_64_mib(viewport):  # só Linux
     assert r["subiu"] <= r["lote"] + C + (16 << 20), f"o pico subiu {r['subiu']} bytes; limite lote + C + 16 MiB = {r['lote'] + C + (16 << 20)}"
 
 if __name__ == "__main__":
-    sys.path.insert(0, str(RAIZ / "prototypes"))
+    sys.path.insert(0, str(RAIZ / "viewport"))
     nome, *resto = sys.argv[1:]
     assert not {"obimcore", "PySide6.QtCore"} & sys.modules.keys(), "o teste importou Qt ou obimcore antes da ordem pedida"
     [importlib.import_module(m) for m in ("ifcopenshell", "obimcore")]

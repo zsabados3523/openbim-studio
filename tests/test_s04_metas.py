@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Testes das metas e da saída igual (metas de tempo e IFC igual entre os fluxos A e B). Apoio: s04_fluxo_aux.py (conta das metas do fluxo A) e s04_fluxo_b_aux.py.
-GUARDA: pula enquanto `prototypes/s04/medir_s04.py` for o esqueleto (NotImplementedError); FALHA com OBIM_S04_T12_OBRIGATORIO=1. Os casos B reais (`OBIM_S04_SAIDA_B`) só falham com OBIM_S04_T14_OBRIGATORIO=1.
+GUARDA: pula enquanto `tools/s04/medir_s04.py` for o esqueleto (NotImplementedError); FALHA com OBIM_S04_T12_OBRIGATORIO=1. Os casos B reais (`OBIM_S04_SAIDA_B`) só falham com OBIM_S04_T14_OBRIGATORIO=1.
 Casos com A real rodam em `xvfb-run` (nunca na tela real) e reaproveitam o roteiro R do teste do fluxo A (mesma chave de cache: não rodam o roteiro duas vezes no CI). OBIM_S04_SAIDA_A aponta para uma pasta de A já medida (rodada oficial).
-CONTRATO DA FERRAMENTA (`python prototypes/s04/medir_s04.py`; o teste troca o caminho por OBIM_S04_MEDIR):
+CONTRATO DA FERRAMENTA (`python tools/s04/medir_s04.py`; o teste troca o caminho por OBIM_S04_MEDIR):
  --a PASTA [--b PASTA] [--estrito] [--json ARQ]: cada PASTA tem `medicao.json` (o do fluxo) e o IFC do passo 7 (chave `arquivo_ifc`; relativo = a PASTA). `--estrito` = OBIM_S04_ESTRITO=1 no ambiente. Código de saída: 0 aprovado, 1 reprovado, 2 entrada inválida.
  --linhas --raiz DIR [--json ARQ]: linhas de DIR/obimcore, DIR/fluxo_a e DIR/fluxo_b. JSON: {"linhas": {"obimcore": n, "fluxo_a": n, "fluxo_b": n}}.
  JSON do --a/--b: {"estrito", "metas": {M2, M2b, M3, M4: {n, mediana_ms, p95_ms, max_ms, limite_ms, ok}, M5: {janelas, maior_intervalo_ms, maior_intervalo_parado_ms, ok}}, "erros": [texto "Mx: ..."],
@@ -47,7 +47,7 @@ import s04_fluxo_b_aux as bx
 from test_s04_viewport import caso as _caso
 
 ESTE = Path(__file__).resolve()
-MEDIR = Path(os.environ.get("OBIM_S04_MEDIR") or aux.RAIZ / "prototypes" / "s04" / "medir_s04.py")
+MEDIR = Path(os.environ.get("OBIM_S04_MEDIR") or aux.RAIZ / "tools" / "s04" / "medir_s04.py")
 OBRIG, OBRIG_B = os.environ.get("OBIM_S04_T12_OBRIGATORIO") == "1", os.environ.get("OBIM_S04_T14_OBRIGATORIO") == "1"
 BASE = os.environ.get("OBIM_S04_BASE", "300")
 ROT = {p["id"]: p for p in json.loads(aux.ROTEIRO.read_text(encoding="utf-8"))["passos"]}
@@ -101,7 +101,7 @@ def ferramenta(tmp_path_factory):  # o esqueleto levanta NotImplementedError: o 
         pular(f"{MEDIR} ausente")
     rc, js, p = avaliar(tmp_path_factory.mktemp("sonda"), med())
     if "NotImplementedError" in p.stderr:
-        pular("prototypes/s04/medir_s04.py ainda é o esqueleto")
+        pular("tools/s04/medir_s04.py ainda é o esqueleto")
     return MEDIR
 
 # ---------- tabela de casos: (nome, parâmetros de A, passa na régua virtual, passa na estrita, erro esperado) ----------
@@ -452,7 +452,9 @@ def test_m7_conta_linhas_por_pasta_sem_comentario_sem_vazias_e_depois_de_formata
     assert p.returncode == 0 and json.loads((tmp_path / "l.json").read_text())["linhas"] == {"obimcore": 7, "fluxo_a": 7, "fluxo_b": 3}, p.stderr[-800:]
 
 def test_m7_nas_pastas_reais_fluxo_a_depois_de_formatar_tem_mais_linhas_que_as_cruas(ferramenta, tmp_path):
-    raiz = aux.RAIZ / "prototypes" / "s04"
+    raiz = tmp_path / "raiz_real"  # as três pastas moram em lugares diferentes (native/ e tools/s04/); o medidor quer as três lado a lado
+    for pasta, origem in (("obimcore", aux.RAIZ / "native"), ("fluxo_a", aux.RAIZ / "tools" / "s04"), ("fluxo_b", aux.RAIZ / "tools" / "s04")):
+        shutil.copytree(origem / pasta, raiz / pasta, ignore=shutil.ignore_patterns("build", "__pycache__"))
     p = rodar("--linhas", "--raiz", raiz, "--json", tmp_path / "l.json")
     n = json.loads((tmp_path / "l.json").read_text())["linhas"]
     crua = sum(1 for f in (raiz / "fluxo_a").rglob("*.py") for x in f.read_text(encoding="utf-8").splitlines() if x.strip() and not x.strip().startswith("#"))

@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(RAIZ / "prototypes" / "viewport_qrhi"))
+sys.path.insert(0, str(RAIZ / "viewport" / "viewport_qrhi"))
 sys.path.insert(0, str(RAIZ / "scripts"))
 
 import medir  # noqa: E402

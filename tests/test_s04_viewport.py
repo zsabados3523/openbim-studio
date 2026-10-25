@@ -447,7 +447,7 @@ def rodar(corpo, limite=500):
     sys.exit(app.exec())
 
 if __name__ == "__main__":
-    sys.path.insert(0, str(RAIZ / "prototypes"))
+    sys.path.insert(0, str(RAIZ / "viewport"))
     nome, *resto = sys.argv[1:]
     assert not {"obimcore", "PySide6.QtCore"} & sys.modules.keys(), "o teste importou Qt ou obimcore antes da ordem pedida"
     [importlib.import_module(m) for m in (resto[0] if nome == "imagem" and resto else "ifcopenshell,obimcore").split(",")]

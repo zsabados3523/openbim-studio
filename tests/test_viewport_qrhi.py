@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "prototypes"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "viewport"))
 
 from PySide6.QtCore import QCoreApplication, QElapsedTimer  # noqa: E402
 from PySide6.QtWidgets import QApplication, QRhiWidget  # noqa: E402

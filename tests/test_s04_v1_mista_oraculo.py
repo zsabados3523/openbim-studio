@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Testes da forma "mista" (ADR-004 §5.1, regras 1 a 6 e critério 1): de `prototypes/s04/fluxo_a/lote.py`.
+"""Testes da forma "mista" (ADR-004 §5.1, regras 1 a 6 e critério 1): de `tools/s04/fluxo_a/lote.py`.
 Não editar este arquivo; os `@AINDA_NAO` (xfail estrito) saem quando o módulo existir
 (só as linhas `AINDA_NAO = ...` e `@AINDA_NAO`). Contrato :
 1. `lote.medir(f, "mista", ...)`: o comando roda na thread da JANELA, cedendo como a forma 2 (`_Fatiador`, `fluxo_a.api` e `Cena.atualizar` são operações);
@@ -250,7 +250,7 @@ def c_real(res, base, aberturas):  # o FluxoA e o obimcore de verdade: parede pe
 # ---------- testes ----------
 def _rodar(nome, *a, limite, alvo=ESTE):
     if not (aux.PASTA / "lote.py").is_file():
-        pular("prototypes/s04/fluxo_a/lote.py ausente")
+        pular("tools/s04/fluxo_a/lote.py ausente")
     if not (os.environ.get("CI") or os.environ.get("OBIM_S04_TELA_VIRTUAL") == "1") if sys.platform == "win32" else not shutil.which("xvfb-run"):
         pular("sem tela virtual (xvfb-run; no Windows só no CI ou com OBIM_S04_TELA_VIRTUAL=1): nunca na tela real")
     from test_s04_viewport import caso

@@ -44,7 +44,7 @@ def c_pesada(res, base, aberturas, rodadas):
 def pes():
     texto = (aux.PASTA / "lote.py").read_text(encoding="utf-8") if (aux.PASTA / "lote.py").is_file() else ""
     if "def base_pesada" not in texto or "def main_pesada" not in texto:
-        pular("prototypes/s04/fluxo_a/lote.py sem base_pesada e main_pesada")
+        pular("tools/s04/fluxo_a/lote.py sem base_pesada e main_pesada")
     if importlib.util.find_spec("obimcore") is None:
         pular("módulo obimcore ausente")
     if not (os.environ.get("CI") or os.environ.get("OBIM_S04_TELA_VIRTUAL") == "1") if sys.platform == "win32" else not shutil.which("xvfb-run"):

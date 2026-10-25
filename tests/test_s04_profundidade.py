@@ -55,7 +55,7 @@ def test_tres_cubos_alinhados_em_ordens_permutadas_mostram_sempre_o_mais_perto(t
     assert perto_e_a_cor_do_centro(r, PERTO[3]), f"ordem {ordem}: o pixel central deveria ser vermelho (o mais perto), saiu {r['centro']} (vizinhos {r['vizinhos']})"
 
 if __name__ == "__main__":
-    sys.path.insert(0, str(RAIZ / "prototypes"))
+    sys.path.insert(0, str(RAIZ / "viewport"))
     nome, *resto = sys.argv[1:]
     __import__("ifcopenshell"), __import__("obimcore")
     rodar(lambda r: globals()["c_" + nome](r, *resto))

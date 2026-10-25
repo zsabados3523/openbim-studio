@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Apoio do teste do fluxo B, parte 1 (tests/test_s04_fluxo_b_paredes.py; contrato em prototypes/s04/fluxo_b/CONTRATO.md):
+"""Apoio do teste do fluxo B, parte 1 (tests/test_s04_fluxo_b_paredes.py; contrato em tools/s04/fluxo_b/CONTRATO.md):
 assinatura de um IFC (só ifcopenshell, independente de A e de B), comparação com tolerância, adaptadores A e B e o roteiro passo a passo."""
 import math
 import sys
@@ -10,8 +10,8 @@ import numpy as np
 
 AQUI = Path(__file__).resolve()
 RAIZ = AQUI.parent.parent
-CONTRATO = RAIZ / "prototypes" / "s04" / "fluxo_b" / "CONTRATO.md"
-sys.path[:0] = [str(RAIZ / "prototypes" / "s04" / "fluxo_a"), str(RAIZ / "app"), str(RAIZ / "prototypes"), str(RAIZ / "scripts"), str(AQUI.parent)]  # só a pasta do fluxo A (não prototypes/s04)
+CONTRATO = RAIZ / "tools" / "s04" / "fluxo_b" / "CONTRATO.md"
+sys.path[:0] = [str(RAIZ / "tools" / "s04" / "fluxo_a"), str(RAIZ / "app"), str(RAIZ / "viewport"), str(RAIZ / "scripts"), str(AQUI.parent)]  # só a pasta do fluxo A (não tools/s04)
 FIRE, TOL = "Pset_WallCommon.FireRating", 1e-6
 CAMADAS = [0.02, 0.11, 0.02]
 PAR = dict(tipo="PAR15", comprimento=4.0, altura=2.8, espessura=0.15)

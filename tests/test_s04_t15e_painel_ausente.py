@@ -9,7 +9,7 @@ a meta M3 fica NÃO MEDIDA (ou falha explícita), nunca aprovada calada; nada de
 2. `executar_roteiro` rodado numa thread que não é a da janela (com janela) grava o `medicao.json` (hoje morre com KeyError antes de gravar), as
    repetições do 4a NÃO têm a chave `t_painel_ms` (nada de valor de enchimento: o juiz aceitaria `t_painel_ms = t_comando_ms` como M3 de ~1 ms) e
    `metas.M3` é o objeto do item 1. Controle: o mesmo roteiro na thread da janela tem `t_painel_ms` e metas iguais às de hoje.
-3. Juiz (`prototypes/s04/medir_s04.py`, NÃO muda nesta tarefa): medicao sem `t_painel_ms` no 4a (todas ou uma repetição; em A ou em B; régua
+3. Juiz (`tools/s04/medir_s04.py`, NÃO muda nesta tarefa): medicao sem `t_painel_ms` no 4a (todas ou uma repetição; em A ou em B; régua
    virtual ou estrita) é ENTRADA INVÁLIDA, código 2, citando `passo 4a` e `t_painel_ms`, nunca traceback, nunca aprovação (regra (iii) do
    cabeçalho de tests/test_s04_metas.py). Estes casos já passam hoje: são trava de regressão.
 GUARDA: os casos sem janela rodam sempre; os de janela rodam em SUBPROCESSO sob `xvfb-run` (nunca na tela real; Windows só no CI ou com
@@ -86,7 +86,7 @@ def passos_sint():  # 5 repetições em 3, 4a e 4b; 4c e 5b com relógio de 16 m
 @pytest.fixture
 def fa():
     if not (aux.PASTA / "fluxo_a.py").is_file():
-        pular("prototypes/s04/fluxo_a/fluxo_a.py ausente")
+        pular("tools/s04/fluxo_a/fluxo_a.py ausente")
     import fluxo_a
     return fluxo_a
 
@@ -190,7 +190,7 @@ def c_roteiro(res):
 @pytest.fixture(scope="module")
 def real():
     if not (aux.PASTA / "fluxo_a.py").is_file():
-        pular("prototypes/s04/fluxo_a/fluxo_a.py ausente")
+        pular("tools/s04/fluxo_a/fluxo_a.py ausente")
     if importlib.util.find_spec("obimcore") is None:
         pular("módulo obimcore ausente")
     if not (os.environ.get("CI") or os.environ.get("OBIM_S04_TELA_VIRTUAL") == "1") if sys.platform == "win32" else not shutil.which("xvfb-run"):
@@ -222,7 +222,7 @@ def test_t15e_roteiro_fora_da_thread_da_janela_grava_medicao_sem_t_painel_e_m3_n
 
 
 if __name__ == "__main__":  # python este_arquivo.py roteiro  (sob xvfb-run)
-    sys.path[:0] = [str(aux.PASTA), str(aux.RAIZ / "app"), str(aux.RAIZ / "prototypes")]
+    sys.path[:0] = [str(aux.PASTA), str(aux.RAIZ / "app"), str(aux.RAIZ / "viewport")]
     import faulthandler
     faulthandler.dump_traceback_later(max(int(os.environ.get("OBIM_LIMITE", "300")) - 20, 30), exit=True)
     r = {}

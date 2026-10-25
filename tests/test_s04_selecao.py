@@ -388,7 +388,7 @@ def test_memoria_da_copia_compacta_com_um_milhao_de_triangulos_e_relatada(sel, m
         print(f"AVISO: leitura de RSS inválida neste sistema ({r['rss_mb']}); só vale a medida da cópia compacta")
 
 if __name__ == "__main__":
-    sys.path.insert(0, str(RAIZ / "prototypes"))
+    sys.path.insert(0, str(RAIZ / "viewport"))
     nome, *resto = sys.argv[1:]
     assert not {"obimcore", "PySide6.QtCore"} & sys.modules.keys(), "o teste importou Qt ou obimcore antes da ordem pedida"
     [importlib.import_module(m) for m in ("ifcopenshell", "obimcore")]

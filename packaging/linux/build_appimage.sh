@@ -6,7 +6,7 @@
 #   APPIMAGETOOL caminho do appimagetool-x86_64.AppImage (MIT, baixado por quem roda)
 # Variaveis: RUNTIME_ENV (padrao ~/miniforge3/envs/openbim-runtime), criado com
 #   conda env create -f packaging/runtime-environment.yml
-#   OBIMCORE_DIR (obrigatoria): a pasta obimcore/ (com __init__.py e _obimcore*.so) que o build.sh de prototypes/s04/obimcore gera.
+#   OBIMCORE_DIR (obrigatoria): a pasta obimcore/ (com __init__.py e _obimcore*.so) que o build.sh de native/obimcore gera.
 #   O pacote nao tem compilador: o modulo vem pronto do ambiente de desenvolvimento e entra em app/obimcore/.
 set -euo pipefail
 
@@ -25,7 +25,7 @@ START=$(date +%s)
 # O pacote sem o modulo C++ nao e mais um pacote valido: falha com mensagem clara.
 OBIMCORE_DIR="${OBIMCORE_DIR:-}"
 if [ ! -f "$OBIMCORE_DIR/__init__.py" ] || ! compgen -G "$OBIMCORE_DIR/_obimcore*.so" > /dev/null; then
-  echo "Falta o modulo obimcore: defina OBIMCORE_DIR com a pasta obimcore/ (__init__.py e _obimcore*.so) gerada por prototypes/s04/obimcore/build.sh (valor atual: '${OBIMCORE_DIR}')" >&2
+  echo "Falta o modulo obimcore: defina OBIMCORE_DIR com a pasta obimcore/ (__init__.py e _obimcore*.so) gerada por native/obimcore/build.sh (valor atual: '${OBIMCORE_DIR}')" >&2
   exit 1
 fi
 # R-ABI: o modulo foi compilado no ambiente de desenvolvimento; as travas dos dois ambientes tem de ter a MESMA compilacao destes pacotes.
@@ -56,7 +56,7 @@ PY
 }
 for so in "$OBIMCORE_DIR"/_obimcore*.so; do
   rp="$(rpath_do_modulo "$so")"
-  [ "$rp" = '$ORIGIN/../../env/lib' ] || { echo "RPATH do modulo $(basename "$so") deve ser so \$ORIGIN/../../env/lib e e '$rp'; recompile com prototypes/s04/obimcore/build.sh" >&2; exit 1; }
+  [ "$rp" = '$ORIGIN/../../env/lib' ] || { echo "RPATH do modulo $(basename "$so") deve ser so \$ORIGIN/../../env/lib e e '$rp'; recompile com native/obimcore/build.sh" >&2; exit 1; }
 done
 
 rm -rf "$APPDIR"

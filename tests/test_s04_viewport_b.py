@@ -178,7 +178,7 @@ def test_tipos_de_dado_errados_dao_erro_python_limpo(viewport):
     assert r["viva"] and r["igual"] and r["bom"], r
 
 if __name__ == "__main__":
-    sys.path.insert(0, str(RAIZ / "prototypes"))
+    sys.path.insert(0, str(RAIZ / "viewport"))
     import importlib
     nome, *resto = sys.argv[1:]
     assert not {"obimcore", "PySide6.QtCore"} & sys.modules.keys(), "o teste importou Qt ou obimcore antes da ordem pedida"

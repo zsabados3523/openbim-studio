@@ -36,7 +36,7 @@ endif()
 # Executável com janela: camada C++ pura do núcleo (`obimcore_nucleo`, sem Python; o módulo `_obimcore` não entra: EXCLUDE_FROM_ALL) + `paredes`.
 find_package(Qt6 COMPONENTS Core Gui Widgets GuiPrivate REQUIRED)  # antes do add_subdirectory: os alvos importados têm de valer também aqui
 find_package(OpenCASCADE CONFIG REQUIRED)
-add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../obimcore" obimcore_nucleo EXCLUDE_FROM_ALL)
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../../../native/obimcore" obimcore_nucleo EXCLUDE_FROM_ALL)
 add_executable(fluxo_b_janela main.cpp autotestes.cpp)
 target_link_libraries(fluxo_b_janela PRIVATE paredes obimcore_nucleo)
 set_target_properties(fluxo_b_janela PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<1:${OBIM_SAIDA}>")  # saída plana, ao lado do módulo

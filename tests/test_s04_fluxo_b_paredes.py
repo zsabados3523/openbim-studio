@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Testes do fluxo B, parte 1: paredes em C++ (saída igual ao fluxo A; contrato em prototypes/s04/fluxo_b/CONTRATO.md; apoio em s04_fluxo_b_aux.py).
+"""Testes do fluxo B, parte 1: paredes em C++ (saída igual ao fluxo A; contrato em tools/s04/fluxo_b/CONTRATO.md; apoio em s04_fluxo_b_aux.py).
 GUARDA: pula enquanto o módulo nanobind `fluxo_b_paredes` não puder ser importado (PYTHONPATH ou OBIM_S04_FLUXO_B_DIR); FALHA com OBIM_S04_T13_OBRIGATORIO=1. Rode sob xvfb-run.
 A "saída igual" é conferida PASSO A PASSO: o mesmo roteiro curto vai ao fluxo A (Python, FluxoA sem janela) e à biblioteca C++, ambos gravam e reabrem o IFC depois de cada passo, e a
 assinatura (classes, nomes, camadas, posição, representações, psets, triângulos/caixa/volume por create_shape, relações, desfazer/refazer) tem de ser igual a 1e-6 m. GlobalIds diferem.
@@ -42,7 +42,7 @@ def pular(msg):
 @pytest.fixture(scope="module")
 def mod():
     if not TEM_MODULO:
-        pular("módulo fluxo_b_paredes ausente (build.sh de prototypes/s04/fluxo_b/ e PYTHONPATH)")
+        pular("módulo fluxo_b_paredes ausente (build.sh de tools/s04/fluxo_b/ e PYTHONPATH)")
     import ifcopenshell  # noqa: F401  (antes do módulo: registra os esquemas)
     import fluxo_b_paredes
     return fluxo_b_paredes
@@ -326,14 +326,14 @@ def test_contar_bate_com_o_arquivo_gravado_inclusive_subtipos(mod, tmp_path):
 # Localidade e trava rodam em PROCESSO À PARTE (s04_fluxo_b_t14a_aux.py): queda ou impasse viram falha limpa. "Saída igual" com a base: o fluxo A (FluxoA(base)), por multiconjunto
 # de paredes (a base e a grade colidem em 0,0,0, então não se acha parede pela posição); o resto do contrato é conferido sem olhar para A (`conferir`; o próprio A é a sentinela).
 OBRIG14 = os.environ.get("OBIM_S04_T14A_OBRIGATORIO") == "1"
-FB = aux.RAIZ / "prototypes" / "s04" / "fluxo_b"
+FB = aux.RAIZ / "tools" / "s04" / "fluxo_b"
 FILHO = aux.AQUI.parent / "s04_fluxo_b_t14a_aux.py"
 def pular14(msg):
     (pytest.fail if OBRIG14 else pytest.skip)(f"\n!!! aguarda a biblioteca Paredes com base: {msg} (teste da biblioteca Paredes com base NÃO FOI EXECUTADO) !!!\n")
 @pytest.fixture(scope="module")
 def mod14():
     if not TEM_MODULO:
-        pular14("módulo fluxo_b_paredes ausente (build.sh de prototypes/s04/fluxo_b/ e PYTHONPATH)")
+        pular14("módulo fluxo_b_paredes ausente (build.sh de tools/s04/fluxo_b/ e PYTHONPATH)")
     import fluxo_b_paredes
     falta = [f"Paredes.{n}" for n in ("abrir", "produtos_base", "copiar_atributo") if not hasattr(fluxo_b_paredes.Paredes, n)] + [n for n in ("ModeloOcupado",) if not hasattr(fluxo_b_paredes, n)]
     falta and pytest.fail(f"\n!!! a ponte não tem {falta} (CONTRATO.md, Parte 2a) !!!\n")
@@ -675,7 +675,7 @@ def _exe_frio():
 def test_item_frio_construcao_concorrente_de_paredes_e_segura(mod14, t):  # C++ puro (frio_teste.cpp, alvo `fluxo_b_frio` do CMakeLists): é onde o defeito aparece; a ponte segura o GIL
     exe = _exe_frio()
     if exe is None:
-        pular14("executável fluxo_b_frio ausente (alvo do CMakeLists.txt de prototypes/s04/fluxo_b/; build.sh o gera ao lado do módulo)")
+        pular14("executável fluxo_b_frio ausente (alvo do CMakeLists.txt de tools/s04/fluxo_b/; build.sh o gera ao lado do módulo)")
     for i in range(RODADAS_FRIO):  # cada rodada = processo novo = construção a frio
         try:
             p = subprocess.run([str(exe), str(t), "20"], capture_output=True, text=True, timeout=120)

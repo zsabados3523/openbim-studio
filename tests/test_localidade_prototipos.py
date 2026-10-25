@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 from obrigatorio import pular as pular_chave
 
-PROTO = Path(__file__).resolve().parent.parent / "prototypes" / "viewport_qrhi"
+PROTO = Path(__file__).resolve().parent.parent / "viewport" / "viewport_qrhi"
 
 CODIGO_VIRGULA = "import locale; locale.setlocale(locale.LC_NUMERIC, ''); print(locale.localeconv()['decimal_point'])"
 CODIGO_MEDIR = """

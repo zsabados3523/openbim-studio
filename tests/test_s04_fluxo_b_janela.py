@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Testes do fluxo B, parte 2: executável com janela Qt Widgets (
-contrato em prototypes/s04/fluxo_b/CONTRATO.md, "Parte 2"; apoio em tests/s04_fluxo_b_janela_aux.py, s04_fluxo_aux.py e s04_fluxo_b_aux.py).
+contrato em tools/s04/fluxo_b/CONTRATO.md, "Parte 2"; apoio em tests/s04_fluxo_b_janela_aux.py, s04_fluxo_aux.py e s04_fluxo_b_aux.py).
 GUARDA: pula enquanto o executável `fluxo_b_janela` não existir (OBIM_S04_FLUXO_B_EXE, OBIM_S04_FLUXO_B_DIR, PYTHONPATH ou out/s04); FALHA com OBIM_S04_T14_OBRIGATORIO=1.
-Os casos que usam `prototypes/s04/medir_s04.py` pulam com "aguarda medir_s04" (falham com OBRIGATORIO): faltar o medidor nunca se confunde com faltar o executável.
+Os casos que usam `tools/s04/medir_s04.py` pulam com "aguarda medir_s04" (falham com OBRIGATORIO): faltar o medidor nunca se confunde com faltar o executável.
 Tudo gráfico roda sob `xvfb-run` (Windows: só no CI ou com OBIM_S04_TELA_VIRTUAL=1), nunca na tela real; o fluxo A de referência (roteiro R inteiro) vem do mesmo `caso("roteiro", BASE)` dos testes do fluxo A
 (mesma chave de cache; OBIM_S04_SAIDA_A aponta para uma pasta de A já medida). A pasta de B fica em OBIM_S04_SAIDA_B (o `test_b_real_...` passa a rodar na mesma sessão).
 Mapa dos casos: localidade por thread = test_localidade_por_thread_*, leitura = test_ler_*, sem Python = test_sem_python_* e test_fonte_*, corrida = test_corrida_* e test_fonte_*; memória = test_memoria_*; "lote em thread C++" = test_b_lote_*.
@@ -24,8 +24,8 @@ from test_s04_viewport import caso as _caso
 caso = lambda nome, *a, **k: _caso(nome, *a, alvo=aux.AQUI, **k)  # noqa: E731  (a mesma chave do teste do fluxo A)
 OBRIG = os.environ.get("OBIM_S04_T14_OBRIGATORIO") == "1"
 BASE = os.environ.get("OBIM_S04_BASE", "300")
-FB = jx.RAIZ / "prototypes" / "s04" / "fluxo_b"
-MEDIR = Path(os.environ.get("OBIM_S04_MEDIR") or jx.RAIZ / "prototypes" / "s04" / "medir_s04.py")
+FB = jx.RAIZ / "tools" / "s04" / "fluxo_b"
+MEDIR = Path(os.environ.get("OBIM_S04_MEDIR") or jx.RAIZ / "tools" / "s04" / "medir_s04.py")
 ROT = jx.roteiro_json()
 
 def pular(msg):
@@ -38,14 +38,17 @@ def tela():  # nunca na tela real
 @pytest.fixture(scope="module")
 def exe():
     p = jx.achar_exe()
-    p or pular(f"executável {jx.NOME} ausente (build.sh de prototypes/s04/fluxo_b/; OBIM_S04_FLUXO_B_EXE, OBIM_S04_FLUXO_B_DIR, PYTHONPATH ou out/s04)")
+    p or pular(f"executável {jx.NOME} ausente (build.sh de tools/s04/fluxo_b/; OBIM_S04_FLUXO_B_EXE, OBIM_S04_FLUXO_B_DIR, PYTHONPATH ou out/s04)")
     return p
 
 @pytest.fixture(scope="module")
 def medir(tmp_path_factory):
     if not MEDIR.is_file():
         pular(f"aguarda medir_s04: {MEDIR} ausente")
-    p = subprocess.run([sys.executable, str(MEDIR), "--linhas", "--raiz", str(jx.RAIZ / "prototypes" / "s04"), "--json", str(tmp_path_factory.mktemp("m") / "l.json")], capture_output=True, text=True)
+    raiz = tmp_path_factory.mktemp("raiz")  # as três pastas moram em lugares diferentes (native/ e tools/s04/); o medidor quer as três lado a lado
+    for pasta, origem in (("obimcore", jx.RAIZ / "native"), ("fluxo_a", jx.RAIZ / "tools" / "s04"), ("fluxo_b", jx.RAIZ / "tools" / "s04")):
+        shutil.copytree(origem / pasta, raiz / pasta, ignore=shutil.ignore_patterns("build", "__pycache__"))
+    p = subprocess.run([sys.executable, str(MEDIR), "--linhas", "--raiz", str(raiz), "--json", str(tmp_path_factory.mktemp("m") / "l.json")], capture_output=True, text=True)
     "NotImplementedError" in p.stderr and pular("aguarda medir_s04.py: ainda é o esqueleto")
     return MEDIR
 
@@ -76,7 +79,7 @@ def test_validacao_do_medicao_de_b_aceita_um_correto_e_acusa_cada_defeito():
         assert mut(f), f"o teste não acusou o defeito: {nome}"
 
 def test_fonte_cpp_da_biblioteca_tem_localidade_por_thread_esquema_explicito_mutex_e_ler_completo():  # itens 1, 3, 4 e 2 do lote 22 (o comportamento é conferido pelo executável; isto pega o atalho)
-    (FB / "main.cpp").is_file() or pular("aguarda prototypes/s04/fluxo_b/main.cpp: ainda não existe")
+    (FB / "main.cpp").is_file() or pular("aguarda tools/s04/fluxo_b/main.cpp: ainda não existe")
     todos = {p.name: re.sub(r"//[^\n]*|/\*.*?\*/", "", p.read_text(encoding="utf-8"), flags=re.S) for p in FB.iterdir() if p.suffix in (".cpp", ".h")}  # sem comentários
     lib = todos["paredes.cpp"] + todos["paredes.h"]
     assert "Ifc4::get_schema" in "".join(todos.values()), "item 3: o esquema IFC4 tem de ser referenciado em código (Ifc4::get_schema())"

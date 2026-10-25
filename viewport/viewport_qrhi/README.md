@@ -10,7 +10,7 @@ Cubo colorido com câmera orbital (S03-T04), desenhado em Python puro com `QRhiW
 
 Rodar (precisa de tela):
 
-    cd prototypes && ~/miniforge3/envs/openbim/bin/python -m viewport_qrhi [--api opengl|vulkan]
+    cd viewport && ~/miniforge3/envs/openbim/bin/python -m viewport_qrhi [--api opengl|vulkan]
 
 Refazer os shaders (o `qsb` fica em `~/miniforge3/envs/openbim/lib/qt6/bin/qsb`):
 

@@ -27,7 +27,7 @@ import ifcopenshell.api
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 RAIZ = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(RAIZ / "prototypes"))
+sys.path.insert(0, str(RAIZ / "viewport"))
 
 from test_viewport_adaptador import _ViewportFalso  # noqa: E402
 from test_viewport_carregador import (  # noqa: E402,F401  (modelos e fixtures compartilhados)
@@ -191,7 +191,7 @@ def test_p2_diagnostico_do_filho(mapeadas1, monkeypatch):
     codigo = ("import sys, json, locale; sys.path.insert(0, sys.argv[1]); "
               "import viewport_qrhi.processo_malhas as m; "
               "print(json.dumps([any(k.startswith('PySide6') for k in sys.modules), locale.localeconv()['decimal_point']]))")
-    saida = subprocess.run([sys.executable, "-c", codigo, str(RAIZ / "prototypes")], capture_output=True, text=True,
+    saida = subprocess.run([sys.executable, "-c", codigo, str(RAIZ / "viewport")], capture_output=True, text=True,
                            env={**os.environ, "LC_ALL": "C"}, timeout=120)
     assert saida.returncode == 0, saida.stderr
     assert saida.stdout.strip().splitlines()[-1] == '[false, "."]'

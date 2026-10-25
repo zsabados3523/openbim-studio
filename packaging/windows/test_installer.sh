@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Teste do instalador no CI (ADR-005 teste 7, ADR-009 §5.3): instala em silêncio, confere arquivos e licenças,
+# Teste do instalador no CI (ADR-005 teste 7): instala em silêncio, confere arquivos e licenças,
 # abre o app isolado (--selftest) com variáveis de ambiente "sujas", troca uma DLL do Qt, instala por cima,
 # confirma que a desinstalação preserva arquivos do usuário e não deixa sobras.
 # Uso: test_installer.sh INSTALADOR.exe PASTA_DESTINO_WINDOWS (sem espaços: o /D= do NSIS não aceita)
@@ -42,7 +42,7 @@ selftest() {  # $1 = rótulo; ambiente sujo e Python isolado (-I), como o atalho
   [ "$dur" -le 10 ] || falha "$1: abriu em ${dur}s (meta: até 10 s)"
 }
 
-passo "pasta que já tem arquivos de outra coisa: nada pode ser apagado (defeito N1 do lote opus 3)"
+passo "pasta que já tem arquivos de outra coisa: nada pode ser apagado"
 DEST_OCUPADA="${DEST}-ocupada"; DO="$(cygpath -u "$DEST_OCUPADA")"
 mkdir -p "$DO/app" "$DO/env" && echo "do usuario" > "$DO/app/meu.txt" && echo "do usuario" > "$DO/env/meu.txt"
 instalar "$DEST_OCUPADA"
@@ -65,7 +65,7 @@ ach=$(find "$D/env" \( -iname 'avcodec*' -o -iname 'avformat*' -o -iname 'x264*'
 passo "abrindo o app (isolado, com variáveis de ambiente sujas)"
 selftest "primeira abertura"
 
-passo "reinstalar com o programa aberto: recusa, sem apagar nada (F0-RG-13)"
+passo "reinstalar com o programa aberto: recusa, sem apagar nada"
 "$D/env/python.exe" -I -c "import time; time.sleep(180)" &
 aberto=$!
 sleep 3
@@ -77,7 +77,7 @@ kill "$aberto" 2>/dev/null; wait "$aberto" 2>/dev/null
 sleep 2
 selftest "depois da recusa"
 
-selftest_pythonw() {  # o atalho usa pythonw.exe (sem janela de texto): o registro de erros tem de funcionar sem console (F0-RG-11)
+selftest_pythonw() {  # o atalho usa pythonw.exe (sem janela de texto): o registro de erros tem de funcionar sem console
   local logdir logw rc
   logdir="$(mktemp -d)"; logw="$(cygpath -w "$logdir")"
   timeout 120 env -i SYSTEMROOT="$SYSTEMROOT" TEMP="$TEMP" QT_QPA_PLATFORM=offscreen OPENBIM_LOG_DIR="$logw" OPENBIM_SEM_DIALOGO=1 \
@@ -105,7 +105,7 @@ c=$(sha256sum "$Q" | cut -d' ' -f1)
 [ "$c" = "$a" ] || falha "instalar por cima não restaurou a DLL original"
 selftest "depois da reinstalação"
 
-passo "reinstalar sem escolher pasta lembra a pasta da vez anterior (F0-RG-13)"
+passo "reinstalar sem escolher pasta lembra a pasta da vez anterior"
 printf '\0' >> "$Q"
 "$EXE" /S &
 pid=$!; wait "$pid"; rc=$?
@@ -123,8 +123,8 @@ rm -f "$D/Uninstall.exe"
 rm -f "$D/arquivo-do-usuario.txt"
 for x in env app licenses; do [ ! -e "$D/$x" ] || falha "sobrou $x depois de desinstalar"; done
 rmdir "$D" 2>/dev/null
-passo "pasta com acento e espaço, IFC acentuado e caminho mais longo (F0-RG-13)"
+passo "pasta com acento e espaço, IFC acentuado e caminho mais longo"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$REPO/packaging/windows/test_acento.ps1")" \
-  -Exe "$(cygpath -w "$EXE")" -Base "$(cygpath -w "$(dirname "$D")")" -Ifc "$(cygpath -w "$REPO/docs/acceptance/amostras/casa-simples.ifc")" || falha "teste com acento e espaço"
+  -Exe "$(cygpath -w "$EXE")" -Base "$(cygpath -w "$(dirname "$D")")" -Ifc "$(cygpath -w "$REPO/tests/amostras/casa-simples.ifc")" || falha "teste com acento e espaço"
 passo "OK: instalação, abertura isolada, troca de DLL, reinstalação e desinstalação sem sobras"

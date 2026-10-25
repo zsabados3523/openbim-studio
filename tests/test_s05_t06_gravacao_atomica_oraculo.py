@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo do F0-S05-T06 (cartão F0-S05-T06; ADR-002 §4.5 e §4.8; T00 G1 a G6 menos G4; `F0-S05-oraculos-T04-T06.md`, casos 1 a 13).
-Quem implementa não edita este arquivo; o autor do oráculo tira os `@AINDA_NAO` (xfail estrito por falta do módulo) depois, em commit próprio.
+"""Testes da gravação atômica (ADR-002 §4.5 e §4.8; casos 1 a 13).
+Não editar este arquivo; os `@AINDA_NAO` (xfail estrito por falta do módulo) saem depois.
 CONTRATO (`app/openbim_app/gravacao_atomica.py`, sem Qt, sem obimcore; nomes do ADR-002 §4.8, nada além):
 1. `ETAPAS == ("escrever", "fsync", "conferir", "bak", "trocar", "fsync_pasta")`, nesta ordem; `_etapa(nome, caminho)` é chamada no
    COMEÇO de cada etapa (também `bak` sem destino antigo e `fsync_pasta` no Windows) e lê o ambiente NA HORA: `OBIM_S05_FALHA_EM=<etapa>`
@@ -12,7 +12,7 @@ CONTRATO (`app/openbim_app/gravacao_atomica.py`, sem Qt, sem obimcore; nomes do 
    `Casa.ifc.bak`; o destino nunca deixa de existir; sem destino antigo não faz nada e `bak is None`), `trocar` (`os.replace` do
    temporário para o destino; `PermissionError`: 6 tentativas ao todo, espera de 0,05 s dobrando) e `fsync_pasta` (`os.fsync` de um
    descritor da pasta, depois da troca; Linux e macOS; no Windows nenhum `fsync` de pasta). `gravar_atomico(...) = confirmar(preparar(...))`.
-   O módulo chama `os.replace`, `os.link` e `os.fsync` pelo módulo `os` na hora da chamada (o oráculo os troca com monkeypatch).
+   O módulo chama `os.replace`, `os.link` e `os.fsync` pelo módulo `os` na hora da chamada (o teste os troca com monkeypatch).
 3. Falha = `FalhaGravacao(etapa, motivo, caminho, gravado)`, `motivo` em MOTIVOS (ENOSPC = "disco_cheio"; PermissionError fora da troca
    = "sem_permissao"; troca recusada até o fim = "arquivo_em_uso"; `conferir_ifc` recusou = "conferencia"; o resto, inclusive o EIO
    injetado, = "outro"); `gravado` verdadeiro só se a troca já aconteceu (falha em `fsync_pasta`); `str(e)` em português, com o nome do
@@ -21,11 +21,11 @@ CONTRATO (`app/openbim_app/gravacao_atomica.py`, sem Qt, sem obimcore; nomes do 
 4. `conferir_ifc(caminho)`: recusa o IFC que não começa com `ISO-10303-21;` ou não termina com `END-ISO-10303-21;` (G5).
    `limpar_temporarios(destino)`: apaga `Casa.ifc.tmp` e `Casa.ifc.bak.tmp` que existirem e devolve os caminhos apagados (iterável); erro ao apagar não
    sobe, e o caminho que não saiu não entra na lista.
-Fora deste módulo (ADR-002 §4.5): o modo "sem carimbo" e o carimbo do pset `OBIM_Projeto` são do par (T07); nenhum caso aqui.
-DESVIOS DA ESPECIFICAÇÃO (não afrouxam nada): nome do arquivo pedido pelo líder; caso 6(c) e 11 sem `skipif`, cada sistema com a
+Fora deste módulo (ADR-002 §4.5): o modo "sem carimbo" e o carimbo do pset `OBIM_Projeto` são do par; nenhum caso aqui.
+DESVIOS DA ESPECIFICAÇÃO (não afrouxam nada): nome do arquivo escolhido na revisão; caso 6(c) e 11 sem `skipif`, cada sistema com a
 própria conferência (critério "0 pulos"); caso 9 compara as linhas de entidade depois de reabrir (a régua `s05_conteudo_aux.py` é do
-T04 e ainda não existe) e tem uma parte (a) só em Python. GUARDA: sem ifcopenshell (caso 9b) ou como root no Linux (caso 8), pula; com
-`OBIM_S05_OBRIGATORIO=1` todo pulo vira falha. Os testes `test_regua_*` provam os utilitários do oráculo e valem já (sem `@AINDA_NAO`)."""
+o módulo de transações ainda não existe) e tem uma parte (a) só em Python. GUARDA: sem ifcopenshell (caso 9b) ou como root no Linux (caso 8), pula; com
+`OBIM_S05_OBRIGATORIO=1` todo pulo vira falha. Os testes `test_regua_*` provam os utilitários do teste e valem já (sem `@AINDA_NAO`)."""
 import errno
 import getpass
 import hashlib
@@ -47,7 +47,7 @@ A, B, C = (f"versao {x}\n".encode() * 200 for x in "ABC")
 IFC_OK = b"ISO-10303-21;\nHEADER;\nENDSEC;\nDATA;\nENDSEC;\nEND-ISO-10303-21;\n"
 
 def pular(msg):
-    _pular(f"\n!!! S05-T06: {msg} (caso da gravação atômica NÃO FOI EXECUTADO) !!!\n", "OBIM_S05_OBRIGATORIO")
+    _pular(f"\n!!! gravação atômica: {msg} (caso da gravação atômica NÃO FOI EXECUTADO) !!!\n", "OBIM_S05_OBRIGATORIO")
 
 def ga():
     import openbim_app.gravacao_atomica as m  # primeira linha de cada caso @AINDA_NAO: hoje é ela que dá o xfail
@@ -140,7 +140,7 @@ def casa(tmp_path):
     (tmp_path / "Casa.ifc").write_bytes(B), (tmp_path / "Casa.ifc.bak").write_bytes(A)  # estado depois de gravar A e depois B
     return tmp_path / "Casa.ifc"
 
-# ---------- régua: os utilitários do oráculo pegam o que devem pegar (valem já) ----------
+# ---------- régua: os utilitários do teste pegam o que devem pegar (valem já) ----------
 def test_regua_pasta_pega_cada_mutacao(tmp_path):
     certo = {"Casa.ifc": C, "Casa.ifc.bak": B}
     mutantes = {"gravou por cima e cortou": {"Casa.ifc": C[:100], "Casa.ifc.bak": B}, "temporário sobrando": {**certo, "Casa.ifc.tmp": C},
@@ -201,7 +201,7 @@ def test_regua_somente_leitura(tmp_path):
             (tmp_path / "Casa.ifc.tmp").write_bytes(A)
     (tmp_path / "depois").write_bytes(A)  # a permissão voltou
 
-# ---------- casos do T06 (especificação, casos 1 a 13) ----------
+# ---------- casos da gravação atômica (especificação, casos 1 a 13) ----------
 def test_01_caminho_feliz_sem_destino_antigo(tmp_path):
     m = ga()
     assert tuple(m.ETAPAS) == ETAPAS

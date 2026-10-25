@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo da F0-S04-T15g: o postador de mouse de `lote.medir` não constrói evento fora da thread da janela (cartão F0-S04-T15g; diagnóstico T15f, lotes 43 e 44).
+"""Testes do postador de mouse de `lote.medir`: não constrói evento fora da thread da janela.
 Os casos rodam o `lote.medir` de verdade num SUBPROCESSO com janela (Linux: `xvfb-run -a`; Windows: só no CI), com um `f` de ensaio (janela Qt
-simples, comando que só espera, `obimcore.agora` de ensaio): não precisam do obimcore. Contrato (o implementador lê só isto):
+simples, comando que só espera, `obimcore.agora` de ensaio): não precisam do obimcore. Contrato :
 1. Regra 1: todo `QMouseEvent` e o dispositivo nascem na thread da janela, DENTRO da chamada de `medir` e ANTES de t0 (cada rodada constrói os
    seus: de 30.001 a 90.001 eventos, de 10 a 30 min de lote a 20 ms; piso = o da correção de referência: 10 min são 2/3 do limite de 900 s do
-   caso `lote` inteiro do T15b, 12 rodadas, que no Windows levou 145 s ao todo). A thread `lote-mouse` só chama
+   caso `lote` inteiro das formas, 12 rodadas, que no Windows levou 145 s ao todo). A thread `lote-mouse` só chama
    `QCoreApplication.postEvent(janela, ev)`: o k-ésimo objeto postado é UM dos construídos (identidade: nada de `clone()`, cópia ou reuso), com
    x == k. Espião: subclasses de `PySide6.QtGui.QMouseEvent`/`QPointingDevice` e `QCoreApplication.postEvent` trocados ANTES de `import lote`
    (use esses nomes na hora; não guarde cópias de antes).
@@ -42,7 +42,7 @@ REG = {"ev": [], "disp": [], "post": [], "segurar": False}
 
 
 def pular(msg):
-    (pytest.fail if OBRIGATORIO else pytest.skip)(f"\n!!! S04-T15g: {msg} (oráculo do postador NÃO FOI EXECUTADO) !!!\n")
+    (pytest.fail if OBRIGATORIO else pytest.skip)(f"\n!!! postador: {msg} (teste do postador NÃO FOI EXECUTADO) !!!\n")
 
 
 # ---------- ambiente de ensaio (só no subprocesso) ----------

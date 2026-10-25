@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Régua do oráculo do F0-S05-T07 (`tests/s05_t07_aux.py`), validada HOJE sem o módulo do par (sem `@AINDA_NAO`; quem implementa não edita).
+"""Régua do teste de gravação do par (`tests/s05_t07_aux.py`), validada sem o módulo do par (sem `@AINDA_NAO`).
 Prova que `estado_par` aceita o par antigo inteiro e o par novo inteiro e pega cada mistura ou incoerência. Guarda: sem ifcopenshell, pula (falha
 com OBIM_S05_OBRIGATORIO=1)."""
 import json

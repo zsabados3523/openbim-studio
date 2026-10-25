@@ -115,7 +115,7 @@ jobs:
         shell: bash -elo pipefail {0}
         timeout-minutes: 20
         run: |
-          # RG-03: estes testes pulavam sem tela (offscreen). Aqui rodam com Xvfb e Mesa (llvmpipe), e pulo vira falha (OBIM_TELA_OBRIGATORIA=1).
+          # Estes testes pulavam sem tela (offscreen). Aqui rodam com Xvfb e Mesa (llvmpipe), e pulo vira falha (OBIM_TELA_OBRIGATORIA=1).
           mkdir -p out/desenho
           # Xvfb e Mesa vêm do próprio runner Ubuntu; se faltar, instala só no runner.
           command -v xvfb-run >/dev/null || sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0
@@ -175,7 +175,7 @@ jobs:
           OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15e_painel_ausente.py
           OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15g_postador.py
           OBIM_CI=1 OBIM_S04_V1_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_v1_mista_oraculo.py tests/test_s04_v1_veredito_oraculo.py
-          OBIM_CI=1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe pytest -q -rsP tests/test_s04_viewport_software.py  # aviso de desenho por software (F0-RG-13)
+          OBIM_CI=1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe pytest -q -rsP tests/test_s04_viewport_software.py  # aviso de desenho por software
       - name: Fluxo B e sublotes (T13, T14c, V1c e T07e; bloqueia o merge) (só na parte 6)
         if: matrix.parte == 6
         shell: bash -elo pipefail {0}
@@ -210,27 +210,12 @@ jobs:
         run: |
           mkdir -p out
           python scripts/license_inventory.py out/license-inventory.md --informativo
-      - name: Sonda da thread de desenho (S04-T05; informativo, não bloqueia)
-        shell: bash -elo pipefail {0}
-        continue-on-error: true
-        timeout-minutes: 5
-        run: |
-          # Desenho por software (Linux: tela virtual + Mesa). Nenhuma janela na tela real.
-          mkdir -p out/s04_sonda
-          B="$(python -c 'import os; print(os.path.abspath("out/s04_sonda/build"))')"; O="$(python -c 'import os; print(os.path.abspath("out/s04_sonda"))')"
-          cmake -S prototypes/s04/sonda_desenho -B "$B" -G Ninja -DCMAKE_BUILD_TYPE=Release -DOBIM_SAIDA="$O" -DCMAKE_PREFIX_PATH="$CONDA_PREFIX"
-          cmake --build "$B" --config Release
-          QT_QPA_PLATFORM=xcb LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x800x24" python prototypes/s04/sonda_desenho/sonda.py "$O" out/s04_sonda/sonda.json; rc=$?
-          cat out/s04_sonda/sonda.json || true
-          echo "::notice title=sonda da thread de desenho no ${RUNNER_OS}::$(python -c "import json; r=json.load(open('out/s04_sonda/sonda.json')); print('rc=$rc meta_atingida=%s' % r.get('meta_atingida'), {k:v.get('maior_intervalo_ms') for k,v in r['fases'].items() if isinstance(v,dict)})" || echo sem resultado)"
-          echo "Sonda da thread de desenho (${RUNNER_OS}): código $rc, relatório em out/s04_sonda/sonda.json" >> "$GITHUB_STEP_SUMMARY"
-          true
       - name: Gravação do roteiro (experimento T12; não bloqueia)
         shell: bash -elo pipefail {0}
         continue-on-error: true
         run: |
           mkdir -p out/video
-          if QT_QPA_PLATFORM=offscreen python tests/video/gravar_roteiro.py out/video docs/acceptance/amostras/casa-simples.ifc; then r=gravou; else r="FALHOU (experimento, não bloqueia)"; fi
+          if QT_QPA_PLATFORM=offscreen python tests/video/gravar_roteiro.py out/video tests/amostras/casa-simples.ifc; then r=gravou; else r="FALHOU (experimento, não bloqueia)"; fi
           echo "Gravação do roteiro (${RUNNER_OS}): ${r}" >> "$GITHUB_STEP_SUMMARY"
       - name: Pacote do app esqueleto
         run: tar czf out/app.tar.gz app/
@@ -238,7 +223,7 @@ jobs:
         with:
           name: openbim-ci-linux
           path: out/
-          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
+          retention-days: 7  # build de teste, não é versão publicada
       - name: Tempo total
         if: always()
         run: |
@@ -330,7 +315,7 @@ jobs:
         continue-on-error: true
         run: |
           mkdir -p out/video
-          if QT_QPA_PLATFORM=offscreen python tests/video/gravar_roteiro.py out/video docs/acceptance/amostras/casa-simples.ifc; then r=gravou; else r="FALHOU (experimento, não bloqueia)"; fi
+          if QT_QPA_PLATFORM=offscreen python tests/video/gravar_roteiro.py out/video tests/amostras/casa-simples.ifc; then r=gravou; else r="FALHOU (experimento, não bloqueia)"; fi
           echo "Gravação do roteiro (${RUNNER_OS}): ${r}" >> "$GITHUB_STEP_SUMMARY"
       - name: Pacote do que o job gerou
         if: always()
@@ -343,7 +328,7 @@ jobs:
         with:
           name: openbim-ci-windows-testes-${{ matrix.parte }}
           path: out/
-          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
+          retention-days: 7  # build de teste, não é versão publicada
       - name: Tempo total
         if: always()
         shell: bash
@@ -461,7 +446,7 @@ jobs:
         with:
           name: openbim-ci-windows-viewport-a-${{ matrix.parte }}
           path: out/
-          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
+          retention-days: 7  # build de teste, não é versão publicada
       - name: Tempo total
         if: always()
         shell: bash
@@ -488,7 +473,7 @@ jobs:
         continue-on-error: true
         timeout-minutes: 15
         run: |
-          # Só mede e guarda os números (relatório docs/state/reports/F0-S04-threads.md). Desenho por software (WARP): NÃO substitui o oficial com placa de vídeo real.
+          # Só mede e guarda os números. Desenho por software (WARP): NÃO substitui o oficial com placa de vídeo real.
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_S04_TELA_VIRTUAL=1 QSG_RHI_BACKEND=d3d11 QSG_RHI_PREFER_SOFTWARE_RENDERER=1 QT_QPA_PLATFORM=windows RHI=d3d11 LC_ALL=C  # as do passo anterior e as do subprocesso dos testes
           SAIDA="$(python -c 'import os; print(os.path.abspath("out/threads-ci"))')"
@@ -563,7 +548,7 @@ jobs:
         with:
           name: openbim-ci-windows-viewport-b-${{ matrix.parte }}
           path: out/
-          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
+          retention-days: 7  # build de teste, não é versão publicada
       - name: Tempo total
         if: always()
         shell: bash
@@ -619,60 +604,12 @@ jobs:
         with:
           name: openbim-ci-windows-fluxo-b-${{ matrix.parte }}
           path: out/
-          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
+          retention-days: 7  # build de teste, não é versão publicada
       - name: Tempo total
         if: always()
         shell: bash
         run: |
           echo "### windows-fluxo-b: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
-
-  # Informativo: fora da regra de bloqueio e fora do caminho do `windows` (a sonda esgota 3 min por conta própria).
-  windows-sonda:
-    needs: windows  # T23c: informativo; começa depois da fila crítica para não tomar vaga de máquina dela
-    if: ${{ !cancelled() }}
-    runs-on: windows-latest
-    timeout-minutes: 60
-    steps:
-      - name: Início (relógio)
-        shell: bash
-        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/ambiente-windows
-      - name: Módulo obimcore (só o build, para os testes deste job; a ponte é testada no job windows-viewport-a)
-        shell: bash -elo pipefail {0}
-        run: CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04
-      - name: Sonda da thread de desenho (S04-T05; informativo, não bloqueia)
-        shell: bash -elo pipefail {0}
-        continue-on-error: true
-        timeout-minutes: 5
-        run: |
-          # Desenho por software (Linux: tela virtual + Mesa; Windows: WARP). Nenhuma janela na tela real.
-          mkdir -p out/s04_sonda
-          B="$(python -c 'import os; print(os.path.abspath("out/s04_sonda/build"))')"; O="$(python -c 'import os; print(os.path.abspath("out/s04_sonda"))')"
-          if [ "${RUNNER_OS}" = "Windows" ]; then GEN=(-A x64); else GEN=(-G Ninja); fi
-          cmake -S prototypes/s04/sonda_desenho -B "$B" "${GEN[@]}" -DCMAKE_BUILD_TYPE=Release -DOBIM_SAIDA="$O" -DCMAKE_PREFIX_PATH="$CONDA_PREFIX"
-          cmake --build "$B" --config Release
-          QT_QPA_PLATFORM=windows RHI=d3d11 python prototypes/s04/sonda_desenho/sonda.py "$O" out/s04_sonda/sonda.json; rc=$?
-          cat out/s04_sonda/sonda.json || true
-          echo "::notice title=sonda da thread de desenho no ${RUNNER_OS}::$(python -c "import json; r=json.load(open('out/s04_sonda/sonda.json')); print('rc=$rc meta_atingida=%s' % r.get('meta_atingida'), {k:v.get('maior_intervalo_ms') for k,v in r['fases'].items() if isinstance(v,dict)})" || echo sem resultado)"
-          true
-      - name: Pacote do que o job gerou
-        if: always()
-        shell: bash
-        run: |
-          mkdir -p out
-          tar czf out/app.tar.gz app/
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
-        with:
-          name: openbim-ci-windows-sonda
-          path: out/
-          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
-      - name: Tempo total
-        if: always()
-        shell: bash
-        run: |
-          echo "### windows-sonda: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
 
   # Mantém o nome `windows` (regra de bloqueio de merge): passa só se TODOS os jobs paralelos acima passarem.
   windows:
@@ -757,7 +694,7 @@ jobs:
           exec > >(tee "$RUNNER_TEMP/passo.log") 2>&1
           mkdir -p out
           t0=$(date +%s)
-          # Ambiente de runtime (o que vai ao usuário): pela trava, se existir (F0-RG-10; PO.md A3); senão pelo .yml
+          # Ambiente de runtime (o que vai ao usuário): pela trava, se existir; senão pelo .yml
           LOCK="packaging/runtime-environment.${PLAT}.lock"
           if [ -f "$LOCK" ]; then conda create -p "$RUNNER_TEMP/rt" --file "$LOCK" -y -q; echo "::notice title=ambiente de runtime::criado pela trava $LOCK"
           else conda env create -f packaging/runtime-environment.yml -p "$RUNNER_TEMP/rt" -y -q; echo "::notice title=ambiente de runtime::sem trava para ${PLAT}; criado pelo .yml"; fi
@@ -773,7 +710,7 @@ jobs:
           ls -l "$RUNNER_TEMP/inst-out/OpenBIM-Studio-Setup.exe" | tee -a "$GITHUB_STEP_SUMMARY"
           size=$(stat -c %s "$RUNNER_TEMP/inst-out/OpenBIM-Studio-Setup.exe")
           echo "Instalador (T17b, com obimcore): $size bytes; o módulo soma $(cat "$RUNNER_TEMP"/obimcore_pacote/_obimcore*.pyd "$RUNNER_TEMP"/obimcore_pacote/__init__.py | wc -c) bytes sem compressão. Para comparar com o tamanho de antes (sem o módulo), ver o resumo da última execução no main." | tee -a "$GITHUB_STEP_SUMMARY"
-          test "$size" -le 600000000 || { echo "::error::instalador acima de 600 MB (ADR-005 §9: não cortar em silêncio, levar ao PO)"; exit 1; }
+          test "$size" -le 600000000 || { echo "::error::instalador acima de 600 MB (não cortar o tamanho em silêncio)"; exit 1; }
           cp "$RUNNER_TEMP/inst-out/OpenBIM-Studio-Setup.exe" "$RUNNER_TEMP/inst-out/licencas-coletadas.txt" out/
       - name: R1-j, o módulo dentro do instalador (T17b; instala em silêncio, roda o oráculo e desinstala; bloqueia o merge porque o job instalador-windows é obrigatório)
         if: steps.detecta.outputs.instalador == 'true'
@@ -824,7 +761,7 @@ jobs:
         with:
           name: openbim-instalador-windows
           path: out/
-          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
+          retention-days: 7  # build de teste, não é versão publicada
       - name: Tempo total
         if: always()
         shell: bash
@@ -851,7 +788,7 @@ jobs:
           miniforge-version: latest
       - name: Testes
         id: testes
-        continue-on-error: true  # macOS é experimental: a falha vira aviso e o job não aparece como falha (monitor do PO)
+        continue-on-error: true  # macOS é experimental: a falha vira aviso e o job não aparece como falha
         shell: bash -elo pipefail {0}
         run: |
           # Em caso de falha, as últimas linhas viram anotação pública (o log completo exige login no GitHub).
@@ -880,7 +817,7 @@ jobs:
         with:
           name: openbim-ci-macos
           path: out/
-          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
+          retention-days: 7  # build de teste, não é versão publicada
       - name: Tempo total
         if: always()
         shell: bash
@@ -890,7 +827,7 @@ jobs:
         if: failure() || steps.testes.outcome == 'failure'
         shell: bash
         run: |
-          echo "::warning title=macOS::job macOS falhou; melhor esforço, não bloqueia merge. Registrar o motivo em docs/state/LOG.md."
+          echo "::warning title=macOS::job macOS falhou; melhor esforço, não bloqueia merge."
           echo "AVISO: o job macOS falhou (não bloqueia merge)." >> "$GITHUB_STEP_SUMMARY"
 
   # Gera o AppImage (pacote Linux) a cada alteração. Bloqueia o merge: o job `appimage` é obrigatório na regra proteger-main. Não renomear.
@@ -920,7 +857,7 @@ jobs:
           conda-remove-defaults: "true"
           channel-priority: strict
           miniforge-version: latest
-      - name: Criar o ambiente de runtime (pela trava, se existir; F0-RG-10, PO.md A3)
+      - name: Criar o ambiente de runtime (pela trava, se existir)
         shell: bash -elo pipefail {0}
         run: |
           PLAT=linux-64
@@ -995,7 +932,7 @@ jobs:
         with:
           name: openbim-appimage
           path: out/
-          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
+          retention-days: 7  # build de teste, não é versão publicada
       - name: Tempo total
         if: always()
         run: |

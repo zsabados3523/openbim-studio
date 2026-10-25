@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Testes do registro de erros e das mensagens de abertura (F0-RG-11)."""
+"""Testes do registro de erros e das mensagens de abertura."""
 import logging
 import os
 import runpy

@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo da seleção por triângulo e da memória (S04-T10; LOTE_OPUS_9 §1 a §6, cartão F0-S04-T10; casos de `test_viewport_selecao.py` da S03).
+"""Testes da seleção por triângulo e da memória (casos de `test_viewport_selecao.py`).
 Cada caso gráfico roda em SUBPROCESSO sob `xvfb-run` (nunca na tela real; Windows só no CI ou com OBIM_S04_TELA_VIRTUAL=1), como `test_s04_cena.py`.
 GUARDA: pula enquanto faltar `Cena.selecionar` (e, nos casos que os usam, `atualizar`, `orbitar`, `mover`, `aproximar`); FALHA com OBIM_S04_T10_OBRIGATORIO=1.
-API ESPERADA (o implementador segue; o oráculo não depende de mais nada):
+API ESPERADA (o teste não depende de mais nada):
  * Cena.selecionar(x: float, y: float) -> str | None
      (x, y) em PIXELS da viewport, os mesmos de `capturar()` (origem no canto superior esquerdo, y para baixo; escala 1 nos testes). Devolve o
      GlobalId (22 caracteres, `str`) do objeto cujo TRIÂNGULO o raio do pixel acerta primeiro (o mais perto da câmera), ou None se nenhum triângulo
@@ -11,7 +11,7 @@ API ESPERADA (o implementador segue; o oráculo não depende de mais nada):
      x ou y fora de [0, largura) x [0, altura) da viewport, ou NaN/inf: ValueError, sem alterar a cena.
  * Depois de `atualizar`, `limpar` ou `perder_contexto`, nunca devolve objeto removido.
 Régua de tempo (1 milhão de triângulos, 50 consultas em pixels variados que acertam geometria): sempre mediana < 100 ms e nenhuma >= 250 ms
-(régua do CI virtual); fora do CI (variável CI ausente: máquina do PO) vale também o p95 < 100 ms. Memória: bytes de RSS do processo acrescentados
+(régua do CI virtual); fora do CI (variável CI ausente: máquina de referência) vale também o p95 < 100 ms. Memória: bytes de RSS do processo acrescentados
 pela cena com 1 milhão de triângulos (cópia compacta + placa por software), por triângulo, < 200; o valor é impresso (use `pytest -rsP`)."""
 import importlib, importlib.util, os, shutil, sys, time  # noqa: E401
 from dataclasses import replace
@@ -36,15 +36,15 @@ MIL = "{:022d}".format
 def exige(*extra):
     import obimcore
     faltam = [m for m in ("selecionar", *extra) if not hasattr(obimcore.Cena, m)]
-    faltam and pular(f"\n!!! aguarda S04-T10: Cena sem {faltam} (seleção por triângulo NÃO FOI EXECUTADA) !!!\n")
+    faltam and pular(f"\n!!! aguarda a cena: sem {faltam} (seleção por triângulo NÃO FOI EXECUTADA) !!!\n")
 
 @pytest.fixture(scope="module")
 def sel():
     if importlib.util.find_spec("obimcore") is None:
-        pular("\n!!! aguarda S04-T10: módulo obimcore ausente (oráculo da seleção NÃO FOI EXECUTADO) !!!\n")
+        pular("\n!!! aguarda obimcore: módulo ausente (teste da seleção NÃO FOI EXECUTADO) !!!\n")
     import ifcopenshell, obimcore  # noqa: E401,F401
     faltam = [m for m in METODOS if not hasattr(getattr(obimcore, "Cena", None), m)]
-    faltam and pular(f"\n!!! aguarda S04-T07/T08: obimcore sem {faltam} (oráculo da seleção NÃO FOI EXECUTADO) !!!\n")
+    faltam and pular(f"\n!!! aguarda obimcore: sem {faltam} (teste da seleção NÃO FOI EXECUTADO) !!!\n")
     exige()
     if not (CI or os.environ.get("OBIM_S04_TELA_VIRTUAL") == "1") if sys.platform == "win32" else not shutil.which("xvfb-run"):
         pular("\n!!! sem tela virtual (xvfb-run; no Windows só no CI ou com OBIM_S04_TELA_VIRTUAL=1): nunca na tela real !!!\n")
@@ -390,6 +390,6 @@ def test_memoria_da_copia_compacta_com_um_milhao_de_triangulos_e_relatada(sel, m
 if __name__ == "__main__":
     sys.path.insert(0, str(RAIZ / "prototypes"))
     nome, *resto = sys.argv[1:]
-    assert not {"obimcore", "PySide6.QtCore"} & sys.modules.keys(), "o oráculo importou Qt ou obimcore antes da ordem pedida"
+    assert not {"obimcore", "PySide6.QtCore"} & sys.modules.keys(), "o teste importou Qt ou obimcore antes da ordem pedida"
     [importlib.import_module(m) for m in ("ifcopenshell", "obimcore")]
     rodar(lambda r: globals()["c_" + nome](r, *resto))

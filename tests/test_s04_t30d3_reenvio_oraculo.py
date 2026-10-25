@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo do F0-S04-T30d3 (LOTE_OPUS_62 §6.4, LOTE_OPUS_64 §2 ponto 5): reenvio por posição, instantâneo e contadores. Quem implementa o T30b1/T30b2
-não edita este arquivo. Cada caso roda em subprocesso sob `xvfb-run` (helpers de `test_s04_viewport.py` e do oráculo T30d2).
-Guardas (pulam, nunca afrouxam): `nao_partidos`/`pecas_maiores_que_c` em `estatisticas()` (T30b1), chave `geracao` em `estatisticas()` (o T30b1 não a
+"""Testes do reenvio por posição, instantâneo e contadores. Reenvio
+não edita este arquivo. Cada caso roda em subprocesso sob `xvfb-run` (helpers de `test_s04_viewport.py` e de `test_s04_t30d2_sublotes_oraculo.py`).
+Guardas (pulam, nunca afrouxam): `nao_partidos`/`pecas_maiores_que_c` em `estatisticas()` chave `geracao` em `estatisticas()` (não a
 expõe hoje: o item "ger_" fica pulado até alguém expô-la; o "instantâneo coerente" não tem API no Python: o revisor lê o diff e o item 6 o cobre pelo piso
-de triângulos na placa), `Cena.dados_lote` (T30a3).
-Os marcadores `@AINDA_NAO` (xfail estrito) foram retirados depois do T30b1/T30b2 no ramo (antes, o `main` reenviava a cena inteira a cada troca e `sem` subia `ger_`): `test_quadros_por_troca...`, `test_placa_nunca_...`,
-`test_so_o_sublote_trocado_e_reenviado`, `test_troca_repetida...` e `test_apagar...`. Cena do T27 reduzida aos 4 lotes tocados (8,97, 24,24, 68,27 e 285,36 MiB, 387 MiB) mais o de 1 KB: com os 13 lotes (805,7 MiB) o `main`
+de triângulos na placa), `Cena.dados_lote`.
+Os marcadores `@AINDA_NAO` (xfail estrito) foram retirados depois da correção de reenvio por posição (antes, o código principal reenviava a cena inteira a cada troca e `sem` subia `ger_`): `test_quadros_por_troca...`, `test_placa_nunca_...`,
+`test_so_o_sublote_trocado_e_reenviado`, `test_troca_repetida...` e `test_apagar...`. Cena grande reduzida aos 4 lotes tocados (8,97, 24,24, 68,27 e 285,36 MiB, 387 MiB) mais o de 1 KB: com os 13 lotes (805,7 MiB) o `main`
 leva ~500 s só nas trocas (reenvia tudo), e a conta de quadros do reenvio por posição é por lote tocado. O enchimento é de peças de ~1 MiB, para o sub-lote tocado
 ser cheio (~8 MiB), como no detalhado. Trocas: 2 nos lotes de 8,97 e 285,36 (a mediana do item 4) e 1 nos demais."""
 import importlib, statistics, sys, time  # noqa: E401
@@ -20,7 +20,7 @@ from test_s04_viewport import RAIZ, agora, caso as _caso, captura, esperar, novo
 
 ESTE = Path(__file__).resolve()
 caso = lambda nome, *a, **k: _caso(nome, *a, alvo=ESTE, **k)  # noqa: E731
-MIB = (8.97, 24.24, 68.27, 285.36)  # lotes tocados do T27 (os outros 9 lotes do T27 só atrasam: o main leva ~500 s com os 13; ver cabeçalho)
+MIB = (8.97, 24.24, 68.27, 285.36)  # lotes tocados (os outros 9 só atrasam: leva ~500 s com os 13; ver cabeçalho)
 TOCADOS, ORC, AMARELO = {"8MiB": 0, "24MiB": 1, "68MiB": 2, "285MiB": 3}, 2 << 20, (240, 240, 30, 255)
 NOMES = ("1KB", "8MiB", "24MiB", "68MiB", "285MiB")
 CAM = dict(alvo=(-98.0, -45.0, 0.0), distancia=4.0, azimute=-90.0, elevacao=20.0)  # olha para os cubos 15.000 a 15.004 da grade de `cubos`
@@ -87,7 +87,7 @@ def c_geracao(res):  # item 1: troca e remoção não sobem `ger_`; limpar() sob
     c.parar()
     yield 0
 
-def c_trocas(res):  # itens 3 e 4 (e o piso de triângulos): cena do T27 na placa, trocas de uma parede por lote
+def c_trocas(res):  # itens 3 e 4 (e o piso de triângulos): cena grande na placa, trocas de uma parede por lote
     c, w, _ = novo(0)
     total = 0
     for i, m in enumerate(MIB):
@@ -225,23 +225,23 @@ def c_acessor(res):  # item 7: ValueError do `dados_lote` em sequência desconhe
 
 def test_contadores_nao_partidos_e_pecas_maiores_que_c_antes_e_depois_de_sem(viewport):  # item 1
     r = caso("contadores", limite=600)
-    r["guarda"] or pytest.skip("estatisticas() sem nao_partidos/pecas_maiores_que_c (T30b1)")
+    r["guarda"] or pytest.skip("estatisticas() sem nao_partidos/pecas_maiores_que_c")
     assert not r["falhas"], "\n".join(r["falhas"])
 
 def test_troca_nao_sobe_a_geracao_e_limpar_sobe(viewport):  # item 1
     r = caso("geracao", limite=600)
-    r["guarda"] or pytest.skip("estatisticas() sem a chave geracao (o T30b1 não a expõe)")
+    r["guarda"] or pytest.skip("estatisticas() sem a chave geracao")
     assert not r["falhas"], "\n".join(r["falhas"])
 
 def test_quadros_por_troca_ate_teto_de_c_por_2_mib_mais_3_em_toda_faixa_de_lote(viewport):  # item 3
     r = caso("trocas", limite=1500)
-    assert r["na_placa"], "a cena do T27 não chegou à placa"
+    assert r["na_placa"], "a cena grande não chegou à placa"
     teto = C // ORC + 3
     ruins = [f"{n}: {x['quadros']} quadros" for n, xs in r["casos"].items() for x in xs if x["quadros"] > teto]
     print("MEDIDO quadros", {n: [x["quadros"] for x in xs] for n, xs in r["casos"].items()})
     assert not ruins, f"teto {teto} (= C ÷ 2 MiB + 3): " + "; ".join(ruins)
 
-def test_atualizar_do_lote_de_285_mib_custa_no_maximo_3_vezes_o_de_8_97_mib(viewport):  # item 4 (relativo, mesma rodada)
+def test_atualizar_do_lote_de_285_mib_custa_no_maximo_3_vezes_o_de_8_97_mib(viewport):  # relativo, mesma rodada
     r = caso("trocas", limite=1500)
     ms = {n: statistics.median(x["ms"] for x in r["casos"][n]) for n in ("8MiB", "285MiB")}
     print("MEDIDO atualizar_ms mediana", ms)
@@ -254,12 +254,12 @@ def test_placa_nunca_abaixo_da_cena_menos_a_peca_antiga_em_toda_troca(viewport):
 
 def test_sublotes_nao_tocados_ficam_com_os_mesmos_bits_e_a_mesma_sequencia(viewport):  # item 2
     r = caso("reenvio", limite=900)
-    r["tem_acessor"] or pytest.skip("sem Cena.dados_lote (T30a3)")
+    r["tem_acessor"] or pytest.skip("sem Cena.dados_lote")
     assert r["sublotes"] >= 3 and not r["falhas"], f"{r['sublotes']} sub-lotes; " + "\n".join(r["falhas"])
 
-def test_so_o_sublote_trocado_e_reenviado_bytes_por_troca(viewport):  # item 2: bytes por troca = lote novo + sub-lote trocado
+def test_so_o_sublote_trocado_e_reenviado_bytes_por_troca(viewport):  # bytes por troca = lote novo + sub-lote trocado
     r = caso("reenvio", limite=900)
-    r["tem_acessor"] or pytest.skip("sem Cena.dados_lote (T30a3)")
+    r["tem_acessor"] or pytest.skip("sem Cena.dados_lote")
     assert r["na_placa"] and 0 < r["bytes_esperados"] <= C + (1 << 20), r
     assert r["quadros"] <= r["teto"], f"{r['quadros']} quadros; teto(bytes {r['bytes_esperados']} ÷ 2 MiB) + 3 = {r['teto']}"
 
@@ -273,7 +273,7 @@ def test_captura_depois_das_trocas_igual_pixel_a_pixel_a_de_depois_de_perder_con
     assert r["recuperou"] and r["amarelas"] >= 800, f"a placa não voltou ou os 5 cubos novos não aparecem: {r}"
     assert r["dif_contexto"] == 0, f"{r['dif_contexto']} pixels diferentes depois de perder o contexto"
 
-def test_troca_repetida_no_mesmo_lote_durante_o_reenvio_mantem_piso_e_estado_final(viewport):  # item 6
+def test_troca_repetida_no_mesmo_lote_durante_o_reenvio_mantem_piso_e_estado_final(viewport):
     r = caso("repetida", limite=1500)
     assert r["na_placa"] and not r["falhas"], "\n".join(r["falhas"])
     assert not r["viol"], f"a placa ficou abaixo da cena menos a peça antiga: {r['viol']}"
@@ -282,7 +282,7 @@ def test_bytes_copia_das_trocas_repetidas_sem_sobra(viewport):  # item 6 (lote 6
     r = caso("repetida", limite=1500)
     assert abs(r["delta_copia"]) <= 5 * 816 + 64 * 1024, f"bytes_copia mudou {r['delta_copia']} em 5 trocas de cubo por cubo"
 
-def test_apagar_em_lote_de_ate_2_mib_leva_no_maximo_2_quadros(viewport):  # item 6
+def test_apagar_em_lote_de_ate_2_mib_leva_no_maximo_2_quadros(viewport):
     r = caso("repetida", limite=1500)
     assert r["apagar_quadros"] <= 2 and r["apagar_tri_min"] >= r["apagar_piso"], f"apagar: {r['apagar_quadros']} quadros, placa mínima {r['apagar_tri_min']} (piso {r['apagar_piso']})"
 
@@ -291,14 +291,14 @@ def test_limpar_e_reenviar_espera_o_quadro_da_sequencia_antes_da_placa_cheia(vie
     assert r["na_placa"] and r["pixels"] >= 500, r
     assert r["dif"] == 0, f"{r['dif']} pixels diferentes depois de limpar() e reenviar a mesma cena"
 
-def test_dados_lote_recusa_sequencia_desconhecida_e_limpa_com_value_error(viewport):  # item 7 (sugestão 2 do lote 64)
+def test_dados_lote_recusa_sequencia_desconhecida_e_limpa_com_value_error(viewport):
     r = caso("acessor", limite=600)
-    r["guarda"] or pytest.skip("sem Cena.dados_lote (T30a3)")
+    r["guarda"] or pytest.skip("sem Cena.dados_lote")
     assert not r["falhas"], "\n".join(r["falhas"])
 
 if __name__ == "__main__":
     sys.path.insert(0, str(RAIZ / "prototypes"))
     nome, *resto = sys.argv[1:]
-    assert not {"obimcore", "PySide6.QtCore"} & sys.modules.keys(), "o oráculo importou Qt ou obimcore antes da ordem pedida"
+    assert not {"obimcore", "PySide6.QtCore"} & sys.modules.keys(), "o teste importou Qt ou obimcore antes da ordem pedida"
     [importlib.import_module(m) for m in ("ifcopenshell", "obimcore")]
     rodar(lambda r: globals()["c_" + nome](r, *resto))

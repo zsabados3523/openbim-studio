@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Apoio do oráculo do fluxo A (S04-T11, tests/test_s04_fluxo_a.py): referência independente (só ifcopenshell), espião da Cena e os casos
+"""Apoio do teste do fluxo A (tests/test_s04_fluxo_a.py): referência independente (só ifcopenshell), espião da Cena e os casos
 gráficos c_<nome>, que rodam num processo próprio (`python s04_fluxo_aux.py <nome> [args]`, sob xvfb-run, nunca na tela real)."""
 import json
 import locale
@@ -43,7 +43,7 @@ def erros_ifc(g):  # erros do validador (esquema + regras EXPRESS). O nível vem
     V.validate(g, lg, express_rules=True)
     return [s for s in lg.statements if str(s.get("level", "")).lower() == "error"]
 
-def materiais(f):  # T11c: usos de camadas e relações de material, vistos de fora pelo ifcopenshell
+def materiais(f):  # usos de camadas e relações de material, vistos de fora pelo ifcopenshell
     return {c: len(f.by_type(c, include_subtypes=False)) for c in ("IfcMaterialLayerSetUsage", "IfcRelAssociatesMaterial", "IfcMaterialLayerSet", "IfcMaterialLayer", "IfcMaterial")}
 
 def confere_uma_camada_por_parede(f, n, tipos=1):  # n paredes -> n usos e n relações de material (+1 relação por tipo); cada uso/relação é só da sua parede
@@ -213,7 +213,7 @@ def c_roteiro(res, paredes):  # o roteiro R inteiro, com a cena espiada e cada c
     res["med"] = med = f.executar_roteiro(ROTEIRO)
     esp.relogio()
     res["chamadas"], res["sequencias"], res["arquivo_medicao"] = chamadas, list(f.sequencias), med["arquivo_medicao"]
-    res["quadros_vistos"] = sorted(esp.vistos.items())  # [[t_ms, sequencia]]: todo quadro que o fluxo ou o oráculo viu em `Cena.relogio()`
+    res["quadros_vistos"] = sorted(esp.vistos.items())  # [[t_ms, sequencia]]: todo quadro que o fluxo ou o teste viu em `Cena.relogio()`
     res["lc_numeric"] = locale.setlocale(locale.LC_NUMERIC)
     res["tri_ref"] = sum(forma(p)[0] for p in f.ifc.by_type("IfcProduct") if p.Representation)
     por = {p["id"]: p["reps"] for p in med["passos"]}

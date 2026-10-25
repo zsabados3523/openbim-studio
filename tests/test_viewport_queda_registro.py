@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Queda do processo de geometria deixa o motivo no registro (F0-RG-11, achado B21)."""
+"""Queda do processo de geometria deixa o motivo no registro ."""
 import logging
 import signal
 import sys

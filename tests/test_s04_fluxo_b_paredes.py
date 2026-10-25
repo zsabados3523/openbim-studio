@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo do fluxo B, parte 1: paredes em C++ (S04-T13; LOTE_OPUS_9 §1.1, §1.2, §2.2 "saída igual", §4 etapa 3; contrato em prototypes/s04/fluxo_b/CONTRATO.md; apoio em s04_fluxo_b_aux.py).
+"""Testes do fluxo B, parte 1: paredes em C++ (saída igual ao fluxo A; contrato em prototypes/s04/fluxo_b/CONTRATO.md; apoio em s04_fluxo_b_aux.py).
 GUARDA: pula enquanto o módulo nanobind `fluxo_b_paredes` não puder ser importado (PYTHONPATH ou OBIM_S04_FLUXO_B_DIR); FALHA com OBIM_S04_T13_OBRIGATORIO=1. Rode sob xvfb-run.
 A "saída igual" é conferida PASSO A PASSO: o mesmo roteiro curto vai ao fluxo A (Python, FluxoA sem janela) e à biblioteca C++, ambos gravam e reabrem o IFC depois de cada passo, e a
 assinatura (classes, nomes, camadas, posição, representações, psets, triângulos/caixa/volume por create_shape, relações, desfazer/refazer) tem de ser igual a 1e-6 m. GlobalIds diferem.
-Suposições do oráculo (o Opus confere): (1) classes de geometria de apoio (ponto, direção, eixo, lista de pontos, curva, perfil) NÃO são contadas, mas qualquer entidade sem referência
+Premissas do teste: (1) classes de geometria de apoio (ponto, direção, eixo, lista de pontos, curva, perfil) NÃO são contadas, mas qualquer entidade sem referência
 (órfã) reprova; as demais classes, inclusive relações, batem em número com A (1 relação de tipo e 1 de pavimento, compartilhadas; 1 IfcMaterialLayerSetUsage e 1 relação de material por parede, SEM
-exceção desde a T11c: A e B têm a mesma contagem de TODA classe e cada um confere sozinho 1 uso por parede e 1 relação por parede e por tipo);
+exceção desde a regra de material: A e B têm a mesma contagem de TODA classe e cada um confere sozinho 1 uso por parede e 1 relação por parede e por tipo);
 (2) o gancho `definir_falha(k)` conta TODA mutação do modelo (criar instância, alterar atributo, remover instância) feita pelo comando; (3) tipo e parede são achados pelo nome e pela posição.
-Sentinelas sem o módulo: contrato, `validate` com regras EXPRESS, e o roteiro curto no próprio fluxo A (prova que o oráculo é satisfazível)."""
+Sentinelas sem o módulo: contrato, `validate` com regras EXPRESS, e o roteiro curto no próprio fluxo A (prova que o teste é satisfazível)."""
 import functools
 import gc
 import importlib.util
@@ -37,7 +37,7 @@ TEM_MODULO = importlib.util.find_spec("fluxo_b_paredes") is not None
 TIPO = dict(nome="PAR15", camadas_m=CAMADAS)
 
 def pular(msg):
-    (pytest.fail if OBRIGATORIO else pytest.skip)(f"\n!!! aguarda S04-T13: {msg} (oráculo do fluxo B NÃO FOI EXECUTADO) !!!\n")
+    (pytest.fail if OBRIGATORIO else pytest.skip)(f"\n!!! aguarda o fluxo B: {msg} (teste do fluxo B NÃO FOI EXECUTADO) !!!\n")
 
 @pytest.fixture(scope="module")
 def mod():
@@ -268,7 +268,7 @@ def roteirinho(b):
     b.editar_propriedades(w[0], nome="Muro", propriedades={FIRE: "R60"})
     b.mudar_comprimento(w[1], 5.55)
 
-def test_gravar_com_localidade_pt_br_nao_poe_virgula_decimal(mod, tmp_path):  # armadilha 3 da etapa 3 (T26): o fluxo B não tem o garantir_numerico_c do Python
+def test_gravar_com_localidade_pt_br_nao_poe_virgula_decimal(mod, tmp_path):  # armadilha de localidade: o fluxo B não tem o garantir_numerico_c do Python
     nome = next((n for n in ("pt_BR.UTF-8", "pt_BR.utf8", "Portuguese_Brazil.1252", "pt_BR") if _tem(n)), None)
     nome or pular_chave("\n!!! SEM LOCALIDADE pt_BR NESTA MÁQUINA: o caso da vírgula decimal NÃO FOI EXECUTADO !!!\n", "OBIM_LOCALIDADE_OBRIGATORIA")
     b = mod.Paredes()
@@ -321,22 +321,22 @@ def test_contar_bate_com_o_arquivo_gravado_inclusive_subtipos(mod, tmp_path):
     with pytest.raises(ValueError):
         b.contar("IfcNaoExiste")
 
-# ======================= S04-T14a: abrir a base e as correções do lote 22 (CONTRATO.md, "Parte 2a") =======================
-# Itens 1 a 4 (obrigatórios) de LOTE_OPUS_22 (os opcionais 5, 7, 8 ficam sem caso). Porta própria: OBIM_S04_T14A_OBRIGATORIO=1 (CI). Sem o módulo pula; módulo sem a API da Parte 2a FALHA.
+# ======================= abrir a base e as correções (CONTRATO.md, "Parte 2a") =======================
+# Itens 1 a 4 (obrigatórios; os opcionais 5, 7, 8 ficam sem caso). Porta própria: OBIM_S04_T14A_OBRIGATORIO=1 (CI). Sem o módulo pula; módulo sem a API da Parte 2a FALHA.
 # Localidade e trava rodam em PROCESSO À PARTE (s04_fluxo_b_t14a_aux.py): queda ou impasse viram falha limpa. "Saída igual" com a base: o fluxo A (FluxoA(base)), por multiconjunto
 # de paredes (a base e a grade colidem em 0,0,0, então não se acha parede pela posição); o resto do contrato é conferido sem olhar para A (`conferir`; o próprio A é a sentinela).
 OBRIG14 = os.environ.get("OBIM_S04_T14A_OBRIGATORIO") == "1"
 FB = aux.RAIZ / "prototypes" / "s04" / "fluxo_b"
 FILHO = aux.AQUI.parent / "s04_fluxo_b_t14a_aux.py"
 def pular14(msg):
-    (pytest.fail if OBRIG14 else pytest.skip)(f"\n!!! aguarda S04-T14a: {msg} (oráculo da biblioteca Paredes com base NÃO FOI EXECUTADO) !!!\n")
+    (pytest.fail if OBRIG14 else pytest.skip)(f"\n!!! aguarda a biblioteca Paredes com base: {msg} (teste da biblioteca Paredes com base NÃO FOI EXECUTADO) !!!\n")
 @pytest.fixture(scope="module")
 def mod14():
     if not TEM_MODULO:
         pular14("módulo fluxo_b_paredes ausente (build.sh de prototypes/s04/fluxo_b/ e PYTHONPATH)")
     import fluxo_b_paredes
     falta = [f"Paredes.{n}" for n in ("abrir", "produtos_base", "copiar_atributo") if not hasattr(fluxo_b_paredes.Paredes, n)] + [n for n in ("ModeloOcupado",) if not hasattr(fluxo_b_paredes, n)]
-    falta and pytest.fail(f"\n!!! S04-T14a: a ponte não tem {falta} (CONTRATO.md, Parte 2a) !!!\n")
+    falta and pytest.fail(f"\n!!! a ponte não tem {falta} (CONTRATO.md, Parte 2a) !!!\n")
     return fluxo_b_paredes
 
 @functools.lru_cache(maxsize=None)
@@ -449,7 +449,7 @@ def test_t14a_contrato_e_ci_declaram_a_parte_2a():
     t = (FB / "CONTRATO.md").read_text(encoding="utf-8")
     assert len(t.splitlines()) <= 80 and all(x in t for x in ("Parte 2a", "abrir", "produtos_base", "copiar_atributo", "ModeloOcupado", "OBIM_S04_T14A_OBRIGATORIO", "gil_scoped_release", "uselocale", "Ifc4::get_schema", "logic_error"))
 
-def test_t14a_ci_liga_a_variavel_no_passo_do_fluxo_b_dos_dois_jobs():  # falha com mensagem clara se o passo 'Fluxo B, paredes em C++' faltar no ci.yml (não é para o oráculo recriá-lo)
+def test_t14a_ci_liga_a_variavel_no_passo_do_fluxo_b_dos_dois_jobs():  # falha com mensagem clara se o passo 'Fluxo B, paredes em C++' faltar no ci.yml
     ci = (aux.RAIZ / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     assert len(re.findall(r"OBIM_CI=1 pytest[^\n]*test_s04_fluxo_b_paredes\.py", ci)) == 2, "OBIM_CI=1 (que liga OBIM_S04_T14A_OBRIGATORIO) tem de estar no passo do fluxo B dos dois jobs (linux e windows)"
 
@@ -510,7 +510,7 @@ def test_abrir_unidade_qualquer_profundidade_exata_e_grade_na_unidade_do_projeto
     assert all(igual(assinar(ma[k]), assinar(mb[k]), k) == [] for k in ma)
 
 @pytest.mark.parametrize("contextos", [None, ("Plan",), ("Model",), ()], ids=["base com Model+Body e sem Plan", "so Plan (sem Model)", "so Model (sem Plan nem Body)", "sem nenhum contexto"])
-def test_contexto_criado_pelo_b_entra_em_ifcproject_representationcontexts_e_o_desfazer_devolve_a_lista(mod14, tmp_path, contextos):  # LOTE_OPUS_25 (A) item 1: B gravava [Model] onde A gravava [Model, Plan]
+def test_contexto_criado_pelo_b_entra_em_ifcproject_representationcontexts_e_o_desfazer_devolve_a_lista(mod14, tmp_path, contextos):  # B gravava [Model] onde A gravava [Model, Plan]
     p, info = fazer_base(tmp_path, contextos=contextos)
     assert info["sig"]["contextos_do_projeto"] == (["Model"] if contextos is None else sorted(contextos)), "a base do caso não tem os contextos pedidos"
     mb = rodar_b(tmp_path / "b", mod14, p, 4)
@@ -519,7 +519,7 @@ def test_contexto_criado_pelo_b_entra_em_ifcproject_representationcontexts_e_o_d
     assert conferir(ma, info, 4) == [], "sentinela: o fluxo A tem de cumprir o mesmo esperado"
     assert all(igual(assinar(ma[k]), assinar(mb[k]), k) == [] for k in ma)
 
-def test_contexto_orfao_e_contexto_fora_do_projeto_sao_detectados_pela_assinatura(tmp_path):  # sentinela de `orfas` e de `assinar`: sem isto o oráculo poderia ficar cego a contexto sem uso
+def test_contexto_orfao_e_contexto_fora_do_projeto_sao_detectados_pela_assinatura(tmp_path):  # sentinela de `orfas` e de `assinar`: sem isto o teste poderia ficar cego a contexto sem uso
     f = ifcopenshell.file(schema="IFC4")
     prj = f.create_entity("IfcProject", GlobalId=ifcopenshell.guid.new(), Name="P")
     modelo = f.create_entity("IfcGeometricRepresentationContext", ContextType="Model", CoordinateSpaceDimension=3, Precision=1e-5)
@@ -653,7 +653,7 @@ def test_item4_segundo_escritor_com_espera_zero_falha_ocupado_e_a_leitura_espera
         assert x["lido_durante"] == x["esperado"] == x["paredes_final"], f"{i}: a leitura viu o lote pela metade ({x})"
         assert x["retorno"] == 15000 and x["pode_desfazer"] == 3 and x["total"] == x["total_ref"], f"{i}: o escritor barrado tocou no modelo ou o lote saiu diferente do lote sozinho ({x})"
 
-# Construção concorrente (achado da T14c): várias threads criando o PRIMEIRO `Paredes` do processo ao mesmo tempo derrubam-no (SIGSEGV; 'malloc(): unaligned tcache chunk'); o aquecimento
+# Construção concorrente: várias threads criando o PRIMEIRO `Paredes` do processo ao mesmo tempo derrubam-no (SIGSEGV; 'malloc(): unaligned tcache chunk'); o aquecimento
 # (um modelo criado antes, na thread principal) cura. A causa está na 1a construção (estáticos preguiçosos do IfcOpenShell). Um filho NOVO por rodada: cada processo só tem UMA 1a construção.
 RODADAS_FRIO = 15
 def test_item_frio_a_ponte_aguenta_threads_criando_o_primeiro_paredes_ao_mesmo_tempo(mod14):  # pela ponte: HOJE passa, porque o construtor nanobind segura o GIL e serializa as construções

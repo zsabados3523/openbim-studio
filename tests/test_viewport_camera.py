@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo da S03-T04: câmera orbital (pura) e ligação ao mouse do viewport."""
+"""Testes da câmera orbital (pura) e ligação ao mouse do viewport."""
 import sys
 from pathlib import Path
 

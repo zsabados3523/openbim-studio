@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo do F0-S05-T04 (cartão `docs/state/cards/F0-S05/F0-S05-T04.md`; ADR-002 §4.1 a §4.3 e §4.8; casos 1 a 12 de `F0-S05-oraculos-T04-T06.md`).
-Quem implementa não edita este arquivo nem `tests/s05_*aux.py` (régua P1, gerador); quem tira os `@AINDA_NAO` (xfail estrito) é o autor do oráculo, em
+"""Testes de transação do histórico (ADR-002 §4.1 a §4.3 e §4.8; casos 1 a 12).
+Não editar este arquivo nem `tests/s05_*aux.py` (régua P1, gerador); quem tira os `@AINDA_NAO` (xfail estrito) é o autor do teste, em
 commit próprio, depois da implementação (só as linhas `AINDA_NAO = ...` e `@AINDA_NAO`). CONTRATO (só nomes do ADR-002 §4.8; o implementador lê isto e o ADR):
 1. `openbim_app.lateral`: `Lateral()`; `obter(c, id)` devolve CÓPIA (ou None); `canonico()` = bytes do JSON canônico do lateral inteiro (não depende da
    ordem de criação); `ObjetoInvalido` (ex.: NaN). Edição do lateral só por `t.lado.criar(c, id, obj)`, `t.lado.alterar(c, id, obj)`, `t.lado.apagar(c, id)`.
-2. `openbim_app.transacao`: `Historico(sessao, lateral, limite_bytes=None, codificar=None, anotar=None)`, com `sessao` = `SessaoModelo`. O oráculo edita o
+2. `openbim_app.transacao`: `Historico(sessao, lateral, limite_bytes=None, codificar=None, anotar=None)`, com `sessao` = `SessaoModelo`. O teste edita o
    arquivo LIVRE antes de construir o `Historico` (montagem); a guarda (sentinela em `arquivo.transaction`) vale a partir da construção. `anotar` é chamado
-   uma vez por transação confirmada (passo 5 do §4.2; o oráculo aceita `*a, **k`) e NUNCA por `fora_do_historico`.
-3. `with h.transacao(esc) as t:` (esc = a `Escrita` de `SessaoModelo.escrever()`): `t.ifc` é o arquivo (o oráculo usa `ifcopenshell.api` sobre ele), `t.lado`
+   uma vez por transação confirmada (passo 5 do §4.2; o teste aceita `*a, **k`) e NUNCA por `fora_do_historico`.
+3. `with h.transacao(esc) as t:` (esc = a `Escrita` de `SessaoModelo.escrever()`): `t.ifc` é o arquivo (o teste usa `ifcopenshell.api` sobre ele), `t.lado`
    como em 1; ao sair, `t.resumo`. `h.desfazer(esc)` / `h.refazer(esc)` devolvem `Resumo` ou None (nada a fazer). `Resumo(criados, alterados, apagados,
    lado_criados, lado_alterados, lado_apagados)`: coleções comparadas como conjunto (GlobalId; no lateral, `(coleção, id)` comparado como tupla).
 4. `h.pode_desfazer`, `h.pode_refazer`, `h.quebrado` (bool) e `h.descartados` (int) são PROPRIEDADES (lidas sem chamar). Uma transação nossa = um
@@ -33,7 +33,7 @@ from s05_t04_aux import SEMENTE, TIPOS, aplicar, igual, montar
 
 
 
-class Real:  # o módulo do T04
+class Real:  # o módulo de transações
     def __init__(s, f, c, **kw):
         from openbim_app.lateral import Lateral
         from openbim_app.sessao_modelo import SessaoModelo

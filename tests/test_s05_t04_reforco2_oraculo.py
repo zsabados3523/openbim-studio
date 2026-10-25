@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Reforço do oráculo do F0-S05-T04, segunda leva (mutantes vivos do lote Opus 81; autor do oráculo; quem implementa não edita).
-Mesmo contrato de `test_s05_t04_transacao_oraculo.py` (ADR-002 §4.1 a §4.3), nada novo. Vale já (o T04 está no main), sem `@AINDA_NAO`.
+"""Reforço do teste de transações, segunda leva (mutantes que sobreviveram à revisão).
+Mesmo contrato de `test_s05_t04_transacao_oraculo.py` (ADR-002 §4.1 a §4.3), nada novo. Vale já, sem `@AINDA_NAO`.
 B1 (§4.1, resumo por dono): "atribuir tipo" (relação criada: todos os objetos dela; relação editada: só quem entrou ou saiu), "apagar" (relação
    apagada junto: o tipo que ficou sem a parede é alterado) e entidade sem GlobalId apagada por `remove` (atingidos pelos inversos: o dono sobe).
 B2 (§4.3): `IdInexistente` em alterar e apagar de id que não existe, `IdRepetido` em criar repetido, `ObjetoInvalido` para objeto que não é dict

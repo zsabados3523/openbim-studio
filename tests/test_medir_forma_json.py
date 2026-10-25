@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""F0-S04-T29f: o JSON do medir.py traz reinicios, registro_reinicio e desenho (só a forma; modelo gerado, sem IFC do PO)."""
+"""O JSON do medir.py traz reinicios, registro_reinicio e desenho (só a forma; modelo gerado, sem IFC de terceiros)."""
 import json
 import sys
 from pathlib import Path

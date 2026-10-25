@@ -1,19 +1,19 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo da F0-S04-T15b: formas 1 e 2 do LOTE_OPUS_9 §2.3, M5 e M5b (cartão F0-S04-T15b; contrato em prototypes/s04/fluxo_a/CONTRATO.md, seção T15).
+"""Testes das formas 1 e 2, M5 e M5b (contrato em prototypes/s04/fluxo_a/CONTRATO.md, seção de formas).
 Forma 1: o lote (`criar_paredes_lote`) roda numa thread Python e a thread da janela fica em `QEventLoop.exec()`. Forma 2: o lote roda na thread da janela,
 cedendo (`processEvents`) depois de cada operação quando passaram 8 ms desde a última cessão; operação = cada chamada de `fluxo_a.api`, cada bloco de até
 25 GlobalIds de `obimcore.malhas` e `Cena.atualizar`. Nenhuma chamada da API é partida para melhorar o número.
 M5 (relógio do núcleo): quadros apresentados entre t0 (início do lote) e t1 (1o quadro com a sequência do lote). M5b: eventos de mouse sintéticos agendados a cada
 20 ms desde t0 (agendado_k = t0 + 20k), postos na fila da janela principal por uma thread auxiliar; atraso = tratado - AGENDADO (não o instante em que foi
 postado: um postador sem o bloqueio do interpretador esconderia a espera). Mais o pulso de 10 ms da thread da janela (o mesmo número do fluxo B).
-`lote.py <saida.json> --base N --quantidade N --rodadas N` grava `threads.json`; o oráculo recalcula tudo dos dados brutos e aplica a régua abaixo.
+`lote.py <saida.json> --base N --quantidade N --rodadas N` grava `threads.json`; o teste recalcula tudo dos dados brutos e aplica a régua abaixo.
 Controle (o postador do mouse é uma 3a thread Python e disputa o bloqueio: medido, ele quase triplica a surdez da janela na forma 1): `main` roda, por forma e
 rodada, uma medida SÓ com o pulso (`medir(..., mouse=False)`, grupo "controle") e outra com pulso e mouse (grupo "formas"); a comparação entre formas e a
 parada usam o controle; o M5b com mouse vai ao relatório ao lado, com o tamanho do efeito.
 Régua (RG-09 + lote 11): por forma, em cada rodada toda janela de 1 s com >= 20 quadros; mediana dos maiores intervalos < 100 ms (OBIM_S04_ESTRITO=1: 200);
 no máximo 1 rodada com intervalo > 200 ms; mediana <= 3x max(33,3 ms, mediana do parado). Forma 2 fatia de verdade: >= 20 fatias e mediana <= 20 ms.
-Parada (PROPOSTA DO OPUS, aguarda o PO; o lote 9 §2.3 diz só "registrar"): se o maior intervalo do pulso no controle (mediana das rodadas) passar de
-1.000 ms nas DUAS formas, o caso falha e o cartão manda levar ao PO (lote 9 §5.1: "janela surda por mais de 1 s" faria mudar de ideia).
+Parada (a confirmar pela equipe; o contrato diz só "registrar"): se o maior intervalo do pulso no controle (mediana das rodadas) passar de
+1.000 ms nas DUAS formas, o caso falha e o caso pede revisão ("janela surda por mais de 1 s" faria mudar de ideia).
 GUARDA: os casos com janela rodam em SUBPROCESSO sob `xvfb-run` (nunca na tela real; Windows só no CI ou com OBIM_S04_TELA_VIRTUAL=1); pulam sem lote.py ou
 obimcore; com OBIM_S04_T15_OBRIGATORIO=1 todo pulo vira falha. As sentinelas da régua rodam sempre."""
 import importlib.util
@@ -38,7 +38,7 @@ CHAVES = {"forma", "quantidade", "parado", "thread_janela", "thread_lote", "t0_m
 
 
 def pular(msg):
-    (pytest.fail if OBRIGATORIO else pytest.skip)(f"\n!!! S04-T15b: {msg} (oráculo das formas 1 e 2 NÃO FOI EXECUTADO) !!!\n")
+    (pytest.fail if OBRIGATORIO else pytest.skip)(f"\n!!! formas 1 e 2: {msg} (teste das formas 1 e 2 NÃO FOI EXECUTADO) !!!\n")
 
 
 # ---------- conta e régua (escritas sem olhar para lote.py) ----------
@@ -100,7 +100,7 @@ def test_sentinela_resumo_conta_as_pontas_e_o_agendado():
     assert s["M5"]["janelas"] == [45, 50] and s["M5b"]["max_ms"] == 35.0 and s["pulso_maior_ms"] == 10.0
 
 
-def test_t15b_resumo_de_lote_py_em_dados_sinteticos():  # `lote.resumo(r)` é função pura: a mesma conta do oráculo, com pontas que mandam no resultado
+def test_t15b_resumo_de_lote_py_em_dados_sinteticos():  # `lote.resumo(r)` é função pura: a mesma conta do teste, com pontas que mandam no resultado
     if not (aux.PASTA / "lote.py").is_file():
         pular("prototypes/s04/fluxo_a/lote.py ausente")
     import lote
@@ -235,12 +235,12 @@ def test_t15b_forma_2_fatia_de_verdade(med):
 @pytest.mark.parametrize("forma", [1, 2])
 def test_t15b_m5_na_forma(med, forma):
     e = regua_m5([resumo(r)["M5"] for r in rodadas(med, forma) + rodadas(med, forma, "controle")])
-    assert not e, f"M5 reprovou na forma {forma}: {e}. M5 reprovada nas formas 1 e 2 = parar e levar ao PO (lote 9 §3)"
+    assert not e, f"M5 reprovou na forma {forma}: {e}. M5 reprovada nas formas 1 e 2 = parar e rever a decisão"
 
 
-def test_t15b_janela_surda_mais_de_1_s_nas_duas_formas_para_e_vai_ao_po(med):  # PROPOSTA DO OPUS (aguarda o PO): mede no controle, sem o postador
+def test_t15b_janela_surda_mais_de_1_s_nas_duas_formas_para_e_vai_ao_po(med):  # mede no controle, sem o postador
     mx = {f: statistics.median(resumo(r)["pulso_maior_ms"] for r in rodadas(med, f, "controle")) for f in (1, 2)}
-    assert min(mx.values()) <= 1000.0, f"a janela ficou surda por mais de 1 s nas duas formas (pulso, controle: {mx}): PARAR e levar ao PO (lote 9 §5.1)"
+    assert min(mx.values()) <= 1000.0, f"a janela ficou surda por mais de 1 s nas duas formas (pulso, controle: {mx}): PARAR e rever a decisão"
 
 
 def test_t15b_tratador_que_muda_o_modelo_durante_o_lote_recebe_modelo_ocupado(tela):

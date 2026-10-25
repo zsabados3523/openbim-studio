@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Utilitários do oráculo do F0-S05-T07 (gravação do par com diário de gravação). Código de teste do autor do oráculo; quem implementa não edita.
+"""Utilitários do teste de gravação do par com diário. Código de teste; não editar.
 O contrato está em `tests/test_s05_t07_par_oraculo.py`. Aqui: leitura do par (manifesto e objetos do ZIP, pset `OBIM_Projeto`), régua do par
 (`estado_par`: "antigo" por bytes exatos, "novo" por conteúdo, "nada"; qualquer outra coisa é problema), escritor de par falso (só para a régua),
 a mudança fixa que o caso faz no modelo (`mudar`) e o processo filho que grava (ou resolve) e morre no ponto pedido (`rodar`)."""
@@ -17,12 +17,12 @@ from pathlib import Path
 import s05_conteudo_aux as R
 
 AQUI = Path(__file__).resolve().parent
-LADO = str(uuid.uuid5(uuid.UUID("2b1f6a40-7d0e-4c52-9a43-1c0de5a7f007"), "t07"))  # LadoId provisório dado pelo chamador nos casos
+LADO = str(uuid.uuid5(uuid.UUID("2b1f6a40-7d0e-4c52-9a43-1c0de5a7f007"), "t07"))  # LadoId dado pelo chamador nos casos
 SEQ = 17
 SEMENTE = 20261023
 TEMPS = ("Casa.ifc.tmp", "Casa.obim.tmp", "Casa.ifc.bak.tmp", "Casa.obim.bak.tmp")
 CAMPOS = {"formato", "versao_formato", "provisorio", "LadoId", "Revisao", "ifc_nome", "ifc_sha256", "ifc_tamanho", "ifc_projeto_globalid",
-          "programa_versao", "data"}  # v2/02 §6.2 mais ADR-002 §4.3
+          "programa_versao", "data"}  # formato do par (ADR-002 §4.3)
 Antigo = namedtuple("Antigo", "ifc obim")  # bytes exatos do par de antes
 Novo = namedtuple("Novo", "revisao lado_id foto lado")  # o que o par novo tem de conter (foto sem o pset OBIM_Projeto; lado = json canônico)
 sha = lambda b: hashlib.sha256(b).hexdigest()  # noqa: E731
@@ -71,7 +71,7 @@ def mudar(ifc, criar, tag):
 
 
 def esperado(ifc_origem, objetos, tag, revisao):
-    """O `Novo` de gravar `ifc_origem` (caminho) com `objetos` depois de `mudar(..., tag)`, sem o módulo do T07."""
+    """O `Novo` de gravar `ifc_origem` (caminho) com `objetos` depois de `mudar(..., tag)`, sem o módulo de gravação."""
     import ifcopenshell
     f, objs = ifcopenshell.open(str(ifc_origem)), json.loads(json.dumps(objetos))
     mudar(f, lambda c, i, o: objs.setdefault(c, {}).__setitem__(i, o), tag)
@@ -132,7 +132,7 @@ def estado_par(destino, antigo=None, novo=None, pasta_projeto=None):
 
 
 def escrever_par_falso(destino, ifc_origem, objetos, revisao, lado_id=LADO, manifesto=None):
-    """Só para a régua: grava um par como o ADR-002 §4.3 e v2/02 §6.2 descrevem, sem o módulo do T07; `manifesto` sobrescreve campos."""
+    """Só para a régua: grava um par como o ADR-002 §4.3 descreve, sem o módulo de gravação; `manifesto` sobrescreve campos."""
     import ifcopenshell
     import ifcopenshell.api
     f = ifcopenshell.open(str(ifc_origem))

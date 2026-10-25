@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo da S03-T05 (Parte 0), V1 a V5: o viewport recebe lotes e desenha (V1 a V4 precisam de tela).
+"""Testes de viewport, casos V1 a V5: o viewport recebe lotes e desenha (V1 a V4 precisam de tela).
 
-Transcrição de docs/state/arquivo/lotes-1-a-28/LOTE_OPUS_4/resultado.md §1.5. Congelado: não afrouxar número nem remover caso.
-Sem os métodos novos (S03-T05 parte B) ou sem tela, V1 a V4 pulam com mensagem. V5 sempre roda.
+Números congelados: não afrouxar número nem remover caso.
+Sem os métodos novos ou sem tela, V1 a V4 pulam com mensagem. V5 sempre roda.
 """
 import os
 import subprocess
@@ -23,7 +23,7 @@ from test_viewport_carregador import CarregadorMalhas, _carregar, m600  # noqa: 
 from viewport_qrhi.cubo_rhi import CuboViewport  # noqa: E402
 
 NOVOS = ("limpar", "adicionar_lote", "enquadrar", "estatisticas")
-assert all(hasattr(CuboViewport, n) for n in NOVOS), "CuboViewport sem os métodos da S03-T05 parte B"
+assert all(hasattr(CuboViewport, n) for n in NOVOS), "CuboViewport sem os métodos de lote"
 
 
 @pytest.fixture(scope="module")

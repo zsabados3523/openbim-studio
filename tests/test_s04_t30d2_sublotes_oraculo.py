@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo do F0-S04-T30d2 (LOTE_OPUS_63 §3 ponto 4): a cena parte um lote grande em sub-lotes de até C = 8 MiB de vértices e índices (nv*28 + ni*4),
-na fronteira de peça. Quem implementa o T30a2/T30b não edita este arquivo. Cada caso roda em subprocesso sob `xvfb-run`, como em `test_s04_viewport.py`.
-Guardas (pulam, nunca afrouxam): `Cena.dados_lote` (T30a3, bits), `nao_partidos`/`pecas_maiores_que_c` em `estatisticas()` (T30b), Linux (/proc).
+"""Testes de sub-lotes: a cena parte um lote grande em sub-lotes de até C = 8 MiB de vértices e índices (nv*28 + ni*4),
+na fronteira de peça. Não editar este arquivo. Cada caso roda em subprocesso sob `xvfb-run`, como em `test_s04_viewport.py`.
+Guardas (pulam, nunca afrouxam): `Cena.dados_lote` (bits), `nao_partidos`/`pecas_maiores_que_c` em `estatisticas()`, Linux (/proc).
 Uma chamada devolve a sequência do ÚLTIMO sub-lote; os sub-lotes dela são os seguidos (anterior + 1 até a devolvida); a tabela da chamada é a
-concatenação de `objetos(q)` dessa faixa (função `tabela`, do oráculo do T30a1)."""
+concatenação de `objetos(q)` dessa faixa (função `tabela`, do teste de `sem`)."""
 import gc, importlib, sys, time  # noqa: E401
 from dataclasses import replace
 from pathlib import Path
@@ -275,7 +275,7 @@ def c_memoria(res):  # item 11 (Linux)
     c.parar()
     yield 0
 
-def test_teto_de_cada_sublote_e_numero_minimo_de_sublotes(viewport):  # item 3
+def test_teto_de_cada_sublote_e_numero_minimo_de_sublotes(viewport):
     r = caso("teto", limite=600)
     assert not r["falhas_teto"], "\n".join(r["falhas_teto"])
 
@@ -283,14 +283,14 @@ def test_uniao_dos_sublotes_e_a_forma_canonica_da_entrada(viewport):  # item 4 (
     r = caso("teto", limite=600)
     assert not r["falhas_forma"], "\n".join(r["falhas_forma"])
 
-def test_uniao_dos_sublotes_igual_em_bits_por_globalid(viewport):  # item 4, pelo acessor `dados_lote` (T30a3)
+def test_uniao_dos_sublotes_igual_em_bits_por_globalid(viewport):  # pelo acessor `dados_lote`
     r = caso("teto", limite=600)
-    r["acessor"] or pytest.skip("sem Cena.dados_lote (T30a3)")
+    r["acessor"] or pytest.skip("sem Cena.dados_lote")
     assert not r["falhas_bits"], "\n".join(r["falhas_bits"])
 
-def test_contadores_nao_partidos_e_pecas_maiores_que_c(viewport):  # item 10, com guarda até o T30b
+def test_contadores_nao_partidos_e_pecas_maiores_que_c(viewport):  # com guarda
     r = caso("teto", limite=600)
-    r["contadores"] or pytest.skip("estatisticas() sem nao_partidos/pecas_maiores_que_c (T30b)")
+    r["contadores"] or pytest.skip("estatisticas() sem nao_partidos/pecas_maiores_que_c")
     assert not r["falhas_contadores"], "\n".join(r["falhas_contadores"])
 
 def test_sequencias_seguidas_crescentes_e_atualizar_devolve_a_do_ultimo(viewport):  # item 2
@@ -308,7 +308,7 @@ def test_primeiro_quadro_com_a_sequencia_da_chamada_ja_tem_todos_os_sublotes_na_
     assert r["achou"], "nenhum quadro com a sequência da chamada chegou a ser apresentado com a placa cheia"
     assert not r["viol"], f"quadro com a sequência {r['sublotes']} apresentado com a placa incompleta (triângulos na placa: {r['viol'][:3]})"
 
-def test_erros_recusam_o_lote_inteiro_e_a_cena_fica_intacta(viewport):  # item 7
+def test_erros_recusam_o_lote_inteiro_e_a_cena_fica_intacta(viewport):
     r = caso("erros", limite=600)
     assert not r["falhas"], "\n".join(r["falhas"])
 
@@ -322,7 +322,7 @@ def test_bytes_copia_e_a_soma_exata_dos_sublotes(viewport):  # item 9
     assert r["dados"] == r["entrada"], f"os sub-lotes somam {r['dados']} bytes de malha, a entrada tem {r['entrada']}"
     assert abs(r["delta"] - r["esperado"]) <= 64 * 1024, f"bytes_copia subiu {r['delta']}, soma dos sub-lotes {r['esperado']}"
 
-def test_memoria_do_pico_ao_adicionar_lote_de_64_mib(viewport):  # item 11 (só Linux)
+def test_memoria_do_pico_ao_adicionar_lote_de_64_mib(viewport):  # só Linux
     sys.platform.startswith("linux") or pytest.skip("VmHWM só no Linux")
     r = caso("memoria", limite=600)
     "pulou" in r and pytest.skip(r["pulou"])
@@ -332,6 +332,6 @@ def test_memoria_do_pico_ao_adicionar_lote_de_64_mib(viewport):  # item 11 (só 
 if __name__ == "__main__":
     sys.path.insert(0, str(RAIZ / "prototypes"))
     nome, *resto = sys.argv[1:]
-    assert not {"obimcore", "PySide6.QtCore"} & sys.modules.keys(), "o oráculo importou Qt ou obimcore antes da ordem pedida"
+    assert not {"obimcore", "PySide6.QtCore"} & sys.modules.keys(), "o teste importou Qt ou obimcore antes da ordem pedida"
     [importlib.import_module(m) for m in ("ifcopenshell", "obimcore")]
     rodar(lambda r: globals()["c_" + nome](r, *resto))

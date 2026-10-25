@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo do F0-S04-P1, parte Python (LOTE_OPUS_69; ADR-004 §5, decisão 3C, e §5.1, regras 3 e 4): a porta única do modelo.
-Quem implementa o P1 não edita este arquivo; quem tira os `@AINDA_NAO` (xfail estrito) é o autor do oráculo, em commit próprio (só as linhas
-`AINDA_NAO = ...` e `@AINDA_NAO`). Contrato (cartão `docs/state/cards/F0-S04/F0-S04-P1.md`), módulo `app/openbim_app/sessao_modelo.py`, sem Qt:
+"""Testes da porta única do modelo, parte Python (ADR-004 §5, decisão 3C, e §5.1, regras 3 e 4).
+Não editar este arquivo; quem tira os `@AINDA_NAO` (xfail estrito) é o autor do teste,  (só as linhas
+`AINDA_NAO = ...` e `@AINDA_NAO`). Contrato, módulo `app/openbim_app/sessao_modelo.py`, sem Qt:
 - `SessaoModelo(arquivo)` (só `ifcopenshell.file`, senão `TypeError`) é a única dona do arquivo: nenhum atributo público o devolve.
 - `ler(espera=None)`: contexto que entrega o arquivo; vários leitores juntos. `escrever(espera=None)`: contexto que entrega uma `Escrita`
   (`.arquivo`, `.emprestar_leitura()`); um escritor só e nenhum leitor junto. `espera`: None = sem limite; número > 0 = segundos; 0 = não espera;

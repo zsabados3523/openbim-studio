@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""T26b: os protótipos do viewport também não deixam a vírgula decimal depois de criar o QApplication.
+"""Os protótipos do viewport também não deixam a vírgula decimal depois de criar o QApplication.
 
 Roda em SUBPROCESSO sem LC_ALL (o conftest.py põe LC_ALL=C no pytest e esconderia o defeito).
 Sem localidade pt_BR na máquina, pula COM MENSAGEM EM DESTAQUE; nunca passa em silêncio.
@@ -45,15 +45,15 @@ def _py(codigo):
 @pytest.fixture(scope="module")
 def tem_pt_br():
     if sys.platform == "win32":
-        pytest.skip("\n!!! T26b: caso de localidade pt_BR só roda no Linux; NAO FOI EXECUTADO !!!\n")
+        pytest.skip("\n!!! localidade pt_BR: caso só roda no Linux; NAO FOI EXECUTADO !!!\n")
     if _py(CODIGO_VIRGULA) != ",":
-        pular_chave("\n!!! SEM LOCALIDADE pt_BR NESTA MAQUINA: teste da T26b NAO FOI EXECUTADO "
+        pular_chave("\n!!! SEM LOCALIDADE pt_BR NESTA MAQUINA: teste de localidade dos protótipos NAO FOI EXECUTADO "
               "(Linux: locale-gen pt_BR.UTF-8) !!!\n", "OBIM_LOCALIDADE_OBRIGATORIA")
 
 
 def test_prototipo_deixa_ponto_decimal_depois_do_qapplication(tem_pt_br):
     antes, depois = _py(CODIGO_MEDIR).split()
-    assert antes == ",", "o canário parou de reproduzir: o QApplication não troca mais a localidade; revise a T26b"
+    assert antes == ",", "o canário parou de reproduzir: o QApplication não troca mais a localidade; revise o teste de localidade dos protótipos"
     assert depois == "."
 
 

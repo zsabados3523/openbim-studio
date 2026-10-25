@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Utilitários do oráculo do F0-S05-T05 (autor do oráculo; quem implementa não edita). Contrato: `test_s05_t05_diario_oraculo.py`.
-`fazer_casa` (modelo montado do T04 gravado em `<tmp>/proj/Casa.ifc`); `preparar` (reabre o Casa.ifc com GlobalId novos em sequência fixa e o
+"""Utilitários do teste do diário de gravação. Contrato: `test_s05_t05_diario_oraculo.py`.
+`fazer_casa` (modelo montado do módulo de transações gravado em `<tmp>/proj/Casa.ifc`); `preparar` (reabre o Casa.ifc com GlobalId novos em sequência fixa e o
 contexto do gerador refeito: o pai e o processo filho chegam ao MESMO modelo); `acoes(n)` (sequência fixa de transacao/desfazer/refazer, semente
-SEMENTE + 4); `Sessao` (Historico real do T04 + Diario, um passo por ação); `esperadas` (fotos depois de cada ação, sem diário); `recuperar`
+SEMENTE + 4); `Sessao` (Historico real + Diario, um passo por ação); `esperadas` (fotos depois de cada ação, sem diário); `recuperar`
 (chama `diario.recuperar` e confere P5: nada gravado na pasta do Casa.ifc); `abrir_filho` (o processo filho, que roda `filho()`)."""
 import hashlib
 import itertools
@@ -107,7 +107,7 @@ class Sessao:
         s.r.h.encerrar()
 
 
-def esperadas(casa, kinds):  # foto antes (0) e depois de cada ação, sem diário (o Historico do T04 sozinho)
+def esperadas(casa, kinds):  # foto antes (0) e depois de cada ação, sem diário (o Historico sozinho)
     s = Sessao(casa, diario=False)
     fotos = [s.foto()]
     for k in kinds:

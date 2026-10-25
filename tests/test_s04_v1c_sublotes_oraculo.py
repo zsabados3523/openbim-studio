@@ -1,14 +1,14 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo do F0-S04-V1c (cartão `docs/state/cards/F0-S04/F0-S04-V1c.md`, critério 1; ADR-004 §5.1 item 8): `spatial.assign_container` em sub-lotes.
-Quem implementa não edita este arquivo; quem tira os `@AINDA_NAO` (xfail estrito) é o autor do oráculo, em commit próprio, depois da implementação
-(só as linhas `AINDA_NAO = ...` e `@AINDA_NAO`). Contrato (o implementador lê só isto e o cartão):
-1. `fluxo_a.SUBLOTE_CONTAINER = 100` no nível do módulo; `_paredes` lê o valor do módulo NA HORA da chamada (o oráculo o troca com monkeypatch) e chama
+"""Testes de `spatial.assign_container` em sub-lotes (ADR-004 §5.1 item 8).
+Não editar este arquivo; os `@AINDA_NAO` (xfail estrito) saem quando o módulo existir
+(só as linhas `AINDA_NAO = ...` e `@AINDA_NAO`). Contrato :
+1. `fluxo_a.SUBLOTE_CONTAINER = 100` no nível do módulo; `_paredes` lê o valor do módulo NA HORA da chamada (o teste o troca com monkeypatch) e chama
    `api("spatial.assign_container", ...)` (o `api` do módulo, lido na hora: é o ponto de cessão de `lote._Fatiador`) uma vez por sub-lote de no máximo
    SUBLOTE_CONTAINER peças, na ordem de criação, todas com o mesmo `relating_structure`; tudo dentro da MESMA transação (um desfazer só).
 2. "Mesmo IFC da chamada única" = mesmo conteúdo canônico: contagem por classe, conjunto de GlobalId, cada IfcRelContainedInSpatialStructure (GlobalId,
    pavimento, CONJUNTO de peças; uma só por pavimento), matriz de posição de cada parede nova e a lista de GlobalId devolvida (em ordem).
    A ORDEM interna de `RelatedElements` e os números STEP NÃO entram: o próprio `assign_container` monta a lista com `set` (medido em 2026-10-22:
-   duas chamadas ÚNICAS iguais, com GlobalId fixos, já saem com ~2.000 linhas STEP diferentes). A ordem que o oráculo fixa é a das peças entregues à API.
+   duas chamadas ÚNICAS iguais, com GlobalId fixos, já saem com ~2.000 linhas STEP diferentes). A ordem que o teste fixa é a das peças entregues à API.
 VALOR MEDIDO (Linux local, 2026-10-22, xvfb-run, ambiente openbim; base sintética do `gerar_modelo_grande` com 36.000 paredes e 6.000 por andar = 31 MB;
 1.000 paredes num pavimento que já tem 6.000; tempo de CADA chamada de assign_container, 2 rodadas):
   100 peças: 84-85 ms (mediana), maior 116-149 ms · 250 peças: mediana 176-195, maior 284-285 ms · 1.000 peças: 639-668 ms.
@@ -20,7 +20,7 @@ CORREÇÃO (2026-10-22, CI do PR 261): o ifcopenshell guarda o histórico de des
 que nunca solta: os ~10 modelos deste arquivo (~75 mil objetos cada) ficavam vivos e cada varredura do coletor do Python ficava mais longa, até uma pausa
 única de ~250-500 ms no teste seguinte (test_viewport_responsivo). Agora cada caso tira do registro os arquivos que ele mesmo criou e coleta o lixo ao
 terminar (`_limpa`, autouse); nenhum número nem caso mudou.
-CORREÇÃO 2 (2026-10-22, windows-testes do PR 261 ainda lento depois da 1): nada do oráculo roda mais no processo do pytest. Cada caso `caso_*` roda num
+CORREÇÃO 2 (2026-10-22, windows-testes do PR 261 ainda lento depois da 1): nada do teste roda mais no processo do pytest. Cada caso `caso_*` roda num
 pytest FILHO (subprocesso, OBIM_S04_V1C_DENTRO=1) sobre este mesmo arquivo; o processo de fora só importa a biblioteca padrão e lê o resultado.
 Os casos, números e marcas são os mesmos; pulo dentro do filho vira pulo (ou falha, com OBRIGATORIO) fora."""
 import gc
@@ -45,7 +45,7 @@ AC = "spatial.assign_container"
 
 
 def pular(msg):
-    (pytest.fail if OBRIGATORIO else pytest.skip)(f"\n!!! S04-V1c: {msg} (oráculo dos sub-lotes NÃO FOI EXECUTADO) !!!\n")
+    (pytest.fail if OBRIGATORIO else pytest.skip)(f"\n!!! S04-V1c: {msg} (teste dos sub-lotes NÃO FOI EXECUTADO) !!!\n")
 
 
 @pytest.fixture(autouse=True)

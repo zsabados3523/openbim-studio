@@ -9,7 +9,7 @@ Sai com código 1 e lista o que faltou. Só usa a biblioteca padrão.
 import re
 import sys
 
-INFORMATIVOS = {"windows-sonda", "windows-medicoes"}  # não bloqueiam o merge; ficam fora do needs
+INFORMATIVOS = {"windows-medicoes"}  # não bloqueiam o merge; ficam fora do needs
 
 
 def trabalhos(texto):

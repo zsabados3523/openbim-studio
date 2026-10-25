@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo da viewport, casos novos (S04-T06b; LOTE_OPUS_12 §4 f e achado 9.e; LOTE_OPUS_13). Reaproveita os auxiliares de
+"""Testes da viewport, casos novos. Reaproveita os auxiliares de
 `test_s04_viewport.py` (importados) e roda os casos em subprocesso sob `xvfb-run`, como ele. Os casos (g) tamanho da captura e (h) escala
 1,25 estão em `test_s04_viewport.py` (caso `trocar`). Aqui:
- * `info()` -> str "<desenho> | <placa>" (ex. "OpenGL | llvmpipe", "D3D11 | ..."); começa por "ERRO" se a QRhi não subiu. Existe desde a T07.
- * T07b (guarda: pula enquanto `estatisticas()` não trouxer as chaves; FALHA com OBIM_S04_T07B_OBRIGATORIO=1, que entra junto com a T07b):
+ * `info()` -> str "<desenho> | <placa>" (ex. "OpenGL | llvmpipe", "D3D11 | ..."); começa por "ERRO" se a QRhi não subiu. Existe desde a versão anterior.
+ * contadores (guarda: pula enquanto `estatisticas()` não trouxer as chaves; FALHA com OBIM_S04_T07B_OBRIGATORIO=1):
    estatisticas()["superficies_soltas"] (int, quantas superfícies a thread de desenho soltou; >= 1 no caso `recriar_superficie`, que destrói a janela nativa) e
    estatisticas()["solturas_atrasadas"] (int, soltas que estouraram os 3 s; == 0 em todos os casos).
- * T08 (guarda: pula enquanto `estatisticas()` não trouxer a chave marcadora "fatias_enviadas" (int, fatias de envio à placa); FALHA com
-   OBIM_S04_T08_OBRIGATORIO=1, que entra junto com a T08): orçamento por quadro (lote de ~1 milhão de triângulos em UM adicionar_lote: nenhum
+ * fatias (guarda: pula enquanto `estatisticas()` não trouxer a chave marcadora "fatias_enviadas" (int, fatias de envio à placa); FALHA com
+   OBIM_S04_T08_OBRIGATORIO=1): orçamento por quadro (lote de ~1 milhão de triângulos em UM adicionar_lote: nenhum
    intervalo entre quadros apresentados > 50 ms até tudo estar na placa); sequência: o relogio() mostra, depois de perder_contexto() e depois
    de limpar()+novo lote, quadros cuja sequência volta a alcançar a devolvida por adicionar_lote (maior prefixo contínuo na placa);
    adicionar_lote com dtype/índices errados (vértices com itemsize != 28, índices não-uint32 ou não contíguos, índice >= nº de vértices,
@@ -47,12 +47,12 @@ def test_info_diz_qual_desenho_foi_usado(viewport):
 def test_contadores_de_soltura_t07b(viewport, nome, args, extra, limite):  # a confirmação vem depois dos casos (resultado em cache)
     s = _caso(nome, *args, limite=limite, extra=extra).get("solt") or {}
     if s.get("superficies_soltas") is None or s.get("solturas_atrasadas") is None:
-        guarda("OBIM_S04_T07B_OBRIGATORIO")("\n!!! aguarda S04-T07b: estatisticas() sem superficies_soltas/solturas_atrasadas !!!\n")
+        guarda("OBIM_S04_T07B_OBRIGATORIO")("\n!!! aguarda contadores: estatisticas() sem superficies_soltas/solturas_atrasadas !!!\n")
     assert s["solturas_atrasadas"] == 0, f"{nome}: soltura passou dos 3 s ({s})"
     # `trocar` NÃO exige superficies_soltas >= 1: o Qt reparenta o contêiner sem destruir a janela nativa (no CI o contador ficou em 0).
     assert nome != "recriar_superficie" or s["superficies_soltas"] >= 1, f"recriar_superficie: nenhuma superfície solta ({s})"
 
-# ---- T08 (guardados) ----
+# ---- fatias (guardados) ----
 def grade(n):  # ~2*n*n triângulos num só lote, na frente da câmera (plano z=0, cor verde)
     from viewport_qrhi.carregador import DTYPE_OBJETO, DTYPE_VERTICE, LoteMalha
     ij = np.stack(np.meshgrid(np.arange(n + 1), np.arange(n + 1)), -1).reshape(-1, 2).astype(np.float32)
@@ -146,14 +146,14 @@ def c_tipos_errados(res):
 
 def exige_t08(r):
     r["t08"] or guarda("OBIM_S04_T08_OBRIGATORIO")(
-        "\n!!! aguarda S04-T08: estatisticas() sem 'fatias_enviadas' (orçamento/sequência/tipos NÃO FORAM EXECUTADOS) !!!\n")
+        "\n!!! aguarda fatias: estatisticas() sem 'fatias_enviadas' (orçamento/sequência/tipos NÃO FORAM EXECUTADOS) !!!\n")
 
 def test_orcamento_por_quadro_lote_de_um_milhao_de_triangulos(viewport):
-    """Régua (decisão do líder, S04-T06b): o que o caso prova é que o ENVIO em fatias não congela a thread de desenho.
+    """Régua: o que o caso prova é que o ENVIO em fatias não congela a thread de desenho.
     (1) durante o envio (triangulos_na_placa < total; ~200 ms no llvmpipe, no máx. ~12 quadros a 60 Hz, então o piso é de 8 quadros e não 20): >= 8 quadros e nenhum intervalo > 50 ms;
     (2) com o lote completo e a cena estável: maior intervalo <= 3 x a mediana dos intervalos (regra da razão do lote 11) e nenhum >= 200 ms.
     Por que não "50 ms com o lote completo": no desenho por software do CI (llvmpipe) desenhar 1 milhão de triângulos subpixel custa
-    ~52 ms por quadro, limite do renderizador e não do envio. A meta absoluta de 50 ms por quadro (v2/03 §2.1/§2.3) vale na máquina do PO,
+    ~52 ms por quadro, limite do renderizador e não do envio. A meta absoluta de 50 ms por quadro vale na máquina de referência,
     com placa real; o número oficial é medido lá."""
     r = caso("orcamento", limite=300)
     exige_t08(r)
@@ -181,6 +181,6 @@ if __name__ == "__main__":
     sys.path.insert(0, str(RAIZ / "prototypes"))
     import importlib
     nome, *resto = sys.argv[1:]
-    assert not {"obimcore", "PySide6.QtCore"} & sys.modules.keys(), "o oráculo importou Qt ou obimcore antes da ordem pedida"
+    assert not {"obimcore", "PySide6.QtCore"} & sys.modules.keys(), "o teste importou Qt ou obimcore antes da ordem pedida"
     [importlib.import_module(m) for m in ("ifcopenshell", "obimcore")]
     rodar(lambda r: globals()["c_" + nome](r, *resto))

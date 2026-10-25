@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo da F0-S04-T15e: roteiro R fora da thread da janela, sem `t_painel_ms` (LOTE_OPUS_38 item 3; cartão F0-S04-T15e).
-Desde a T15a, `editar_propriedades` com janela e fora da thread dela não traz `t_painel_ms` (não há pintura medida). Regra do PO: sem o dado,
+"""Testes do roteiro R fora da thread da janela, sem `t_painel_ms`.
+Desde a versão com threads, `editar_propriedades` com janela e fora da thread dela não traz `t_painel_ms` (não há pintura medida). Regra: sem o dado,
 a meta M3 fica NÃO MEDIDA (ou falha explícita), nunca aprovada calada; nada de afrouxar.
 1. `fluxo_a._metas(passos)`: M3 só é calculada quando TODAS as repetições do passo 4a têm `t_painel_ms` (nunca de um subconjunto).
    Faltando em qualquer uma: M3 = objeto explícito {"passo": "4a", "n": <repetições do 4a>, "limite_ms": 50, "medida": False, "ok": False,
@@ -37,10 +37,10 @@ TEMPOS = ("mediana_ms", "p95_ms", "max_ms")
 
 
 def pular(msg):
-    (pytest.fail if OBRIGATORIO else pytest.skip)(f"\n!!! S04-T15e: {msg} (oráculo do painel ausente NÃO FOI EXECUTADO) !!!\n")
+    (pytest.fail if OBRIGATORIO else pytest.skip)(f"\n!!! painel ausente: {msg} (teste do painel ausente NÃO FOI EXECUTADO) !!!\n")
 
 
-def metas_hoje(passos, com_m3=True):  # cópia CONGELADA de fluxo_a._metas no main com a T15a (commit 913d3db); com_m3=False omite só a conta do M3
+def metas_hoje(passos, com_m3=True):  # cópia CONGELADA de fluxo_a._metas; com_m3=False omite só a conta do M3
     por = {p["id"]: p["reps"] for p in passos}
     meta = lambda pid, f, lim: (lambda v: {"passo": pid, "n": len(v), "mediana_ms": float(np.median(v)), "p95_ms": float(np.percentile(v, 95)), "max_ms": float(v.max()), "limite_ms": lim,  # noqa: E731
                                            "ok": bool(np.percentile(v, 95) < lim)} if len(v) else None)(np.array([f(r) for r in por.get(pid, [])], float))

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Teste do AdaptadorCarga (S03-T05-C1, B-8): viewport falso, sem tela."""
+"""Teste do AdaptadorCarga: viewport falso, sem tela."""
 import sys
 import time
 from pathlib import Path
@@ -52,9 +52,9 @@ def test_adaptador_m600(tmp_path):
     assert app is not None
 
 
-# ---------- P17 (cartão T08-0b, arquivo/lotes-1-a-28/LOTE_OPUS_7/resultado.md §1.6 e §4 item 5): troca de janela com a liberação ligada ----------
-# Esperado da T08-E: ao perder lotes, o viewport emite o sinal `contexto_perdido` (sem argumentos) e zera a caixa da cena;
-# o `AdaptadorCarga` reabre o arquivo sozinho (mesmo caminho e opções). (Antes da T08-E a cena ficava vazia em silêncio.)
+# ---------- P17: troca de janela com a liberação ligada ----------
+# Esperado: ao perder lotes, o viewport emite o sinal `contexto_perdido` (sem argumentos) e zera a caixa da cena;
+# o `AdaptadorCarga` reabre o arquivo sozinho (mesmo caminho e opções). (Antes dessa correção a cena ficava vazia em silêncio.)
 
 
 def _esperar(app, cond, limite_s):

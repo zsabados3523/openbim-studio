@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo do F0-S04-V1 (LOTE_OPUS_69; ADR-004 §5.1, regras 1 a 6 e critério 1): a forma "mista" de `prototypes/s04/fluxo_a/lote.py`.
-Quem implementa o V1 não edita este arquivo; quem tira os `@AINDA_NAO` (xfail estrito) é o autor do oráculo, em commit próprio, depois da implementação
-(só as linhas `AINDA_NAO = ...` e `@AINDA_NAO`). Contrato (o implementador lê só isto e o cartão `docs/state/cards/F0-S04/F0-S04-V1.md`):
+"""Testes da forma "mista" (ADR-004 §5.1, regras 1 a 6 e critério 1): de `prototypes/s04/fluxo_a/lote.py`.
+Não editar este arquivo; os `@AINDA_NAO` (xfail estrito) saem quando o módulo existir
+(só as linhas `AINDA_NAO = ...` e `@AINDA_NAO`). Contrato :
 1. `lote.medir(f, "mista", ...)`: o comando roda na thread da JANELA, cedendo como a forma 2 (`_Fatiador`, `fluxo_a.api` e `Cena.atualizar` são operações);
    cada chamada de `obimcore.malhas` (capturada no início do comando, como na forma 2) vira UM pedido inteiro (sem blocos) a uma `threading.Thread`
    chamada "lote-geometria"; a janela fecha a fatia em andamento, entra em `QEventLoop.exec()` e só sai quando o resultado chega por sinal Qt enfileirado
@@ -13,7 +13,7 @@ Quem implementa o V1 não edita este arquivo; quem tira os `@AINDA_NAO` (xfail e
 5. Comando `{"cmd": "composto", "passos": [...]}` só na mista (`lote_partido_cmd`, `lote_pesado_cmd`): passos em ordem, um `executar_detalhado` cada.
 6. Critério 1 (intactos), `main_mista` e `veredito_mista`: na segunda parte, `tests/test_s04_v1_veredito_oraculo.py`.
 GUARDA (pula, nunca afrouxa): casos com janela em SUBPROCESSO sob `xvfb-run -a` (nunca na tela real; Windows só no CI ou com OBIM_S04_TELA_VIRTUAL=1);
-os casos "real" pedem o obimcore; com OBIM_S04_V1_OBRIGATORIO=1 todo pulo vira falha. Os números do §5.1 (itens 2 a 8) são MEDIÇÃO do cartão, não daqui."""
+os casos "real" pedem o obimcore; com OBIM_S04_V1_OBRIGATORIO=1 todo pulo vira falha. Os números do §5.1 (itens 2 a 8) são medição, não daqui."""
 import importlib.util
 import json
 import os
@@ -38,7 +38,7 @@ REG = {"log": [], "qt": [], "falha": False, "geo_s": 0.3, "f": None, "emit": 0, 
 
 
 def pular(msg):
-    (pytest.fail if OBRIGATORIO else pytest.skip)(f"\n!!! S04-V1: {msg} (oráculo da forma mista NÃO FOI EXECUTADO) !!!\n")
+    (pytest.fail if OBRIGATORIO else pytest.skip)(f"\n!!! S04-V1: {msg} (teste da forma mista NÃO FOI EXECUTADO) !!!\n")
 
 
 # ---------- espiões (só no subprocesso, ANTES de `import lote`) ----------
@@ -362,7 +362,7 @@ def test_v1_real_parede_pesada_na_mista(real):
     for _, _, ini, fim, _ in mal:
         assert not [x for x in r["log"] if x[0] == "api" and x[3] > ini and x[2] < fim], "nenhuma escrita durante a malha (regra 3)"
     g = max(p["geometria"], key=lambda x: x["t_fim_ms"] - x["t_ini_ms"])
-    assert g["t_fim_ms"] - g["t_ini_ms"] >= 50, f"a malha da parede pesada levou {g['t_fim_ms'] - g['t_ini_ms']:.0f} ms: o caso não mede nada (voltar ao líder)"
+    assert g["t_fim_ms"] - g["t_ini_ms"] >= 50, f"a malha da parede pesada levou {g['t_fim_ms'] - g['t_ini_ms']:.0f} ms: o caso não mede nada (revisar o caso)"
     assert [t for t in p["pulsos"] if _dentro(t, g["t_ini_ms"], g["t_fim_ms"])], "a janela não tratou nenhum pulso durante a malha da parede pesada"
     dentro = [x for x in r["tent"] if _dentro(x[0], g["t_ini_ms"], g["t_fim_ms"])]
     assert len(dentro) >= 3 and all(x[1] == "ocupado" and x[2] == r["nome0"] and x[3] < 50 for x in r["tent"]), f"reentrada e painel durante a espera: {r['tent'][:4]}"

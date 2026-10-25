@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""F0-S04-V1b: `main_mista --parte lote --ifc <arquivo> --apelido <nome>` mede num IFC existente (aqui, uma base gerada por
-`gerar_modelo_grande`, nunca IFC do PO): mesmo formato de JSON, `base` nulo, `ifc` = apelido (nunca nome nem caminho). Janela em subprocesso, sob xvfb-run."""
+"""`main_mista --parte lote --ifc <arquivo> --apelido <nome>` mede num IFC existente (aqui, uma base gerada por
+`gerar_modelo_grande`, nunca IFC de terceiros): mesmo formato de JSON, `base` nulo, `ifc` = apelido (nunca nome nem caminho). Janela em subprocesso, sob xvfb-run."""
 import importlib.util
 import json
 import sys

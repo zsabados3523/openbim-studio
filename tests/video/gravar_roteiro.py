@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Experimento T12: roda um roteiro automático do app sem tela, captura a janela em cada passo e monta
-um GIF animado (e um WebP). Não é teste: é só para o PO ver. Uso: gravar_roteiro.py PASTA_SAIDA IFC"""
+"""Experimento: roda um roteiro automático do app sem tela, captura a janela em cada passo e monta
+um GIF animado (e um WebP). Não é teste: é só para visualizar. Uso: gravar_roteiro.py PASTA_SAIDA IFC"""
 import io
 import sys
 import time

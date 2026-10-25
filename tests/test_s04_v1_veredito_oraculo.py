@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo do F0-S04-V1, segunda parte (LOTE_OPUS_69; ADR-004 §5.1, critérios 1 a 6): o que fica intacto em `lote.py`, `main_mista` e `veredito_mista`.
+"""Testes da forma mista, segunda parte (ADR-004 §5.1, critérios 1 a 6): o que fica intacto em `lote.py`, `main_mista` e `veredito_mista`.
 A primeira parte (regras 2 a 5 da forma mista) está em `test_s04_v1_mista_oraculo.py`; mesmas regras de marcador e de guarda.
 - Critério 1: formas 1 e 2, `fluxo_a.py` (régua, A29) e o resto de `lote.py` intactos (sha256 do código, linhas sem espaço à direita, `main` de
   2026-10-21); em `medir` só mudam linhas com "_forma", "geometria" ou "mista" (o despacho da forma e a chave `geometria`). Passa hoje.
@@ -12,8 +12,8 @@ A primeira parte (regras 2 a 5 da forma mista) está em `test_s04_v1_mista_oracu
   Parte "lote": "4_controle_1s" (mediana do `pulso_maior_ms` da mista no controle < 1.000), "4_controle_forma2" (a mesma mediana <= a pior rodada
   da forma 2 no controle), "4_mouse_forma2" (mediana do M5b `mediana_ms` da mista <= a pior rodada da forma 2), "4_surda" (toda rodada da mista
   com `pulso_maior_ms` <= 1.000), "5_m5_1", "5_m5_2", "5_m5_mista" (controle + mouse: o texto do ADR, TODA rodada com janelas >= 20 e maior
-  intervalo < 200, E a régua do T15b no limite dele, 100 ms, ou 200 com `dados["estrito"]`, que `main_mista` grava de OBIM_S04_ESTRITO=1; valor =
-  mediana do maior intervalo, limite = o da régua do T15b). Parte "pesada": "3_parede" (mediana do M5b `max_ms` da mista < 0,5 x `malha_ms`), "6_longo" (mediana do M5b `max_ms` com a
+  intervalo < 200, E a régua de latência no limite dela, 100 ms, ou 200 com `dados["estrito"]`, que `main_mista` grava de OBIM_S04_ESTRITO=1; valor =
+  mediana do maior intervalo, limite = o da régua de latência). Parte "pesada": "3_parede" (mediana do M5b `max_ms` da mista < 0,5 x `malha_ms`), "6_longo" (mediana do M5b `max_ms` com a
   parede menos sem a parede <= 0,5 x `malha_ms`), "4_surda" (pesada e longo). Mediana = `numpy.median`."""
 import hashlib
 import importlib.util
@@ -47,7 +47,7 @@ def _med(v):
     return float(statistics.median(v))
 
 
-def _m5(rs, estrito):  # o ADR (toda rodada: janelas >= 20 e maior < 200) E a régua do T15b no limite dele (100 ms; 200 com OBIM_S04_ESTRITO=1)
+def _m5(rs, estrito):  # o ADR (toda rodada: janelas >= 20 e maior < 200) E a régua de latência no limite dela (100 ms; 200 com OBIM_S04_ESTRITO=1)
     mx, lim = [r["M5"]["maior_intervalo_ms"] for r in rs], 200.0 if estrito else 100.0
     par, med = _med([r["M5"]["maior_intervalo_parado_ms"] for r in rs]), _med(mx)
     ok = all(r["M5"]["janelas"] and min(r["M5"]["janelas"]) >= 20 for r in rs) and max(mx) < 200 and med < lim and med <= 3 * max(33.3, par)

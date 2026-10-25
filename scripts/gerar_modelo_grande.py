@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Gera um IFC grande e sintético para o benchmark (F0-S03-T02), só com IfcOpenShell, sem dado de
+"""Gera um IFC grande e sintético para o benchmark, só com IfcOpenShell, sem dado de
 terceiros. Repete paredes (caixas de 12 triângulos) em andares. Mesma quantidade = mesmo arquivo.
 Uso: gerar_modelo_grande.py SAIDA.ifc [--paredes N] [--por-andar M]"""
 import argparse

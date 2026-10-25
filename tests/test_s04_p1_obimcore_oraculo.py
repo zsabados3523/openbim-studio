@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo do F0-S04-P1, parte C++ (LOTE_OPUS_69; ADR-004 §5, decisão 3C: "o obimcore recebe a sessão e confere a trava antes de soltar o
-interpretador; sem trava, erro claro, não queda"). Quem implementa o P1 não edita este arquivo; os `@AINDA_NAO` (xfail estrito) saem pelo autor do oráculo.
+"""Testes da porta do obimcore, parte C++ (ADR-004 §5, decisão 3C: "o obimcore recebe a sessão e confere a trava antes de soltar o
+interpretador; sem trava, erro claro, não queda"). Os `@AINDA_NAO` (xfail estrito) saem quando o módulo existir.
 Contrato: `obimcore.malhas(alvo, guids)` aceita, além do `ifcopenshell.file` de hoje (caminho dos protótipos, que não muda: `fluxo_a.py` é régua), uma
 `SessaoModelo` (`app/openbim_app/sessao_modelo.py`). Com a sessão: COM o bloqueio, chama `alvo._obimcore_entrar()` (o erro dele, `TravaNaoSegura`, sobe
 como está); solta o bloqueio só para a geometria; com o bloqueio de volta chama `alvo._obimcore_sair()` SEMPRE (também quando a geometria falha).
@@ -26,9 +26,9 @@ def _sm():
 
 
 @pytest.fixture(scope="module")
-def base():  # 5 paredes do gerador + 1 parede de 60 m com 150 aberturas (a do T15d)
+def base():  # 5 paredes do gerador + 1 parede de 60 m com 150 aberturas
     if importlib.util.find_spec("obimcore") is None:
-        (pytest.fail if OBRIGATORIO else pytest.skip)("\n!!! S04-P1: módulo obimcore ausente (oráculo da porta no C++ NÃO FOI EXECUTADO) !!!\n")
+        (pytest.fail if OBRIGATORIO else pytest.skip)("\n!!! S04-P1: módulo obimcore ausente (testes da porta no C++ NÃO FOI EXECUTADO) !!!\n")
     import ifcopenshell
     import lote
     import obimcore
@@ -148,7 +148,7 @@ def test_p1_bloqueio_solto_durante_a_geometria_da_sessao(base):  # R1-h, regra 4
         sum(range(200))
     th.join()
     dur = fim["t1"] - fim["t0"]
-    assert dur >= 0.1, f"a malha da parede pesada levou {dur * 1000:.0f} ms: o caso não mede nada (voltar ao líder; não mexer nas aberturas)"
+    assert dur >= 0.1, f"a malha da parede pesada levou {dur * 1000:.0f} ms: o caso não mede nada (não mexer nas aberturas)"
     m = [t for t in marca if fim["t0"] <= t <= fim["t1"]]
     gap = max(np.diff([fim["t0"], *m, fim["t1"]]))
     assert gap < 0.05, f"a thread principal ficou {gap * 1000:.0f} ms parada durante {dur * 1000:.0f} ms de geometria: o C++ não soltou o bloqueio"

@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo do F0-S05-T07, parte 1: gravação do par no mesmo processo (cartão F0-S05-T07; ADR-002 §4.3, §4.5 e §4.8; T00 G4 a G6; v2/02 §6.1,
-§6.2 e §6.5). Quem implementa não edita `tests/`; o autor do oráculo tira os `@AINDA_NAO` (xfail estrito por falta do módulo) depois, em commit
+"""Testes da gravação do par, parte 1, no mesmo processo (ADR-002 §4.3, §4.5 e §4.8;
+§6.2 e §6.5). Não editar `tests/`; o autor do teste tira os `@AINDA_NAO` (xfail estrito por falta do módulo) depois, em commit
 próprio. A parte 2 (morte do processo filho em cada estado, E1 a E10, laço aleatório) está em `test_s05_t07_queda_oraculo.py`.
 CONTRATO de `app/openbim_app/gravacao_par.py` (sem Qt, sem obimcore). O ADR-002 §4.8 nomeia só `resolver_gravacao_pendente` e o gancho
-`ao_concluir(seq)`; o nome `gravar_par` e os nomes dos parâmetros são PROPOSTOS PELO ORÁCULO (pendentes do líder). O oráculo chama tudo POR NOME:
+`ao_concluir(seq)`; o nome `gravar_par` e os nomes dos parâmetros são PROPOSTOS NESTE TESTE (pendentes de confirmação). O teste chama tudo POR NOME:
 1. `gravar_par(sessao=, historico=, lateral=, destino=, pasta_projeto=, lado_id=, seq=, carimbo=True, ao_concluir=None)`: `destino` = `Casa.ifc`;
    o lateral vai em `Casa.obim` (mesmo nome-base, mesma pasta); `pasta_projeto` = `projetos/<LadoId>` (já existe; dada pelo chamador, o módulo
    não importa `diario.py` nem lê `OBIM_PASTA_LOCAL`); o diário de gravação é `pasta_projeto/gravacao.json`. O valor devolvido não é conferido.
@@ -21,7 +21,7 @@ CONTRATO de `app/openbim_app/gravacao_par.py` (sem Qt, sem obimcore). O ADR-002 
    carimbo de volta ao valor anterior, `ao_concluir` não é chamado. Depois dele: o resolvedor roda na hora (ADR-002 §4.5); se não conseguir, o
    `gravacao.json` fica e a mensagem diz onde está o temporário.
 6. `resolver_gravacao_pendente(pasta_projeto=, destino=, ao_concluir=None)`: estados E1 a E10 do ADR-002 §4.5 (parte 2). O valor devolvido não é
-   conferido (o "avisa" do E9/E10 está em PERGUNTA_LIDER); o oráculo confere o disco e as chamadas de `ao_concluir`. Depois de concluir ou
+   conferido (o "avisa" do E9/E10 está em PERGUNTA_LIDER); o teste confere o disco e as chamadas de `ao_concluir`. Depois de concluir ou
    desfazer não sobra `Casa.*.tmp`, `Casa.*.bak.tmp` nem `gravacao*` (o resolvedor limpa com `limpar_temporarios`; `confirmar` de novo com o
    `.bak` já ligado ao destino por `os.link` deixa `Casa.ifc.bak.tmp`, porque `os.replace` entre dois nomes do mesmo arquivo não faz nada).
 GUARDA: sem ifcopenshell, pula; com OBIM_S05_OBRIGATORIO=1 todo pulo vira falha. Régua: `s05_t07_aux.py` (provada em `test_s05_t07_regua_oraculo.py`)."""
@@ -89,7 +89,7 @@ def proj(tmp_path, base_ifc, monkeypatch):  # noqa: F811
 
 
 class Traco:
-    """Anota (em ordem) `_etapa` do T06, `ifcopenshell.file.write`, `os.replace`, `os.unlink`/`os.remove` e o estado da porta em cada um;
+    """Anota (em ordem) `_etapa` do módulo de gravação, `ifcopenshell.file.write`, `os.replace`, `os.unlink`/`os.remove` e o estado da porta em cada um;
     `gatilhos[evento]` (evento = tupla; com "depois" no fim, roda depois do real) é chamado naquele ponto."""
     def __init__(s, mp, sessao, gatilhos=None):
         import ifcopenshell

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Teste de fumaça do ambiente (F0-S02-T03): as versões fixadas em environment.yml."""
+"""Teste de fumaça do ambiente: as versões fixadas em environment.yml."""
 import sys
 
 import ifcopenshell

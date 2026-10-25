@@ -19,14 +19,14 @@ def pular_sem_tela(msg):
 
 
 # OBIM_CI=1 (RG-12) liga de uma vez as chaves de obrigatório da S04, uma por etapa. Fica de fora OBIM_S04_T14_OBRIGATORIO
-# (casos B reais de test_s04_metas.py: a T14 ainda não existe). As chaves de tela e de localidade têm passo próprio no CI.
+# (casos B reais de test_s04_metas.py, que dependem de uma medição de fluxo B). As chaves de tela e de localidade têm passo próprio no CI.
 CHAVES_S04 = (
     "OBIM_S04_OBRIGATORIO", "OBIM_S04_VIEWPORT_OBRIGATORIO", "OBIM_S04_T07B_OBRIGATORIO", "OBIM_S04_T08_OBRIGATORIO",
     "OBIM_S04_T09_OBRIGATORIO", "OBIM_S04_T10_OBRIGATORIO", "OBIM_S04_T10B_OBRIGATORIO", "OBIM_S04_T10C_OBRIGATORIO",
     "OBIM_S04_T11_OBRIGATORIO", "OBIM_S04_T11B_OBRIGATORIO", "OBIM_S04_T11C_OBRIGATORIO", "OBIM_S04_T12_OBRIGATORIO",
     "OBIM_S04_T13_OBRIGATORIO", "OBIM_S04_T14A_OBRIGATORIO", "OBIM_S04_T16_OBRIGATORIO",
 )
-CHAVES_S05 = ("OBIM_S05_OBRIGATORIO",)  # S05 (T06 em diante): uma chave para a fatia toda
+CHAVES_S05 = ("OBIM_S05_OBRIGATORIO",)  # S05: uma chave para o conjunto inteiro
 
 
 def ligar_ci():

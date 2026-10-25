@@ -17,7 +17,7 @@ cmake-build-*/
 *.pyd
 *.dll
 
-# Pasta local de autosave (v2/02 §6.5) e cópias geradas por ele
+# Pasta local de autosave e cópias geradas por ele
 autosave/
 *.autosave
 
@@ -26,11 +26,11 @@ corpus/*
 !corpus/README.md
 
 # Modelos do usuário: nunca vão ao repositório público (um IFC copiado por engano não teria volta).
-# Exceção: a amostra pública do roteiro de aceitação.
+# Exceção: a amostra pública de testes.
 *.ifc
 *.ifczip
 *.obim
-!docs/acceptance/amostras/casa-simples.ifc
+!tests/amostras/casa-simples.ifc
 
 # Grafo local do graphify (gerado por `graphify update .`; não vai ao repositório)
 graphify-out/

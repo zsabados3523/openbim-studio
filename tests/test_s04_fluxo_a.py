@@ -1,21 +1,21 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo do fluxo A (S04-T11; LOTE_OPUS_9 §1.1, §1.4 regras 1-8, §2, §4 etapa 3; contrato em prototypes/s04/fluxo_a/CONTRATO.md).
+"""Testes do fluxo A (regras 1 a 8, medições e etapa 3; contrato em prototypes/s04/fluxo_a/CONTRATO.md).
 GUARDA: pula enquanto `prototypes/s04/fluxo_a/fluxo_a.py` não existir; FALHA com OBIM_S04_T11_OBRIGATORIO=1, OBIM_S04_T11B_OBRIGATORIO=1 ou OBIM_S04_T11C_OBRIGATORIO=1 (todo skip vira falha; só o caso da localidade no Windows segue sendo pulado, não se aplica lá). Casos sem janela rodam no processo;
 os gráficos rodam em SUBPROCESSO sob `xvfb-run` (nunca na tela real; Windows só no CI ou com OBIM_S04_TELA_VIRTUAL=1) e o roteiro R inteiro roda UMA vez.
-Suposições do oráculo (o Opus confere): parede = prisma retangular = 12 triângulos; a base é `scripts/gerar_modelo_grande.py` com OBIM_S04_BASE paredes
+Premissas do teste: parede = prisma retangular = 12 triângulos; a base é `scripts/gerar_modelo_grande.py` com OBIM_S04_BASE paredes
 (padrão 300; oficial 3000); régua do CI virtual = mediana < limite e nenhum valor >= max(3 x limite, 250 ms) (M2, M2b, M3), M4 < 20 s, M5 pela régua do lote 11
-(maior intervalo < 100 ms, >= 20 quadros por janela de 1 s, <= 3x o parado); OBIM_S04_ESTRITO=1 (máquina do PO) troca por p95 < limite.
-Fora do escopo (T12): M1, M6, M7 e a comparação A x B. Sentinelas sem fluxo_a: roteiro, ifcopenshell sozinho e a conta das metas.
+(maior intervalo < 100 ms, >= 20 quadros por janela de 1 s, <= 3x o parado); OBIM_S04_ESTRITO=1 (máquina de referência) troca por p95 < limite.
+Fora do escopo deste teste: M1, M6, M7 e a comparação A x B. Sentinelas sem fluxo_a: roteiro, ifcopenshell sozinho e a conta das metas.
 
-T11c (lote 22 item 5): `criar_paredes_lote` de N paredes cria N IfcMaterialLayerSetUsage e N IfcRelAssociatesMaterial (cada relação só da sua parede, +1 relação por tipo), como N `criar_parede`;
- o IFC segue válido (esquema + regras EXPRESS) e rollback, desfazer e refazer do lote seguem intactos (casos "t11c" abaixo; o fluxo B é conferido em test_s04_fluxo_b_paredes.py, sem exceção).
+Criação em lote (`criar_paredes_lote`) de N paredes cria N IfcMaterialLayerSetUsage e N IfcRelAssociatesMaterial (cada relação só da sua parede, +1 relação por tipo), como N `criar_parede`;
+ o IFC segue válido (esquema + regras EXPRESS) e rollback, desfazer e refazer do lote seguem intactos (casos de material abaixo; o fluxo B é conferido em test_s04_fluxo_b_paredes.py, sem exceção).
 
-T11b (lote 18; o implementador precisa saber, ver também CONTRATO.md):
+Transações (ver também CONTRATO.md):
  - NOVO retorno de comando: `FluxoA.executar_detalhado(cmd, espera=None) -> (guids, detalhe)`; `detalhe` é um dict NOVO a cada chamada (criados, alterados, apagados,
    geometria, sequencia, t0_ms, t_comando_ms e, só em editar_propriedades, t_painel_ms), nunca o objeto compartilhado. `executar` continua devolvendo só a lista de GlobalIds
    (= o primeiro item) e `ultimo` continua existindo (cópia do último detalhe), mas `executar_roteiro` não pode depender dele: usa o detalhe devolvido.
  - falha DEPOIS do `end_transaction` (em `_lote`/`obimcore.malhas` ou em `Cena.atualizar`): `ifc.undo()` + tirar o registro do histórico, a grade (`_g`) não anda, a trava solta e a exceção sobe;
-   falha no meio da transação (antes do commit): `discard_transaction()`. O oráculo força a falha em `fluxo_a.api` e `ifcopenshell.api.run` (o módulo continua com `api = ifcopenshell.api.run`
+   falha no meio da transação (antes do commit): `discard_transaction()`. O teste força a falha em `fluxo_a.api` e `ifcopenshell.api.run` (o módulo continua com `api = ifcopenshell.api.run`
    e chama as funções por ele), em `obimcore.malhas` (chamado como atributo do módulo na hora) e em `self.cena.atualizar`.
  - desfazer/refazer: o registro só sai da pilha depois de `ifc.undo()/redo()` dar certo; se `Cena.atualizar` (ou a malha) falhar depois, volta o undo/redo e o registro à pilha
    (modelo e cena em sincronia). A malha re-enviada é só a afetada: `geometria` do registro (o que o comando original mandou) mais o que o desfazer/refazer fez APARECER
@@ -47,7 +47,7 @@ GEO = {"criar_parede", "criar_paredes_lote", "mudar_comprimento", "mover"}  # co
 CMDS = MUTA | {"abrir", "selecionar", "orbitar", "camera_mover", "aproximar", "enquadrar", "camera", "animar_orbita", "parar_animacao", "esperar", "gravar"}
 
 def pular(msg):
-    (pytest.fail if OBRIGATORIO else pytest.skip)(f"\n!!! S04-T11/T11b/T11c: {msg} (oráculo do fluxo A NÃO FOI EXECUTADO) !!!\n")
+    (pytest.fail if OBRIGATORIO else pytest.skip)(f"\n!!! S04-T11/T11b/T11c: {msg} (testes do fluxo A NÃO FOI EXECUTADO) !!!\n")
 
 @pytest.fixture(scope="module")
 def fa():
@@ -198,7 +198,7 @@ def test_lote_de_paredes_e_uma_transacao_so(novo):
     assert sorted(f.executar({"cmd": "desfazer"})) == sorted(r) and estado(f.ifc) == e0 and not f.ifc.by_type("IfcWall")
     assert sorted(f.executar({"cmd": "refazer"})) == sorted(r) and estado(f.ifc) == e1
 
-# ---------- T11c: uma camada de material por parede, também no lote ----------
+# ---------- uma camada de material por parede, também no lote ----------
 LOTE = dict(PAREDE, cmd="criar_paredes_lote")
 
 def test_t11c_lote_de_n_paredes_tem_n_usos_e_n_relacoes_de_material(novo):
@@ -305,7 +305,7 @@ def test_t11c_lote_que_falha_no_meio_deixa_zero_usos_novos_e_o_desfazer_seguinte
         aux.confere_uma_camada_por_parede(f.ifc, 10)
         assert forma(f.ifc.by_guid(lote[0]))[2] == [2 * 5.0, 0.0, 0.0], prefixos
 
-def test_t11c_tipo_sem_conjunto_de_camadas(novo):  # lote Opus 24 A1: tipo sem material, ou com IfcMaterial simples, não tem conjunto de camadas a usar; no main funciona (a parede só não ganha uso), então o lote também tem de funcionar
+def test_t11c_tipo_sem_conjunto_de_camadas(novo):  # tipo sem material, ou com IfcMaterial simples, não tem conjunto de camadas a usar; a parede só não ganha uso, e o lote também tem de funcionar
     import ifcopenshell.api as A
     for nome, simples in (("SEM", False), ("SIMPLES", True)):
         f = novo()
@@ -321,7 +321,7 @@ def test_t11c_tipo_sem_conjunto_de_camadas(novo):  # lote Opus 24 A1: tipo sem m
         assert aux.erros_ifc(f.ifc) == [], nome
         assert all(w.IsTypedBy and w.IsTypedBy[0].RelatingType == t for w in f.ifc.by_type("IfcWall")), f"{nome}: cada parede continua ligada ao tipo"
 
-def test_t11c_custo_do_lote_nao_cresce_com_as_paredes_que_o_tipo_ja_tem(novo):  # sentinela de escala (lote 23 A3): vale com OBIM_S04_T11C_OBRIGATORIO=1 (o `fa` falha em vez de pular)
+def test_t11c_custo_do_lote_nao_cresce_com_as_paredes_que_o_tipo_ja_tem(novo):  # sentinela de escala: vale com OBIM_S04_T11C_OBRIGATORIO=1 (o `fa` falha em vez de pular)
     # O mesmo lote de 300 paredes, com 0 e com ~2000 paredes do tipo já no modelo: o tempo não pode mais que dobrar.
     # Não prescreve número nem forma de chamada da API (o lote 23 mediu 5,7x num código quadrático e 1,1x na alternativa linear).
     # Pesado (~21 s aqui, ~60 s no CI): só roda com OBIM_S04_T11C_OBRIGATORIO=1 (o passo Viewport do ci.yml liga). Na suíte inteira (`pytest -q tests`) ele roda antes de test_viewport_responsivo.py e a memória/GC que deixa leva 3 testes de resposta da janela de ~75 ms para 220-295 ms (medido: sem ele 71/77 ms, com ele 241/228 ms).
@@ -432,7 +432,7 @@ def test_mini_roteiro_sem_janela_resolve_alvos_repeticoes_e_grava_medicao(novo, 
     assert arq["fluxo"] == "A" and Path(med["arquivo_medicao"]).name == "medicao.json" and [p["id"] for p in arq["passos"]] == [p["id"] for p in mini["passos"]]
     assert all(r["t0_ms"] <= r["t_comando_ms"] <= r["t_quadro_ms"] for p in arq["passos"] for r in p["reps"])
 
-# ---------- T11b: casos sem janela ----------
+# ---------- casos sem janela ----------
 def test_conferencia_de_validade_do_ifc_do_oraculo_pega_ifc_invalido(novo, tmp_path):
     import ifcopenshell
     import ifcopenshell.validate as V
@@ -445,7 +445,7 @@ def test_conferencia_de_validade_do_ifc_do_oraculo_pega_ifc_invalido(novo, tmp_p
     ruim = ifcopenshell.open(arq)  # descartável: espessura de camada negativa (regra EXPRESS) e GlobalId com tamanho errado (esquema)
     ruim.by_type("IfcMaterialLayer")[0].LayerThickness = -0.5
     ruim.by_type("IfcWall")[0].GlobalId = "abc"
-    assert len(aux.erros_ifc(ruim)) >= 2, "o oráculo tem de ver os dois defeitos (esquema e regra EXPRESS)"
+    assert len(aux.erros_ifc(ruim)) >= 2, "o teste tem de ver os dois defeitos (esquema e regra EXPRESS)"
     antigo = V.json_logger()  # o filtro de antes (nível em maiúsculas, sem regras EXPRESS) não via nenhum: é o que o lote 18 achou
     V.validate(ruim, antigo)
     assert not [x for x in antigo.statements if x.get("level") == "ERROR"] and not [x for x in antigo.statements if x.get("level") == "error" and "SELF" in x.get("message", "")]
@@ -557,7 +557,7 @@ def test_base_em_mm_grade_no_lugar_e_profundidade_sem_ruido_depois_de_mudar_o_co
     import ifcopenshell.util.unit as U
     gerar_modelo_grande.gerar(str(tmp_path / "mm.ifc"), paredes=4)
     f = novo(str(tmp_path / "mm.ifc"))
-    assert U.calculate_unit_scale(f.ifc) == 0.001, "a base do oráculo tem de ser em milímetros"
+    assert U.calculate_unit_scale(f.ifc) == 0.001, "a base do teste tem de ser em milímetros"
     f.executar(TIPO)
     gs = [f.executar(PAREDE)[0] for _ in range(52)]
     for g in (0, 1, 49, 50, 51):  # a grade é em metros, qualquer que seja a unidade do projeto
@@ -693,7 +693,7 @@ def test_roteiro_r_grava_medicao_json_com_os_campos_e_as_metas_do_lote_9(rot):
         assert m["M5"][a] == pytest.approx(c["M5"][a], abs=1e-6), a
     print("METAS", json.dumps(c))
 
-def test_roteiro_r_metas_dentro_da_regua_do_ci_virtual(rot):  # a régua do CI não é o número oficial: esse é o do PO (OBIM_S04_ESTRITO=1)
+def test_roteiro_r_metas_dentro_da_regua_do_ci_virtual(rot):  # a régua do CI não é o número oficial: esse é o da máquina de referência (OBIM_S04_ESTRITO=1)
     assert not (e := veredito(calcular(rot["med"]))), e
 
 def test_desfazer_e_refazer_devolvem_cena_imagem_e_selecao_ao_estado_anterior(tela):
@@ -719,8 +719,8 @@ def test_localidade_numerica_c_depois_de_criar_a_aplicacao(tela):
     assert res["controle_virgula"], "controle: o Qt deveria ter posto vírgula no processo (sem isso o caso não prova nada)"
     assert res["depois"] == "." and res["lc"] == "C" and res["apos_gravar"] == "." and res["dims"] == [4.0, 0.15, 2.8], res
 
-# ---------- T11b: casos gráficos ----------
-def test_roteiro_r_tempos_batem_com_o_relogio_do_nucleo_visto_por_fora(rot):  # lote 18 achado 2: o oráculo não confia só nos tempos que o fluxo anota
+# ---------- casos gráficos ----------
+def test_roteiro_r_tempos_batem_com_o_relogio_do_nucleo_visto_por_fora(rot):  # o teste não confia só nos tempos que o fluxo anota
     med, ch = rot["med"], rot["chamadas"]
     vistos = {float(t): int(s) for t, s in rot["quadros_vistos"]}
     assert len(vistos) > 100, "o espião de Cena.relogio() quase não viu quadros"
@@ -775,7 +775,7 @@ def test_desfazer_e_refazer_de_propriedade_nao_reenviam_a_cena(fino):
     for k in ("editar", "des_editar", "ref_editar"):
         assert p[k]["dfatias"] == 0 and p[k]["tri"][0] == p[k]["tri"][1] == p[k]["tri"][2], (k, p[k])
         assert len(p[k]["log"]) == 1 and not p[k]["log"][0]["guids"] and not p[k]["log"][0]["remover"], f"{k}: propriedade não é malha, a cena não recebe lote ({p[k]['log']})"
-    for k in ("des_mudar", "ref_mudar"):  # só a parede que mudou; o núcleo ainda reenvia tudo (T12), mas não mais do que no comando original
+    for k in ("des_mudar", "ref_mudar"):  # só a parede que mudou; o núcleo ainda reenvia tudo, mas não mais do que no comando original
         assert [l["guids"] for l in p[k]["log"]] == [[p["alvo_mudar"]]] and not p[k]["log"][0]["remover"], (k, p[k]["log"])
         assert p[k]["dfatias"] <= p["mudar"]["dfatias"], (k, p[k]["dfatias"], p["mudar"]["dfatias"])
 
@@ -793,7 +793,7 @@ def test_desfazer_e_refazer_com_falha_na_cena_voltam_o_modelo_e_o_registro(fino)
         for qual in ("desfazer", "refazer"):
             assert all(v[qual].values()), (onde, qual, {k: x for k, x in v[qual].items() if not x})
 
-# ---------- F0-RG-07: deslocamento da cena (coordenadas georreferenciadas) ----------
+# ---------- deslocamento da cena (coordenadas georreferenciadas) ----------
 @pytest.mark.parametrize("base", [(333000.0, 7400000.0, 0.0), (-333000.0, -7400000.0, -50.0)])
 def test_rg07_lote_com_coordenada_utm_usa_deslocamento_e_nao_perde_precisao(novo, base):
     try:

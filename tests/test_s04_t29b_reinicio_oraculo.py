@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo da F0-S04-T29b: reinício planejado do filho de geometria (regra R-A), peça por peça.
+"""Testes do reinício planejado do filho de geometria (regra R-A), peça por peça.
 
-Transcrição de docs/state/lotes/LOTE_OPUS_59/resultado.md §2.4. Quem implementa o T29a e o T29c não edita este arquivo.
+Não editar este arquivo.
 
 Como ler:
 - Os testes SEM marca (forma canônica, controle "normal contra normal", limites padrão) passam com o produto de hoje.
@@ -10,7 +10,7 @@ Como ler:
 - A forma canônica junta todos os pedaços de cada peça (id_step), gira cada triângulo para começar no menor vértice SEM trocar a
   ordem (mantém o sentido da face), ordena e compara exato, em bits. Não compara número e ordem dos lotes.
 - O número de filhos e a posição do reinício vêm de um espião no `multiprocessing` do carregador (não dependem de nomes novos
-  no resumo). Tudo com os mesmos fios nos dois lados (1 fio, bloco de 3 peças); o passe de 1 fio do T21 não é referência.
+  no resumo). Tudo com os mesmos fios nos dois lados (1 fio, bloco de 3 peças); o passe de 1 fio não é referência.
 - Modelo sintético de 12 paredes: 4 blocos de 3 peças; `max_bytes_lote` pequeno parte cada peça em 2 pedaços.
 Hipótese registrada: o gancho OBIM_TESTE_CRESCER_MB aceita vários pares separados por vírgula ("g1=mb,g2=mb"), só para o caso do
 segundo reinício pedido com o teto padrão (a especificação descreve um par; ver PERGUNTA_PO do retorno).
@@ -257,7 +257,7 @@ def test_bloco_padrao_e_250():
     assert inspect.signature(CarregadorMalhas.__init__).parameters["tamanho_bloco"].default == 250
 
 
-# ---------- reinício forçado (T29a) ----------
+# ---------- reinício forçado ----------
 def _lenta(modelo, k, env):
     """Acrescenta ao env uma peça lenta (LENTA_S) na posição k."""
     return {**env, "OBIM_TESTE_PECA_LENTA": f"{_guid(modelo, k)}={LENTA_S:g}"}
@@ -296,7 +296,7 @@ def test_dois_reinicios_nenhuma_peca_some(modelo, monkeypatch):
     _comparar_com_normal(modelo, monkeypatch, {"OBIM_TESTE_REINICIO_BLOCO": "2,4"}, filhos=3)
 
 
-# ---------- reinício pelo caminho real (T29c) ----------
+# ---------- reinício pelo caminho real ----------
 def test_crescer_em_bloco_que_nao_e_o_primeiro_reinicia_uma_vez_no_bloco_certo(modelo, monkeypatch):
     g = _guid(modelo, BLOCO)  # 1ª peça do bloco 2 cresce; a última do mesmo bloco é lenta (L)
     env = _lenta(modelo, 2 * BLOCO - 1, {"OBIM_TESTE_CRESCER_MB": f"{g}={CRESCER_MB}"})

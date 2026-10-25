@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Testes do gerador de modelo grande (F0-S03-T02), tamanho pequeno."""
+"""Testes do gerador de modelo grande, tamanho pequeno."""
 import importlib.util
 import multiprocessing
 import pathlib

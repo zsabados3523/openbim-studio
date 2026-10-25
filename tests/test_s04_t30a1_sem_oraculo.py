@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo do F0-S04-T30a1 (T30d1): o `sem` da cena (refaz um lote sem os objetos removidos) tem de dar o MESMO resultado de hoje
-e parar de inflar `bytes_copia`. Quem implementa o T30a1 não edita este arquivo.
-Sem marca: equivalência (passa com o `sem` de hoje e tem de continuar passando). `bytes_copia` sem sobra: passa desde o T30a1 (PR 200).
+"""Testes do `sem` da cena (refaz um lote sem os objetos removidos) tem de dar o MESMO resultado de hoje
+e parar de inflar `bytes_copia`. Não editar este arquivo.
+Sem marca: equivalência (passa com o `sem` de hoje e tem de continuar passando). `bytes_copia` sem sobra: passa desde essa correção.
 Forma canônica por peça: calculada em Python puro (`sem_mortos`) a partir do lote de entrada, pelo GUID; índices renumerados por soma parcial.
 O Python não lê os vértices da cena de volta: a conferência em bits dos vértices é indireta, pela imagem (captura) da cena operada contra a
 captura da mesma cena remontada do zero com a forma canônica (mesmo `enquadrar`, mesma ordem de lotes). Tabela, contagens e caixa: exatas.
@@ -153,11 +153,11 @@ def test_sem_equivale_a_forma_canonica_por_peca_e_a_cena_remontada(viewport):  #
     assert r["na_placa"] and r["pixels_cena"] >= 500, f"a cena não chegou à placa ou a imagem está vazia: {r}"
     assert r["imagem_igual"], f"a cena operada difere da remontada com a forma canônica em {r['pixels_dif']} pixels"
 
-def test_marcador_vazio_e_lote_so_com_marcador_nao_mudam_nada(viewport):  # critério 3
+def test_marcador_vazio_e_lote_so_com_marcador_nao_mudam_nada(viewport):  
     r = caso("marcador")
     assert not r["falhas"], "\n".join(r["falhas"])
 
-def test_bytes_copia_sobe_so_o_lote_novo(viewport):  # critério 2; hoje a sobra de capacidade é de megabytes
+def test_bytes_copia_sobe_so_o_lote_novo(viewport):  # hoje a sobra de capacidade é de megabytes
     r = caso("bytes_copia")
     print(f"MEDIDO bytes_copia antes {r['antes']} depois {r['depois']} diferença {r['depois'] - r['antes']} (lote novo {r['bytes_novo']}, lote tocado {r['tam_lote']})")
     assert abs(r["depois"] - r["antes"]) <= r["bytes_novo"] + 64 * 1024, f"bytes_copia {r['antes']} -> {r['depois']}: diferença {r['depois'] - r['antes']}"
@@ -165,6 +165,6 @@ def test_bytes_copia_sobe_so_o_lote_novo(viewport):  # critério 2; hoje a sobra
 if __name__ == "__main__":
     sys.path.insert(0, str(RAIZ / "prototypes"))
     nome, *resto = sys.argv[1:]
-    assert not {"obimcore", "PySide6.QtCore"} & sys.modules.keys(), "o oráculo importou Qt ou obimcore antes da ordem pedida"
+    assert not {"obimcore", "PySide6.QtCore"} & sys.modules.keys(), "o teste importou Qt ou obimcore antes da ordem pedida"
     [importlib.import_module(m) for m in ("ifcopenshell", "obimcore")]
     rodar(lambda r: globals()["c_" + nome](r, *resto))

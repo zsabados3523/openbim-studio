@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""F0-RG-04: o formato de vértices e de objetos é o mesmo em Python e em C++. Lê os números escritos no código C++ (sem
+"""Formato de vértices e de objetos é o mesmo em Python e em C++. Lê os números escritos no código C++ (sem
 precisar compilar) e compara com `prototypes/formato_malha.py`; se um lado mudar sem o outro, este teste falha."""
 import ast
 import re

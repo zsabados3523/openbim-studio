@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo do F0-S05-T05, parte 3: disco cheio de verdade no `anotar` (achado ALTO do lote Opus 82; quem implementa não edita). CONTRATO: o de
+"""Testes do diário, parte 3: disco cheio de verdade no `anotar` (achado de revisão; não editar). CONTRATO: o de
 `test_s05_t05_diario_oraculo.py` (item 8: o diário fica sem resto do registro que falhou e o próximo `anotar` segue com o `seq` seguinte), com o
 objeto de arquivo REAL do Python (`io.FileIO`, sob `io.BufferedWriter` como `open(..., "wb")` devolve), sem ponto de teste do módulo. Disco cheio
 = a escrita aceita só os CABE primeiros bytes (escrita curta) e depois levanta `OSError(ENOSPC)`. Registro pequeno (cabe no buffer de 8 KB) e
 grande. Corte do resto que também falha: diário QUEBRADO, aquele `anotar` levanta e todo `anotar` seguinte recusa com `transacao.HistoricoQuebrado`
-sem escrever. O oráculo troca na hora `open` (binário), `io.FileIO`, `os.write` e `os.ftruncate` só para o diário; o diário escreve e corta por
-um deles. `@AINDA_NAO` (xfail estrito, como nas partes 1 a 3): o autor do oráculo tira depois do conserto do `diario.py`."""
+sem escrever. O teste troca na hora `open` (binário), `io.FileIO`, `os.write` e `os.ftruncate` só para o diário; o diário escreve e corta por
+um deles. `@AINDA_NAO` (xfail estrito, como nas partes 1 a 3): o autor do teste tira depois do conserto do `diario.py`."""
 import builtins
 import errno
 import io

@@ -110,7 +110,7 @@ def test_runtime_microsoft_so_por_excecao(tmp_path):
 
 
 def test_parenteses_internos_reprovam(tmp_path):
-    # Defeito D1 do lote opus 3: parênteses internos passavam sem conferir o item proibido.
+    # Defeito: parênteses internos passavam sem conferir o item proibido.
     for i, lic in enumerate(["(MIT OR Proprietary) AND LicenseRef-NVIDIA",
                              "MIT AND (GPL-2.0-only OR BSD-3-Clause)"]):
         d = tmp_path / str(i)

@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Régua de comparação por conteúdo da S05 (P1; ADR-002 §4.2 e §4.8; `docs/state/cards/F0-S05/F0-S05-oraculos-T04-T06.md`).
-Código de teste do autor do oráculo (não é de `app/`; o implementador não edita). `foto(arquivo, lateral=None, sem_pset_obim=False)` e
+"""Régua de comparação por conteúdo do fluxo de gravação (ADR-002 §4.2 e §4.8).
+Código auxiliar de teste (não é de `app/`). `foto(arquivo, lateral=None, sem_pset_obim=False)` e
 `diferencas(a, b)` (lista legível; vazia = igual). Entidade com GlobalId: chave = GlobalId, valor = (classe, atributos na ordem do esquema, sem os
 derivados). Referência a entidade com GlobalId = ("G", GlobalId); sem GlobalId = ("E", resumo) com resumo = blake2b da forma canônica (classe e
 atributos, recursivo, memória por id; inversos fora). Valor tipado (id 0) = ("T", classe, valor). SET/BAG = multiconjunto (ordenado), LIST/ARRAY em
 ordem; o tipo vem do esquema, nunca do tipo Python. Números exatos (sem tolerância). Entidades sem GlobalId: multiconjunto (classe, resumo) de TODAS.
-Fora: ids STEP, cabeçalho; com sem_pset_obim, o pset `OBIM_Projeto`, as propriedades dele e a relação que o liga (T07). Lateral: `canonico()`.
+Fora: ids STEP, cabeçalho; com sem_pset_obim, o pset `OBIM_Projeto`, as propriedades dele e a relação que o liga. Lateral: `canonico()`.
 Granularidade de `diferencas`: uma linha por GlobalId cujo valor mudou (classe e primeiro atributo diferente) e uma por (classe, resumo) do
 multiconjunto cuja contagem difere; uma forma sem GlobalId que mudou dá DUAS linhas (a velha e a nova).
 Fixtures comuns da S05 (importar no módulo de teste): `base_ifc` (gerar_modelo_grande, 300 paredes, sha256 impresso) e `_limpa` (autouse: solta o
@@ -30,7 +30,7 @@ except ImportError as e:  # o módulo carrega; cada caso que usa a régua pula
 
 def exigir():
     if ifcopenshell is None:
-        pular(f"\n!!! S05: sem ifcopenshell ({_SEM}); oráculo NÃO FOI EXECUTADO !!!\n", "OBIM_S05_OBRIGATORIO")
+        pular(f"\n!!! S05: sem ifcopenshell ({_SEM}); teste NÃO FOI EXECUTADO !!!\n", "OBIM_S05_OBRIGATORIO")
 
 
 @pytest.fixture(scope="session")

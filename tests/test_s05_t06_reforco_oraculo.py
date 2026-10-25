@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Reforço do oráculo do F0-S05-T06 (achados do lote Opus 80). Mesmo contrato de `test_s05_t06_gravacao_atomica_oraculo.py`,
+"""Reforço do teste da gravação atômica (achados de revisão). Mesmo contrato de `test_s05_t06_gravacao_atomica_oraculo.py`,
 cujos utilitários este arquivo usa; quem implementa não edita este arquivo. Acréscimos ao contrato (ADR-002 §4.5, sem nome novo):
 5. A espera entre tentativas da troca é `time.sleep` do módulo `time`, chamado na hora: 0,05 s antes da 2a tentativa, dobrando
-   (0,05; 0,1; 0,2; 0,4; 0,8 = cerca de 1,55 s), nenhuma espera depois da última. O oráculo troca `time.sleep` e não espera de verdade.
+   (0,05; 0,1; 0,2; 0,4; 0,8 = cerca de 1,55 s), nenhuma espera depois da última. O teste troca `time.sleep` e não espera de verdade.
 6. A cópia do `.bak` (quando `os.link` falha) passa por `shutil` (`copy2`, `copy` ou `copyfile`); se ela falhar, a etapa `bak`
    falha e o `.bak` antigo, o destino e a pasta ficam como estavam (nada de apagar o `.bak` antes de ter a cópia nova pronta).
 Mutantes que estes casos matam (lote 80): `fsync` no destino antigo em vez do temporário (R1); tentativas sem espera (R2); `.bak`

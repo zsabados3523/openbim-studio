@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo da F0-S04-T29e: medida `pos_emitir_mb` e critério novo do ensaio (decisão do Opus, lote 65 §4, item 4).
+"""Testes da medida `pos_emitir_mb` e do critério novo do ensaio.
 
-Escrito só das exigências do cartão e do Opus, sem consultar o código do implementador. Quem implementa o T29e não edita este arquivo.
+Escrito só das exigências, sem consultar o código da implementação.
 1. Canal: com o filho em blocos, cada `bloco` do 2º em diante e o `fim` trazem `pos_emitir_mb`, medida depois de todos os `lote` do
    bloco anterior (ordem: `bloco_fim` -> `lote`... -> `bloco` com o campo). Provado em processo, com a medida de memória trocada por um
    contador (cada leitura recebe um número único; assim a ordem das leituras aparece sem depender da memória real).
-2. Registro do pai: `est["blocos"]` traz o valor e as decisões do vigia não mudam (mesmos números do teste do T29b com
+2. Registro do pai: `est["blocos"]` traz o valor e as decisões do vigia não mudam (mesmos números do teste de reinício com
    OBIM_TESTE_CRESCER_MB).
 3. `calcular_parada` da sonda: (d') 50 passa e 50,1 para; (e) 999 passa e 1.000 para; leitura de 6.000 para; (d) antigo só informa.
 4. Windows usa a mesma função (WorkingSetSize); macOS pula a parte de memória real.
@@ -23,7 +23,7 @@ sys.path.insert(0, str(RAIZ / "tests"))
 
 from viewport_qrhi import processo_malhas  # noqa: E402
 import sonda_ensaio_t33 as sonda  # noqa: E402
-from test_s04_t29b_reinicio_oraculo import (  # noqa: E402,F401  (modelo sintético de 12 paredes e ajudantes do T29b)
+from test_s04_t29b_reinicio_oraculo import (  # noqa: E402,F401  (modelo sintético de 12 paredes e ajudantes do teste de reinício)
     BLOCO, CRESCER_MB, LENTA_S, _guid, _lenta, _rodar, modelo)
 
 NAO_MAC = pytest.mark.skipif(sys.platform == "darwin", reason="macOS: a medida de memória é experimental; pula como hoje")
@@ -93,7 +93,7 @@ def test_registro_do_pai_traz_o_valor_em_execucao_normal(modelo, monkeypatch):
 
 @NAO_MAC
 def test_decisoes_do_vigia_nao_mudam_com_a_medida_nova(modelo, monkeypatch):
-    """Mesmo caso do T29b (`test_crescer_em_bloco_que_nao_e_o_primeiro...`): reinicia uma vez, no bloco 2, pela vigia."""
+    """Mesmo caso do teste de reinício (`test_crescer_em_bloco_que_nao_e_o_primeiro...`): reinicia uma vez, no bloco 2, pela vigia."""
     g = _guid(modelo, BLOCO)
     env = _lenta(modelo, 2 * BLOCO - 1, {"OBIM_TESTE_CRESCER_MB": f"{g}={CRESCER_MB}"})
     lotes, r, esp = _rodar(modelo, monkeypatch, env=env)

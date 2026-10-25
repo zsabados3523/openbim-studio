@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo da F0-S04-T15a: o fluxo A seguro com mais de uma thread (LOTE_OPUS_18 achado 8; LOTE_OPUS_19 item 5; cartão F0-S04-T15a).
+"""Testes do fluxo A seguro com mais de uma thread.
 1. `ultimo` e `_ult_guid` são escritos com a trava do modelo presa: num comando com trava, ANTES de soltá-la (o próximo escritor resolve "ultimo" certo);
    num comando livre (sem trava), só se a trava estiver livre, pegando-a sem esperar; ocupada: não publica e não espera.
 2. `executar_roteiro` conta a base (produtos com geometria) com a trava presa pela própria thread.
@@ -29,7 +29,7 @@ OBRIGATORIO = os.environ.get("OBIM_S04_T15_OBRIGATORIO") == "1"
 
 
 def pular(msg):
-    (pytest.fail if OBRIGATORIO else pytest.skip)(f"\n!!! S04-T15a: {msg} (oráculo das threads do fluxo A NÃO FOI EXECUTADO) !!!\n")
+    (pytest.fail if OBRIGATORIO else pytest.skip)(f"\n!!! threads do fluxo A: {msg} (teste das threads do fluxo A NÃO FOI EXECUTADO) !!!\n")
 
 
 class TravaEspia:  # fica no lugar de `f.trava`: um Lock de verdade (não reentrante) que sabe quem o segura e fotografa o publicado ao soltar

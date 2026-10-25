@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Apoio do oráculo R1 (S04-T02): modelos por script, referência em Python e casos em subprocesso (r1e|r1f|r1g)."""
+"""Apoio do teste R1 (ponte Python/C++): modelos por script, referência em Python e casos em subprocesso (r1e|r1f|r1g)."""
 import gc
 import importlib
 import json
@@ -166,7 +166,7 @@ def caso_r1f(pasta, base="modulo", voltas=1000):
 
 def caso_r1g(pasta, voltas=1000):
     oc = _importar()
-    caminho, ruins, tem = str(Path(pasta) / "s04_ifc4.ifc"), 0, hasattr(oc, "malhas")  # `malhas` só chega na T04
+    caminho, ruins, tem = str(Path(pasta) / "s04_ifc4.ifc"), 0, hasattr(oc, "malhas")  # `malhas` só existe em versões posteriores da ponte
     for i in range(int(voltas)):
         ifcopenshell.open(caminho)  # destruído antes de qualquer chamada ao C++
         f = ifcopenshell.open(caminho)

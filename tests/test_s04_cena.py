@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo da cena (S04-T06c e S04-T09; LOTE_OPUS_9 §1-§6, LOTE_OPUS_10 achado 10, LOTE_OPUS_14 cartões T06c/T09 e achados 3 a 6 e 10).
+"""Testes da cena (limpeza, câmera, animação e substituição de malhas).
 Reaproveita os auxiliares de `test_s04_viewport.py`/`test_s04_viewport_b.py` e roda cada caso em subprocesso sob `xvfb-run`.
-T06c (vale hoje): (a) limpar() durante a subida da grade de 1 milhão, 8 vezes, pausas variadas; (b) fatias_enviadas parado com a cena estável;
+Casos de limpeza (valem hoje): (a) limpar() durante a subida da grade de 1 milhão, 8 vezes, pausas variadas; (b) fatias_enviadas parado com a cena estável;
 (c) Cena.objetos(seq): vetores 1D, guid, caixa NaN sem geometria, ValueError (limpar, sequência desconhecida, faixa fora do lote).
-T09 (GUARDA: pula enquanto faltar algum método de METODOS_T09; FALHA com OBIM_S04_T09_OBRIGATORIO=1). API ESPERADA (nomes em português; o
+Casos de câmera e substituição (GUARDA: pula enquanto faltar algum método de METODOS_T09; FALHA com OBIM_S04_T09_OBRIGATORIO=1). API ESPERADA (nomes em português; o
 implementador segue estas assinaturas e convenções; tudo é chamado da thread da janela, só enfileira e volta logo; a thread de desenho aplica):
  * Cena.orbitar(dx: float, dy: float) -> None   dx, dy em PIXELS do mouse (dx > 0 = arrastou para a direita). 0,5 grau por pixel, exato:
      azimute -= 0,5*dx; elevacao = clamp(elevacao + 0,5*dy, -89, 89). Entradas somadas na ordem; nenhuma se perde (200 chamadas = 200 aplicadas).
@@ -46,7 +46,7 @@ def exige_t09():
     faltam = [m for m in METODOS_T09 if not hasattr(obimcore.Cena, m)]
     if faltam:
         (pytest.fail if os.environ.get("OBIM_S04_T09_OBRIGATORIO") == "1" else pytest.skip)(
-            f"\n!!! aguarda S04-T09: Cena sem {faltam} (camera/orbita/atualizar NÃO FORAM EXECUTADOS) !!!\n")
+            f"\n!!! aguarda a cena: sem {faltam} (camera/orbita/atualizar NÃO FORAM EXECUTADOS) !!!\n")
 
 def com_guids(l, *g):
     o = l.objetos.copy()
@@ -70,7 +70,7 @@ def estavel(c, ms=450):  # deixa a thread de desenho aplicar e apresentar
     yield ms
     return pos(c)
 
-# ===================== T06c: casos que valem hoje =====================
+# ===================== casos que valem hoje =====================
 def c_limpar_corrida(res):
     c, w, _ = novo(0)
     yield 1000
@@ -169,7 +169,7 @@ def test_fatias_enviadas_nao_cresce_com_a_cena_estavel(viewport):
     assert r["ok"] and r["f"][0] >= 1 and r["quadros"] >= 20, r
     assert len(set(r["f"])) == 1, f"fatias_enviadas continuou crescendo com a cena parada: {r['f']}"
 
-def test_objetos_tabela_do_lote(viewport):  # LOTE_OPUS_10 achado 10 (1D) e LOTE_OPUS_14 achado 3
+def test_objetos_tabela_do_lote(viewport):
     r = caso("objetos")
     assert r["viva"] and r["guid"] == r["guid_esperado"] and all(isinstance(g, str) for g in r["guid"]), r["guid"]
     for k, dt in (("id_step", "int32"), ("primeiro_indice", "uint32"), ("n_indices", "uint32"), ("primeiro_vertice", "uint32"), ("n_vertices", "uint32")):
@@ -182,7 +182,7 @@ def test_objetos_tabela_do_lote(viewport):  # LOTE_OPUS_10 achado 10 (1D) e LOTE
     assert r["erros"] == {"faixa de indices": "ValueError", "faixa de vertices": "ValueError", "seq desconhecida": "ValueError", "seq zero": "ValueError",
                           "depois de limpar": "ValueError"} and r["lotes_igual"], r["erros"]
 
-# ===================== T09: câmera, animação, substituição (guardados) =====================
+# ===================== câmera, animação, substituição (guardados) =====================
 def c_camera(res):
     c, w, _ = novo(0)
     c.adicionar_lote(tres(3))  # vermelho 3 m acima (Z para cima: aparece mais alto na imagem)
@@ -382,7 +382,7 @@ def c_deslocamento(res):
     c.parar()
     yield 0
 
-def test_deslocamento_por_lote_em_objetos(viewport):  # LOTE_OPUS_14 achado 4
+def test_deslocamento_por_lote_em_objetos(viewport):
     exige_t09()
     r = caso("deslocamento")
     assert r["d1"] == [1000.5, 2000.25, 3.0] and r["d3"] == r["d1"], f"objetos() deve devolver o deslocamento do lote: {r}"
@@ -394,6 +394,6 @@ def test_deslocamento_por_lote_em_objetos(viewport):  # LOTE_OPUS_14 achado 4
 if __name__ == "__main__":
     sys.path.insert(0, str(RAIZ / "prototypes"))
     nome, *resto = sys.argv[1:]
-    assert not {"obimcore", "PySide6.QtCore"} & sys.modules.keys(), "o oráculo importou Qt ou obimcore antes da ordem pedida"
+    assert not {"obimcore", "PySide6.QtCore"} & sys.modules.keys(), "o teste importou Qt ou obimcore antes da ordem pedida"
     [importlib.import_module(m) for m in ("ifcopenshell", "obimcore")]
     rodar(lambda r: globals()["c_" + nome](r, *resto))

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Inventário de licenças do ambiente conda ativo (ADR-009 §7, itens 2 e 3).
+"""Inventário de licenças do ambiente conda ativo.
 
 Uso: python scripts/license_inventory.py SAIDA.md [--removidos=ARQUIVO] [--informativo]
 Lê $CONDA_PREFIX/conda-meta/*.json. Sai com 1 se algum pacote que VAI NO PACOTE não vier do
@@ -16,9 +16,9 @@ from pathlib import Path
 
 UNKNOWN = {"", "unknown", "none", "null"}
 
-# Licenças permitidas (ADR-009 §4). Identificadores SPDX; comparação sem diferenciar maiúsculas.
+# Licenças permitidas. Identificadores SPDX; comparação sem diferenciar maiúsculas.
 # Não entram: GPL-2.0-only e LGPL-2.0-only sozinhas, licenças proprietárias, "sem licença".
-# LGPL-2.1-only (OCCT, geos, libiconv...) é permitida só como biblioteca dinâmica sem modificação (ADR-009 §5.1).
+# LGPL-2.1-only (OCCT, geos, libiconv...) é permitida só como biblioteca dinâmica sem modificação.
 ALLOWED = {x.lower() for x in """
 MIT MIT-open-group X11 NCSA ISC 0BSD HPND HPND-sell-variant PostgreSQL TCL blessing curl Zlib zlib-acknowledgement libpng-2.0
 BSD-2-Clause BSD-3-Clause BSD-3-Clause-Attribution BSD-3-Clause-Clear BSL-1.0 Apache-2.0 PSF-2.0 Python-2.0 MPL-2.0 OFL-1.1 FTL
@@ -32,15 +32,15 @@ EXCEPTION_ONLY = {"licenseref-microsoft-redistributable"}
 ALLOWED_EXCEPTIONS = {x.lower() for x in "GCC-exception-3.1 LLVM-exception OCCT-exception-1.0 Qt-GPL-exception-1.0".split()}
 
 # Exceções registradas, uma a uma, amarradas à versão (reconferir quando a versão mudar).
-# (nome, versão) -> (licença SPDX equivalente, justificativa). Registrar também em docs/state/LOG.md.
+# (nome, versão) -> (licença SPDX equivalente, justificativa). Registrar também em THIRD_PARTY.md.
 EXCEPTIONS = {
-    ("tbb-devel", "2023.1.0"): ("Apache-2.0", "metadado vazio; o próprio pacote traz o arquivo de licença Apache-2.0 e sai da mesma receita do tbb (conferido no lote opus 2)"),
-    # Runtimes redistribuíveis da Microsoft (decisão do PO, 2026-10-11): a Microsoft permite redistribuir estas DLLs
+    ("tbb-devel", "2023.1.0"): ("Apache-2.0", "metadado vazio; o próprio pacote traz o arquivo de licença Apache-2.0 e sai da mesma receita do tbb"),
+    # Runtimes redistribuíveis da Microsoft: a Microsoft permite redistribuir estas DLLs
     # junto de programas; todo programa C++ no Windows as leva. Condições no THIRD_PARTY.md.
     ("ucrt", "10.0.26100.0"): ("LicenseRef-Microsoft-Redistributable", "Universal CRT do Windows SDK 10, redistribuível pelos termos da Microsoft"),
     ("vc14_runtime", "14.51.36247"): ("LicenseRef-Microsoft-Redistributable", "runtime do Visual C++ 2015-2022, redistribuível pelos termos da Microsoft"),
     ("vcomp14", "14.51.36247"): ("LicenseRef-Microsoft-Redistributable", "runtime OpenMP do Visual C++ 2015-2022, redistribuível pelos termos da Microsoft"),
-    ("cgal-cpp", "6.2.1"): ("GPL-3.0-or-later AND LGPL-3.0-or-later", "metadado 'GPL3/LGPL3' (não é SPDX); cabeçalhos do CGAL em GPL-3 e LGPL-3 (partes diferentes), compilados dentro do IfcOpenShell; combinação pela seção 13 da AGPL (lote opus 2)"),
+    ("cgal-cpp", "6.2.1"): ("GPL-3.0-or-later AND LGPL-3.0-or-later", "metadado 'GPL3/LGPL3' (não é SPDX); cabeçalhos do CGAL em GPL-3 e LGPL-3 (partes diferentes), compilados dentro do IfcOpenShell; combinação pela seção 13 da AGPL"),
 }
 
 

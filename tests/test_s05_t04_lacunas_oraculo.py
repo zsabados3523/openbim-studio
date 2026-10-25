@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo do F0-S05-T04, segunda leva (autor do oráculo; quem implementa não edita; `@AINDA_NAO` = o mesmo xfail estrito do arquivo principal, sai no mesmo commit). Casos que o ADR-002 pede
+"""Testes de transações, segunda leva (`@AINDA_NAO` = o mesmo xfail estrito do arquivo principal). Casos que o ADR-002 pede
 e a primeira leva não cobria:
 L1 (§4.2): `file.add` fora da transação levanta e MARCA o histórico como quebrado (as dependências criadas não dá para limpar).
-L2 (cartão T04, item 5; §4.2 "uma transação nossa = um Transaction + a lista do lateral"): editar o lateral fora da transação é recusado e não muda nada.
+L2 (§4.2 "uma transação nossa = um Transaction + a lista do lateral"): editar o lateral fora da transação é recusado e não muda nada.
 L3 (§4.4: o diário tem registros `desfazer` e `refazer`; "o que está na memória = base + diário"): `anotar` é chamado uma vez em cada desfazer e
    refazer que fez algo (nenhuma vez quando devolve None); se ele falha, o passo volta nos dois lados, as pilhas ficam como estavam e o erro sobe.
 L4 (§4.4): `codificar` que falha (operação que não vira JSON) descarta a transação: erro sobe, foto e pilhas iguais, nada anotado.

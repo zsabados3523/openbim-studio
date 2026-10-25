@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Gerador do oráculo do F0-S05-T04 (`tests/s05_t04_aux.py`), validado HOJE sem o módulo novo (sem `@AINDA_NAO`; quem implementa não edita):
+"""Gerador do teste de transações (`tests/s05_t04_aux.py`), validado sem o módulo novo (sem `@AINDA_NAO`):
 pisos do sorteio em 101 sementes; a régua pega uma mutação de cada um dos 12 tipos de operação (e 0 diferenças ao desfazer); a rodada inteira do
 caso 1 (10.000 operações, semente 20261023) sobre o ifcopenshell cru, num pytest filho: modelo segue o plano, pisos, gravar e reabrir, desfazer
 tudo = inicial, refazer tudo = final, conferência a cada 500 transações."""

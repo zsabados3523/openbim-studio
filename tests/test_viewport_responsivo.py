@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo da S03-T05 (Parte 0), R1 e R2: a janela continua responsiva durante a carga.
+"""Testes de responsividade durante a carga, R1 e R2: a janela continua responsiva durante a carga.
 
-Transcrição de docs/state/arquivo/lotes-1-a-28/LOTE_OPUS_4/resultado.md §1.5. Congelado: não afrouxar número nem remover caso.
-Emendas do lote Opus 5 §1.1 (P0b): todas as amostras de atraso (iniciar() dentro do laço), R2 demonstra o
+Números congelados: não afrouxar número nem remover caso.
+Ajustes de medição: todas as amostras de atraso (iniciar() dentro do laço), R2 demonstra o
 fenômeno (atraso >= 0,5 x next()) e os números de R1/R2 aparecem sem -s (capsys.disabled + record_property).
 R1a roda sem tela (parte A); R1b precisa de tela e dos métodos novos do Viewport (parte B).
 R2 é a única falha esperada (xfail, não estrito). Testes lentos (M1M): OBIM_TESTES_LENTOS=1.
@@ -30,7 +30,7 @@ from test_viewport_carregador import (  # noqa: E402,F401  (modelos, M1M e fixtu
 from viewport_qrhi.cubo_rhi import CuboViewport  # noqa: E402
 
 MAX_MS, P95_MS = 200.0, 33.0
-assert hasattr(CuboViewport, "adicionar_lote"), "CuboViewport sem adicionar_lote (S03-T05 parte B)"
+assert hasattr(CuboViewport, "adicionar_lote"), "CuboViewport sem adicionar_lote"
 
 
 @pytest.fixture(scope="module")

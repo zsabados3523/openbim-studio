@@ -1,15 +1,15 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo da S03-T08 (cartão T08-0), P1 a P12: carga de malhas em processo separado, sem tela.
+"""Testes de carga de malhas em processo separado, casos P1 a P12, sem tela.
 
-Transcrição de docs/state/arquivo/lotes-1-a-28/LOTE_OPUS_6/resultado.md §2.4. Congelado: não afrouxar número nem remover caso.
+Números congelados: não afrouxar número nem remover caso.
 As guardas de ativação (requer_processo, requer_limite) saíram na RG-03: módulo ou parâmetro ausente agora FALHA, não pula.
 Peça lenta injetada no filho: OBIM_TESTE_PECA_LENTA="<guid>=<s>[,...]"; filho que cai: OBIM_TESTE_MATAR_FILHO="<guid>".
 Teste lento (P6): OBIM_TESTES_LENTOS=1.
 
-P13 a P18 (cartão T08-0b, arquivo/lotes-1-a-28/LOTE_OPUS_7/resultado.md §4 item 5): defeitos achados no lote 7. Cada um é `xfail(strict=True)` até a
-S03-T08-E: quando passar, o xfail estrito vira falha e avisa para tirar a marca. Gancho de teste novo:
+P13 a P18 (defeitos achados em revisão). Cada um é `xfail(strict=True)` até a
+a correção: quando passar, o xfail estrito vira falha e avisa para tirar a marca. Gancho de teste novo:
 OBIM_TESTE_FALHAR_CAIXA="<guid>" (o filho da caixa falha nessa peça). As guardas `requer_caixa_falha` e `OBIM_FORCAR_GUARDAS`
-saíram na S04-T16 (cartão S03-T08-G): o recurso já está no `main`.
+saíram com a abertura por processo: o recurso já está no código principal.
 """
 import inspect
 import multiprocessing
@@ -41,7 +41,7 @@ assert "limite_peca_s" in _PARAMS and "max_bytes_lote" in _PARAMS, "CarregadorMa
 
 
 def _aguarda_e(item):
-    return pytest.mark.xfail(strict=True, reason=f"aguarda S03-T08-E: {item}")
+    return pytest.mark.xfail(strict=True, reason=f"aguarda correção: {item}")
 
 
 def _lento_ou_pular():
@@ -252,7 +252,7 @@ def test_p10_adaptador_cancela_peca_de_30s(app, mapeadas1, monkeypatch):
 def test_p11_medicao_de_memoria():
     from viewport_qrhi.medir import pico_memoria_mb
     assert pico_memoria_mb() > 0
-    assert inspect.signature(pico_memoria_mb).parameters, "pico_memoria_mb sem parâmetro (S03-T08-C: pico de um processo filho)"
+    assert inspect.signature(pico_memoria_mb).parameters, "pico_memoria_mb sem parâmetro (pico de um processo filho)"
     filho = multiprocessing.get_context("spawn").Process(target=time.sleep, args=(5,), daemon=True)
     filho.start()
     try:
@@ -343,7 +343,7 @@ def test_p8_filho_que_cai(mapeadas1, monkeypatch):
     _regra_de_ouro(r)
 
 
-# ---------- P13 a P18 (cartão T08-0b): defeitos do lote 7 ----------
+# ---------- P13 a P18: defeitos de revisão ----------
 def _mundo(lotes):
     """id_step -> (mínimo, máximo) no mundo (caixa do lote + deslocamento; peça dividida: união dos pedaços)."""
     saida = {}

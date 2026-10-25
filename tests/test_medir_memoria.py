@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""S03-T05-C1, B-2: a leitura do pico de memória funciona (Linux e Windows), sem tela."""
+"""A leitura do pico de memória funciona (Linux e Windows), sem tela."""
 import sys
 from pathlib import Path
 

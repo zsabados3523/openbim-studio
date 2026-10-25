@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Caso gráfico do F0-RG-07 (tests/test_s04_fluxo_a.py): modelo em coordenada UTM aberto numa cena com janela, câmera em coordenada do
+"""Caso gráfico de coordenada UTM (tests/test_s04_fluxo_a.py): modelo em coordenada UTM aberto numa cena com janela, câmera em coordenada do
 mundo, seleção e desenho. Roda num processo próprio (`python s04_fluxo_utm_aux.py utm mais|menos`), sob xvfb-run, nunca na tela real."""
 import json
 import os

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Script auxiliar da T26 (ver tests/test_localidade.py). Roda UM caso por processo e imprime um JSON na última linha.
+"""Script auxiliar do teste de localidade (ver tests/test_localidade.py). Roda UM caso por processo e imprime um JSON na última linha.
 
 Uso: python localidade_aux.py <caso>. O processo é lançado SEM LC_ALL, com LANG/LC_NUMERIC em pt_BR no Linux.
 Este arquivo não importa nada do programa antes de escolher o caso: o canário (L1) não depende de localidade.py.

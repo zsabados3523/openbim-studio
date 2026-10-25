@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo da S03-T06: seleção por clique (raio x triângulos), sem tela e com tela.
+"""Testes da seleção por clique (raio x triângulos), sem tela e com tela.
 
 Teste pesado (1 milhão de triângulos): defina OBIM_MODELO_GRANDE=caminho/modelo-grande-1m.ifc.
 """
@@ -159,7 +159,7 @@ def test_clique_no_cubo_seleciona_e_fora_da_none(app):
     assert w.pick(w.width() / 2, w.height() / 2) == 1 and w.pick(3, 3) is None
 
 
-# ---- T06b: seleção só por caixas (modo de lotes, sem triângulos) ----
+# ---- seleção só por caixas (modo de lotes, sem triângulos) ----
 def _lote(objs, desl=(0.0, 0.0, 0.0), indice=0):
     """objs: lista de (id_step, guid, caixa_min, caixa_max); a caixa está no espaço do lote (antes do deslocamento)."""
     ob = np.zeros(len(objs), DTYPE_OBJETO)
@@ -238,7 +238,7 @@ def _grade_1m(n=83_334):
 
 
 def test_pior_caso_raio_atravessa_muitas_caixas_dentro_de_100_ms():
-    # Limite do portão da S03 (v2/03): 100 ms. Os 16 ms (um quadro) eram meta do cartão e oscilavam no executor Windows do GitHub (18 ms).
+    # Limite de 100 ms. Os 16 ms (um quadro) oscilavam no executor Windows do CI (18 ms).
     lotes, lado = _grade_1m()
     c = CaixasObjetos(lotes)
     assert len(c) == 83_334

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Apoio do oráculo do fluxo B, parte 1 (S04-T13, tests/test_s04_fluxo_b_paredes.py; contrato em prototypes/s04/fluxo_b/CONTRATO.md):
+"""Apoio do teste do fluxo B, parte 1 (tests/test_s04_fluxo_b_paredes.py; contrato em prototypes/s04/fluxo_b/CONTRATO.md):
 assinatura de um IFC (só ifcopenshell, independente de A e de B), comparação com tolerância, adaptadores A e B e o roteiro passo a passo."""
 import math
 import sys
@@ -17,7 +17,7 @@ CAMADAS = [0.02, 0.11, 0.02]
 PAR = dict(tipo="PAR15", comprimento=4.0, altura=2.8, espessura=0.15)
 # Geometria de apoio: o contrato deixa livre COMO ela é montada (compartilhar ou não ponto/direção, perfil retangular ou arbitrário, polilinha ou curva indexada);
 # a geometria em si é conferida por create_shape e a ausência de sobras pela checagem de órfãs. Toda outra classe tem de bater em número com o fluxo A.
-# Sem exceção (T11c): A e B criam 1 IfcMaterialLayerSetUsage e 1 relação de material por parede (e 1 relação por tipo); a contagem de TODA classe é comparada entre A e B.
+# Sem exceção: A e B criam 1 IfcMaterialLayerSetUsage e 1 relação de material por parede (e 1 relação por tipo); a contagem de TODA classe é comparada entre A e B.
 # `materiais` segue sendo conferido à parte também (B sozinho: 1 uso por parede, 1 relação por parede e por tipo).
 MATERIAL = {"IfcMaterialLayerSetUsage", "IfcRelAssociatesMaterial"}
 LIVRES = {"IfcCartesianPoint", "IfcDirection", "IfcAxis2Placement2D", "IfcAxis2Placement3D", "IfcCartesianPointList2D", "IfcCartesianPointList3D", "IfcIndexedPolyCurve",
@@ -120,7 +120,7 @@ class Fluxo:
             s.ws += r
         return r
 
-class FluxoAd(Fluxo):  # fluxo A, sem janela (o oráculo do fluxo A é o da T11)
+class FluxoAd(Fluxo):  # fluxo A, sem janela (o teste do fluxo A é o mesmo)
     def __init__(s, pasta):
         import fluxo_a
         super().__init__(pasta)
@@ -160,14 +160,14 @@ class FluxoBd(Fluxo):  # a biblioteca C++ pelo módulo nanobind
         s.b.gravar(str(s.pasta / f"b{s.n}.ifc"))
         return s.pasta / f"b{s.n}.ifc"
 
-# ---------- o roteiro curto do cartão (tipo, 20 paredes, edições, desfazer 3, gravar) e a continuação ----------
+# ---------- roteiro curto (tipo, 20 paredes, edições, desfazer 3, gravar) e a continuação ----------
 def roteiro():
     p = [("criar_tipo", dict(nome="PAR15", camadas_m=CAMADAS))] + [("criar_parede", dict(PAR))] * 20
     p += [("editar_propriedades", dict(alvo=i, nome="Parede ção ✓-3" if i == 3 else f"Parede R-{i}", propriedades={FIRE: "R60"})) for i in range(5)]
     p += [("mudar_comprimento", dict(alvo=i, comprimento=5.0)) for i in range(5, 10)]
     p += [("editar_propriedades", dict(alvo=0, propriedades={FIRE: "R120"}))]  # pset já existe: edita no lugar
     p += [("editar_propriedades", dict(alvo=10, nome="Muro 10")), ("mudar_comprimento", dict(alvo=11, comprimento=6.5)), ("editar_propriedades", dict(alvo=12, propriedades={FIRE: "R90"}))]
-    p += [("desfazer", {})] * 3 + [("#curto", {})]  # fim do roteiro do cartão (o IFC gravado aqui é o "IFC do roteiro curto")
+    p += [("desfazer", {})] * 3 + [("#curto", {})]  # fim do roteiro curto (o IFC gravado aqui é o "IFC do roteiro curto")
     p += [("refazer", {}), ("criar_parede", dict(PAR)), ("refazer", {}), ("desfazer", {}), ("criar_parede", dict(PAR)),  # refazer vazio; a grade segue andando
           ("criar_paredes_lote", dict(PAR, quantidade=60)), ("desfazer", {}), ("refazer", {}), ("desfazer", {}), ("refazer", {}), ("#desfazer_tudo", {})]
     return p
@@ -184,7 +184,7 @@ def percorrer(a, b, passos):  # executa nos dois, grava e compara depois de CADA
         d = igual(sa, sb, "ifc")  # inclusive "classes" (sem exceção de material) e "materiais" (A e B iguais)
         nw, nt = len(sb["paredes"]), len(sb["tipos"])
         d += [f"B: usos de camadas/relações de material {sb['materiais']} (esperado 1 uso por parede e 1 relação por parede e por tipo: {nw}, {nw + nt})"] * (sb["materiais"] != {"IfcMaterialLayerSetUsage": nw, "IfcRelAssociatesMaterial": nw + nt})
-        d += [f"A: usos de camadas/relações de material {sa['materiais']} (esperado 1 uso por parede e 1 relação por parede e por tipo: {nw}, {nw + nt}; T11c)"] * (sa["materiais"] != {"IfcMaterialLayerSetUsage": nw, "IfcRelAssociatesMaterial": nw + nt})
+        d += [f"A: usos de camadas/relações de material {sa['materiais']} (esperado 1 uso por parede e 1 relação por parede e por tipo: {nw}, {nw + nt})"] * (sa["materiais"] != {"IfcMaterialLayerSetUsage": nw, "IfcRelAssociatesMaterial": nw + nt})
         mapa.update({gb: ga for ga, gb in zip(a.ws + [a.tipo], b.ws + [b.tipo])})
         if ra is not None:  # nos marcos não houve comando (o gravar do fluxo A zera o `ultimo`)
             d += igual(ua, {k: [mapa.get(g, g) for g in v] for k, v in ub.items()}, "ultimo") + igual(ra, [mapa.get(g, g) for g in rb], "retorno")

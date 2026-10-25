@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo do F0-S05-T07, parte 2: morte do processo filho durante a gravação do par e reabertura (estados E1 a E10 do ADR-002 §4.5).
-Mesmo contrato de `test_s05_t07_par_oraculo.py` (quem implementa não edita). O filho (`s05_t07_aux.FILHO`) abre o par, faz uma transação e grava;
-morre (`os._exit(86)`) ANTES do evento k do próprio traço (`_etapa` do T06, `ifcopenshell.file.write`, `os.replace`, `os.unlink`, `ao_concluir`),
+"""Testes da gravação do par, parte 2: morte do processo filho durante a gravação e reabertura (estados E1 a E10 do ADR-002 §4.5).
+Mesmo contrato de `test_s05_t07_par_oraculo.py`. O filho (`s05_t07_aux.FILHO`) abre o par, faz uma transação e grava;
+morre (`os._exit(86)`) ANTES do evento k do próprio traço (`_etapa` do módulo de gravação, `ifcopenshell.file.write`, `os.replace`, `os.unlink`, `ao_concluir`),
 num ponto com nome ou numa hora sorteada (o pai mata). O pai então "reabre": `resolver_gravacao_pendente` e a régua do par.
 Regra fixa: morreu antes do `os.replace` que põe o `gravacao.json` = par antigo (ou nada, na primeira gravação); depois = par novo, e o
 resolvedor chama `ao_concluir(seq)` uma vez. Nunca misturado, nenhum temporário nem `gravacao*` sobrando, resolver de novo não muda nada.
@@ -16,7 +16,7 @@ from s05_conteudo_aux import _limpa, base_ifc, exigir  # noqa: F401  (fixtures)
 from s05_t07_aux import SEQ, SEMENTE, gp
 
 N_LACO = 50
-NOMEADOS = {  # cartão T07 item 1 (lista mínima), com o estado do ADR-002 §4.5 e o par esperado
+NOMEADOS = {  # lista mínima de estados, com o estado do ADR-002 §4.5 e o par esperado
     "E1_antes_dos_temporarios": (["etapa", "escrever", "Casa.ifc.tmp"], "antigo"),
     "E2_ifc_tmp_escrito": (["etapa", "escrever", "Casa.obim.tmp"], "antigo"),
     "E2_ifc_tmp_cortado": ("ifc_cortado", "antigo"),

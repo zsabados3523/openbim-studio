@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Apoio do oráculo do fluxo B, parte 2 (S04-T14, tests/test_s04_fluxo_b_janela.py; contrato: prototypes/s04/fluxo_b/CONTRATO.md, "Parte 2"):
+"""Apoio do teste do fluxo B, parte 2 (tests/test_s04_fluxo_b_janela.py; contrato: prototypes/s04/fluxo_b/CONTRATO.md, "Parte 2"):
 como achar e rodar o executável (sob xvfb-run, nunca na tela real), validação estrutural do `medicao.json`, assinatura de IFC sem GlobalId nem posição."""
 import json
 import math
@@ -13,7 +13,7 @@ RAIZ = Path(__file__).resolve().parent.parent
 ROTEIRO = RAIZ / "prototypes" / "s04" / "fluxo_a" / "roteiro_r.json"
 NOME = "fluxo_b_janela" + (".exe" if sys.platform == "win32" else "")
 
-def achar_exe():  # None se não existe (o oráculo pula ou falha, conforme OBIM_S04_T14_OBRIGATORIO)
+def achar_exe():  # None se não existe (o teste pula ou falha, conforme OBIM_S04_T14_OBRIGATORIO)
     pastas = [os.environ.get("OBIM_S04_FLUXO_B_DIR"), *os.environ.get("PYTHONPATH", "").split(os.pathsep), str(RAIZ / "out" / "s04")]
     for c in [os.environ.get("OBIM_S04_FLUXO_B_EXE"), *(Path(p) / NOME for p in pastas if p)]:
         if c and Path(c).is_file():
@@ -28,7 +28,7 @@ def rodar(exe, args, grafico=False, env=None, timeout=900):  # grafico: tela vir
         e["QT_QPA_PLATFORM"] = "offscreen"
     e.update(env or {})
     pre = ["xvfb-run", "-a", "-s", "-screen 0 1280x800x24"] if grafico and sys.platform != "win32" else []
-    return subprocess.run([*pre, str(exe), *map(str, args)], env=e, capture_output=True, encoding="utf-8", errors="replace", timeout=timeout)  # LOTE_OPUS_35: o executável escreve UTF-8; não a codificação da localidade (cp1252 no Windows)
+    return subprocess.run([*pre, str(exe), *map(str, args)], env=e, capture_output=True, encoding="utf-8", errors="replace", timeout=timeout)  # o executável escreve UTF-8; não a codificação da localidade (cp1252 no Windows)
 
 def resultado(p, rotulo):  # JSON da linha `RESULTADO`; queda ou DLL/plugin Qt ausente aparecem com o código de saída e a saída unida (sob xvfb-run o stderr vem junto do stdout)
     linhas = [x for x in p.stdout.splitlines() if x.startswith("RESULTADO ")]

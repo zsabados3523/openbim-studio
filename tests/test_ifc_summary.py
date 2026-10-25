@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Testes do resumo de IFC (F0-S02-T05): arquivos gerados no próprio teste."""
+"""Testes do resumo de IFC: arquivos gerados no próprio teste."""
 import ifcopenshell
 import ifcopenshell.api
 import ifcopenshell.guid
@@ -28,7 +28,7 @@ def test_ifc4_exact_counts_and_oracle(tmp_path):
     s = count_by_class(path)
     assert (s.file_name, s.schema, s.total) == ("a.ifc", "IFC4", 10)
     assert s.by_class == {"IfcSlab": 3, "IfcWall": 7}
-    # oráculo independente: leitura direta do ifcopenshell
+    # referência independente: leitura direta do ifcopenshell
     model = ifcopenshell.open(str(path))
     assert s.by_class["IfcWall"] == len(model.by_type("IfcWall", include_subtypes=False))
     assert s.by_class["IfcSlab"] == len(model.by_type("IfcSlab", include_subtypes=False))

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo da T26 (lote Opus 6, §3.3): o IFC não pode sair com vírgula decimal depois de criar o QApplication.
+"""Teste de localidade: o IFC não pode sair com vírgula decimal depois de criar o QApplication.
 
 Cada caso roda em SUBPROCESSO sem LC_ALL (o conftest.py põe LC_ALL=C no pytest e isso esconderia o defeito).
 O módulo app/openbim_app/localidade.py é exigido na coleta (RG-03).
@@ -17,7 +17,7 @@ from obrigatorio import pular as pular_chave
 RAIZ = Path(__file__).resolve().parent.parent
 APP = RAIZ / "app"
 AUX = Path(__file__).resolve().parent / "localidade_aux.py"
-assert (APP / "openbim_app" / "localidade.py").exists(), "falta app/openbim_app/localidade.py (S03-T26)"  # RG-03: antes os casos pulavam
+assert (APP / "openbim_app" / "localidade.py").exists(), "falta app/openbim_app/localidade.py"  # antes os casos pulavam
 WIN = sys.platform == "win32"
 LINUX = sys.platform.startswith("linux")
 
@@ -55,7 +55,7 @@ def destaque(msg):
 def virgula_disponivel():
     nome = caso("provar_locale")["nome"]
     if not nome:
-        pular_chave(destaque("SEM LOCALIDADE pt_BR NESTA MAQUINA: oraculo da T26 NAO FOI EXECUTADO "
+        pular_chave(destaque("SEM LOCALIDADE pt_BR NESTA MAQUINA: teste de localidade NAO FOI EXECUTADO "
                        "(Linux: locale-gen pt_BR.UTF-8)"), "OBIM_LOCALIDADE_OBRIGATORIA")
     return nome
 
@@ -86,7 +86,7 @@ def test_l1_canario_qapplication_sem_correcao(virgula_disponivel):
     r = caso("l1")
     assert r["antes"] == ".", "pré-condição: o Python começa com ponto decimal"
     assert r["depois"] == ",", ("O CANARIO PAROU DE REPRODUZIR: o QApplication não troca mais a localidade; "
-                                "revise o teste e a especificação da T26")
+                                "revise o teste e a especificação de localidade")
     assert "2799,9" in r["texto"], "o IfcOpenShell deveria gravar vírgula sem a correção (canário)"
 
 

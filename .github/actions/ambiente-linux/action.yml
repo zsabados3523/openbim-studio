@@ -49,7 +49,7 @@ runs:
     - name: Localidade pt_BR na máquina descartável (T26; bloqueia o merge)
       shell: bash
       run: |
-        # RG-03: sem a localidade os testes da T26 pulariam sem avisar; agora o passo falha e a chave liga o "pulo vira falha".
+        # Sem a localidade os testes da T26 pulariam sem avisar; agora o passo falha e a chave liga o "pulo vira falha".
         sudo locale-gen pt_BR.UTF-8 >/dev/null 2>&1 || true
         sudo update-locale >/dev/null 2>&1 || true
         locais=$(locale -a); if grep -qi '^pt_BR\.utf-\?8$' <<<"$locais"; then

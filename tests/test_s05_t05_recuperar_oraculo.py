@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo do F0-S05-T05, parte 2: morte e recuperação (cartão F0-S05-T05, itens 2 a 6; ADR-002 §4.4 e §4.7). CONTRATO: o cabeçalho de
-`test_s05_t05_diario_oraculo.py` (quem implementa não edita nenhum dos dois). "Igual" = foto por conteúdo da régua do T04 (`s05_conteudo_aux`),
+"""Testes do diário, parte 2: morte e recuperação (ADR-002 §4.4 e §4.7). CONTRATO: o cabeçalho de
+`test_s05_t05_diario_oraculo.py` (não editar nenhum dos dois). "Igual" = foto por conteúdo da régua de comparação (`s05_conteudo_aux`),
 modelo e lateral, sem tolerância; toda recuperação passa por `s05_t05_aux.recuperar`, que confere P5 (nada gravado na pasta do Casa.ifc) e o
 desfazer vazio. Processos filhos (`s05_t05_aux.filho`): morte em ponto fixo (`OBIM_S05_MORRER_EM`, código 86) em transacao, desfazer e refazer;
 e N_MORTES = 50 mortes por `kill` do pai em hora sorteada (semente SEMENTE + 5), em cada sistema (Linux e Windows). Cada ação que o filho
 confirmou (linha "ok") está no diário; no máximo uma a mais (a que morreu entre o registro e o "ok"). A morte sorteada é `kill` do pai (mais
-forte que o `os._exit` do item 2 do cartão: cai em qualquer instrução). Achados do lote 80 (cartão): 6c exige corrigir o `_mover` do T04 (o
-`KeyError` do `_repor` hoje esconde o erro e o IFC não é refeito; a "ligação mínima" em `transacao.py` que o cartão permite); 6d, o `file.add`
+forte que o `os._exit`: cai em qualquer instrução). Achados de revisão: 6c exige corrigir o `_mover` do módulo de transações (o
+`KeyError` do `_repor` hoje esconde o erro e o IFC não é refeito; a "ligação mínima" em `transacao.py` é permitida); 6d, o `file.add`
 fora da transação, se recupera pelo diário. Os testes `test_regua_*` provam os utilitários e valem já (sem `@AINDA_NAO`)."""
 import collections
 import random

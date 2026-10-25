@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Autoteste da régua de comparação por conteúdo da S05 (`tests/s05_conteudo_aux.py`; P1; R1 a R4 de `F0-S05-oraculos-T04-T06.md`) e mutantes de
-estrutura (cada um tem de aparecer, e sumir ao desfazer). Vale já (sem `@AINDA_NAO`). Os mutantes por tipo de operação do gerador do T04 ficam em
-`tests/test_s05_t04_gerador_oraculo.py`. Quem implementa não edita."""
+"""Autoteste da régua de comparação por conteúdo (`tests/s05_conteudo_aux.py`; R1 a R4) e mutantes de
+estrutura (cada um tem de aparecer, e sumir ao desfazer). Vale já (sem `@AINDA_NAO`). Os mutantes por tipo de operação do gerador de transações ficam em
+`tests/test_s05_t04_gerador_oraculo.py`. Não editar."""
 import math
 
 import s05_conteudo_aux as R

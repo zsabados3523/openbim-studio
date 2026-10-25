@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Reforço do oráculo do F0-S05-T07 (achados 1 a 6 do lote Opus 82). Mesmo contrato de `test_s05_t07_par_oraculo.py` (quem implementa não
-edita este arquivo; o autor do oráculo tira os `@AINDA_NAO` depois, em commit próprio), com estes acréscimos, todos do ADR-002 §4.5 e da
-decisão do líder sobre o lote 82:
+"""Reforço do teste de gravação do par (achados 1 a 6 de revisão). Mesmo contrato de `test_s05_t07_par_oraculo.py` (não
+edita este arquivo; o autor do teste tira os `@AINDA_NAO` depois, ), com estes acréscimos, todos do ADR-002 §4.5 e da
+decisão da revisão:
 7. Desfazer volta o destino só por um `.bak` cujo sha256 é o `antigo` desta gravação; antigo nulo (primeira gravação): apaga o destino só se o
    sha256 é o novo. Qualquer outro caso (`.bak` velho, `.bak` sumido com antigo não nulo): não mexe em nada e mantém o `gravacao.json` (como E9).
 8. Destino que sumiu quando o antigo existia = E9: não mexe, mantém o `gravacao.json`, não chama `ao_concluir`.

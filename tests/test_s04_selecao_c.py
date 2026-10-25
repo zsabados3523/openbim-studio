@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo da S04-T10c: achados 1 a 7 do LOTE_OPUS_16 (escala de tela, sincronia, caixas, plano `perto`, memória dos GlobalId; lacunas 7a a 7h).
+"""Testes de seleção: escala de tela, sincronia, caixas, plano `perto`, memória dos GlobalId (lacunas 7a a 7h).
 Cada caso gráfico roda em SUBPROCESSO sob `xvfb-run` (nunca na tela real; Windows só no CI ou com OBIM_S04_TELA_VIRTUAL=1), como `test_s04_selecao.py`.
 DECISÃO: `Cena.selecionar(x, y)` recebe pixels LÓGICOS (os do mouse do Qt) e converte por devicePixelRatio da janela; faixa válida = [0, largura/escala) x [0, altura/escala).
-API DE TESTE (o implementador deve expor EXATAMENTE este nome): `Cena.definir_escala_teste(r: float)`: passa a usar r (> 0) no lugar do devicePixelRatio real;
+API DE TESTE (deve existir EXATAMENTE com este nome): `Cena.definir_escala_teste(r: float)`: passa a usar r (> 0) no lugar do devicePixelRatio real;
   pixel físico = lógico * r. Sem ela, os casos (a) com escala simulada PULAM (ou FALHAM com OBIM_S04_T10C_OBRIGATORIO=1). Os casos com QT_SCALE_FACTOR real
-  (dpr de verdade, sem API de teste) e os casos (b) a (j) NÃO são guardados: falham até a T10c ser implementada, e é isso o esperado hoje.
+  (dpr de verdade, sem API de teste) e os casos (b) a (j) NÃO são guardados: falham até a funcionalidade ser implementada, e é isso o esperado hoje.
 Regra de todos os casos de imagem: cada pixel CONFIANTE da captura (cor erodida) tem de selecionar o objeto daquela cor, e o fundo, None."""
 import importlib.util, os, sys, threading, time  # noqa: E401
 from dataclasses import replace
@@ -27,7 +27,7 @@ ESC = {"v": G(0), "g": G(1), "a": G(2)}
 def exige_escala():
     import obimcore
     if not hasattr(obimcore.Cena, "definir_escala_teste"):
-        (pytest.fail if OBRIG else pytest.skip)("\n!!! aguarda S04-T10c: Cena sem `definir_escala_teste` (escala simulada NÃO FOI EXECUTADA) !!!\n")
+        (pytest.fail if OBRIG else pytest.skip)("\n!!! aguarda a cena: sem `definir_escala_teste` (escala simulada NÃO FOI EXECUTADA) !!!\n")
 
 def ok(v, minimo=100, cores=3):  # varredura: nenhum pixel ruim; fundo e pelo menos `cores` classes com `minimo` pixels
     boas = [k for k, d in v.items() if k != "f" and d["n"] >= minimo]
@@ -372,6 +372,6 @@ def test_bytes_da_copia_inclui_o_texto_dos_globalid(sel):
 if __name__ == "__main__":
     sys.path.insert(0, str(RAIZ / "prototypes"))
     nome, *resto = sys.argv[1:]
-    assert not {"obimcore", "PySide6.QtCore"} & sys.modules.keys(), "o oráculo importou Qt ou obimcore antes da ordem pedida"
+    assert not {"obimcore", "PySide6.QtCore"} & sys.modules.keys(), "o teste importou Qt ou obimcore antes da ordem pedida"
     [importlib.import_module(m) for m in ("ifcopenshell", "obimcore")]
     rodar(lambda r: globals()["c_" + nome](r, *resto))

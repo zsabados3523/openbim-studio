@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo R1 da S04 (cartão T02; LOTE_OPUS_9 §1.4 e §1.5): o modelo é o MESMO dos dois lados da ponte Python/C++
-(`obimcore`). R1-a a R1-i (R1-j é da T17). Sem `obimcore` o que depende dele PULA com mensagem em destaque.
-SUPOSIÇÕES (o Opus confere): (1) `versao()` devolve texto/dict contendo, por substring, `ifcopenshell.version`, o build
+"""Testes R1 da ponte (o modelo é o MESMO dos dois lados da ponte Python/C++
+(`obimcore`). R1-a a R1-i. Sem `obimcore` o que depende dele PULA com mensagem em destaque.
+PREMISSAS: (1) `versao()` devolve texto/dict contendo, por substring, `ifcopenshell.version`, o build
 do conda-meta, `qVersion()` e a versão do `occt`; `contar(f, classe)` int com subtipos, `None` = toda instância;
 `bibliotecas_carregadas()` lista de caminhos. (2) `malhas(f, guids)` devolve dict {guid: item} ou lista na ordem
 pedida; item (dict/objeto) com posicoes, indices e, opcional, caixa (6 números), em coordenadas do mundo, sem soldar
 vértices (opções da S03). (3) Desfazer = `undo()` do ifcopenshell-python; não-arquivo = qualquer `Exception`.
-(4) R1-e só confere /proc/self/maps no Linux. `OBIM_S04_OBRIGATORIO=1` faz todo pulo falhar (exceto o que aguarda a T04c). (5) R1-f: o ifcopenshell 0.9 SOZINHO cresce ~0,7 MB por reabertura
+(4) R1-e só confere /proc/self/maps no Linux. `OBIM_S04_OBRIGATORIO=1` faz todo pulo falhar (exceto o que aguarda o registro do IfcOpenShell). (5) R1-f: o ifcopenshell 0.9 SOZINHO cresce ~0,7 MB por reabertura
 (medido): os 10% valem para o que o módulo acrescenta sobre a mesma volta em Python puro. (6) LC_ALL=C basta.
 """
 import importlib.util
@@ -38,7 +38,7 @@ def modelos(tmp_path_factory):
 @pytest.fixture(scope="module")
 def oc():
     if not TEM_MODULO:
-        pular("\n!!! aguarda S04-T03: módulo obimcore (oráculo R1 NÃO FOI EXECUTADO) !!!\n")
+        pular("\n!!! aguarda o módulo obimcore (teste da ponte NÃO FOI EXECUTADO) !!!\n")
     import ifcopenshell, obimcore  # noqa: E401,F401  (ifcopenshell antes do obimcore)
     aux.preparar_dono()
     return obimcore
@@ -46,7 +46,7 @@ def oc():
 @pytest.fixture
 def malhas(oc):
     if not hasattr(oc, "malhas"):
-        pular("\n!!! aguarda S04-T04: obimcore.malhas !!!\n")
+        pular("\n!!! aguarda obimcore.malhas !!!\n")
     return oc.malhas
 
 def abrir(caminho):
@@ -87,7 +87,7 @@ def test_r1a_versao_e_build_iguais_aos_do_python(oc):  # compilação (cabeçalh
 def test_r1b_registro_de_esquemas_unico(oc):  # achado 6: o mesmo registro IFC4 dos dois lados
     import ifcopenshell.ifcopenshell_wrapper as w
     if "registro_ifc4" not in oc.versao():
-        pular("\n!!! aguarda S04-T04c: versao()['registro_ifc4'] (prova de uma cópia só do IfcOpenShell) !!!\n")
+        pular("\n!!! aguarda versao()['registro_ifc4'] (prova de uma cópia só do IfcOpenShell) !!!\n")
     assert oc.versao()["registro_ifc4"] == int(w.schema_by_name("IFC4").this)
 
 @pytest.mark.parametrize("esq", ESQ)

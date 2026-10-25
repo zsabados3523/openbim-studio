@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Gerador do oráculo do F0-S05-T04 (quem implementa não edita): `Plano` (sorteio puro com semente; a simulação dos pisos e os casos usam ESTE
+"""Gerador de casos aleatórios para o teste de transações (não editar): `Plano` (sorteio puro com semente; a simulação dos pisos e os casos usam ESTE
 código), `aplicar` (uma operação no IFC por `ifcopenshell.api` ou no lateral), `LadoEnsaio` e `Cru` (ifcopenshell sem o módulo novo, para a régua e
 a rodada de hoje), `montar` (arquivo livre antes do `Historico`), `dez_mil` (caso 1) e `rodar_filho` (caso pesado num pytest filho, como o V1c).
 Semente SEMENTE = 20261023 (`random.Random`): tipo da operação, operações por transação (1 a 3) e alvos; SEMENTE + 1: parâmetros (matrizes, valores);
@@ -123,7 +123,7 @@ def aplicar(op, f, lado, c):  # c: contexto da montagem (ids STEP e GlobalId est
         api("geometry.edit_object_placement", f, product=W, matrix=_matriz(P))
     elif t == "apagar":
         api("root.remove_product", f, product=W)
-    elif t == "lote":  # padrão da sonda do T02 (0 diferenças ao desfazer)
+    elif t == "lote":  # padrão da sonda de desfazer (0 diferenças)
         f.batch()
         for p in op[1]:
             api("root.remove_product", f, product=f.by_guid(G.get(p, p)))
@@ -264,7 +264,7 @@ def rodar_filho(arquivo, caso, base):  # o `@AINDA_NAO` fica no processo de fora
     try:
         r = subprocess.run(cmd, cwd=str(os.path.dirname(os.path.dirname(os.path.abspath(arquivo)))), env=env, capture_output=True, text=True, timeout=5400)
     except subprocess.TimeoutExpired:
-        pytest.fail(f"caso {caso} (semente {SEMENTE}): o pytest filho passou de 5400 s; levar ao líder, nunca baixar o número")
+        pytest.fail(f"caso {caso} (semente {SEMENTE}): o pytest filho passou de 5400 s; revisar o limite, nunca baixar o número")
     saida, fim = r.stdout + r.stderr, (r.stdout.strip().splitlines() or [""])[-1]  # o stderr pode ter aviso do ifcopenshell depois do resumo
     print("\n".join(x for x in saida.splitlines() if "MEDIDA" in x) + f"\n{caso}: {time.monotonic() - t0:.0f} s no filho")
     if r.returncode == 0 and " passed" in fim and not any(x in fim for x in ("skipped", "xfail", "xpass", "error")):

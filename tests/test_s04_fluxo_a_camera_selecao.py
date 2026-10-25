@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo da F0-S04-T14d: no fluxo A, `selecionar` logo depois de um comando de câmera vê a câmera NOVA (a mesma regra do fluxo B, LOTE_OPUS_33 item 1 e O1).
+"""Teste do fluxo A: no fluxo A, `selecionar` logo depois de um comando de câmera vê a câmera NOVA (a mesma regra do fluxo B).
 O núcleo só ENFILEIRA `enquadrar`, `orbitar`, `mover` e `aproximar` (e `definir_camera` só muda a câmera de trabalho); a thread de desenho aplica no início do quadro
 seguinte, e `Cena.selecionar` usa a câmera do ÚLTIMO QUADRO APRESENTADO. Regra: depois de qualquer comando de câmera (enquadrar, orbitar, camera_mover, aproximar, camera),
 o `selecionar` espera 2 quadros apresentados com tempo >= o instante em que o comando voltou (o 1o ainda pode ter aplicado a câmera antiga; o 2o já tem a nova) e falha
@@ -36,7 +36,7 @@ NUCLEO = ("enquadrar", "orbitar", "mover", "aproximar", "definir_camera")  # mé
 
 
 def pular(msg):
-    (pytest.fail if OBRIGATORIO else pytest.skip)(f"\n!!! S04-T14d: {msg} (oráculo da câmera antes da seleção no fluxo A NÃO FOI EXECUTADO) !!!\n")
+    (pytest.fail if OBRIGATORIO else pytest.skip)(f"\n!!! S04-T14d: {msg} (teste da câmera antes da seleção no fluxo A NÃO FOI EXECUTADO) !!!\n")
 
 
 # ---------- subprocesso (python este_arquivo.py corrida) ----------

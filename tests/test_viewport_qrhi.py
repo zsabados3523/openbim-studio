@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo da S03-T03: o QRhiWidget desenha o cubo e o quadro não é de uma cor só."""
+"""Teste do QRhiWidget: o desenho desenha o cubo e o quadro não é de uma cor só."""
 import os
 import sys
 from pathlib import Path
@@ -36,7 +36,7 @@ def _desenhar(app, api=None):
 
 def test_cubo_desenha_quadro_nao_uniforme(app, tmp_path):
     w, quadros = _desenhar(app)
-    exigir = "1" in (os.environ.get("OBIM_EXIGIR_DESENHO"), os.environ.get("OBIM_TELA_OBRIGATORIA"))  # passo informativo do CI (T25): sem desenho = falha, não pulo
+    exigir = "1" in (os.environ.get("OBIM_EXIGIR_DESENHO"), os.environ.get("OBIM_TELA_OBRIGATORIA"))  # passo informativo do CI: sem desenho = falha, não pulo
     if w.rhi() is None or not quadros:
         w.close()
         if exigir:

@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo da S03-T05 (Parte 0), O1 a O10: carregador de malhas do IFC, sem Qt e sem tela.
+"""Testes do carregador de malhas, casos O1 a O10: carregador de malhas do IFC, sem Qt e sem tela.
 
-Transcrição de docs/state/arquivo/lotes-1-a-28/LOTE_OPUS_4/resultado.md §1.5. Congelado: não afrouxar número nem remover caso.
-Sem o carregador (S03-T05 parte A) os testes pulam. Testes lentos (M1M): OBIM_TESTES_LENTOS=1.
+Números congelados: não afrouxar número nem remover caso.
+Sem o carregador os testes pulam. Testes lentos (M1M): OBIM_TESTES_LENTOS=1.
 """
 import gc
 import hashlib
@@ -45,7 +45,7 @@ def _sha_m1m():
 def _m1m_ou_pular():
     """Caminho do M1M, ou pula com mensagem (teste lento: só local, com o arquivo certo)."""
     if os.environ.get("OBIM_TESTES_LENTOS") != "1":
-        pytest.skip("teste lento: defina OBIM_TESTES_LENTOS=1 (M1M, só na máquina do PO)")
+        pytest.skip("teste lento: defina OBIM_TESTES_LENTOS=1 (M1M, só na máquina de referência)")
     if not M1M_CAMINHO.exists():
         pytest.skip(f"teste lento: falta {M1M_CAMINHO}")
     if not _sha_m1m().startswith("0d4639449d5a18f1"):
@@ -344,7 +344,7 @@ def test_o8_arquivo_invalido(tmp_path, modo, excecoes_em_thread):
 
 
 def test_foto_do_arquivo_detecta_tamanho_data_e_conteudo(tmp_path):
-    """F0-RG-04: a foto (tamanho, data, soma) acusa qualquer mudança no arquivo e diz o que mudou."""
+    """A foto (tamanho, data, soma) acusa qualquer mudança no arquivo e diz o que mudou."""
     from viewport_qrhi import foto_arquivo as fa
     c = tmp_path / "a.ifc"
     c.write_bytes(b"abcdef")
@@ -431,7 +431,7 @@ def _soma(lotes):
 
 
 def test_o10_vida_dos_dados_m600(m600):
-    # emenda T08-0: com o processo separado, o arquivo só é aberto no pai se pedido (manter_arquivo)
+    # com o processo separado, o arquivo só é aberto no pai se pedido (manter_arquivo)
     car = CarregadorMalhas(str(m600), manter_arquivo=True)
     car.iniciar()
     assert car.arquivo is None  # durante a carga

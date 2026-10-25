@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Aviso visível quando o desenho cai para software, sem placa de vídeo (F0-RG-13, achado B25)."""
+"""Aviso visível quando o desenho cai para software, sem placa de vídeo ."""
 import os
 
 from test_s04_viewport_b import _caso, guarda, viewport  # noqa: F401

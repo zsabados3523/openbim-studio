@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo mínimo da ORDEM DE PROFUNDIDADE da viewport (S04-T10b). Roda em subprocesso sob `xvfb-run` (nunca na tela real), como `test_s04_selecao.py`.
-Historico: a janela GL nao tinha buffer de profundidade (corrigido na T10b: 24/8 bits em `Janela::Janela`); o teste agora protege contra a volta do defeito.
+"""Teste mínimo da ORDEM DE PROFUNDIDADE da viewport. Roda em subprocesso sob `xvfb-run` (nunca na tela real), como `test_s04_selecao.py`.
+Historico: a janela GL nao tinha buffer de profundidade (corrigido: 24/8 bits em `Janela::Janela`); o teste agora protege contra a volta do defeito.
 Regra: um cubo opaco PERTO da câmera, alinhado com um cubo maior ATRÁS, tem de dar a cor do perto no pixel central, em qualquer ordem de inserção.
 OBIM_S04_T10B_OBRIGATORIO=1 transforma pulo em falha."""
 import importlib.util, os, shutil, sys  # noqa: E401
@@ -23,7 +23,7 @@ PERTO, MEIO, LONGE = ("perto", (0, -4, 0), 1.0, CORES[0]), ("meio", (0, 0, 0), 2
 @pytest.fixture(scope="module")
 def tela():
     if importlib.util.find_spec("obimcore") is None:
-        pular("\n!!! aguarda S04-T07/T08: módulo obimcore ausente (oráculo de profundidade NÃO FOI EXECUTADO) !!!\n")
+        pular("\n!!! aguarda obimcore: módulo ausente (teste de profundidade NÃO FOI EXECUTADO) !!!\n")
     import ifcopenshell, obimcore  # noqa: E401,F401
     if not (os.environ.get("CI") or os.environ.get("OBIM_S04_TELA_VIRTUAL") == "1") if sys.platform == "win32" else not shutil.which("xvfb-run"):
         pular("\n!!! sem tela virtual (xvfb-run; no Windows só no CI ou com OBIM_S04_TELA_VIRTUAL=1): nunca na tela real !!!\n")

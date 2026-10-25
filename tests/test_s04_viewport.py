@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo da viewport C++ e do relógio (S04-T06; LOTE_OPUS_9 §2.3/§4; LOTE_OPUS_11/12). Cada caso gráfico roda em SUBPROCESSO sob
+"""Testes da viewport C++ e do relógio. Cada caso gráfico roda em SUBPROCESSO sob
 `xvfb-run` (nunca na tela real; Windows só no CI ou com OBIM_S04_TELA_VIRTUAL=1). GUARDA: pula enquanto `obimcore.Cena` ou seus métodos
-não existirem (T07/T08); falha com OBIM_S04_OBRIGATORIO=1 **e** OBIM_S04_VIEWPORT_OBRIGATORIO=1. API ESPERADA (o Opus confere):
+não existirem (funções novas); falha com OBIM_S04_OBRIGATORIO=1 **e** OBIM_S04_VIEWPORT_OBRIGATORIO=1. API ESPERADA:
  obimcore.agora() -> ms (mesmo relógio de relogio(): steady_clock) · obimcore.Cena(gl: bool) (True OpenGL, False D3D11) · viewport_ptr()
  -> int (QWidget contêiner; shiboken6.wrapInstance) · iniciar()/parar()/viva() · adicionar_lote(LoteMalha) -> int (sequência crescente)
  · limpar() · relogio() -> [(tempo_ms, sequencia)] dos quadros APRESENTADOS (buffer >= 2000) · capturar() -> (larg, alt, RGBA8888 de cima
@@ -41,14 +41,14 @@ pular = pytest.fail if OBRIGATORIO else pytest.skip
 @pytest.fixture(scope="module")
 def viewport():
     if importlib.util.find_spec("obimcore") is None:
-        pular("\n!!! aguarda S04-T07/T08: módulo obimcore ausente (oráculo da viewport NÃO FOI EXECUTADO) !!!\n")
+        pular("\n!!! aguarda obimcore: módulo ausente (teste da viewport NÃO FOI EXECUTADO) !!!\n")
     import ifcopenshell, obimcore  # noqa: E401,F401
     faltam = [m for m in METODOS if not hasattr(getattr(obimcore, "Cena", None), m)] + ["agora"] * (not hasattr(obimcore, "agora"))
-    faltam and pular(f"\n!!! aguarda S04-T07/T08: obimcore sem {faltam} (oráculo da viewport NÃO FOI EXECUTADO) !!!\n")
+    faltam and pular(f"\n!!! aguarda obimcore: sem {faltam} (teste da viewport NÃO FOI EXECUTADO) !!!\n")
     if not (os.environ.get("CI") or os.environ.get("OBIM_S04_TELA_VIRTUAL") == "1") if sys.platform == "win32" else not shutil.which("xvfb-run"):
         pular("\n!!! sem tela virtual (xvfb-run; no Windows só no CI ou com OBIM_S04_TELA_VIRTUAL=1): nunca na tela real !!!\n")
 
-_CACHE = {}  # o mesmo caso (nome, args, ambiente) roda uma vez por sessão; os testes de contadores (T07b) reaproveitam o resultado
+_CACHE = {}  # o mesmo caso (nome, args, ambiente) roda uma vez por sessão; os testes de contadores reaproveitam o resultado
 def caso(nome, *args, limite=400, extra=(), alvo=None):
     chave = (str(alvo), nome, args, tuple(extra))
     if chave in _CACHE:
@@ -74,18 +74,18 @@ def classificar(a):  # imagem HxWx4 -> {cor: (pixels, x médio)} para vermelho (
     m = {k: (x >= 60) & (x > 1.8 * y) & (x > 1.8 * z) for k, (x, y, z) in zip("vga", ((r, g, b), (g, r, b), (b, r, g)))}
     return {k: [int(x.sum()), float(np.nonzero(x)[1].mean()) if x.any() else -1.0] for k, x in m.items()}
 
-def veredito(fases):  # critério do LOTE_OPUS_11: {fase: [{"max": ms}, ...]} -> lista de erros
+def veredito(fases):  # critério: {fase: [{"max": ms}, ...]} -> lista de erros
     mx = {k: [r["max"] for r in v] for k, v in fases.items()}
     erros, med = [f"fase {k}: {len(v)} rodadas (exige {RODADAS})" for k, v in mx.items() if len(v) != RODADAS], {k: statistics.median(v) for k, v in mx.items() if v}
     for k, v in mx.items():
         altos = sum(x > 200 for x in v)  # RG-09 parte 2: um pico isolado de máquina passa; um travamento de verdade aparece em todas as rodadas
-        erros += [f"fase {k}: mediana dos maiores {med[k]:.1f} ms >= 100"] * (med[k] >= 100)  # regra aprovada pelo PO (E3)
+        erros += [f"fase {k}: mediana dos maiores {med[k]:.1f} ms >= 100"] * (med[k] >= 100)  # regra de mediana dos maiores
         erros += [f"fase {k}: {altos} rodadas com intervalo > 200 ms (no máximo 1)"] * (altos >= 2)
         erros += [f"fase {k}: mediana dos maiores {med[k]:.1f} ms >= 50"] * (med[k] >= 50)
         erros += [f"fase {k}: razão lote/parado {med[k] / med['A']:.1f} > 3"] * (k != "A" and med[k] > 3 * med["A"])
     return erros
 
-def test_criterio_de_repeticao_do_oraculo():  # roda hoje, sem o módulo: a régua tem de aprovar o T05 e reprovar o F9
+def test_criterio_de_repeticao_do_oraculo():  # roda hoje, sem o módulo: a régua tem de aprovar o caso de 0,75 s e reprovar o de bloqueio
     f = lambda *m: {k: [{"max": x} for x in v] for k, v in zip("ABCD", m)}  # noqa: E731
     ok = [29.7, 30.1, 31.0, 29.9, 31.5, 30.4, 30.8]
     assert not veredito(f(ok, [31.9] * 7, [46.5, 31, 33, 32, 30, 31, 32], ok))
@@ -93,7 +93,7 @@ def test_criterio_de_repeticao_do_oraculo():  # roda hoje, sem o módulo: a rég
     assert not veredito(f(ok, ok, [120, 31, 33, 32, 30, 31, 32], ok))
     assert all(veredito(f(ok, ok, c, ok)) for c in ([46.5, 31, 210, 32, 210, 31, 32], [60] * 7, [30] * 6, [95] * 7, [100] * 7))
 
-def test_viewport_dentro_de_janela_pyside6_com_as_cores_esperadas(viewport):  # reaproveita S03-T03 (quadro não uniforme)
+def test_viewport_dentro_de_janela_pyside6_com_as_cores_esperadas(viewport):  # reaproveita o teste do QRhi (quadro não uniforme)
     r = caso("imagem")
     assert r["viva"] and r["na_janela"], r
     assert abs(r["tam"][0] - r["cont"][1]) <= 2 and abs(r["tam"][1] - r["cont"][0]) <= 2, f"imagem {r['tam']} != contêiner {r['cont']}"
@@ -108,7 +108,7 @@ def test_viewport_dentro_de_janela_pyside6_com_as_cores_esperadas(viewport):  # 
 def test_r1e_um_qt_so_com_a_janela_aberta(viewport, ordem):  # Qt6Core, Gui, Widgets (e o que o GuiPrivate puxa) 1 vez cada
     r = caso("imagem", ordem)  # o mesmo caso da imagem, com a janela aberta e desenhando
     assert r["viva"]
-    for fonte in ("modulo", "real"):  # nenhum núcleo duas vezes; as três bibliotecas Qt exatamente uma (T02 cobre as de geometria)
+    for fonte in ("modulo", "real"):  # nenhum núcleo duas vezes; as três bibliotecas Qt exatamente uma (a ponte cobre as de geometria)
         assert all(len(v) <= 1 for v in (r[fonte] or {}).values()), f"duas cópias ({fonte}): {r[fonte]}"
     assert len(r["modulo"]["Qt6Core"]) == 1 and all(len(r["real"][k]) == 1 for k in ("Qt6Core", "Qt6Gui", "Qt6Widgets") if r["real"])
 
@@ -123,14 +123,14 @@ def test_relogio_crescente_e_casa_sequencia_com_quadro(viewport):
         q = next((x for x in fr if x[1] >= s), None)
         assert q and t < q[0] <= t + 500, f"sequência {s}: pedido em {t}, primeiro quadro com ela {q}"
 
-def test_intervalo_maximo_com_o_bloqueio_preso(viewport):  # caso do T05, critério do lote 11, sensibilidade (c)
+def test_intervalo_maximo_com_o_bloqueio_preso(viewport):  # caso de bloqueio, sensibilidade (c)
     r = caso("intervalo", limite=900)
     print("RODADAS", json.dumps({"fases": r["fases"], "hb": r["hb"]}))  # por rodada e fase: max, p99, lentos (>33 ms); hb = batimento da thread da janela
     for k in "CD":  # controle: o bloqueio ficou preso mesmo (a thread da janela parou >= 500 ms; só então a medida vale)
         assert min(r["hb"][k]) >= 500, f"controle falhou na fase {k}: a thread da janela só parou {r['hb'][k]} ms"
     assert not (erros := veredito(r["fases"])), f"{erros}\nrodadas: {r['fases']}"
 
-@pytest.mark.parametrize("escala", ["1", "1.25"])  # (h) 1,25: tamanho fracionário na tela (LOTE_OPUS_13 achado 1); nos dois sistemas
+@pytest.mark.parametrize("escala", ["1", "1.25"])  # (h) 1,25: tamanho fracionário na tela; nos dois sistemas
 def test_trocar_de_janela_setparent_esconder_e_redimensionar_sem_queda(viewport, escala):  # armadilha 4 e achado 4(b): recriar a superfície
     r = caso("trocar", extra=[("QT_SCALE_FACTOR", escala)])
     assert not r["falhas"] and r["viva"] and all(v[0] >= 500 for v in r["cls"].values()), r  # e a imagem final tem os 3 cubos
@@ -189,7 +189,7 @@ def novo(n=600, cam=CAM):
     from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
     c = obimcore.Cena(os.environ.get("RHI", "d3d11" if sys.platform == "win32" else "gl") == "gl")
     w = QWidget()
-    QVBoxLayout(w).addWidget(QLabel("Oráculo T06"))
+    QVBoxLayout(w).addWidget(QLabel("Teste de desenho"))
     cont = shiboken6.wrapInstance(c.viewport_ptr(), QWidget)
     cont.setMinimumSize(320, 240)
     w.layout().addWidget(cont)
@@ -215,11 +215,11 @@ def agora():  # importa o obimcore só na hora da chamada (a ordem de importaç�
 def retoma(c, n=5):
     t0 = agora()
     return (yield from esperar(lambda: c.viva() and len(quadros(c, t0)) >= n, 4000))
-def segurar(s):  # chamada C que NÃO solta o bloqueio (PyDLL), como a de 0,75 s do T05
+def segurar(s):  # chamada C que NÃO solta o bloqueio (PyDLL), como a de 0,75 s
     import ctypes
     ctypes.PyDLL("kernel32").Sleep(int(s * 1000)) if sys.platform == "win32" else ctypes.PyDLL(None).usleep(int(s * 1e6))
 
-def soltas(c):  # contadores da T07b; None enquanto a chave não existir
+def soltas(c):  # contadores; None enquanto a chave não existir
     return {k: c.estatisticas().get(k) for k in ("superficies_soltas", "solturas_atrasadas")}
 
 def maps(res):  # R1-e: núcleos que o módulo vê e núcleos que o SO mapeou (Linux)
@@ -242,7 +242,7 @@ def c_imagem(res, ordem=""):  # `ordem`: já importada pelo __main__ (R1-e nas d
                cls=classificar(a), cores=len({tuple(p) for p in a[::4, ::4].reshape(-1, 4)}), placa=st["triangulos_na_placa"], tri=st["triangulos"],
                cantos=[a[y, x, :3].tolist() for y in (2, -3) for x in (2, -3)])
     res["info"] = c.info() if hasattr(c, "info") else None  # qual desenho foi usado (OpenGL ou D3D11)
-    res["software"] = [c.desenho_por_software(), c.aviso()] if hasattr(c, "aviso") else None  # F0-RG-13: aviso quando sem placa de vídeo
+    res["software"] = [c.desenho_por_software(), c.aviso()] if hasattr(c, "aviso") else None  # aviso quando sem placa de vídeo
     c.limpar()
     yield from esperar(lambda: c.estatisticas()["triangulos"] == 0)
     yield 500
@@ -263,7 +263,7 @@ def c_relogio(res):
     res["quadros"], res["solt"] = quadros(c), soltas(c)
     c.parar()
 
-def lote_api(dur):  # lote de ifcopenshell.api numa thread Python (como o T05)
+def lote_api(dur):  # lote de ifcopenshell.api numa thread Python
     import ifcopenshell.api
     run = ifcopenshell.api.run
     f = run("project.create_file")
@@ -449,6 +449,6 @@ def rodar(corpo, limite=500):
 if __name__ == "__main__":
     sys.path.insert(0, str(RAIZ / "prototypes"))
     nome, *resto = sys.argv[1:]
-    assert not {"obimcore", "PySide6.QtCore"} & sys.modules.keys(), "o oráculo importou Qt ou obimcore antes da ordem pedida"
+    assert not {"obimcore", "PySide6.QtCore"} & sys.modules.keys(), "o teste importou Qt ou obimcore antes da ordem pedida"
     [importlib.import_module(m) for m in (resto[0] if nome == "imagem" and resto else "ifcopenshell,obimcore").split(",")]
     rodar(lambda r: globals()["c_" + nome](r, *resto))

@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo do F0-S04-T07e (cartão `docs/state/cards/F0-S04/F0-S04-T07e.md`, critério 1; diagnóstico em `reports/F0-S04-T07c.md`): limite em
-`Motor::parar()`. Quem implementa não edita este arquivo; quem tira os `@AINDA_NAO` (xfail estrito) é o autor do oráculo, em commit próprio, depois da
-implementação (só as linhas `AINDA_NAO = ...` e `@AINDA_NAO`). Contrato (o implementador lê só isto e o cartão):
+"""Testes do limite de tempo de parar() (critério 1 da correção): limite em
+`Motor::parar()`. Não editar este arquivo; quem tira os `@AINDA_NAO` (xfail estrito) é o autor do teste, , depois da
+implementação (só as linhas `AINDA_NAO = ...` e `@AINDA_NAO`). Contrato:
 1. `estatisticas()["paradas_atrasadas"]` (int): quantas threads de desenho foram ABANDONADAS porque a espera de `parar()` estourou o limite. Conta uma vez
    por thread (outra `parar()`, `desligar()`, `aboutToQuit` ou `~Viewport` sobre a mesma thread já abandonada não somam). 0 em operação normal.
-2. Limite de `parar()`: LIMITE_S = 5 s (fixo; o oráculo não lê constante do módulo). Com a thread presa, `parar()` volta entre LIMITE_S - 0,5 e LIMITE_S
+2. Limite de `parar()`: LIMITE_S = 5 s (fixo; o teste não lê constante do módulo). Com a thread presa, `parar()` volta entre LIMITE_S - 0,5 e LIMITE_S
    + FOLGA_S (1 s), contando a espera de `~Janela` (`desligar`) quando a janela é apagada. Chamada repetida com a thread ainda presa: volta em até
    LIMITE_S + FOLGA_S. Nunca congela; o `join` só acontece se a thread terminou (abandonada: `detach`). A PRÓPRIA thread guarda um `shared_ptr` do
    `Motor` (hoje ela captura `this` cru): `~Viewport` e `~Janela` soltarem os deles não o liberam; se o último dono for a thread, o `~Motor` roda nela
@@ -16,7 +16,7 @@ implementação (só as linhas `AINDA_NAO = ...` e `@AINDA_NAO`). Contrato (o im
    não tocar em nada delas (vazar a `Gpu` de propósito é aceitável: vazamento controlado, com o contador e um aviso em `info()`).
 4. Depois que o gancho solta, nada acessa objeto destruído: o subprocesso termina com código 0 e uma viewport nova volta a desenhar. Sair do programa com
    a thread ainda presa (gancho de 60 s) também termina com código 0, sem esperar o gancho.
-SANITIZADOR (critério 1 do cartão, "20 voltas"): OBIM_S04_T07E_VOLTAS=20 repete os casos `travar` no mesmo subprocesso (padrão 1); rodar com o módulo
+SANITIZADOR (critério 1, "20 voltas"): OBIM_S04_T07E_VOLTAS=20 repete os casos `travar` no mesmo subprocesso (padrão 1); rodar com o módulo
 compilado com -fsanitize=address, LD_PRELOAD da libasan do ambiente e ASAN_OPTIONS=detect_leaks=0 (o vazamento proposital e os do Python/Qt fariam o
 LeakSanitizer sair com código != 0); se não houver, registrar no relatório que não houve sanitizador. Só local, fora do CI.
 GUARDA (pula, nunca afrouxa): sem o módulo obimcore ou sem tela virtual (xvfb-run no Linux; no Windows só no CI ou com OBIM_S04_TELA_VIRTUAL=1),
@@ -42,7 +42,7 @@ caso = lambda nome, *a, **k: _caso(nome, *a, alvo=ESTE, **k)  # noqa: E731
 
 
 def pular(msg):
-    (pytest.fail if OBRIGATORIO else pytest.skip)(f"\n!!! S04-T07e: {msg} (oráculo do limite de parar() NÃO FOI EXECUTADO) !!!\n")
+    (pytest.fail if OBRIGATORIO else pytest.skip)(f"\n!!! parar(): {msg} (teste do limite de parar() NÃO FOI EXECUTADO) !!!\n")
 
 
 @pytest.fixture(scope="module")
@@ -122,7 +122,7 @@ def c_travar(res, modo):
         t0 = time.perf_counter()
         if modo == "parar":
             c.parar()
-        else:  # o caminho do T07c: ~Janela -> desligar() -> parar(), sem parar() antes
+        else:  # o caminho de desligar: ~Janela -> desligar() -> parar(), sem parar() antes
             w.close()
             shiboken6.delete(w)
         v["parar_s"] = time.perf_counter() - t0

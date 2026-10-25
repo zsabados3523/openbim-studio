@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo do F0-S05-T05, parte 1: diário (cartão `docs/state/cards/F0-S05/F0-S05-T05.md`, itens 1, 6 e 7; ADR-002 §4.2, §4.4 e §4.8).
-Quem implementa não edita este arquivo, `test_s05_t05_recuperar_oraculo.py` nem `tests/s05_*aux.py`; o autor do oráculo tira os `@AINDA_NAO`
-(xfail estrito por falta do módulo) em commit próprio, depois da implementação (só as linhas `AINDA_NAO = ...` e `@AINDA_NAO`).
-CONTRATO (`app/openbim_app/diario.py`, sem Qt, sem obimcore, sem importar `gravacao_par`; nomes do ADR-002 §4.8; [P] = escolha do oráculo que o
-ADR não fixa, provisória até o líder confirmar):
+"""Testes do diário de gravação, parte 1 (ADR-002 §4.2, §4.4 e §4.8).
+Não editar este arquivo, `test_s05_t05_recuperar_oraculo.py` nem `tests/s05_*aux.py`; os `@AINDA_NAO`
+(xfail estrito por falta do módulo) depois da implementação (só as linhas `AINDA_NAO = ...` e `@AINDA_NAO`).
+CONTRATO (`app/openbim_app/diario.py`, sem Qt, sem obimcore, sem importar `gravacao_par`; nomes do ADR-002 §4.8; [P] = escolha do teste que o
+ADR não fixa, provisória até confirmação):
 1. `pasta_base()` (caminho; lê o ambiente na hora): `OBIM_PASTA_LOCAL` se definida; senão `%LOCALAPPDATA%\\OpenBIMStudio` no Windows e
    `$XDG_DATA_HOME/OpenBIMStudio` (ou `~/.local/share/OpenBIMStudio`) nos outros. `pasta_projeto(lado_id)` = `pasta_base()/projetos/<lado_id>`.
    O diário fica em `pasta_projeto(lado_id)/diario/diario.obimlog` (pastas criadas se faltarem).
@@ -15,7 +15,7 @@ ADR não fixa, provisória até o líder confirmar):
    tamanho lidos do `ifc_caminho` no disco). `d.anotar(tipo, ifc, lado)` é o `anotar` que o `Historico` chama (tipo em transacao, desfazer,
    refazer; `ifc` = saída de `codificar_ifc`; `lado` = lista de `(coleção, id, antigo, novo)`): volta só depois da linha escrita e `flush` feito.
    `d.sincronizar()`: `os.fsync` do diário; sozinho, até cerca de 2 s depois do primeiro registro não sincronizado; `d.fechar()` sincroniza,
-   fecha o arquivo e para o temporizador (nenhuma thread fica). `os.fsync` é chamado pelo módulo `os` na hora (o oráculo o troca).
+   fecha o arquivo e para o temporizador (nenhuma thread fica). `os.fsync` é chamado pelo módulo `os` na hora (o teste o troca).
 5. Formato (§4.4): linhas `<crc32 em 8 hex minúsculos> <JSON>\\n` (só `\\n`, também no Windows), crc = `zlib.crc32` dos bytes UTF-8 do JSON;
    campos `v` (1), `seq` (consecutivo), `tipo`, `hora` (ISO 8601 em UTC, com fuso explícito: `+00:00` ou `Z`); `base`: `ifc_sha256`, `ifc_tamanho`, `ifc_caminho`, `obim_sha256`,
    `lado_id`; os demais: `ifc` e `lado`, autossuficientes (desfazer e refazer levam as MESMAS operações do passo: `ifc` e `lado` iguais aos do
@@ -33,7 +33,7 @@ ADR não fixa, provisória até o líder confirmar):
    `OBIM_S05_FALHA_EM` em `anotar_antes` ou `anotar_meio` levanta `OSError` nos mesmos pontos; o diário fica sem resto do registro que falhou
    e o próximo `anotar` segue com o `seq` seguinte ao último inteiro.
 Ordem do fim da transação (§4.2): `codificar` com a transação do ifcopenshell aberta, antes do `end_transaction`; `anotar` depois dele.
-Fora (T09 e T07; nenhum caso aqui): `zerar`, `diario-descartado.obimlog`, `abrir` sobre diário que já existe, a pergunta "Recuperar o trabalho".
+Fora (outros módulos; nenhum caso aqui): `zerar`, `diario-descartado.obimlog`, `abrir` sobre diário que já existe, a pergunta "Recuperar o trabalho".
 GUARDA: sem ifcopenshell, pula; com OBIM_S05_OBRIGATORIO=1 todo pulo vira falha. Semente 20261023 (`s05_t04_aux.SEMENTE`)."""
 import datetime
 import json

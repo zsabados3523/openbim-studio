@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo do fluxo B, parte 2: executável com janela Qt Widgets (S04-T14; LOTE_OPUS_9 §1.1, §1.2, §2.1 a §2.3; LOTE_OPUS_22 itens 1 a 4 e 9;
+"""Testes do fluxo B, parte 2: executável com janela Qt Widgets (
 contrato em prototypes/s04/fluxo_b/CONTRATO.md, "Parte 2"; apoio em tests/s04_fluxo_b_janela_aux.py, s04_fluxo_aux.py e s04_fluxo_b_aux.py).
 GUARDA: pula enquanto o executável `fluxo_b_janela` não existir (OBIM_S04_FLUXO_B_EXE, OBIM_S04_FLUXO_B_DIR, PYTHONPATH ou out/s04); FALHA com OBIM_S04_T14_OBRIGATORIO=1.
-Os casos que usam `prototypes/s04/medir_s04.py` pulam com "aguarda S04-T12" (falham com OBRIGATORIO): faltar a T12 nunca se confunde com faltar o executável.
-Tudo gráfico roda sob `xvfb-run` (Windows: só no CI ou com OBIM_S04_TELA_VIRTUAL=1), nunca na tela real; o fluxo A de referência (roteiro R inteiro) vem do mesmo `caso("roteiro", BASE)` das T11/T12
-(mesma chave de cache; OBIM_S04_SAIDA_A aponta para uma pasta de A já medida). A pasta de B fica em OBIM_S04_SAIDA_B (o `test_b_real_...` do oráculo da T12 passa a rodar na mesma sessão).
-Mapa dos itens do lote 22: 1 = test_localidade_por_thread_*, 2 = test_ler_*, 3 = test_sem_python_* e test_fonte_*, 4 = test_corrida_* e test_fonte_*; 9 = test_memoria_*; "lote em thread C++" = test_b_lote_*.
-Suposições do oráculo (o Opus confere): parede = 12 triângulos; a janela "não trava" = nenhum intervalo do pulso de 10 ms da thread da janela >= 100 ms (CI virtual) ou 200 ms (OBIM_S04_ESTRITO=1)."""
+Os casos que usam `prototypes/s04/medir_s04.py` pulam com "aguarda medir_s04" (falham com OBRIGATORIO): faltar o medidor nunca se confunde com faltar o executável.
+Tudo gráfico roda sob `xvfb-run` (Windows: só no CI ou com OBIM_S04_TELA_VIRTUAL=1), nunca na tela real; o fluxo A de referência (roteiro R inteiro) vem do mesmo `caso("roteiro", BASE)` dos testes do fluxo A
+(mesma chave de cache; OBIM_S04_SAIDA_A aponta para uma pasta de A já medida). A pasta de B fica em OBIM_S04_SAIDA_B (o `test_b_real_...` passa a rodar na mesma sessão).
+Mapa dos casos: localidade por thread = test_localidade_por_thread_*, leitura = test_ler_*, sem Python = test_sem_python_* e test_fonte_*, corrida = test_corrida_* e test_fonte_*; memória = test_memoria_*; "lote em thread C++" = test_b_lote_*.
+Premissas do teste: parede = 12 triângulos; a janela "não trava" = nenhum intervalo do pulso de 10 ms da thread da janela >= 100 ms (CI virtual) ou 200 ms (OBIM_S04_ESTRITO=1)."""
 import json
 import os
 import re
@@ -21,7 +21,7 @@ import s04_fluxo_b_aux as bx
 import s04_fluxo_b_janela_aux as jx
 from test_s04_viewport import caso as _caso
 
-caso = lambda nome, *a, **k: _caso(nome, *a, alvo=aux.AQUI, **k)  # noqa: E731  (a mesma chave do oráculo da T11)
+caso = lambda nome, *a, **k: _caso(nome, *a, alvo=aux.AQUI, **k)  # noqa: E731  (a mesma chave do teste do fluxo A)
 OBRIG = os.environ.get("OBIM_S04_T14_OBRIGATORIO") == "1"
 BASE = os.environ.get("OBIM_S04_BASE", "300")
 FB = jx.RAIZ / "prototypes" / "s04" / "fluxo_b"
@@ -29,7 +29,7 @@ MEDIR = Path(os.environ.get("OBIM_S04_MEDIR") or jx.RAIZ / "prototypes" / "s04" 
 ROT = jx.roteiro_json()
 
 def pular(msg):
-    (pytest.fail if OBRIG else pytest.skip)(f"\n!!! S04-T14: {msg} (oráculo do fluxo B, parte 2, NÃO FOI EXECUTADO) !!!\n")
+    (pytest.fail if OBRIG else pytest.skip)(f"\n!!! fluxo B: {msg} (teste do fluxo B, parte 2, NÃO FOI EXECUTADO) !!!\n")
 
 def tela():  # nunca na tela real
     if (not (os.environ.get("CI") or os.environ.get("OBIM_S04_TELA_VIRTUAL") == "1")) if sys.platform == "win32" else not shutil.which("xvfb-run"):
@@ -44,9 +44,9 @@ def exe():
 @pytest.fixture(scope="module")
 def medir(tmp_path_factory):
     if not MEDIR.is_file():
-        pular(f"aguarda S04-T12: {MEDIR} ausente")
+        pular(f"aguarda medir_s04: {MEDIR} ausente")
     p = subprocess.run([sys.executable, str(MEDIR), "--linhas", "--raiz", str(jx.RAIZ / "prototypes" / "s04"), "--json", str(tmp_path_factory.mktemp("m") / "l.json")], capture_output=True, text=True)
-    "NotImplementedError" in p.stderr and pular("aguarda S04-T12: medir_s04.py ainda é o esqueleto")
+    "NotImplementedError" in p.stderr and pular("aguarda medir_s04.py: ainda é o esqueleto")
     return MEDIR
 
 def rodar_medir(*args):
@@ -73,10 +73,10 @@ def test_validacao_do_medicao_de_b_aceita_um_correto_e_acusa_cada_defeito():
                 "sem relogio no 5b": lambda m, r: r["5b"][0].pop("relogio"), "mesma thread": lambda m, r: r["5b"][0].update(thread={"comando": "1", "janela": "1"}), "sem pulso": lambda m, r: r["5b"][0].pop("pulso_janela_ms"),
                 "pulso fora do passo": lambda m, r: r["5b"][0].update(pulso_janela_ms=[0.0] + r["5b"][0]["pulso_janela_ms"]), "guid curto": lambda m, r: r["3"][0].update(guids=["abc"])}
     for nome, f in defeitos.items():
-        assert mut(f), f"o oráculo não acusou o defeito: {nome}"
+        assert mut(f), f"o teste não acusou o defeito: {nome}"
 
 def test_fonte_cpp_da_biblioteca_tem_localidade_por_thread_esquema_explicito_mutex_e_ler_completo():  # itens 1, 3, 4 e 2 do lote 22 (o comportamento é conferido pelo executável; isto pega o atalho)
-    (FB / "main.cpp").is_file() or pular("aguarda S04-T14: prototypes/s04/fluxo_b/main.cpp ainda não existe")
+    (FB / "main.cpp").is_file() or pular("aguarda prototypes/s04/fluxo_b/main.cpp: ainda não existe")
     todos = {p.name: re.sub(r"//[^\n]*|/\*.*?\*/", "", p.read_text(encoding="utf-8"), flags=re.S) for p in FB.iterdir() if p.suffix in (".cpp", ".h")}  # sem comentários
     lib = todos["paredes.cpp"] + todos["paredes.h"]
     assert "Ifc4::get_schema" in "".join(todos.values()), "item 3: o esquema IFC4 tem de ser referenciado em código (Ifc4::get_schema())"
@@ -98,7 +98,7 @@ def test_sem_python_no_processo_e_esquema_ifc4_registrado_por_codigo(exe):  # it
     import s04_aux
     for k, padrao in s04_aux.NUCLEOS.items():
         assert len({x for x in libs if re.search(padrao, x, re.I)}) == 1, f"{k}: esperado 1 cópia em {libs}"
-    # LOTE_OPUS_35: o OCCT só entra pelo plugin do núcleo de geometria (carregado na 1a malha); sem ele, a régua acima não vê o OCCT da geometria
+    # o OCCT só entra pelo plugin do núcleo de geometria (carregado na 1a malha); sem ele, a régua acima não vê o OCCT da geometria
     assert len({x for x in libs if re.search(r"geometry_kernel_opencascade", x, re.I)}) == 1, f"o --versao tem de listar as bibliotecas DEPOIS de uma malha real (1 cópia do plugin do OCCT): {libs}"
 
 def test_ler_cobre_todo_tipo_de_atributo_no_desfazer_e_refazer(exe):  # item 2: o desfazer de INT, LOGICAL, ENUMERATION, listas... não pode apagar em silêncio
@@ -127,7 +127,7 @@ def test_localidade_por_thread_gravacoes_simultaneas_com_virgula_no_processo(exe
         assert bx.igual(ref, bx.assinatura(a)) == [], a
     assert not bx.validar(r["arquivos"][-1])
 
-def test_corrida_lote_em_thread_leituras_e_segundo_escritor(exe, tmp_path):  # item 4
+def test_corrida_lote_em_thread_leituras_e_segundo_escritor(exe, tmp_path):  
     r = autoteste(exe, "--autoteste", "corrida", 6, tmp_path)
     assert len(r["iteracoes"]) == 6
     ref = bx.assinatura(tmp_path / "ref.ifc")
@@ -137,7 +137,7 @@ def test_corrida_lote_em_thread_leituras_e_segundo_escritor(exe, tmp_path):  # i
         assert it["leituras"] > 0 and it["maior_leitura_ms"] < 50, f"{i}: a leitura do painel durante o lote tem de usar try_lock e voltar logo ({it})"
         assert bx.igual(ref, bx.assinatura(it["arquivo"])) == [], f"{i}: o resultado com a leitura e o 2o escritor em volta difere do lote sozinho"
 
-def test_memoria_de_10000_edicoes_cresce_menos_de_10_kb_por_edicao(exe):  # item 9 (o oráculo da T13 não media vazamento)
+def test_memoria_de_10000_edicoes_cresce_menos_de_10_kb_por_edicao(exe):  # (o teste de paredes não media vazamento)
     r = autoteste(exe, "--autoteste", "memoria", 10000)
     cresc = (r["rss_kb_fim"] - r["rss_kb_inicio"]) / 10000
     assert cresc < 10, f"{cresc:.1f} KB por edição (RSS {r['rss_kb_inicio']} -> {r['rss_kb_fim']} KB)"
@@ -182,7 +182,7 @@ def b(exe, saida_a, a_med, tmp_path_factory):  # o MESMO modelo de base e o MESM
     p = jx.rodar(exe, ["--base", base, "--roteiro", jx.ROTEIRO, "--saida", pasta, "--painel-log", pasta / "painel.jsonl"], grafico=True, env={"LC_ALL": "C", "OBIM_LIMITE": "900"})
     assert p.returncode == 0 and (pasta / "medicao.json").is_file(), f"B CAIU ou falhou no roteiro (código {p.returncode}):\n{(p.stdout + p.stderr)[-3000:]}"
     assert any(x.startswith("MEDICAO ") for x in p.stdout.splitlines()[-3:]), "faltou a linha MEDICAO no fim da saída"
-    os.environ["OBIM_S04_SAIDA_B"] = str(pasta)  # o test_b_real_... do oráculo da T12 lê daqui (arquivo de teste anterior, mesma sessão)
+    os.environ["OBIM_S04_SAIDA_B"] = str(pasta)  # o test_b_real_... lê daqui (arquivo de teste anterior, mesma sessão)
     med = json.loads((pasta / "medicao.json").read_text())
     ifc = Path(med["arquivo_ifc"]) if Path(med["arquivo_ifc"]).is_absolute() else pasta / med["arquivo_ifc"]
     return {"pasta": pasta, "med": med, "ifc": ifc, "base": base, "painel": pasta / "painel.jsonl"}
@@ -193,7 +193,7 @@ def reps(med):
 def test_b_medicao_json_e_valido_e_mede_o_mesmo_modelo(b, a_med):
     import ifcopenshell
     g = ifcopenshell.open(str(b["base"]))
-    produtos = sum(1 for p in g.by_type("IfcProduct") if p.Representation)  # conta independente do oráculo
+    produtos = sum(1 for p in g.by_type("IfcProduct") if p.Representation)  # conta independente do teste
     assert jx.validar_medicao(b["med"], ROT, produtos=produtos) == [] and produtos == a_med["base"]["produtos"]
     assert json.loads((b["pasta"] / "medicao.json").read_text())["base"]["produtos"] == produtos
 
@@ -219,7 +219,7 @@ def test_b_metas_na_regua_do_ci_virtual_e_metas_gravadas_conferem(b):
         assert {a: med["metas"][k][a] for a in ("mediana_ms", "p95_ms", "max_ms")} == pytest.approx({a: c[k][a] for a in ("mediana_ms", "p95_ms", "max_ms")}, abs=1e-6), k
     print("METAS_B", json.dumps(c))
 
-def test_b_lote_em_thread_cpp_nao_trava_a_janela(b):  # M3/M5 do cartão: durante o lote a thread da janela segue viva (pulso de 10 ms) e a viewport desenha
+def test_b_lote_em_thread_cpp_nao_trava_a_janela(b):  # durante o lote a thread da janela segue viva (pulso de 10 ms) e a viewport desenha
     x = next(p for p in b["med"]["passos"] if p["id"] == "5b")["reps"][0]
     assert x["thread"]["comando"] != x["thread"]["janela"]
     assert jx.maior_pulso_ms(x) < (200 if aux.ESTRITO else 100), f"a janela ficou {jx.maior_pulso_ms(x):.0f} ms sem tratar eventos durante o lote"
@@ -251,7 +251,7 @@ def test_b_saida_igual_a_de_a(b, a_med):  # §2.2: mesmas classes, e por parede 
     ia = Path(a_med["arquivo_ifc"])
     assert bx.igual(jx.assin(ia), jx.assin(b["ifc"])) == [] and not bx.validar(ia)
 
-def test_b_aceito_pelo_medir_s04(b, saida_a, medir, tmp_path):  # a ferramenta da T12 lê o mesmo medicao.json de A e de B e compara os IFCs do passo 7
+def test_b_aceito_pelo_medir_s04(b, saida_a, medir, tmp_path):  # a ferramenta medir_s04 lê o mesmo medicao.json de A e de B e compara os IFCs do passo 7
     p = rodar_medir("--a", saida_a, "--b", b["pasta"], "--json", tmp_path / "ab.json")
     js = json.loads((tmp_path / "ab.json").read_text())
     assert p.returncode == 0 and js["aprovado"] and js["saida_igual"] == {"ok": True, "diferencas": []}, (js["erros"], js["saida_igual"], (p.stdout + p.stderr)[-800:])

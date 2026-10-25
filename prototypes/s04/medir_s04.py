@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""S04-T12: ferramenta que lê `medicao.json` do fluxo A (e do B), aplica as metas M2 a M5, compara os IFCs do passo 7, calcula M6 e conta linhas (M7).
+"""Ferramenta que lê `medicao.json` do fluxo A (e do B), aplica as metas M2 a M5, compara os IFCs do passo 7, calcula M6 e conta linhas (M7).
 O contrato (linha de comando, JSON e regras) está no cabeçalho de `tests/test_s04_metas.py`.
 Só biblioteca padrão, numpy e ifcopenshell. Os tempos vêm dos tempos brutos (não confiar no campo `metas` gravado pelos fluxos).
 Código de saída: 0 aprovado, 1 reprovado, 2 entrada inválida."""
@@ -18,7 +18,7 @@ LIMITES = {"M2": 200.0, "M2b": 200.0, "M3": 50.0}  # ms; p95 na régua estrita, 
 TETO, TETO_MIN_MS, M4_MS, M5_VIRTUAL_MS, M5_ESTRITO_MS = 3.0, 250.0, 20000.0, 100.0, 200.0
 
 
-def _teto_ms(lim):  # teto rígido de um valor só (RG-09); mesma conta de tests/s04_fluxo_aux.teto_ms
+def _teto_ms(lim):  # teto rígido de um valor só; mesma conta de tests/s04_fluxo_aux.teto_ms
     return max(TETO * lim, TETO_MIN_MS)
 OFICIAL = 3000  # paredes do modelo oficial (régua estrita)
 TOL = 1e-6
@@ -135,13 +135,13 @@ def _contar(raiz, f_py, f_c):
 
 
 def contar_linhas(raiz):
-    """{"obimcore": n, "fluxo_a": n, "fluxo_b": n}: linhas de código depois de formatar (regra no cabeçalho do oráculo)."""
+    """{"obimcore": n, "fluxo_a": n, "fluxo_b": n}: linhas de código depois de formatar."""
     return _contar(raiz, _linhas_python, _linhas_c)
 
 
 def contar_linhas_cruas(raiz):
     """Mesma forma, sem normalizar: Python conta as linhas do arquivo como estão (sem vazias nem comentário de linha inteira); C/C++ sem peso de largura.
-    Fica ao lado da contagem normalizada para o PO ver o efeito do formato (o Python é normalizado a uma instrução por linha, o C++ não)."""
+    Fica ao lado da contagem normalizada para quem lê ver o efeito do formato (o Python é normalizado a uma instrução por linha, o C++ não)."""
     return _contar(raiz, _cru_python, _cru_c)
 
 
@@ -489,7 +489,7 @@ def _resumo_texto(r):
 
 
 def main(argv=None):
-    p = argparse.ArgumentParser(description="S04-T12: metas, saída igual, M6 e linhas")
+    p = argparse.ArgumentParser(description="Metas, saída igual, M6 e linhas")
     p.add_argument("--a", help="pasta do fluxo A (medicao.json e o IFC do passo 7)")
     p.add_argument("--b", help="pasta do fluxo B (opcional)")
     p.add_argument("--estrito", action="store_true", help="régua estrita (p95), como OBIM_S04_ESTRITO=1")

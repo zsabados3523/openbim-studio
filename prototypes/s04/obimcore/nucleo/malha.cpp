@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Malha por elemento no mundo (S04-T04; LOTE_OPUS_9 §1.4 regras 1 a 4 e §1.5 R1-h/R1-i), C++ PURO (T14b): sem Python; a ponte é ponte_malha.cpp.
-// Opções da S03 (coordenadas do mundo, sem soldar vértices) e a biblioteca "híbrida". O arquivo é emprestado (regra 1) e nada dele é guardado
+// Malha por elemento no mundo, C++ PURO: sem Python; a ponte é ponte_malha.cpp.
+// Opções do viewport Python (coordenadas do mundo, sem soldar vértices) e a biblioteca "híbrida". O arquivo é emprestado (regra 1) e nada dele é guardado
 // depois do retorno (regra 2). Quem chama deixa o escritor parado (regra 3).
 #include "malha.h"
 #include <ifcparse/file.h>
@@ -23,7 +23,7 @@ using namespace ifcopenshell::geom;
 namespace obim {
 namespace {
 
-constexpr const char* BIBLIOTECA = "hybrid-cgal-simple-opencascade";  // a mesma da S03 (carregador.py)
+constexpr const char* BIBLIOTECA = "hybrid-cgal-simple-opencascade";  // a mesma de carregador.py
 
 // Uma passada por vez no processo (sem o bloqueio do interpretador, que está solto): com 4 threads em arquivos diferentes a
 // biblioteca de geometria derrubou o processo em ~10% das rodadas (medido); serializada, 0 em 55. Travar só a construção não bastou.
@@ -65,7 +65,7 @@ void passada(ifcopenshell::file* f, const std::set<int>& ids, std::map<std::stri
     }
 }
 
-// GlobalIds repetidos no pedido contam uma vez só: uma passada, um resultado por GlobalId (LOTE_OPUS_10 achado 3b).
+// GlobalIds repetidos no pedido contam uma vez só: uma passada, um resultado por GlobalId.
 std::map<std::string, Malha> calcular(ifcopenshell::file* f, const std::vector<std::string>& guids) {
     std::set<int> ids;
     std::map<std::string, Malha> saida;

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Ponte nanobind do módulo `fluxo_b_paredes` (S04-T13): só tradução de tipos; a lógica está em paredes.cpp. Medidas em metros, GlobalIds em texto.
+// Ponte nanobind do módulo `fluxo_b_paredes`: só tradução de tipos; a lógica está em paredes.cpp. Medidas em metros, GlobalIds em texto.
 // Entrada inválida (std::invalid_argument) vira ValueError; falha injetada (std::runtime_error) vira RuntimeError.
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/optional.h>

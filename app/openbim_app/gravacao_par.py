@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Gravação do par `Casa.ifc` + `Casa.obim` com diário de gravação (F0-S05-T07; ADR-002 §4.3, §4.5 e §4.8).
+"""Gravação do par `Casa.ifc` + `Casa.obim` com diário de gravação (ADR-002 §4.3, §4.5 e §4.8).
 O IFC é carimbado com `Revisao` + 1 e `LadoId` por `Historico.fora_do_historico`; o resto roda em `ler()`. IFC e lateral são preparados,
 o `gravacao.json` entra por troca atômica e só então os dois são confirmados (IFC primeiro). Falha antes do diário volta o carimbo; depois
 dele o resolvedor roda na hora. Sem Qt, sem `obimcore` e sem importar `diario.py`."""

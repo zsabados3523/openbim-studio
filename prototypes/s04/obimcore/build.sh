@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Constrói o módulo `obimcore` (S04-T03) e anota os tempos. Roda com o ambiente `openbim` ativo; não instala nada.
+# Constrói o módulo `obimcore` e anota os tempos. Roda com o ambiente `openbim` ativo; não instala nada.
 # Uso: bash build.sh <pasta-de-saida>   (cria <pasta-de-saida>/obimcore/ com __init__.py e o módulo; ponha a pasta no PYTHONPATH)
 # Primeira execução = build limpo; as seguintes são incrementais. Para medir os dois: CLEAN=1 apaga o build antes.
 set -euo pipefail
@@ -30,7 +30,7 @@ t0=$(agora)
 cmake -S . -B "$B" "${GEN[@]}" -DCMAKE_BUILD_TYPE=Release -DOBIM_SAIDA="$OUT" -DCMAKE_PREFIX_PATH="$CONDA_PREFIX"
 cmake --build "$B" --config Release
 t1=$(agora)
-# Linux (T17a): o g++ do conda acrescenta ao RPATH o caminho ABSOLUTO do ambiente de desenvolvimento. Dentro do pacote isso seria uma biblioteca
+# Linux: o g++ do conda acrescenta ao RPATH o caminho ABSOLUTO do ambiente de desenvolvimento. Dentro do pacote isso seria uma biblioteca
 # de fora (R1-e), então fica só o primeiro caminho, o relativo ao pacote ($ORIGIN/../../env/lib). Reescreve a string no lugar (não há patchelf).
 if [ "$(uname -s)" = Linux ]; then
 python - "$OUT"/obimcore/_obimcore*.so <<'PY'

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Câmera da viewport (S04-T09). Ver camera.h.
+// Câmera da viewport. Ver camera.h.
 #include "camera.h"
 #include <algorithm>
 #include <cmath>

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Foto do arquivo IFC (F0-RG-04): tamanho, data de modificação e soma de verificação. O carregador tira a foto antes da carga
+"""Foto do arquivo IFC: tamanho, data de modificação e soma de verificação. O carregador tira a foto antes da carga
 e entrega a cada processo filho; se o arquivo mudar no meio (OneDrive sincronizando, outro programa gravando), a carga para com
 uma mensagem clara em vez de misturar duas versões do mesmo arquivo. Python puro, sem Qt e sem ifcopenshell."""
 from __future__ import annotations

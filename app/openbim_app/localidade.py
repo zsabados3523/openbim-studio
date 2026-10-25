@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Localidade numérica do processo (T26).
+"""Localidade numérica do processo.
 
 O construtor do Qt troca a localidade numérica do C (LC_NUMERIC) para a do ambiente; em pt_BR o
 IfcOpenShell passa a gravar "2799,99" (IFC corrompido, que ainda reabre). Aqui a categoria numérica

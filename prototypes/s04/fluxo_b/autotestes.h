@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Autotestes do executável do fluxo B (S04-T14c; CONTRATO.md, Parte 2, "Autotestes"): sem janela, uma linha `RESULTADO {json}` no stdout. Código movido do main.cpp, sem mudança.
+// Autotestes do executável do fluxo B (CONTRATO.md, Parte 2, "Autotestes"): sem janela, uma linha `RESULTADO {json}` no stdout.
 #pragma once
 #include <string>
 #include <vector>

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Constrói o módulo `fluxo_b_paredes` (S04-T13). Roda com o ambiente `openbim` ativo; não instala nada.
-# Uso: bash build.sh <pasta-de-saida>   (cria <pasta-de-saida>/fluxo_b_paredes*.so|.pyd; ponha a pasta no PYTHONPATH; o oráculo também a lê de OBIM_S04_FLUXO_B_DIR)
+# Constrói o módulo `fluxo_b_paredes`. Roda com o ambiente `openbim` ativo; não instala nada.
+# Uso: bash build.sh <pasta-de-saida>   (cria <pasta-de-saida>/fluxo_b_paredes*.so|.pyd; ponha a pasta no PYTHONPATH; o teste também a lê de OBIM_S04_FLUXO_B_DIR)
 set -euo pipefail
 OUT="$(python -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "$1")"; B="$OUT/build_fluxo_b"
 cd "$(dirname "$0")"

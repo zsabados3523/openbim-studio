@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Câmera da viewport (S04-T09; LOTE_OPUS_9 §1 a §6). Estado, fila de entradas e animação. Sem Qt e sem Python.
+// Câmera da viewport. Estado, fila de entradas e animação. Sem Qt e sem Python.
 // A thread da janela só ENFILEIRA (mutex próprio, folha: nunca se pede outro mutex dentro dele); a thread de desenho APLICA, na ordem,
 // uma vez por quadro, com o tamanho real do backbuffer. Nenhuma entrada se perde. A animação de órbita é por relógio (steady_clock), não por quadro.
 #pragma once

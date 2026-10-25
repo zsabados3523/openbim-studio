@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Registro de erros (F0-RG-11): arquivo de texto na pasta do usuário, para o usuário poder mandar quando algo falhar.
+"""Registro de erros: arquivo de texto na pasta do usuário, para o usuário poder mandar quando algo falhar.
 
 Grava `openbim.log` (mensagens e erros não tratados, com a pilha) e `quedas.log` (queda do próprio Python/Qt,
 pelo `faulthandler`). A pasta fica fora da instalação: `%LOCALAPPDATA%\\OpenBIM Studio\\logs` no Windows,

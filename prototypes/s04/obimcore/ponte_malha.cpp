@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Ponte nanobind de `obimcore.malhas(arquivo, guids)` (S04-T04; T14b: separada da geometria em nucleo/malha.cpp, C++ puro). Só adapta tipos:
+// Ponte nanobind de `obimcore.malhas(arquivo, guids)` (separada da geometria em nucleo/malha.cpp, C++ puro). Só adapta tipos:
 // empresta o arquivo (com o bloqueio), SOLTA o bloqueio durante toda a geometria (nesse trecho nada toca em objeto Python) e monta os arrays do numpy.
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
@@ -24,7 +24,7 @@ nb::object matriz(std::vector<T>&& v, size_t colunas) {  // o numpy fica dono do
 
 void registrar_malhas(nb::module_& m) {
     m.def("malhas", [](nb::object arquivo, const std::vector<std::string>& guids) {
-        // Com a SessaoModelo (P1; ADR-004 §5.1 regra 3): confere a trava COM o bloqueio (o erro de _obimcore_entrar sobe como está) e chama
+        // Com a SessaoModelo (ADR-004 §5.1 regra 3): confere a trava COM o bloqueio (o erro de _obimcore_entrar sobe como está) e chama
         // _obimcore_sair com o bloqueio de volta, em todo caminho. O C++ nunca pega a trava do modelo. O caminho do ifcopenshell.file não muda.
         nb::object sessao;
         nb::object alvo = arquivo;  // fica referenciado até o fim

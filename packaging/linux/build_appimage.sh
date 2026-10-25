@@ -6,7 +6,7 @@
 #   APPIMAGETOOL caminho do appimagetool-x86_64.AppImage (MIT, baixado por quem roda)
 # Variaveis: RUNTIME_ENV (padrao ~/miniforge3/envs/openbim-runtime), criado com
 #   conda env create -f packaging/runtime-environment.yml
-#   OBIMCORE_DIR (obrigatoria, T17a): a pasta obimcore/ (com __init__.py e _obimcore*.so) que o build.sh de prototypes/s04/obimcore gera.
+#   OBIMCORE_DIR (obrigatoria): a pasta obimcore/ (com __init__.py e _obimcore*.so) que o build.sh de prototypes/s04/obimcore gera.
 #   O pacote nao tem compilador: o modulo vem pronto do ambiente de desenvolvimento e entra em app/obimcore/.
 set -euo pipefail
 
@@ -22,7 +22,7 @@ START=$(date +%s)
 
 [ -x "$ENV_DIR/bin/python" ] || { echo "Ambiente de runtime nao encontrado: $ENV_DIR" >&2; exit 1; }
 
-# O pacote sem o modulo C++ nao e mais um pacote valido (cartao F0-S04-T17): falha com mensagem clara.
+# O pacote sem o modulo C++ nao e mais um pacote valido: falha com mensagem clara.
 OBIMCORE_DIR="${OBIMCORE_DIR:-}"
 if [ ! -f "$OBIMCORE_DIR/__init__.py" ] || ! compgen -G "$OBIMCORE_DIR/_obimcore*.so" > /dev/null; then
   echo "Falta o modulo obimcore: defina OBIMCORE_DIR com a pasta obimcore/ (__init__.py e _obimcore*.so) gerada por prototypes/s04/obimcore/build.sh (valor atual: '${OBIMCORE_DIR}')" >&2
@@ -67,7 +67,7 @@ cp -a "$ENV_DIR" "$APPDIR/env"
 rm -rf "$APPDIR/env/include" "$APPDIR/env/man" "$APPDIR/env/share/man" "$APPDIR/env/share/doc"
 find "$APPDIR/env" -name '*.a' -delete
 
-# 1b. Poda de pacotes nao usados (decisao do PO, cartao F0-S02-T10, opcao 1; ampliada em F0-S02-T11).
+# 1b. Poda de pacotes nao usados.
 # O pacote conda `occt` depende de `vtk` so para o modulo de visualizacao do OCCT (libTKIVtk); o `vtk`
 # arrasta `vtk-io-ffmpeg`, `ffmpeg` (compilacao GPL, com x264 e x265) e ~130 pacotes de video, audio e
 # aceleracao. O app NAO usa nada disso (verificado: selftest e ifcopenshell.geom.create_shape funcionam).
@@ -83,7 +83,7 @@ done
 
 # 2. Codigo do app, lancador, desktop e icone
 cp -a "$REPO/app/openbim_app" "$APPDIR/app/"
-# Modulo C++ (T17a): so o __init__.py e o .so, nada do diretorio de compilacao. O RPATH dele ($ORIGIN/../../env/lib) acha o env/ do pacote.
+# Modulo C++: so o __init__.py e o .so, nada do diretorio de compilacao. O RPATH dele ($ORIGIN/../../env/lib) acha o env/ do pacote.
 mkdir -p "$APPDIR/app/obimcore"
 cp "$OBIMCORE_DIR/__init__.py" "$OBIMCORE_DIR"/_obimcore*.so "$APPDIR/app/obimcore/"
 find "$APPDIR/app" -name __pycache__ -type d -prune -exec rm -rf {} +
@@ -101,7 +101,7 @@ for f in LGPL-3.0 LGPL-2.1 GPL-3.0 OCCT-exception-1.0 nanobind-BSD-3-Clause tsl-
 done
 CONDA_PREFIX="$ENV_DIR" python3 "$REPO/scripts/license_inventory.py" "$APPDIR/licenses/INVENTARIO.md" "--removidos=$OUT/removidos.txt" > "$OUT/inventario.log" || { sed -n '/## Não conda-forge/,$p' "$OUT/inventario.log"; echo "INVENTÁRIO DE LICENÇAS REPROVOU (ver acima)" >&2; exit 1; }
 printf '\n> Nota: os pacotes listados em REMOVIDOS.md aparecem acima mas foram **removidos na montagem**.\n' >> "$APPDIR/licenses/INVENTARIO.md"
-# O modulo obimcore (T17a) leva codigo de terceiros que nao e pacote do ambiente de runtime, entao o inventario nao o lista:
+# O modulo obimcore leva codigo de terceiros que nao e pacote do ambiente de runtime, entao o inventario nao o lista:
 # nanobind (BSD-3-Clause) e tsl::robin_map (MIT) vao compilados DENTRO do modulo (avisos nesta pasta); Eigen (MPL-2.0) e Boost (BSL-1.0) so como cabecalhos na compilacao.
 printf '\n> Nota: o modulo `app/obimcore` (codigo do projeto) leva compilados dentro dele o **nanobind 3.1.0 (BSD-3-Clause)** e o **tsl::robin_map (MIT)**, com os avisos de copyright em `nanobind-BSD-3-Clause.txt` e `tsl-robin-map-MIT.txt` (esta pasta); usou cabecalhos do Eigen (MPL-2.0) e do Boost (BSL-1.0) so na compilacao; e usa IfcOpenShell, OCCT e Qt por bibliotecas dinamicas (pasta `env/`, LGPL-COMO-TROCAR.md).\n' >> "$APPDIR/licenses/INVENTARIO.md"
 # arquivos de licenca que cada pacote conda traz (info/licenses do cache do conda)

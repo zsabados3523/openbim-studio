@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Executável do ORÁCULO da S04-T14a (item "construção concorrente", tests/test_s04_fluxo_b_paredes.py): T threads C++ criam o PRIMEIRO `Paredes` do processo ao mesmo tempo (sem aquecer
+// Executável de teste da construção concorrente (tests/test_s04_fluxo_b_paredes.py): threads C++ criam o PRIMEIRO `Paredes` do processo ao mesmo tempo (sem aquecer
 // na thread principal) e já usam o modelo. A ponte Python não alcança isto (o construtor nanobind segura o GIL), então o caso é em C++ puro. O implementador não edita este arquivo.
 // Uso: fluxo_b_frio <threads> [paredes]. Imprime `FRIO ok <threads>` ao fim; queda do processo ou impasse = falha (o teste mede código de saída e prazo).
 #include <atomic>

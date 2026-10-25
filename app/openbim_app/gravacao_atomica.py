@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Gravação atômica de um arquivo: temporário na mesma pasta, fsync, conferência, .bak de uma geração e troca (F0-S05-T06; ADR-002 §4.5 e §4.8)."""
+"""Gravação atômica de um arquivo: temporário na mesma pasta, fsync, conferência, .bak de uma geração e troca (ADR-002 §4.5 e §4.8)."""
 import errno
 import hashlib
 import os

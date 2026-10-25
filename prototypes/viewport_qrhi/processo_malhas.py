@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Processo filho que converte o IFC em malhas (S03-T08-B1; arquivo/lotes-1-a-28/LOTE_OPUS_6/resultado.md §2.2 D3). Python puro, sem Qt.
+"""Processo filho que converte o IFC em malhas Python puro, sem Qt.
 
 O filho abre o arquivo, lista os produtos, converte com `ifcopenshell.geom.iterator` e manda mensagens
 `(tipo, dados)` por um `Pipe` de mão única: `fase`, `bloco` e `bloco_fim` (memória do filho no início e no fim da conversão de cada bloco; `bloco` e `fim` trazem também `pos_emitir_mb`, a memória depois de `emitir` do bloco anterior), `inicio`, `lote`, `feitos`, `atual`, `sem_malha`, `erro`, `fim`.
@@ -29,7 +29,7 @@ except ImportError:  # pragma: no cover  (módulo importado fora do pacote)
 def pico_memoria_mb(ident=None, atual=False) -> float:
     """Pico de memória de um processo, sem psutil. Sem argumento: o próprio processo.
     Com `ident`: pid no Linux; no Windows, o identificador (handle) do processo, p.ex. `Process.sentinel`.
-    Com `atual=True` (T29c): a memória residente de agora, não o pico (Linux VmRSS; Windows WorkingSetSize)."""
+    Com `atual=True` : a memória residente de agora, não o pico (Linux VmRSS; Windows WorkingSetSize)."""
     if sys.platform == "win32":
         import ctypes
         from ctypes import wintypes
@@ -119,7 +119,7 @@ _RETIDO = []  # memória do gancho OBIM_TESTE_CRESCER_MB: guardada até o fim do
 
 
 def _crescer():
-    """OBIM_TESTE_CRESCER_MB="<guid>=<mb>[,<guid>=<mb>...]": ao converter a peça, o filho aloca e escreve essa memória (T29c)."""
+    """OBIM_TESTE_CRESCER_MB="<guid>=<mb>[,<guid>=<mb>...]": ao converter a peça, o filho aloca e escreve essa memória."""
     saida = {}
     for par in os.environ.get("OBIM_TESTE_CRESCER_MB", "").split(","):
         if "=" in par:
@@ -154,7 +154,7 @@ def entrada(tx, params):
 
 
 def _conferir_foto(params):
-    """Para a carga se o arquivo não é mais o da foto tirada pelo pai (F0-RG-04). Confere só tamanho e data (barato)."""
+    """Para a carga se o arquivo não é mais o da foto tirada pelo pai Confere só tamanho e data (barato)."""
     try:
         from . import foto_arquivo
     except ImportError:  # pragma: no cover
@@ -208,9 +208,9 @@ def _converter(enviar, params):
             estado["indice"] += 1
 
     feitos = 0
-    pos_emitir = None  # T29e: memória logo depois de `emitir` do bloco anterior; vai dentro do próximo `bloco` (ou do `fim`)
+    pos_emitir = None  # memória logo depois de `emitir` do bloco anterior; vai dentro do próximo `bloco` (ou do `fim`)
     t = time.perf_counter()
-    if isolado:  # UM iterador para todas as peças pedidas (S04-T16), ou um por peça (`por_peca`); cada peça sai assim que fica pronta
+    if isolado:  # UM iterador para todas as peças pedidas, ou um por peça (`por_peca`); cada peça sai assim que fica pronta
         enviar("fase", "convertendo")
         buffer, t_buf = [], 0.0
 
@@ -238,14 +238,14 @@ def _converter(enviar, params):
         soltar()
         if sem:
             enviar("sem_malha", sem)
-        if os.environ.get("OBIM_TESTE_MATAR_NO_FIM"):  # gancho de teste (S03-T08-G): cai depois do último lote
+        if os.environ.get("OBIM_TESTE_MATAR_NO_FIM"):  # gancho de teste: cai depois do último lote
             os._exit(3)
     else:
         for ini in range(0, total, tb):
             bloco = produtos[ini:ini + tb]
             _RETIDO.clear()  # fim do bloco anterior: a memória do gancho de crescimento volta ao sistema
             enviar("fase", "convertendo")  # antes de criar o iterador: a primeira peça é convertida em initialize()
-            enviar("bloco", {"rss_mb": pico_memoria_mb(atual=True), "t": time.time(), "pos_emitir_mb": pos_emitir})  # memória de partida do bloco (regra R-A, T29c)
+            enviar("bloco", {"rss_mb": pico_memoria_mb(atual=True), "t": time.time(), "pos_emitir_mb": pos_emitir})  # memória de partida do bloco
             prods, sem = _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar, None, crescer)
             enviar("bloco_fim", {"rss_mb": pico_memoria_mb(atual=True)})  # o pai pode estar atrasado na fila: a medida vem do filho
             feitos += len(bloco)
@@ -288,7 +288,7 @@ def _bloco(ifcopenshell, cfg, arq, bloco, params, enviar, lentas, matar, entrega
                     os._exit(3)
                 if guid in lentas:
                     time.sleep(lentas[guid])
-                if crescer and guid in crescer:  # gancho de teste (T29c): escreve de verdade, senão a memória não é residente
+                if crescer and guid in crescer:  # gancho de teste: escreve de verdade, senão a memória não é residente
                     _RETIDO.append(np.ones(crescer[guid] * 2**20, dtype=np.uint8))
                 if guid is not None:
                     enviar("feitos", s.id)
@@ -353,7 +353,7 @@ def _pontos_item(util_p, item, m, saida, t_fim):
 
 def _caixa_produto(util_p, prod, escala):
     """(mínimo, máximo) em metros, no mundo. Pontos da representação; falha ou estouro ao ler os pontos: cubo de 0,5 m na posição da peça; posição ilegível: a peça falha (vai para `sem_malha`)."""
-    # S03-T08-G: posição ilegível = a peça falha (vai para `sem_malha`); nunca uma caixa em posição zero
+    # posição ilegível = a peça falha (vai para `sem_malha`); nunca uma caixa em posição zero
     m = util_p.get_local_placement(prod.ObjectPlacement) if prod.ObjectPlacement is not None else np.eye(4)
     try:
         t_fim = time.perf_counter() + LIMITE_CAIXA_S

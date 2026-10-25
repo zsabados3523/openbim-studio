@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Janela Qt Widgets do fluxo B (S04-T14c; CONTRATO.md, Parte 2): viewport do núcleo (C++ puro) + painel de propriedades (QLabel) + pulso de 10 ms da thread da janela.
+// Janela Qt Widgets do fluxo B (CONTRATO.md, Parte 2): viewport do núcleo (C++ puro) + painel de propriedades (QLabel) + pulso de 10 ms da thread da janela.
 // O painel só lê o modelo com `try_lock` (regra 4): trava ocupada devolve o último texto mostrado. Nada de Python.
 #pragma once
 #include "malha.h"
@@ -38,7 +38,7 @@ inline std::string painel_do(Paredes& p, const std::string& guid, const std::str
     }
     return e.declaration().name() + "\nNome: " + txt(e, 2) + "\nGlobalId: " + guid + "\nResistência ao fogo: " + fogo;
 }
-struct Etiqueta : QLabel {  // uma linha JSON por pintura (--painel-log): o oráculo confere que o texto novo foi pintado antes de t_painel_ms
+struct Etiqueta : QLabel {  // uma linha JSON por pintura (--painel-log): o teste confere que o texto novo foi pintado antes de t_painel_ms
     std::ofstream log;
     void paintEvent(QPaintEvent* e) override {
         if (log.is_open()) log << QJsonDocument(QJsonObject{{"t_ms", agora()}, {"texto", text()}}).toJson(QJsonDocument::Compact).toStdString() << std::endl;

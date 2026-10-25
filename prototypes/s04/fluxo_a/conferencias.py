@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""F0-S04-T15c: conferências (i), (ii), (iii) e forma 3 (referência) do LOTE_OPUS_9 §2.3. SONDAS que alimentam o ADR-004, não portão (a forma 3 deve reprovar).
-Contrato em CONTRATO.md (seção T15) e no oráculo tests/test_s04_t15c_conferencias.py. Medir, não otimizar. Importar não cria QApplication nem importa o obimcore.
+"""Conferências (i), (ii), (iii) e forma 3 (referência). Sondas que alimentam o ADR-004, não portão (a forma 3 deve reprovar).
+Contrato em CONTRATO.md e nos testes tests/test_s04_t15c_conferencias.py. Medir, não otimizar. Importar não cria QApplication nem importa o obimcore.
 Uso: `python conferencias.py <saida.json> [--base 300] [--quantidade 1000] [--rodadas 3]`."""
 import argparse
 import json
@@ -17,7 +17,7 @@ import numpy as np
 SEG = 1.0  # duração de cada medida da conferência (i)
 FORA = "(fora da API)"
 GRANDE = 10000  # paredes do modelo das chamadas longas de (ii): abrir ~0,17 s, gravar ~0,5 s
-ALVO_PRESO_S = 0.75  # a chamada C da T05
+ALVO_PRESO_S = 0.75  # a chamada C
 
 
 def _fluxo(base, saida):  # fluxo sem janela, com o tipo PAR15 criado
@@ -182,7 +182,7 @@ def conferencia_iii(f):  # f = fluxo com janela e a órbita girando (lote.prepar
             "conteiner_python": not c.__module__.startswith("PySide6.")}
 
 
-# ---------- forma 3: a forma 1 com a viewport Python da S03 (referência; espera-se que reprove) ----------
+# ---------- forma 3: a forma 1 com a viewport Python (referência; espera-se que reprove) ----------
 def forma_3(base, quantidade, rodadas, tmp):
     import obimcore
     from PySide6.QtCore import QEventLoop, QTimer
@@ -201,7 +201,7 @@ def forma_3(base, quantidade, rodadas, tmp):
     loop.exec()
     espera.stop()
     if not quadros:
-        raise RuntimeError("a viewport da S03 não apresentou o primeiro quadro em 10 s")
+        raise RuntimeError("a viewport Python não apresentou o primeiro quadro em 10 s")
     pulso = QTimer()
     pulso.setInterval(lote.PULSO_MS)
     pulso.timeout.connect(lambda: pulsos.append(float(agora())))
@@ -231,7 +231,7 @@ def forma_3(base, quantidade, rodadas, tmp):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="T15c: conferências (i), (ii), (iii) e forma 3; grava conferencias.json")
+    ap = argparse.ArgumentParser(description="Conferências (i), (ii), (iii) e forma 3; grava conferencias.json")
     ap.add_argument("saida")
     ap.add_argument("--base", type=int, default=300)
     ap.add_argument("--quantidade", type=int, default=1000)

@@ -3,8 +3,8 @@
 
 Matrizes são numpy 4x4 em notação de linhas (v' = M @ v), convenção OpenGL.
 
-CONGELADO (F0-RG-04): este arquivo é do caminho da S03 (viewport em Python). O caminho do produto tem a sua própria versão em C++
-(`prototypes/s04/obimcore/nucleo/camera.*`). Só corrigir defeito aqui; recurso novo vai para o C++ (ADR-004, decidido pelo PO em 2026-10-15).
+Congelado: este arquivo é a versão em Python da câmera. O produto usa a versão em C++
+(`prototypes/s04/obimcore/nucleo/camera.*`). Só corrigir defeito aqui; recurso novo vai para o C++ (ADR-004).
 """
 from __future__ import annotations
 

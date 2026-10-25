@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Formato da geometria que Python e C++ trocam (F0-RG-04). Fonte única: o lado C++ (`obimcore/nucleo/cena.h` e `cena.cpp`)
+"""Formato da geometria que Python e C++ trocam. Fonte única: o lado C++ (`obimcore/nucleo/cena.h` e `cena.cpp`)
 repete estes números, e `tests/test_formato_malha.py` confere que os dois lados batem. Python puro, sem Qt e sem ifcopenshell.
 
 Se mudar um número aqui, mude o C++ junto (o teste falha enquanto os dois divergirem)."""

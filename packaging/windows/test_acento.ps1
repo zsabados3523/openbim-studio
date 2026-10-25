@@ -1,5 +1,5 @@
 ﻿# SPDX-License-Identifier: AGPL-3.0-or-later
-# Teste do instalador com caminhos reais do Brasil (F0-RG-13): pasta com acento e espaço (usuário "João", pasta
+# Teste do instalador com caminhos reais do Brasil: pasta com acento e espaço (usuário "João", pasta
 # "Residência Casa"). O /D= do NSIS não aceita aspas, então o instalador é aberto pelo PowerShell com a linha de
 # comando crua. Instala, abre o app, abre um IFC de nome acentuado, mede o caminho mais longo e desinstala.
 # Uso: powershell -NoProfile -ExecutionPolicy Bypass -File test_acento.ps1 -Exe INSTALADOR.exe -Base PASTA -Ifc AMOSTRA.ifc

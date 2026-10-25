@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Seleção por triângulo (S04-T10). Ver selecao.h.
+// Seleção por triângulo. Ver selecao.h.
 #include "selecao.h"
 #include <algorithm>
 #include <cmath>

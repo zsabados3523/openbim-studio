@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Provas do R1-j com o Python do PRÓPRIO instalador (só test_instalador_ponte.sh chama; par de packaging/linux/ponte_no_pacote.py).
+"""Provas do pacote com o Python do PRÓPRIO instalador (só test_instalador_ponte.sh chama; par de packaging/linux/ponte_no_pacote.py).
 Uso: `env\\python.exe -I ponte_no_pacote_win.py COMANDO RAIZ [...]`, RAIZ = pasta instalada (a que tem app\\ e env\\). Só biblioteca padrão.
   freeze RAIZ  freeze_support() em main.py e no .pyw (ast) | vcrt RAIZ  prova 7: runtime do Visual C++ >= ligador do .pyd (cabeçalho PE)
   dlls RAIZ  módulos do processo só do pacote ou do Windows | spawn RAIZ SAIDA  filho spawn (SAIDA: arquivo de texto, pythonw não tem stdout)

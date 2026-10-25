@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Dados da cena (S04-T08). Ver cena.h.
+// Dados da cena. Ver cena.h.
 #include "cena.h"
 #include <algorithm>
 #include <cmath>
@@ -16,7 +16,7 @@ void caixa_de(Dados& d) {  // caixa dos vértices (pura, sem Python)
   }
 }
 
-// Caixa do objeto pelos TRIÂNGULOS dele (vértices apontados por seus índices), nunca pela tabela do carregador (T10c achado 3). Sem geometria: NaN.
+// Caixa do objeto pelos TRIÂNGULOS dele (vértices apontados por seus índices), nunca pela tabela do carregador. Sem geometria: NaN.
 void caixa_do_objeto(const Dados& d, Objeto& o) {
   if (!o.ni || !o.nv) { for (int a = 0; a < 3; ++a) o.cmin[a] = o.cmax[a] = std::nanf(""); return; }
   for (int a = 0; a < 3; ++a) { o.cmin[a] = 1e30f; o.cmax[a] = -1e30f; }
@@ -187,7 +187,7 @@ Totais DadosCena::totais() {
   std::lock_guard<std::mutex> l(m_); Totais t; t.lotes = lotes_.size(); t.ger = ger_;
   for (auto& d : lotes_) { t.nao_partidos += d->nao_partido; t.pecas_maiores_que_c += d->peca_maior_que_c; t.triangulos += d->i.size() / 3; t.vertices += d->v.size() / BYTES_VERTICE;
     t.bytes += d->v.capacity() + d->i.capacity() * 4 + d->objs.capacity() * sizeof(Objeto);
-    for (auto& o : d->objs) if (o.guid.capacity() > 15) t.bytes += o.guid.capacity() + 1; }  // texto do GlobalId fora do std::string (T10c achado 6)
+    for (auto& o : d->objs) if (o.guid.capacity() > 15) t.bytes += o.guid.capacity() + 1; }  // texto do GlobalId fora do std::string
   return t;
 }
 

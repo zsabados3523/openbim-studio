@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Viewport C++ (S04-T07; LOTE_OPUS_9 §1.4 regra 5, LOTE_OPUS_11 achados 3, 5 e 9). Janela Qt nativa (QWindow) desenhada com QRhi por
-// thread própria do C++, embutida numa janela PySide6 por contêiner de janela. C++ PURO (T14b): só Qt e std, nenhum include de Python;
+// Viewport C++. Janela Qt nativa (QWindow) desenhada com QRhi por
+// thread própria do C++, embutida numa janela PySide6 por contêiner de janela. C++ PURO: só Qt e std, nenhum include de Python;
 // um executável Qt sem Python liga este arquivo. A ponte é ponte_viewport.cpp. Posse: o Python é o dono do `Viewport` e dos arrays que
 // entrega (só emprestados durante a chamada); o C++ nunca guarda endereço do Python. Mutexes: `Motor::m_` ANTES de `DadosCena::m_` (cena.h). Contratos:
 //  - A thread nunca chama Python, nunca espera a thread da janela e nunca lê QPointer: ela só usa o `Motor` (estado compartilhado,
 //    com mutex) e o QWindow/QOffscreenSurface crus que a `Janela` entrega em `ligar`. A vida da thread está presa à da janela:
 //    ~Janela, SurfaceAboutToBeDestroyed e aboutToQuit param a thread (e esperam). A janela é a dona da QOffscreenSurface.
 //  - Recursos da placa são criados e destruídos NA thread de desenho. Nenhum método da janela é sobrescrito em Python.
-//  - Windows (T07b, LOTE_OPUS_12 achado 9): nenhuma espera da thread da janela pela de desenho fica sem bombear mensagens (`esperar_ate`,
+//  - Windows : nenhuma espera da thread da janela pela de desenho fica sem bombear mensagens (`esperar_ate`,
 //    `parar`, `soltar_superficie`, `capturar`); o `join` só vem depois do sinal `terminou_` do fim de `laco()`. Se a soltura da swapchain
 //    estourar 3 s, a swapchain é marcada perdida: a thread nunca mais a toca e `solturas_atrasadas` sobe.
 //  - Ritmo de 60 quadros/s; no Windows, timeBeginPeriod(1) (passo de relógio de 1 ms em vez de 15,6 ms; achado 5).
 //  - Perda de dispositivo (FrameOpDeviceLost ou `perder_contexto`): a QRhi é recriada na thread e a cópia compacta é reenviada.
-//  - Cena (T08): fila de lotes, cópia compacta, sequência e caixa vivem em `cena.*` (mutex próprio). Aqui só o envio à placa: orçamento por quadro
+//  - Cena: fila de lotes, cópia compacta, sequência e caixa vivem em `cena.*` (mutex próprio). Aqui só o envio à placa: orçamento por quadro
 //    (`ORCAMENTO_BYTES`, ~4 ms), lotes grandes partidos em fatias; a sequência de um quadro = maior prefixo contínuo de lotes já NA placa.
 #pragma once
 #include "camera.h"
@@ -54,24 +54,24 @@
 namespace obim {
 using Rel = std::chrono::steady_clock;
 double agora_ms();  // motor.cpp
-extern const unsigned char QSB_VERT[], QSB_FRAG[]; extern const size_t QSB_VERT_N, QSB_FRAG_N;  // motor.cpp (QSB da S03, embutidos pelo CMake)
+extern const unsigned char QSB_VERT[], QSB_FRAG[]; extern const size_t QSB_VERT_N, QSB_FRAG_N;  // motor.cpp (QSB de viewport_qrhi/shaders, embutidos pelo CMake)
 struct Estatisticas { size_t bytes_copia, lotes, triangulos, vertices; int64_t fatias_enviadas; int triangulos_na_placa, contextos, superficies_soltas, solturas_atrasadas, paradas_atrasadas; size_t nao_partidos, pecas_maiores_que_c; int64_t geracao; };
 constexpr size_t ORCAMENTO_BYTES = 2u << 20;  // por quadro (cabe em ~1 ms no software); lote maior é partido em fatias
 constexpr auto ORCAMENTO_TEMPO = std::chrono::milliseconds(4);
-constexpr auto LIMITE_PARAR = std::chrono::seconds(5);  // T07e: espera máxima de Motor::parar() pela thread de desenho (depois, abandono controlado)
+constexpr auto LIMITE_PARAR = std::chrono::seconds(5);  // Espera máxima de Motor::parar() pela thread de desenho (depois, abandono controlado)
 
-class Motor : public std::enable_shared_from_this<Motor> {  // a thread de desenho guarda um shared_ptr do Motor (T07e): o abandono não deixa ponteiro solto
+class Motor : public std::enable_shared_from_this<Motor> {  // a thread de desenho guarda um shared_ptr do Motor: o abandono não deixa ponteiro solto
  public:
   std::atomic<bool> exposta{false}, soltar{false}, perder{false}, parar_{false}, perdida_{false}, terminou_{true};
   std::atomic<int> contextos{0}, tri_placa{0}, superficies_soltas{0}, solturas_atrasadas{0}, paradas_atrasadas{0}, trava_ms_{0};  // trava_ms_: gancho de teste (travar_desenho_teste)
   std::atomic<bool> abandonada_{false};  // a thread atual estourou LIMITE_PARAR e foi solta (detach); só a própria thread termina o que falta
   std::atomic<int64_t> fatias_{0};
-  // T10c: o que o último quadro APRESENTADO usou (câmera aplicada, tamanho real do backbuffer, plano perto), gravado junto, sob um só mutex folha (`mc_`),
+  // O que o último quadro APRESENTADO usou (câmera aplicada, tamanho real do backbuffer, plano perto), gravado junto, sob um só mutex folha (`mc_`),
   // depois do endFrame; a seleção lê tudo de uma vez (nunca câmera de um quadro com tamanho de outro).
   struct Quadro { Camera c; int larg = 0, alt = 0; double perto = 0.05; bool ok = false; };
   std::mutex mc_; Quadro quadro_;
   std::atomic<double> dpr_{1.0}, escala_teste_{0.0};  // dpr_: devicePixelRatio da janela (atualizado na thread da janela); escala_teste_ > 0 o substitui (gancho de teste)
-  DadosCena cena_;  // fila de lotes, cópia compacta, sequência e caixa (T08); o Python entra direto, com mutex próprio
+  DadosCena cena_;  // fila de lotes, cópia compacta, sequência e caixa; o Python entra direto, com mutex próprio
   explicit Motor(bool gl) : gl_(gl) {}
   ~Motor() {  // pode rodar NA thread de desenho (último dono = o shared_ptr dela): aí não há join de si mesma
     if (th_.get_id() == std::this_thread::get_id()) th_.detach(); else parar();
@@ -132,13 +132,13 @@ class Motor : public std::enable_shared_from_this<Motor> {  // a thread de desen
     return {cap_w_, cap_h_, std::move(cap_)};
   }
   std::string info() { std::lock_guard<std::mutex> l(m_); return info_; }
-  bool software() const { return software_.load(); }  // true: sem placa de vídeo compatível, o desenho está sendo feito por software (F0-RG-13)
+  bool software() const { return software_.load(); }  // true: sem placa de vídeo compatível, o desenho está sendo feito por software
   std::string aviso() const {  // texto pronto para mostrar ao usuário; vazio quando a placa de vídeo é usada
     return software_.load() ? "Sem placa de vídeo compatível: o desenho está sendo feito por software e fica mais lento." : "";
   }
 
  private:
-  void abandonar() {  // T07e: a thread de desenho não saiu em LIMITE_PARAR (no Windows com WARP, `~QRhi` pode parar para sempre): solta a thread, conta uma vez
+  void abandonar() {  // A thread de desenho não saiu em LIMITE_PARAR (no Windows com WARP, `~QRhi` pode parar para sempre): solta a thread, conta uma vez
     bool ja;
     { std::lock_guard<std::mutex> lt(th_m_); if (th_.joinable()) th_.detach(); ja = abandonada_.exchange(true); }  // juntos: `iniciar` nunca vê th_ solta com abandonada_ falso
     if (ja) return;
@@ -216,7 +216,7 @@ class Motor : public std::enable_shared_from_this<Motor> {  // a thread de desen
                        {0, 2, QRhiVertexInputAttribute::UNormByte4, 24}});
     g.pipe->setVertexInputLayout(lay); g.pipe->setShaderResourceBindings(g.srb.get());
     g.pipe->setRenderPassDescriptor(g.rp.get());
-    g.pipe->setDepthTest(true); g.pipe->setDepthWrite(true);  // sem descarte de faces de trás, como na S03
+    g.pipe->setDepthTest(true); g.pipe->setDepthWrite(true);  // sem descarte de faces de trás, como no viewport Python
     if (!g.pipe->create()) return false;
     ++contextos; tri_placa = 0; seq_placa_ = 0;
     return true;
@@ -316,7 +316,7 @@ class Motor : public std::enable_shared_from_this<Motor> {  // a thread de desen
       const QVector3D alvo3(float(c.alvo[0]), float(c.alvo[1]), float(c.alvo[2]));
       const QVector3D pos = alvo3 + float(c.distancia) * QVector3D(float(std::cos(el) * std::cos(az)), float(std::cos(el) * std::sin(az)), float(std::sin(el)));
       double longe = 20000, perto = 0.05;
-      if (com_caixa) {  // perto/longe pela caixa da cena a cada quadro (como a S03)
+      if (com_caixa) {  // perto/longe pela caixa da cena a cada quadro (como no viewport Python)
         const QVector3D centro(float(bmin[0] + bmax[0]) / 2, float(bmin[1] + bmax[1]) / 2, float(bmin[2] + bmax[2]) / 2);
         const double raio = std::sqrt(std::pow(bmax[0] - bmin[0], 2) + std::pow(bmax[1] - bmin[1], 2) + std::pow(bmax[2] - bmin[2], 2)) / 2;
         longe = ((pos - centro).length() + raio) * 1.1; perto = (std::max)(longe / 10000.0, 0.05);
@@ -345,7 +345,7 @@ class Motor : public std::enable_shared_from_this<Motor> {  // a thread de desen
       cb->endPass(rub2);
       const auto fim = g.rhi->endFrame(g.sc.get());
       if (fim == QRhi::FrameOpDeviceLost) return Fim::Perdido;
-      { std::lock_guard<std::mutex> l(mc_); quadro_ = {c, alvo.width(), alvo.height(), perto, true}; }  // T10c: câmera, tamanho e perto do quadro apresentado
+      { std::lock_guard<std::mutex> l(mc_); quadro_ = {c, alvo.width(), alvo.height(), perto, true}; }  // Câmera, tamanho e perto do quadro apresentado
       const double t = agora_ms();  // quadro apresentado (armadilha 6)
       { std::lock_guard<std::mutex> l(mq_); anel_[n_++ % anel_.size()] = {t, seq_placa_}; }
       if (rb && !rb->data.isEmpty()) {
@@ -364,7 +364,7 @@ class Motor : public std::enable_shared_from_this<Motor> {  // a thread de desen
     }
     return Fim::Parar;
   }
-  void ociosa(Gpu& g) {  // T07e: antes de destruir a QRhi, a GPU fica ociosa (o `Flush` final do WARP não encontra trabalho em voo)
+  void ociosa(Gpu& g) {  // Antes de destruir a QRhi, a GPU fica ociosa (o `Flush` final do WARP não encontra trabalho em voo)
     g.rhi->finish();
 #ifdef Q_OS_WIN
     if (!gl_) if (auto* nh = static_cast<const QRhiD3D11NativeHandles*>(g.rhi->nativeHandles())) if (nh->context) {
@@ -428,7 +428,7 @@ class Janela : public QWindow {
     m_->dpr_ = devicePixelRatio();
     QObject::connect(this, &QWindow::screenChanged, this, [this](QScreen*) { m_->dpr_ = devicePixelRatio(); });
     m_->ligar(this, fb_);  // fb_ é filha desta janela: some junto, depois da thread
-    // A saída do programa para a thread antes de a QGuiApplication sumir (caso "sair" do oráculo).
+    // A saída do programa para a thread antes de a QGuiApplication sumir (caso "sair" do teste).
     QObject::connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, this, [m = m_] { m->parar(); });
   }
   ~Janela() override { m_->desligar(); }  // para e ESPERA a thread de desenho antes de a janela deixar de existir
@@ -472,7 +472,7 @@ class Viewport {  // o Qt é dono do contêiner (depois de posto num layout); es
       if (elevacao) c.elevacao = std::clamp(*elevacao, -89.0, 89.0);
     });
   }
-  // T09: da thread da janela; só enfileiram (a thread de desenho aplica, na ordem). dx, dy em pixels do mouse.
+  // Da thread da janela; só enfileiram (a thread de desenho aplica, na ordem). dx, dy em pixels do mouse.
   void orbitar(double dx, double dy) { m_->cam_.enfileirar({Entrada::Orbitar, dx, dy}); }
   void mover(double dx, double dy) { m_->cam_.enfileirar({Entrada::Mover, dx, dy}); }
   void aproximar(double fator) {
@@ -484,7 +484,7 @@ class Viewport {  // o Qt é dono do contêiner (depois de posto num layout); es
   void parar_animacao() { m_->cam_.animar(0); }
   int64_t atualizar(const LoteBruto* lote_novo, std::set<std::string> guids_remover) { return m_->cena_.atualizar(lote_novo, std::move(guids_remover)); }
   Estatisticas estatisticas() { return m_->estatisticas(); }
-  // T10/T10c: (x, y) em pixels LÓGICOS (os do mouse do Qt); o pixel físico do backbuffer é lógico * devicePixelRatio. Câmera, tamanho e `perto` vêm juntos do último
+  // (x, y) em pixels LÓGICOS (os do mouse do Qt); o pixel físico do backbuffer é lógico * devicePixelRatio. Câmera, tamanho e `perto` vêm juntos do último
   // quadro apresentado; trabalha sobre cópia imutável dos dados (nenhum mutex do Motor é pedido).
   std::optional<std::string> selecionar(double x, double y) {
     Motor::Quadro q; { std::lock_guard<std::mutex> l(m_->mc_); q = m_->quadro_; }
@@ -503,7 +503,7 @@ class Viewport {  // o Qt é dono do contêiner (depois de posto num layout); es
   }
   void perder_contexto() { m_->perder = true; }  // gancho de teste: simula FrameOpDeviceLost
   std::string info() { return m_->info(); }
-  bool desenho_por_software() { return m_->software(); }  // F0-RG-13: true quando não há placa de vídeo compatível
+  bool desenho_por_software() { return m_->software(); }  // true quando não há placa de vídeo compatível
   std::string aviso() { return m_->aviso(); }  // texto para mostrar ao usuário; vazio com placa de vídeo
  private:
   std::shared_ptr<Motor> m_; QPointer<QWidget> cont_;

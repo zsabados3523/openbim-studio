@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Malha por elemento (S04-T04), C++ PURO: nenhum include de Python. Implementação em malha.cpp; a ponte (ponte_malha.cpp) só converte os tipos.
+// Malha por elemento, C++ PURO: nenhum include de Python. Implementação em malha.cpp; a ponte (ponte_malha.cpp) só converte os tipos.
 #pragma once
 #include <array>
 #include <cstdint>

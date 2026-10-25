@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Medição da S03-T05 (arquivo/lotes-1-a-28/LOTE_OPUS_4/resultado.md §1.6), com tela real. Uma configuração por execução (o pico de
+"""Medição do carregador de malhas, com tela real. Uma configuração por execução (o pico de
 memória é por processo). Uso: python medir.py arquivo.ifc [--threads N] [--bloco N] [--png saida.png]
 Imprime uma linha JSON. Roda com QT_QPA_PLATFORM=xcb (ou o padrão do sistema), nunca offscreen."""
 import argparse

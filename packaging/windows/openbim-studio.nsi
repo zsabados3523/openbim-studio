@@ -11,7 +11,7 @@ RequestExecutionLevel user
 InstallDir "$LOCALAPPDATA\Programs\OpenBIM Studio"
 ; reinstalar lembra a pasta escolhida da vez anterior (chave que o próprio instalador grava; /D= continua mandando)
 InstallDirRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\OpenBIM Studio" "InstallLocation"
-; T23e: sem /SOLID, para o env.tgz (já gzip, 296 MB) entrar sem recompressão (SetCompress off abaixo); o resto (~7 MB) segue em LZMA.
+; sem /SOLID, para o env.tgz (já gzip, 296 MB) entrar sem recompressão (SetCompress off abaixo); o resto (~7 MB) segue em LZMA.
 SetCompressor lzma
 SetCompressorDictSize 64
 

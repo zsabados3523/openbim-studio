@@ -1,6 +1,6 @@
 #!/bin/bash
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# F0-S04-T33: N aberturas (1 a 3) da sonda_ensaio_t33.py, cada uma em processo próprio, em tela virtual (nunca a tela real), sob o cadeado da máquina compartilhada.
+# N aberturas (1 a 3) da sonda_ensaio_t33.py, cada uma em processo próprio, em tela virtual (nunca a tela real), sob o cadeado da máquina compartilhada.
 # uso: IFC_T33=/caminho/arquivo.ifc rodar_t33.sh [N] [args da sonda: --fios, --bloco, --bloco-alvo]
 # saídas em ~/openbim-medicao/<data>-T33/ (pasta nova; SAIDA_T33 troca a pasta, para ensaios). O caminho do IFC vem só da variável: nunca entra em arquivo do repositório.
 set -u

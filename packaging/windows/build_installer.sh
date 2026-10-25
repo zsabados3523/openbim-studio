@@ -4,7 +4,7 @@
 # Uso: OBIMCORE_DIR=pasta/obimcore build_installer.sh RUNTIME_ENV SAIDA_DIR   (rodar no bash do Git for Windows, com makensis no PATH)
 #   RUNTIME_ENV  ambiente criado com: conda env create -f packaging/runtime-environment.yml -p <pasta>
 #   SAIDA_DIR    pasta de trabalho/saída (fora do repositório); recebe pacote/ e OpenBIM-Studio-Setup.exe
-#   OBIMCORE_DIR (obrigatória, T17b): a pasta obimcore/ (com __init__.py e UM _obimcore*.pyd) que prototypes/s04/obimcore/build.sh gera.
+#   OBIMCORE_DIR (obrigatória): a pasta obimcore/ (com __init__.py e UM _obimcore*.pyd) que prototypes/s04/obimcore/build.sh gera.
 #   O pacote não tem compilador: o módulo vem pronto do ambiente de desenvolvimento e entra em app\obimcore\.
 set -euo pipefail
 export PYTHONUTF8=1
@@ -18,7 +18,7 @@ EXE="$OUT/OpenBIM-Studio-Setup.exe"
 VERSAO="0.0.1-f0"
 START=$(date +%s)
 
-# O pacote sem o módulo C++ não é mais um pacote válido (cartão F0-S04-T17): falha com mensagem clara, antes de apagar ou copiar qualquer coisa.
+# O pacote sem o módulo C++ não é mais um pacote válido: falha com mensagem clara, antes de apagar ou copiar qualquer coisa.
 OBIMCORE_DIR="${OBIMCORE_DIR:-}"
 shopt -s nullglob; PYDS=("$OBIMCORE_DIR"/_obimcore*.pyd); shopt -u nullglob
 if [ ! -f "$OBIMCORE_DIR/__init__.py" ] || [ "${#PYDS[@]}" -ne 1 ]; then
@@ -26,7 +26,7 @@ if [ ! -f "$OBIMCORE_DIR/__init__.py" ] || [ "${#PYDS[@]}" -ne 1 ]; then
   exit 1
 fi
 # R-ABI: o módulo foi compilado no ambiente de desenvolvimento; as travas dos dois ambientes (e o ambiente de runtime de verdade) têm de ter a MESMA
-# compilação destes pacotes. O ambiente real conta porque, numa montagem local, ele pode estar atrás da trava (lote opus 52, achado 10).
+# compilação destes pacotes. O ambiente real conta porque, numa montagem local, ele pode estar atrás da trava.
 for pkg in ifcopenshell occt pyside6 qt6-main; do
   dev="$(tr -d '\r' < "$REPO/environment.win-64.lock" | grep -m1 -oE "/$pkg-[0-9][^/#]*" || true)"
   run="$(tr -d '\r' < "$REPO/packaging/runtime-environment.win-64.lock" | grep -m1 -oE "/$pkg-[0-9][^/#]*" || true)"
@@ -43,7 +43,7 @@ cp -a "$ENV_DIR" "$PKG/env"
 rm -rf "$PKG/env/Library/include" "$PKG/env/include" "$PKG/env/Library/share/doc" "$PKG/env/Library/man"
 find "$PKG/env" -name '*.a' -delete
 
-# 1b. Poda de pacotes não usados (mesma decisão do PO do AppImage, cartão T10, ampliada na T11).
+# 1b. Poda de pacotes não usados (mesma decisão do AppImage).
 # O pacote conda `occt` depende de `vtk` só para o módulo de visualização do OCCT (TKIVtk); o `vtk`
 # arrasta `vtk-io-ffmpeg`, `ffmpeg` (compilação GPL, com x264 e x265) e dezenas de pacotes de vídeo,
 # áudio e aceleração que o app não usa. prune_packages.py remove as raízes abaixo e só os pacotes
@@ -69,7 +69,7 @@ find "$PKG/env" \( -name '*.lib' -o -name '*.pdb' -o -name '*.exp' \) -delete
 echo "Maiores pastas do ambiente (MB):"
 du -sm "$PKG"/env/* "$PKG"/env/Library/* "$PKG"/env/Lib/site-packages/* 2>/dev/null | sort -rn | head -14
 
-# 1d. Runtime do Visual C++ (T17b; prova 7 do ADR-005 §7.1). O python.exe procura o vcruntime140.dll primeiro na própria pasta (env\) e só depois
+# 1d. Runtime do Visual C++ (prova 7 do ADR-005 §7.1). O python.exe procura o vcruntime140.dll primeiro na própria pasta (env\) e só depois
 # no Windows; sem a cópia aqui, o pacote usaria o do sistema (que pode ser mais velho que o do compilador do módulo, ou faltar em outra máquina).
 # Só usa o que o próprio pacote conda vc14_runtime já traz (fixado na trava): se estiver só em Library\bin, copia para env\.
 for f in "$PKG"/env/Library/bin/vcruntime140*.dll; do
@@ -85,7 +85,7 @@ find "$PKG/app" -name __pycache__ -type d -prune -exec rm -rf {} +
 mkdir -p "$PKG/app/obimcore"  # só o __init__.py e o .pyd, nada do diretório de compilação
 cp "$OBIMCORE_DIR/__init__.py" "${PYDS[0]}" "$PKG/app/obimcore/"
 cp "$HERE/OpenBIM-Studio.pyw" "$PKG/app/"
-# Prova 7 já aqui (o oráculo test_instalador_ponte.sh repete depois de instalar): runtime do pacote >= ligador do .pyd. Falhar agora poupa montar 300 MB à toa.
+# Prova 7 já aqui (o teste test_instalador_ponte.sh repete depois de instalar): runtime do pacote >= ligador do .pyd. Falhar agora poupa montar 300 MB à toa.
 python -I "$HERE/ponte_no_pacote_win.py" vcrt "$(cygpath -w "$PKG")" || { echo "Prova 7 reprovou: runtime do Visual C++ do pacote mais velho que o compilador do obimcore (ver acima)" >&2; exit 1; }
 
 # 3. Licenças, como trocar, fontes
@@ -98,7 +98,7 @@ CONDA_PREFIX="$ENV_DIR" python "$REPO/scripts/license_inventory.py" "$PKG/licens
 printf '
 > Nota: os pacotes listados em REMOVIDOS.md aparecem acima mas foram **removidos na montagem**.
 ' >> "$PKG/licenses/INVENTARIO.md"
-# O módulo obimcore (T17b) leva código de terceiros que não é pacote do ambiente de runtime, então o inventário não o lista:
+# O módulo obimcore leva código de terceiros que não é pacote do ambiente de runtime, então o inventário não o lista:
 # nanobind (BSD-3-Clause) e tsl::robin_map (MIT) vão compilados DENTRO do módulo (avisos nesta pasta); Eigen (MPL-2.0) e Boost (BSL-1.0) só como cabeçalhos na compilação.
 printf '\n> Nota: o módulo `app\\obimcore` (código do projeto) leva compilados dentro dele o **nanobind 3.1.0 (BSD-3-Clause)** e o **tsl::robin_map (MIT)**, com os avisos de copyright em `nanobind-BSD-3-Clause.txt` e `tsl-robin-map-MIT.txt` (esta pasta); usou cabeçalhos do Eigen (MPL-2.0) e do Boost (BSL-1.0) só na compilação; e usa IfcOpenShell, OCCT e Qt por bibliotecas dinâmicas (pasta `env\\`, LGPL-COMO-TROCAR.md).\n' >> "$PKG/licenses/INVENTARIO.md"
 python "$REPO/scripts/collect_package_licenses.py" "$ENV_DIR" "$PKG/licenses/pacotes" | tee "$OUT/licencas-coletadas.txt"
@@ -126,7 +126,7 @@ cp "$PKG/FONTES.md" "$PKG/licenses/FONTES.md"
 
 # 3b. O ambiente (~1 GB, dezenas de milhares de arquivos) vai num único tar.gz dentro do instalador:
 # o makensis (32 bits) estoura a memória com tantos arquivos soltos. O instalador extrai com o tar.exe do Windows.
-# T23e: gzip -6 (o -9 custava ~80 s a mais por ~1% de tamanho); o instalador guarda o env.tgz sem recomprimir. O conteúdo extraído é o mesmo.
+# gzip -6 (o -9 custava ~80 s a mais por ~1% de tamanho); o instalador guarda o env.tgz sem recomprimir. O conteúdo extraído é o mesmo.
 T_TGZ=$(date +%s)
 tar -cf - -C "$PKG" env | gzip -6 > "$OUT/env.tgz"
 rm -rf "$OUT/env-pronto" && mv "$PKG/env" "$OUT/env-pronto"

@@ -5,8 +5,8 @@ Uma `Malha` é uma lista de objetos (id, vértices, triângulos). O `pick` lanç
 de cada objeto (vetorizado em numpy), ordena pela entrada do raio e só testa triângulos dos objetos
 cuja caixa pode ainda vencer o melhor acerto (parada antecipada).
 
-CONGELADO (F0-RG-04): este arquivo é do caminho da S03 (viewport em Python). O caminho do produto tem a sua própria versão em C++
-(`prototypes/s04/obimcore/nucleo/selecao.*`). Só corrigir defeito aqui; recurso novo vai para o C++ (ADR-004, decidido pelo PO em 2026-10-15).
+Congelado: este arquivo é a versão em Python da seleção. O produto usa a versão em C++
+(`prototypes/s04/obimcore/nucleo/selecao.*`). Só corrigir defeito aqui; recurso novo vai para o C++ (ADR-004).
 """
 from __future__ import annotations
 
@@ -149,9 +149,9 @@ def pick(malha: Malha, camera, x, y, largura, altura, modelo_inversa=None):
 
 
 class CaixasObjetos:
-    """Seleção só por caixas (T06b): um objeto por `id_step`, caixa em float64 no espaço do mundo.
+    """Seleção só por caixas: um objeto por `id_step`, caixa em float64 no espaço do mundo.
 
-    Os triângulos não existem mais no programa depois do envio à placa (T08-D); sobram `objetos` e o
+    Os triângulos não existem mais no programa depois do envio à placa; sobram `objetos` e o
     `deslocamento` de cada lote. Peça dividida em vários lotes (mesmo `id_step`) vira uma caixa só (união).
     """
 

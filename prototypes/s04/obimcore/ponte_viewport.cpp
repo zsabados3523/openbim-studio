@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Ponte nanobind da viewport (S04-T14b; antes misturada em viewport.cpp, cena.cpp e malha.cpp). Só ADAPTA tipos: o motor, a cena e a seleção são C++ puro
+// Ponte nanobind da viewport. Só ADAPTA tipos: o motor, a cena e a seleção são C++ puro
 // (nucleo/). Posse: o Python é o dono; os arrays do numpy são EMPRESTADOS (`Emprestado` os prende até o retorno) e o C++ nunca guarda o endereço.
 // O bloqueio do interpretador é solto em torno das chamadas ao núcleo (que nunca toca em objeto Python); erros do núcleo: std::invalid_argument = ValueError.
 #include <nanobind/nanobind.h>
@@ -71,7 +71,7 @@ void registrar_viewport(nb::module_& m) {
       .def("parar", [](Viewport& v) { nb::gil_scoped_release lib; v.parar(); })
       .def("adicionar_lote", [](Viewport& v, nb::object lote) { Emprestado e = emprestar_lote(lote); nb::gil_scoped_release lib; return v.adicionar_lote(e.b); }, nb::arg("lote"))
       .def("limpar", &Viewport::limpar).def("relogio", &Viewport::relogio)
-      .def("objetos", [](Viewport& v, int64_t seq) {  // tabela de objetos do lote `seq` (T09/T10)
+      .def("objetos", [](Viewport& v, int64_t seq) {  // tabela de objetos do lote `seq`
         std::shared_ptr<Dados> d = v.lote(seq);
         std::vector<int32_t> id; std::vector<uint32_t> pi, ni, pv, nv; std::vector<float> cx; std::vector<std::string> guid;
         for (auto& o : d->objs) {
@@ -82,10 +82,10 @@ void registrar_viewport(nb::module_& m) {
         r["guid"] = guid; r["id_step"] = numpy_de(std::move(id), 0); r["primeiro_indice"] = numpy_de(std::move(pi), 0);
         r["n_indices"] = numpy_de(std::move(ni), 0); r["primeiro_vertice"] = numpy_de(std::move(pv), 0);
         r["n_vertices"] = numpy_de(std::move(nv), 0); r["caixa"] = numpy_de(std::move(cx), 6);
-        r["deslocamento"] = numpy_de(std::vector<double>(d->desl, d->desl + 3), 0);  // do lote (T09)
+        r["deslocamento"] = numpy_de(std::vector<double>(d->desl, d->desl + 3), 0);  // do lote
         return r;
       }, nb::arg("sequencia"))
-      .def("dados_lote", [](Viewport& v, int64_t seq) {  // só para teste (T30a3): cópias SOMENTE LEITURA (frombuffer de bytes) dos vértices e índices do lote
+      .def("dados_lote", [](Viewport& v, int64_t seq) {  // só para teste: cópias SOMENTE LEITURA (frombuffer de bytes) dos vértices e índices do lote
         std::shared_ptr<Dados> d = v.lote(seq);  // ValueError se desconhecido ou limpo
         nb::object np = nb::module_::import_("numpy");
         nb::bytes vb(reinterpret_cast<const char*>(d->v.data()), d->v.size());

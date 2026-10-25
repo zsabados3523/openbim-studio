@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Módulo `fluxo_b_paredes` (S04-T13): biblioteca C++ pura `paredes` (a T14 liga o executável Qt nela) + ponte nanobind. Liga pelo IfcOpenShellConfig.cmake do conda, sem a geometria.
+# Módulo `fluxo_b_paredes` biblioteca C++ pura `paredes` (o executável Qt liga nela) + ponte nanobind. Liga pelo IfcOpenShellConfig.cmake do conda, sem a geometria.
 cmake_minimum_required(VERSION 3.20)
 project(fluxo_b_paredes LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
@@ -33,7 +33,7 @@ set_target_properties(fluxo_b_paredes PROPERTIES LIBRARY_OUTPUT_DIRECTORY "$<1:$
 if(WIN32)
   target_link_directories(paredes PUBLIC "${CONDA}/Library/lib")  # o Boost aparece nas dependências só pelo nome (boost_*.lib)
 endif()
-# Executável com janela (S04-T14c): camada C++ pura do núcleo (`obimcore_nucleo`, sem Python; o módulo `_obimcore` não entra: EXCLUDE_FROM_ALL) + `paredes`.
+# Executável com janela: camada C++ pura do núcleo (`obimcore_nucleo`, sem Python; o módulo `_obimcore` não entra: EXCLUDE_FROM_ALL) + `paredes`.
 find_package(Qt6 COMPONENTS Core Gui Widgets GuiPrivate REQUIRED)  # antes do add_subdirectory: os alvos importados têm de valer também aqui
 find_package(OpenCASCADE CONFIG REQUIRED)
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../obimcore" obimcore_nucleo EXCLUDE_FROM_ALL)
@@ -43,7 +43,7 @@ set_target_properties(fluxo_b_janela PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<1:${
 if(WIN32)
   target_link_libraries(fluxo_b_janela PRIVATE psapi)  # autotestes: memória e lista de DLLs
 endif()
-# Oráculo da S04-T14a: T threads C++ criam o 1o `Paredes` do processo juntas (frio_teste.cpp; o implementador não o edita). Sai ao lado do módulo.
+# Teste de construção concorrente: threads C++ criam o 1o `Paredes` do processo juntas (frio_teste.cpp). Sai ao lado do módulo.
 add_executable(fluxo_b_frio frio_teste.cpp)
 target_link_libraries(fluxo_b_frio PRIVATE paredes)
 set_target_properties(fluxo_b_frio PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<1:${OBIM_SAIDA}>")

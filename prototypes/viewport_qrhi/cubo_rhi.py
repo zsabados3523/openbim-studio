@@ -86,7 +86,7 @@ class CuboViewport(QRhiWidget, Viewport):
         self._rhi_antigo = None
         self._cubo = True  # False depois de limpar()/adicionar_lote: só os lotes aparecem
         self._lotes: list[dict] = []
-        # T08-D: depois do envio à placa, o lote perde vértices e índices na memória do programa (só a placa os
+        # Depois do envio à placa, o lote perde vértices e índices na memória do programa (só a placa os
         # guarda); ficam os objetos (caixas e ids) e as contagens. Se a placa for perdida, esses lotes não voltam.
         self._liberar = bool(liberar_apos_envio)
         self.lotes_perdidos = 0
@@ -108,7 +108,7 @@ class CuboViewport(QRhiWidget, Viewport):
         self._cubo = True
         self.update()
 
-    # --- lotes de malha (S03-T05): 1 lote = 2 buffers na placa, no máximo 1 lote enviado por quadro ---
+    # --- lotes de malha: 1 lote = 2 buffers na placa, no máximo 1 lote enviado por quadro ---
     def limpar(self) -> None:
         for e in self._lotes:
             self._soltar(e)
@@ -123,7 +123,7 @@ class CuboViewport(QRhiWidget, Viewport):
                 e[k] = None
 
     def adicionar_lote(self, lote) -> None:
-        """Guarda o lote (a T06 usa `objetos`, `pos` e `indices`); o envio à placa é no próximo desenho."""
+        """Guarda o lote (a seleção usa `objetos`, `pos` e `indices`); o envio à placa é no próximo desenho."""
         self._cubo, self._caixas_sel = False, None
         self._lotes.append({"lote": lote, "vbuf": None, "ibuf": None, "n_idx": int(lote.indices.size),
                             "n_vert": int(lote.vertices.size), "bytes": int(lote.vertices.nbytes + lote.indices.nbytes),
@@ -172,7 +172,7 @@ class CuboViewport(QRhiWidget, Viewport):
         Só a razão x/largura importa, então vale em telas com escala (HiDPI), desde que x, y e o
         tamanho do widget estejam na mesma unidade (aqui, lógica).
         """
-        if not self._cubo:  # modo de lotes (T05): só as caixas por objeto; devolve o id_step
+        if not self._cubo:  # modo de lotes: só as caixas por objeto; devolve o id_step
             r = self.pick_objeto(x, y)
             return None if r is None else r[0]
         if self._selecao is None:

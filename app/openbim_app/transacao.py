@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Transação única IFC + lateral, desfazer e refazer (F0-S05-T04; ADR-002 §4.1, §4.2 e §4.8). Sem Qt, sem `obimcore`.
+"""Transação única IFC + lateral, desfazer e refazer (ADR-002 §4.1, §4.2 e §4.8). Sem Qt, sem `obimcore`.
 Uma transação nossa = um `Transaction` do ifcopenshell + as operações do lateral; fora dela `arquivo.transaction` é uma sentinela que recusa edição.
-Tudo roda em `SessaoModelo.escrever()`. Limite de memória: T08 (`limite_bytes` só guardado; `descartados` = 0)."""
+Tudo roda em `SessaoModelo.escrever()`. Limite de memória: fora deste módulo (`limite_bytes` só guardado; `descartados` = 0)."""
 import sys
 from collections import namedtuple
 from contextlib import contextmanager
@@ -163,7 +163,7 @@ class Historico:
             a = self._arquivo = esc.arquivo
             if a.transaction is not None:
                 raise TransacaoAberta("o arquivo já tem uma transação aberta")
-            a.set_history_size(sys.maxsize)  # só o nosso limite (T08) descarta passos, nunca o silencioso da biblioteca
+            a.set_history_size(sys.maxsize)  # só o nosso limite descarta passos, nunca o silencioso da biblioteca
             self._sent = a.transaction = _Sentinela(a, self)
 
     pode_desfazer = property(lambda s: bool(s._lh))
@@ -287,7 +287,7 @@ class Historico:
         return self._mover(esc, False)
 
     @contextmanager
-    def fora_do_historico(self, esc):  # só para o carimbo do pset OBIM_Projeto (T07): edição livre, sem desfazer nem diário
+    def fora_do_historico(self, esc):  # só para o carimbo do pset OBIM_Projeto: edição livre, sem desfazer nem diário
         with self._aberto(esc) as a, self._livre(a):
             yield
 

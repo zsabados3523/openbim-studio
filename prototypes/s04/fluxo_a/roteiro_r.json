@@ -1,6 +1,6 @@
 {
   "versao": 1,
-  "descricao": "Roteiro R do LOTE_OPUS_9 §1.1 (igual para os fluxos A e B). 'n' = repeticoes (uma transacao cada); 'quantidade' = tamanho do lote.",
+  "descricao": "Roteiro R (igual para os fluxos A e B). 'n' = repeticoes (uma transacao cada); 'quantidade' = tamanho do lote.",
   "passos": [
     {"id": "1", "cmd": "abrir"},
     {"id": "2", "cmd": "criar_tipo", "nome": "PAR15", "camadas_m": [0.02, 0.11, 0.02]},

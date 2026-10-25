@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Sonda da F0-S04-T24: testes baratos da memória ao abrir o arquivo pesado. Só mede; não altera o carregador, o processo de malhas
-nem `sonda_memoria.py` (T21), de onde vêm o amostrador e as funções de /proc. Comandos (uma configuração por execução):
+"""Sonda: testes baratos da memória ao abrir o arquivo pesado. Só mede; não altera o carregador, o processo de malhas
+nem `sonda_memoria.py`, de onde vêm o amostrador e as funções de /proc. Comandos (uma configuração por execução):
   rodar   ARQ --fios N --bloco N --rotulo R --saida r.json [--alvos ids.json] [--reinicios N[,N...]] [--malloc CHAVE=VALOR ...]
-          roda `medir.medir` (mesma conta do T21) com marcas; grava só números. --alvos = lista de ids (fora do repositório; nunca impressa):
+          roda `medir.medir` (mesma conta de `sonda_memoria.py`) com marcas; grava só números. --alvos = lista de ids (fora do repositório; nunca impressa):
           dá bloco de cada peça pesada, o maior silêncio do filho por bloco e os triângulos de cada peça no carregador.
           --reinicios 5 = protótipo da opção 1-B: o 1º filho termina limpo depois de 5 blocos e o carregador abre um filho NOVO com o resto
           (pelo mesmo caminho do carregador: ids pendentes + deslocamento). --malloc: variável da glibc só para o(s) filho(s).

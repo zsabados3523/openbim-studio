@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Teste das obrigacoes de licenca do AppImage (ADR-009 §5.3, ADR-005 testes 7 e 8) e do autoteste.
+# Teste das obrigacoes de licenca do AppImage (ADR-005 testes 7 e 8) e do autoteste.
 # Uso: test_appimage.sh IMAGEM.AppImage   (rodar com QT_QPA_PLATFORM=offscreen em maquina sem tela)
 set -u
 IMG="$(readlink -f "$1")"
@@ -23,7 +23,7 @@ else
   echo "   AVISO: montagem nao testada aqui ($out); precisa de libfuse2 (OBIM_EXIGIR_FUSE=1 torna isto obrigatorio)"
 fi
 
-passo "ambiente sujo: PYTHONPATH e PYTHONHOME do usuario nao podem atrapalhar (modo isolado, F0-RG-13)"
+passo "ambiente sujo: PYTHONPATH e PYTHONHOME do usuario nao podem atrapalhar (modo isolado)"
 out="$(PYTHONPATH=/nao/existe PYTHONHOME=/nao/existe PYTHONUSERBASE=/nao/existe QT_QPA_PLATFORM=offscreen "$IMG" --appimage-extract-and-run --selftest 2>&1 | tail -n 1)"
 [ "$out" = "OK" ] || falha "com PYTHONPATH/PYTHONHOME do usuario o programa nao abriu ($out)"
 
@@ -52,7 +52,7 @@ sha_depois=$(sha256sum "$Q" | cut -d' ' -f1)
 [ "$sha_antes" != "$sha_depois" ] || falha "a troca nao mudou o arquivo"
 out="$(QT_QPA_PLATFORM=offscreen "$R/AppRun" --selftest 2>&1 | tail -n 1)"
 [ "$out" = "OK" ] || falha "com a biblioteca trocada o programa nao abriu ($out)"
-passo "seletor nativo (T24): plugin do portal no pacote e AppRun o ativa"
+passo "seletor nativo: plugin do portal no pacote e AppRun o ativa"
 PT="$R/env/lib/qt6/plugins/platformthemes/libqxdgdesktopportal.so"
 [ -s "$PT" ] || falha "faltou o plugin do portal ($PT)"
 [ -s "$R/env/lib/libQt6DBus.so.6" ] || falha "faltou libQt6DBus (o plugin precisa dela)"

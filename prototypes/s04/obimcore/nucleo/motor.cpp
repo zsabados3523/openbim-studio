@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Dados fixos do motor (S04-T14b): relógio do C++ e shaders QSB da S03 (bytes embutidos pelo CMake). C++ puro; o resto do motor está em motor.h.
+// Dados fixos do motor: relógio do C++ e shaders QSB (bytes embutidos pelo CMake). C++ puro; o resto do motor está em motor.h.
 #include "motor.h"
 namespace obim {
 double agora_ms() { return std::chrono::duration<double, std::milli>(Rel::now().time_since_epoch()).count(); }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Oraculo R1-j do AppImage (cartao F0-S04-T17a; LOTE_OPUS_9 §1.5): o modulo C++ `obimcore` esta DENTRO do pacote e, la dentro,
+# Teste do AppImage: o modulo C++ `obimcore` esta DENTRO do pacote e, la dentro,
 # R1-a (versao e build), R1-d (mesmo modelo dos dois lados), R1-e (uma copia de cada biblioteca) e R1-i (malha igual a do Python)
 # passam, com o Python do proprio pacote e as bibliotecas do proprio pacote.
 # Uso: test_appimage_ponte.sh IMAGEM
@@ -94,5 +94,5 @@ passo "processo filho spawn abre dentro do pacote (-I), roda uma funcao e devolv
 prova "o filho spawn nao funcionou dentro do pacote" spawn "$R"
 
 passo "R1-a, R1-d, R1-e e R1-i do tests/test_s04_ponte.py, com o Python do pacote (casos pulados contam como falha)"
-prova "R1-j reprovou: algum caso de R1-a/d/e/i nao passou, foi pulado ou nao rodou" pytest "$R" "$TESTES" "$W/pytest_site" "$W"
+prova "provas do pacote reprovaram: algum caso nao passou, foi pulado ou nao rodou" pytest "$R" "$TESTES" "$W/pytest_site" "$W"
 passo "OK: obimcore dentro do pacote e R1-a, R1-d, R1-e, R1-i verdes com o Python e as bibliotecas do pacote"

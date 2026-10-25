@@ -21,7 +21,7 @@ class Viewport:
         """Devolve o quadro atual como imagem."""
         raise NotImplementedError
 
-    # --- lotes de malha do IFC (S03-T05) ---
+    # --- lotes de malha do IFC ---
     def limpar(self) -> None:
         """Remove todos os lotes e solta os buffers da placa."""
         raise NotImplementedError

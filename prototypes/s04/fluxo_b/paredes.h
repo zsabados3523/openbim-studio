@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Paredes IFC4 em C++ puro (S04-T13; contrato em CONTRATO.md). Sem nanobind e sem Qt: a ponte é ponte.cpp; a T14 liga a janela Qt nesta classe.
+// Paredes IFC4 em C++ puro (contrato em CONTRATO.md). Sem nanobind e sem Qt: a ponte é ponte.cpp; a janela Qt usa esta classe.
 // O modelo é um ifcopenshell::file próprio. Toda mutação passa por `criar` ou `alterar` (o diário): é o ponto do gancho de falha, do rollback e do desfazer/refazer.
-// Escritor único (S04-T14a): `trava()` é do chamador (a ponte e a janela da T14c); os comandos não a pegam sozinhos. `abrir` troca o modelo por um IFC4 (unidade e pavimento da base).
+// Escritor único: `trava()` é do chamador (a ponte e a janela); os comandos não a pegam sozinhos. `abrir` troca o modelo por um IFC4 (unidade e pavimento da base).
 #pragma once
 #include <ifcparse/file.h>
 #include <cmath>
@@ -51,7 +51,7 @@ class Paredes {
     void definir_falha(int k) { falha_ = k; }
     void abrir(const std::string& arquivo);  // troca o modelo pelo IFC4 dado (std::invalid_argument se não abre; o anterior fica intacto) e zera pilhas, ultimo, grade e gancho
     int produtos_base() const { return produtos_base_; }  // IfcProduct com representação logo depois do abrir
-    ifcopenshell::file* arquivo() { return f_.get(); }  // T14c: a janela lê o modelo (malha e painel) com a trava do chamador; vale até o próximo `abrir`
+    ifcopenshell::file* arquivo() { return f_.get(); }  // A janela lê o modelo (malha e painel) com a trava do chamador; vale até o próximo `abrir`
     Lista copiar_atributo(unsigned destino, unsigned origem, const std::string& atributo);  // gancho de teste: um comando que passa por `ler`
     std::mutex& trava() { return trava_; }
     std::unique_lock<std::mutex> pegar(bool esperar);  // espera a trava ou, sem esperar, lança ModeloOcupado na hora

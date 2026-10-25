@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Ponte Python/C++ (S04-T03; LOTE_OPUS_9 §1.4). Regras de posse e de vida:
+// Ponte Python/C++. Regras de posse e de vida:
 //  1. O Python é o dono do arquivo; o C++ pega emprestado só durante a chamada (o objeto Python fica referenciado até o retorno).
 //  2. O C++ nunca guarda o endereço do arquivo nem ponteiros de entidades entre chamadas.
 //  3. Só a thread do comando chama; as funções curtas mantêm o bloqueio, `malhas` (ponte_malha.cpp) o solta na geometria.

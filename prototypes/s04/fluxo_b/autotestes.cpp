@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Autotestes do executável do fluxo B (S04-T14c; CONTRATO.md, Parte 2): código movido do main.cpp, sem mudança de comportamento.
+// Autotestes do executável do fluxo B (CONTRATO.md, Parte 2).
 #include "autotestes.h"
 #include "janela.h"
 #include "malha.h"
@@ -27,7 +27,7 @@ namespace fs = std::filesystem;
 using J = QJsonObject;
 namespace {
 void resultado(const J& j) { std::cout << "RESULTADO " << QJsonDocument(j).toJson(QJsonDocument::Compact).toStdString() << std::endl; }
-Lista bibliotecas() {  // as bibliotecas do núcleo carregadas no processo (o oráculo confere que não há Python e que cada núcleo vem de uma cópia só)
+Lista bibliotecas() {  // as bibliotecas do núcleo carregadas no processo (o teste confere que não há Python e que cada núcleo vem de uma cópia só)
     Lista todos, saida;
 #ifdef _WIN32
     HMODULE mods[4096];

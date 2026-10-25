@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Paredes IFC4 em C++ puro (S04-T13; CONTRATO.md; LOTE_OPUS_9 §1.1, §4 etapa 3): entidades montadas à mão (no C++ não há camada `api`). Diário de desfazer: cada mutação
+// Paredes IFC4 em C++ puro (CONTRATO.md): entidades montadas à mão (no C++ não há camada `api`). Diário de desfazer: cada mutação
 // (`criar` ou `alterar`) guarda o suficiente para voltar e para refazer com os MESMOS números de linha (referências por número, não por ponteiro).
 #include "paredes.h"
 #include <ifcparse/express.h>
@@ -76,7 +76,7 @@ base Paredes::contexto(const char* tipo, const char* ident, const char* vista, b
     return cria("IfcGeometricRepresentationSubContext", {{0, ident}, {1, tipo}, {6, pai}, {8, enu("IfcGeometricProjectionEnum", vista)}});
 }
 Paredes::Paredes() {
-    // Construção concorrente (achado da T14c): a 1a construção inicializa estáticos preguiçosos do IfcOpenShell que não aguentam duas threads. A trava vale só na CONSTRUÇÃO
+    // Construção concorrente a 1a construção inicializa estáticos preguiçosos do IfcOpenShell que não aguentam duas threads. A trava vale só na CONSTRUÇÃO
     // (esquema, arquivo, contextos, unidades, esqueleto): outras threads criando `Paredes` esperam aqui; nenhum aquecimento é exigido do chamador.
     static std::mutex construcao;
     std::lock_guard<std::mutex> guarda(construcao);
@@ -285,7 +285,7 @@ Lista Paredes::voltar(bool desfazer) {
     auto &de = desfazer ? historico_ : refazer_, &para = desfazer ? refazer_ : historico_;
     ultimo_ = {};
     if (de.empty()) return {};
-    Registro& reg = de.back();  // só sai da pilha depois de aplicado (item 5 do lote 22)
+    Registro& reg = de.back();  // só sai da pilha depois de aplicado
     std::vector<bool> antes;
     for (auto& g : reg.guids) antes.push_back(bool(achar(g)));
     desfazer ? desfazer_passos(reg) : refazer_passos(reg);

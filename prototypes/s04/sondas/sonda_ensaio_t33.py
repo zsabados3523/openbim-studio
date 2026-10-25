@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Sonda da F0-S04-T33: ensaio da regra R-A (T29) ao abrir um IFC, em tela virtual. Só lê números; não muda o produto nem nenhum limite.
+"""Sonda de ensaio do limite de crescimento ao abrir um IFC, em tela virtual. Só lê números; não muda o produto nem nenhum limite.
 Uma abertura por execução (o pico de memória é por processo). Grava JSON só com números (nunca nome, GUID, id de peça, texto de mensagem).
 Uso: sonda_ensaio_t33.py rodar ARQ.ifc --saida r.json [--fios 8] [--bloco 250] [--rotulo R] [--bloco-alvo 22]
      sonda_ensaio_t33.py --auto-teste     (lógica dos critérios de parada com números inventados; sem tela, sem IFC)
-Campos ausentes saem como null. `parada.<nome>`: true = o critério do lote 60/61 passou, false = reprovou, null = sem dado para julgar.
+Campos ausentes saem como null. `parada.<nome>`: true = o critério de parada passou, false = reprovou, null = sem dado para julgar.
 Rodar com `rodar_t33.sh` (cadeado + tela virtual). A saída tem de ficar fora do repositório."""
 import argparse
 import json
@@ -16,15 +16,15 @@ RAIZ = AQUI.parents[2]
 for p in (AQUI.parents[1] / "viewport_qrhi", AQUI.parents[1]):
     sys.path.insert(0, str(p))
 
-BLOCO_ALVO = 22  # bloco das 3 peças pesadas do arquivo pesado (lote 60 §7)
-LIM_ATRASO_S, LIM_SILENCIO_S, LIM_CRESC_MB, LIM_BASE_MB = 0.5, 20.0, 500.0, 50.0  # critérios de parada do lote 60/61; só são lidos
+BLOCO_ALVO = 22  # bloco das 3 peças pesadas do arquivo pesado
+LIM_ATRASO_S, LIM_SILENCIO_S, LIM_CRESC_MB, LIM_BASE_MB = 0.5, 20.0, 500.0, 50.0  # critérios de parada; só são lidos
 G_MB, TETO_MB = 1000.0, 6000.0  # os do produto (G_CRESCIMENTO_MB e o teto); a sonda só os lê, nunca os muda
 CAMPOS = ("rotulo", "fios", "bloco", "estado", "blocos", "registro_reinicio", "reinicios", "filhos", "pico_filhos_mb", "tempos",
           "msgs_nao_feito", "msgs_visto_so_no_fim", "filhos_vivos_juntos", "conta_a_mb", "conta_b_mb", "pico_pai_mb", "m5_atraso_max_ms",
           "m5_atraso_p95_ms", "pecas_com_malha", "triangulos", "vertices", "sem_malha", "simplificadas", "pecas_modo_isolado", "abrir_s", "parada")
 PARADAS = ("fonte_vigia_bloco_alvo", "tarde_zero", "atraso_armar_bloco_alvo_ok", "max_silencio_ok", "crescimento_ok", "primeira_vs_base_ok",
             "base_vs_pos_emitir_ok", "pos_emitir_vs_fim_ok")
-INFORMATIVAS = ("base_vs_fim_ok",)  # (d) do lote 63: calculada e gravada, mas não para o ensaio (lote 65 §4)
+INFORMATIVAS = ("base_vs_fim_ok",)  # (d): calculada e gravada, mas não para o ensaio
 
 
 def _nums(itens, chave):
@@ -36,7 +36,7 @@ def _topo(bloco):
 
 
 def calcular_parada(r, alvo=BLOCO_ALVO):
-    """Calcula os critérios de parada só do próprio JSON `r`. Não decide nada: o líder lê. None = sem dado."""
+    """Calcula os critérios de parada só do próprio JSON `r`. Não decide nada: quem lê o resultado decide. None = sem dado."""
     blocos, regs = r.get("blocos") or [], r.get("registro_reinicio") or []
     atraso = _nums([b for b in blocos if b.get("bloco") == alvo], "atraso_armar_s")
     silencio = _nums(blocos, "max_silencio_s") + _nums(regs, "max_silencio_s")

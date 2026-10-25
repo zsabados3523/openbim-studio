@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Abre a janela. Uso: python -m viewport_qrhi [arquivo.ifc] [--api opengl|vulkan]
 
-Sem arquivo: o cubo. Com arquivo: as malhas do IFC chegam em lotes (S03-T05)."""
+Sem arquivo: o cubo. Com arquivo: as malhas do IFC chegam em lotes."""
 import locale
 import sys
 from pathlib import Path

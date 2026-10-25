@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Carregador de malhas do IFC (S03-T05 parte A; processo separado na S03-T08-B1). Python puro, sem Qt.
+"""Carregador de malhas do IFC. Python puro, sem Qt.
 
-Especificação: docs/state/arquivo/lotes-1-a-28/LOTE_OPUS_4/resultado.md §1.2 e §1.3 e arquivo/lotes-1-a-28/LOTE_OPUS_6/resultado.md §2.2 D3. Quem abre o IFC e gera
+Quem abre o IFC e gera
 os triângulos (`ifcopenshell.geom.iterator`, um iterador por bloco) é um processo filho (`processo_malhas.py`);
 a thread interna só lê as mensagens, vigia o filho e entrega `LoteMalha` (só numpy) por uma fila limitada.
 Durante a carga o pai não abre o arquivo (`manter_arquivo=True` abre depois que o filho terminou).
@@ -24,7 +24,7 @@ try:
 except ImportError:  # pragma: no cover  (módulo importado fora do pacote)
     import foto_arquivo
 
-try:  # o formato vive fora do pacote (a S04 também o usa); `prototypes/` precisa estar no caminho
+try:  # o formato vive fora do pacote (também usado pelo caminho em C++); `prototypes/` precisa estar no caminho
     from formato_malha import DTYPE_OBJETO, DTYPE_VERTICE, LoteMalha
 except ImportError:  # pragma: no cover  (módulo executado fora do pacote)
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -34,7 +34,7 @@ MAX_BYTES_LOTE = 8 * 1024 * 1024
 CINZA = (204, 204, 204, 255)
 ORANGE = (255, 140, 0, 255)  # caixa substituta (D4)
 FATIA_S = 0.05
-G_CRESCIMENTO_MB = 1000  # regra R-A (T29c): crescimento da memória do filho dentro de um bloco que pede o reinício (mesma unidade de pico_memoria_mb)
+G_CRESCIMENTO_MB = 1000  # crescimento da memória do filho dentro de um bloco que pede o reinício (mesma unidade de pico_memoria_mb)
 MOTIVO_SEM_GEOMETRIA = "o conversor não achou geometria nesta peça"
 MOTIVO_CORTE = "esta carga já tinha peças lentas demais; a peça foi mostrada como caixa sem tentar de novo"
 
@@ -57,7 +57,7 @@ class ResumoCarga:
     simplificadas: list = field(default_factory=list)  # (id_step, guid, classe, nome, motivo, segundos): viraram caixa
     filhos: int = 0  # filhos de conversão criados nesta abertura (o reinício planejado cria um a mais)
     reinicios: list = field(default_factory=list)  # bloco global (contando os `convertendo` de todos os filhos) de cada reinício feito
-    blocos: list = field(default_factory=list)  # T29c, só modo normal: por bloco {bloco, filho, base_mb, max_mb, fim_mb, atraso_armar_s, armado, falhas_leitura, max_silencio_s, primeira_mb, tarde, pos_emitir_mb}
+    blocos: list = field(default_factory=list)  # só modo normal: por bloco {bloco, filho, base_mb, max_mb, fim_mb, atraso_armar_s, armado, falhas_leitura, max_silencio_s, primeira_mb, tarde, pos_emitir_mb}
     registro_reinicio: list = field(default_factory=list)  # por reinício feito {bloco, fonte "vigia"|"gancho", base_mb, decisao_mb, atraso_armar_s, decisao_tarde, max_silencio_s}
     pico_filhos_mb: list = field(default_factory=list)  # pico de memória de cada filho, na ordem em que nasceram (o morto entra com o pico lido antes do kill; None = sem leitura)
 
@@ -73,7 +73,7 @@ def _unitarias(n):
 
 def produto_para_numpy(geo, paleta):
     """Geometria do iterador -> (pos float64 (n,3), normal float32 (n,3), cor uint8 (n,4), indices uint32 (3m,)) ou None."""
-    # D2 (LOTE_OPUS_6 §2.2): vetores prontos do IfcOpenShell (int32 e float64) em vez de tuplas; ~17x mais rápido.
+    # vetores prontos do IfcOpenShell (int32 e float64) em vez de tuplas; ~17x mais rápido.
     faces = np.frombuffer(geo.faces_buffer, dtype=np.int32).astype(np.int64).reshape(-1, 3)
     if len(faces) == 0:
         return None
@@ -135,7 +135,7 @@ def montar_lote(indice, prods, desl, feitos, total):
 
 
 class CarregadorMalhas:
-    # D1 (LOTE_OPUS_6 §2.2): a híbrida tenta a biblioteca rápida e cai na "opencascade" nos recortes de abertura.
+    # a híbrida tenta a biblioteca rápida e cai na "opencascade" nos recortes de abertura.
     # Curiosidade: has_geometry_library() responde falso para esse nome, mas o iterador o aceita.
     def __init__(self, caminho, threads=None, tamanho_bloco=250, fila_max=4,
                  excluir=("IfcFeatureElementSubtraction", "IfcSpace"),
@@ -147,10 +147,10 @@ class CarregadorMalhas:
         self.manter_arquivo = bool(manter_arquivo)
         self.limite_peca_s = None if limite_peca_s is None else float(limite_peca_s)  # None desliga
         self.limite_abrir_s = None if limite_abrir_s is None else float(limite_abrir_s)
-        # S04-T16: orçamento da carga (peças mostradas como caixa por lentidão ou queda; segundos gastos em esperas)
+        # orçamento da carga (peças mostradas como caixa por lentidão ou queda; segundos gastos em esperas)
         self.max_pecas_condenadas = int(max_pecas_condenadas)
         self.max_espera_s = float(max_espera_s)
-        # T08-D: no máximo 8 fios por padrão (cada fio a mais custa ~70 MB no filho e quase não ganha tempo)
+        # no máximo 8 fios por padrão (cada fio a mais custa ~70 MB no filho e quase não ganha tempo)
         self.threads = int(threads) if threads else max(1, min(8, (os.cpu_count() or 2) - 1))
         self.tamanho_bloco = int(tamanho_bloco)
         self.excluir = tuple(excluir)
@@ -169,13 +169,13 @@ class CarregadorMalhas:
         self._conv = 0  # mensagens "convertendo" do filho atual (qual bloco está em curso)
         self._feitos = set()  # ids avisados em `feitos` pelo filho atual
         self._atual = None  # peça em conversão no modo uma peça por vez
-        self._pedido = None  # T29a: bloco global em que o filho atual deve ser reiniciado (None = nenhum pedido)
+        self._pedido = None  # bloco global em que o filho atual deve ser reiniciado (None = nenhum pedido)
         self._filho = None  # processo filho atual (o vigia de memória lê a memória dele)
-        self._reg = None  # registro do bloco em curso (T29c)
-        self._decisao = None  # registro do reinício pedido pelo vigia ou pelo gancho (T29c)
+        self._reg = None  # registro do bloco em curso
+        self._decisao = None  # registro do reinício pedido pelo vigia ou pelo gancho
         self._maior_gap = 0.0  # maior silêncio entre duas mensagens do filho atual
         self._falhas = 0  # leituras de memória que falharam neste filho
-        self._base_mb = None  # T29c: memória do filho no início do bloco em curso (None = vigia desarmado)
+        self._base_mb = None  # memória do filho no início do bloco em curso (None = vigia desarmado)
         self._prox_vigia = 0.0
         self._isolado = False  # o filho atual está em modo isolado (o reinício planejado só vale no modo normal)
 
@@ -326,7 +326,7 @@ class CarregadorMalhas:
             falha = self._rodar(est, ids, isolado, isolado and modo == "peca")
             primeiro = False
             if falha is not None and falha["motivo"] == "reinicio":
-                # morte planejada (T29a): não é limite nem queda; não mexe em espera, seguidos, acusadas nem iso. O próximo
+                # morte planejada: não é limite nem queda; não mexe em espera, seguidos, acusadas nem iso. O próximo
                 # filho nasce (estritamente depois da saída deste) com os ids não resolvidos e o mesmo `desl`.
                 est["reinicios"].append(falha["bloco_global"])
                 for k in ("decisao_s", "morte_s", "perdido_s"):
@@ -349,7 +349,7 @@ class CarregadorMalhas:
             seguidos = 0 if progresso else seguidos + 1
             est["espera"] += falha["seg"]
             pend = [i for i in falha["bloco"] if i not in est["resolvidos"]]
-            if not pend:  # o filho caiu depois de entregar tudo (S03-T08-G): nada a isolar
+            if not pend:  # o filho caiu depois de entregar tudo: nada a isolar
                 continue
             if seguidos > 20:  # sem progresso: corta o bloco em vez de terminar em erro
                 self._caixas(est, [(i, MOTIVO_CORTE, 0.0) for i in pend])
@@ -381,7 +381,7 @@ class CarregadorMalhas:
             seguidos, antes = 0, len(est["resolvidos"])
 
     def _estourou(self, est):
-        """Orçamento da carga (S04-T16): peças acusadas e confirmadas (cópias não contam) ou segundos de espera acima do máximo."""
+        """Orçamento da carga: peças acusadas e confirmadas (cópias não contam) ou segundos de espera acima do máximo."""
         return est["acusadas"] > self.max_pecas_condenadas or est["espera"] > self.max_espera_s
 
     def _rodar(self, est, ids, isolado, por_peca=False):
@@ -470,7 +470,7 @@ class CarregadorMalhas:
                     pass
 
     def _vigiar(self, est):
-        """Regra R-A (T29c): a cada `FATIA_S`, lê a memória atual do filho; se cresceu `G_CRESCIMENTO_MB` ou mais desde o começo
+        """Verifica o crescimento: a cada `FATIA_S`, lê a memória atual do filho; se cresceu `G_CRESCIMENTO_MB` ou mais desde o começo
         do bloco (armado em `bloco`, com `_conv` ≥ 2 e modo normal), decide (`_decidir`). É o único gatilho: a medida do fim do bloco
         (`bloco_fim`) só registra, porque o pico já passou. Falha de leitura: aviso no log na 1ª de cada filho e contagem no registro."""
         agora = time.perf_counter()
@@ -654,8 +654,8 @@ class CarregadorMalhas:
                 est["produtos_total"] = dados["total"]
                 self._produtos = {i: (g, c, n, f) for i, g, c, n, f in dados["produtos"]}
         elif tipo == "lote":
-            # cópia própria (o oráculo exige OWNDATA; o recebido aponta para o buffer do canal); a proteção do filho
-            # se perde no canal, então o deslocamento também é copiado e protegido (§1.3 item 1)
+            # cópia própria (o teste exige OWNDATA; o recebido aponta para o buffer do canal); a proteção do filho
+            # se perde no canal, então o deslocamento também é copiado e protegido
             dados = replace(dados, vertices=dados.vertices.copy(), indices=dados.indices.copy(),
                             objetos=dados.objetos.copy(), deslocamento=np.array(dados.deslocamento, dtype=np.float64))
             for a in (dados.vertices, dados.indices, dados.objetos, dados.deslocamento):
@@ -691,7 +691,7 @@ class CarregadorMalhas:
         return False
 
     def _gravar_pos_emitir(self, dados):
-        """T29e: só registro. A memória depois de `emitir` do bloco anterior chega no `bloco` seguinte (ou no `fim`)."""
+        """Só registro. A memória depois de `emitir` do bloco anterior chega no `bloco` seguinte (ou no `fim`)."""
         if self._reg is not None and dados.get("pos_emitir_mb") is not None:
             self._reg["pos_emitir_mb"] = float(dados["pos_emitir_mb"])
 

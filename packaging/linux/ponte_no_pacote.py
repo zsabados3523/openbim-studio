@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Provas do R1-j que rodam com o Python do PRÓPRIO pacote (chamado só por test_appimage_ponte.sh).
+"""Provas do pacote que rodam com o Python do PRÓPRIO pacote (chamado só por test_appimage_ponte.sh).
 
 Uso (sempre pelo `env/bin/python` do pacote, em modo -I, montado como o AppRun monta):
   freeze RAIZ                         `multiprocessing.freeze_support()` em main.py e no AppRun (leitura da árvore sintática)

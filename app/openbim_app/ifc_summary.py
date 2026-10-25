@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Resumo de um arquivo IFC: nome, esquema, total de elementos e contagem por classe (F0-S02-T05)."""
+"""Resumo de um arquivo IFC: nome, esquema, total de elementos e contagem por classe."""
 import logging
 import os
 from collections import Counter
@@ -50,7 +50,7 @@ def count_by_class(path):
     except OSError as exc:
         log.warning("Leitura recusada: %s (%s: %s)", path, type(exc).__name__, exc)
         raise IfcSummaryError(_erro_do_sistema(exc, name)) from None
-    # TEMPORÁRIO: leitura na thread da interface; threads são T3 (ADR-004)
+    # TEMPORÁRIO: leitura na thread da interface; threads: ver ADR-004
     try:
         model = ifcopenshell.open(str(path))
     except FileNotFoundError:

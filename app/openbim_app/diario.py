@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Diário de transações e recuperação depois da queda (F0-S05-T05; ADR-002 §4.4, §4.7 e §4.8). Sem Qt, sem `obimcore`.
+"""Diário de transações e recuperação depois da queda (ADR-002 §4.4, §4.7 e §4.8). Sem Qt, sem `obimcore`.
 Uma linha por registro: `<crc32 8 hex> <JSON compacto>\\n`, CRC sobre os bytes UTF-8 do JSON. Registros autossuficientes: desfazer e refazer
 levam as mesmas operações do passo. Confirmado = linha escrita (sem buffer do Python); `fsync` cerca de 2 s depois, ao sincronizar e ao fechar."""
 import datetime

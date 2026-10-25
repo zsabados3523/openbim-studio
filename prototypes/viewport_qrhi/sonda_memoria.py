@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Sonda de memória da F0-S04-T21: onde vai a memória ao abrir um IFC grande. Só mede; não altera o carregador nem o processo de malhas.
+"""Sonda de memória: onde vai a memória ao abrir um IFC grande. Só mede; não altera o carregador nem o processo de malhas.
 Comandos (uma configuração por execução, porque o pico é por processo; saídas só fora do repositório):
-  rodar   ARQ --fios N --bloco N --saida r.json   roda `medir.medir` (mesma conta do T18) com amostrador de /proc e marcas de fase
+  rodar   ARQ --fios N --bloco N --saida r.json   roda `medir.medir` com amostrador de /proc e marcas de fase
   pecas   ARQ --saida p.json [--so-rank K]        1 fio, peça a peça: quanto cada peça faz o pico do processo crescer (classe, triângulos, MB)
   resumir PASTA [--pecas p.json]                  tabelas em Markdown (só números) a partir dos arquivos de `rodar`
 Rodar sob tela virtual (xvfb-run) e, com o arquivo pesado, sob `flock` (a máquina é dividida). Nada de nome, GUID ou id de peça é impresso."""

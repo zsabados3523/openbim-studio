@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Porta única do modelo (F0-S04-P1; ADR-004 §5, decisão 3C, e §5.1, regras 3 e 4). Sem Qt, sem importar o `obimcore`.
+"""Porta única do modelo (ADR-004 §5 e §5.1). Sem Qt, sem importar o `obimcore`.
 
 `SessaoModelo` é a única dona do `ifcopenshell.file`: trava de leitura e escrita (vários leitores ou um escritor, com preferência do escritor),
 reentrada proibida na hora, exceção solta a porta. O `obimcore` confere a trava por `_obimcore_entrar`/`_obimcore_sair` antes e depois da

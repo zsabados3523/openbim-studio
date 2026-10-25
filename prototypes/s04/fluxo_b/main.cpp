@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Executável do fluxo B (S04-T14c; CONTRATO.md, Parte 2): roteiro R na janela Qt Widgets sobre `Paredes` e o núcleo C++ puro, `medicao.json` igual ao do fluxo A, autotestes sem janela. Sem Python.
+// Executável do fluxo B (CONTRATO.md, Parte 2): roteiro R na janela Qt Widgets sobre `Paredes` e o núcleo C++ puro, `medicao.json` igual ao do fluxo A, autotestes sem janela. Sem Python.
 // Só `criar_paredes_lote` roda numa std::thread (do comando); os outros comandos, o painel e a pintura ficam na thread da janela, que segue tratando eventos durante o lote.
 #include "autotestes.h"
 #include "janela.h"
@@ -209,7 +209,7 @@ int roteiro(int argc, char** argv, const std::map<std::string, std::string>& o) 
     std::map<std::string, QJsonArray> R;
     QJsonArray passos;
     const std::string base = opc("--base");
-    auto Tp = std::make_unique<Tela>(rhi != "d3d11", opc("--painel-log"));  // a janela e a viewport morrem ANTES da QApplication (lote Opus 26: segfault na coleta final); F.t não é usado depois
+    auto Tp = std::make_unique<Tela>(rhi != "d3d11", opc("--painel-log"));  // a janela e a viewport morrem ANTES da QApplication (evita segfault na coleta final); F.t não é usado depois
     Tela& T = *Tp;
     F.t = &T;
     for (auto pv : doc.object()["passos"].toArray()) {

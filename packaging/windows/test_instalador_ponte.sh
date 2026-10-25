@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Oraculo R1-j do instalador Windows (cartao F0-S04-T17b; LOTE_OPUS_9 §1.5; ADR-005 §7.1 prova 7), par de packaging/linux/test_appimage_ponte.sh:
+# Teste do instalador Windows (ADR-005 §7.1 prova 7), par de packaging/linux/test_appimage_ponte.sh:
 # o modulo `obimcore` esta DENTRO da pasta instalada e, la dentro, R1-a/d/e/i passam com o Python (-I) e as DLLs do proprio pacote.
 # Uso (bash do Git for Windows): test_instalador_ponte.sh PASTA_INSTALADA  |  test_instalador_ponte.sh --autoteste (partes sem Windows, em qualquer sistema)
 # QUANDO: com o programa instalado (`Setup.exe /S /D=C:\pasta\sem\espacos`) e ANTES de o test_installer.sh desinstalar (ele desinstala no fim).
@@ -15,7 +15,7 @@
 # OBIM_TESTE_SIMULADO=1 = ENSAIO em Linux (env/bin/python, _obimcore*.so): pula so os passos c e d (DLLs, runtime do Visual C++) e termina em
 #   "OK SIMULADO"; recusado no Windows. REVISOR, no log do CI do Windows, conferir: as versoes impressas (ligador x runtime), o filho pythonw, os
 #   9 casos, e se o R1-e passa (os filhos nao herdam add_dll_directory; "DLL load failed" no filho do s04_aux r1e = levar ao lider, nao afrouxar o teste).
-# MUDANCA DO ORACULO (a ser julgada pelo Opus): a auditoria de DLLs carregadas reprovava QUALQUER modulo fora do pacote e do Windows, mas o antivirus do
+# Mudança no teste: a auditoria de DLLs carregadas reprovava QUALQUER modulo fora do pacote e do Windows, mas o antivirus do
 #   runner (Windows Defender, provedor AMSI MpOav.dll) e injetado no processo. A regra vigente (classificar() no auxiliar) preserva o proposito, sem lista
 #   de excecoes por nome. Modulo de fora do pacote e do Windows REPROVA se: esta sob o prefixo do ambiente de desenvolvimento (OBIM_DEV_PREFIXES, montado
 #   aqui e impresso no log; vazio reprova); esta numa pasta do PATH herdado (entrou por busca de nome); tem o mesmo nome de DLL/PYD do pacote; e importado
@@ -33,7 +33,7 @@ if [ "${1:-}" = "--autoteste" ]; then exec "$(command -v python3 || command -v p
 SIM=0; [ "${OBIM_TESTE_SIMULADO:-}" = 1 ] && SIM=1
 case "$(uname -s)" in
   MINGW*|MSYS*|CYGWIN*) [ "$SIM" = 0 ] || falha "OBIM_TESTE_SIMULADO=1 e proibido no Windows (o CI nunca pode rodar simulado)" ;;
-  *) [ "$SIM" = 1 ] || falha "este oraculo so vale no Windows (Git bash). Em Linux, so como ensaio: OBIM_TESTE_SIMULADO=1" ;;
+  *) [ "$SIM" = 1 ] || falha "este teste so vale no Windows (Git bash). Em Linux, so como ensaio: OBIM_TESTE_SIMULADO=1" ;;
 esac
 if [ "$SIM" = 1 ]; then
   wp() { printf '%s' "$1"; }; up() { readlink -f "$1"; }
@@ -104,7 +104,7 @@ s_spawn_pyw() { spawn "pythonw" "$PYW"; }
 s_pytest() {
   local site; site="$(up "${OBIM_PYTEST_SITE:-/inexistente}" 2>/dev/null)"
   [ -d "$site/_pytest" ] || falha "defina OBIM_PYTEST_SITE com a pasta site-packages que tem o pytest (fora do pacote); valor: '${OBIM_PYTEST_SITE:-}'"
-  prova "R1-j reprovou: algum caso de R1-a/d/e/i nao passou, foi pulado ou nao rodou" "$PY" pytest "$DW" "$(wp "$REPO/tests")" "$(wp "$site")" "$(wp "$W")"
+  prova "provas do pacote reprovaram: algum caso nao passou, foi pulado ou nao rodou" "$PY" pytest "$DW" "$(wp "$REPO/tests")" "$(wp "$site")" "$(wp "$W")"
 }
 
 # Todas as etapas rodam, mesmo se uma falhar; so no fim sai com codigo 1 listando as que reprovaram. Etapa que depende de outra que nao passou

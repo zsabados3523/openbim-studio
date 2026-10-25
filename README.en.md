@@ -7,13 +7,13 @@ Open, general-purpose BIM software with IFC as the model's source of truth. The 
 > The name "OpenBIM Studio" is provisional.
 
 ## Stage
-**Phase 0: technical proofs.** There is no usable version yet. Nothing here promises a delivery date.
+**Early stage, technical proofs.** There is no usable version yet. Nothing here promises a delivery date.
 
 ## Transparency: who builds it, how, and for whom
 
-**Who builds it.** OpenBIM Studio is a one-person project: Rafael, an architect, who defines what the software must do and accepts or rejects each step. He does not write code. The code is written by artificial intelligence agents (Claude models from Anthropic), led by a "technical lead" that is also an AI. Today there is no team of experienced programmers behind it.
+**Who builds it.** OpenBIM Studio is a one-person project: Rafael, an architect, who defines what the software must do and accepts or rejects each step. He does not write code. The code is written by artificial intelligence agents (Claude models from Anthropic), coordinated by another AI that splits up and checks the work. Today there is no team of experienced programmers behind it.
 
-**How the code is made.** Every task starts as a written card with acceptance criteria. The **tests** are written by a different AI than the one that writes the **code**, and the code does not go in unless those tests pass. Delicate parts (the Python/C++ bridge, multi-threaded work, file saving) get a **cross review** by a stronger model and only go in once approved. All tests run automatically on Windows and Linux on every change; nothing enters the main code with a failing test. The reports of those reviews are public in `docs/state/reports/`.
+**How the code is made.** Every task has a written description with acceptance criteria. The **tests** are written by a different AI than the one that writes the **code**, and the code does not go in unless those tests pass. Delicate parts (the Python/C++ bridge, multi-threaded work, file saving) get a **cross review** by a stronger model and only go in once approved. All tests run automatically on Windows and Linux on every change; nothing enters the main code with a failing test. Architecture decisions are recorded in [docs/adr/](docs/adr/) (in Portuguese).
 
 **What this does not guarantee.** Automatic tests and AI review catch a lot, but not everything. Projects built with AI tend to fail on usability details: windows that do not resize, odd navigation and selection, things that worked and later break. For that reason we will have specific regression tests (window, zoom, selection, shortcuts) before any usable release, and we want **external human review** of the critical parts.
 
@@ -33,5 +33,6 @@ Open, general-purpose BIM software with IFC as the model's source of truth. The 
 GNU Affero General Public License v3 or later (AGPL-3.0-or-later). Full text in [LICENSE](LICENSE). Third-party components: [THIRD_PARTY.md](THIRD_PARTY.md).
 
 ## Learn more
-- Plan summary: [v2/00_resumo_executivo.md](v2/00_resumo_executivo.md)
+- Architecture decisions: [docs/adr/](docs/adr/) (in Portuguese)
+- Development environment: [docs/dev-setup.md](docs/dev-setup.md) (in Portuguese)
 - How to contribute: [CONTRIBUTING.en.md](CONTRIBUTING.en.md)

@@ -7,13 +7,13 @@ Programa BIM aberto e geral, com o IFC como verdade do modelo. O núcleo não é
 > O nome "OpenBIM Studio" é provisório.
 
 ## Estágio
-**Fase 0: provas técnicas.** Ainda não existe versão utilizável. Nada aqui promete data de entrega.
+**Fase inicial de provas técnicas.** Ainda não existe versão utilizável. Nada aqui promete data de entrega.
 
 ## Transparência: quem faz, como e para quem
 
-**Quem faz.** O OpenBIM Studio é um projeto de uma pessoa: Rafael, arquiteto, que define o que o programa precisa fazer e aceita (ou recusa) cada etapa. Ele não escreve código. O código é escrito por agentes de inteligência artificial (modelos Claude, da Anthropic), conduzidos por um "líder técnico", que também é uma IA. Não há, hoje, uma equipe de programadores experientes por trás.
+**Quem faz.** O OpenBIM Studio é um projeto de uma pessoa: Rafael, arquiteto, que define o que o programa precisa fazer e aceita (ou recusa) cada etapa. Ele não escreve código. O código é escrito por agentes de inteligência artificial (modelos Claude, da Anthropic), coordenados por outra IA que divide e confere o trabalho. Não há, hoje, uma equipe de programadores experientes por trás.
 
-**Como o código é feito.** Cada tarefa nasce de um cartão escrito, com critério de aceite. Quem escreve os **testes** é uma IA diferente da que escreve o **código**, e o código não passa se os testes dela não passarem. Partes delicadas (a ponte entre Python e C++, tarefas com várias linhas de execução, o salvamento dos arquivos) passam por uma **revisão cruzada** feita por um modelo mais forte, e só entram depois de aprovadas. Todos os testes rodam sozinhos, em Windows e Linux, a cada mudança; nada entra no código principal com teste vermelho. Os relatórios dessas revisões ficam públicos em `docs/state/reports/`.
+**Como o código é feito.** Cada tarefa tem uma descrição escrita, com critério de aceite. Quem escreve os **testes** é uma IA diferente da que escreve o **código**, e o código não passa se os testes dela não passarem. Partes delicadas (a ponte entre Python e C++, tarefas com várias linhas de execução, o salvamento dos arquivos) passam por uma **revisão cruzada** feita por um modelo mais forte, e só entram depois de aprovadas. Todos os testes rodam sozinhos, em Windows e Linux, a cada mudança; nada entra no código principal com teste vermelho. As decisões de arquitetura ficam registradas em [docs/adr/](docs/adr/).
 
 **O que isso não garante.** Teste automático e revisão de IA pegam muita coisa, mas não tudo. Projetos feitos com IA costumam errar em detalhes de uso: janelas que não redimensionam, navegação e seleção estranhas, coisas que funcionavam e quebram depois. Por isso vamos ter testes de regressão específicos para isso (janela, zoom, seleção, atalhos) antes de qualquer versão utilizável, e queremos **revisão humana externa** das partes críticas.
 
@@ -33,5 +33,6 @@ Programa BIM aberto e geral, com o IFC como verdade do modelo. O núcleo não é
 GNU Affero General Public License v3 ou posterior (AGPL-3.0-or-later). Texto completo em [LICENSE](LICENSE). Componentes de terceiros: [THIRD_PARTY.md](THIRD_PARTY.md).
 
 ## Para saber mais
-- Resumo do plano: [v2/00_resumo_executivo.md](v2/00_resumo_executivo.md)
+- Decisões de arquitetura: [docs/adr/](docs/adr/)
+- Preparar o ambiente de desenvolvimento: [docs/dev-setup.md](docs/dev-setup.md)
 - Como contribuir: [CONTRIBUTING.md](CONTRIBUTING.md)

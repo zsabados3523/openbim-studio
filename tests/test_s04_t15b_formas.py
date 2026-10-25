@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Testes das formas 1 e 2, M5 e M5b (contrato em prototypes/s04/fluxo_a/CONTRATO.md, seção de formas).
+"""Testes das formas 1 e 2, M5 e M5b (contrato em tools/s04/fluxo_a/CONTRATO.md, seção de formas).
 Forma 1: o lote (`criar_paredes_lote`) roda numa thread Python e a thread da janela fica em `QEventLoop.exec()`. Forma 2: o lote roda na thread da janela,
 cedendo (`processEvents`) depois de cada operação quando passaram 8 ms desde a última cessão; operação = cada chamada de `fluxo_a.api`, cada bloco de até
 25 GlobalIds de `obimcore.malhas` e `Cena.atualizar`. Nenhuma chamada da API é partida para melhorar o número.
@@ -102,7 +102,7 @@ def test_sentinela_resumo_conta_as_pontas_e_o_agendado():
 
 def test_t15b_resumo_de_lote_py_em_dados_sinteticos():  # `lote.resumo(r)` é função pura: a mesma conta do teste, com pontas que mandam no resultado
     if not (aux.PASTA / "lote.py").is_file():
-        pular("prototypes/s04/fluxo_a/lote.py ausente")
+        pular("tools/s04/fluxo_a/lote.py ausente")
     import lote
     r = {"t0_ms": 0.0, "t1_ms": 2500.0, "quadros": [300.0 + 20 * i for i in range(80)], "pulsos": [400.0 + 10 * i for i in range(100)], "parado": {"quadros": [0.0, 16.0, 40.0]},
          "mouse": [[20.0 * k, 20.0 * k + 3, 20.0 * k + (900 if k == 7 else 35)] for k in range(126)],
@@ -161,7 +161,7 @@ def c_trava(res, base):  # durante o lote, um tratador na thread da janela tenta
 @pytest.fixture(scope="module")
 def tela():
     if not (aux.PASTA / "lote.py").is_file():
-        pular("prototypes/s04/fluxo_a/lote.py ausente")
+        pular("tools/s04/fluxo_a/lote.py ausente")
     if importlib.util.find_spec("obimcore") is None:
         pular("módulo obimcore ausente")
     if not (os.environ.get("CI") or os.environ.get("OBIM_S04_TELA_VIRTUAL") == "1") if sys.platform == "win32" else not shutil.which("xvfb-run"):

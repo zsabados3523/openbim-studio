@@ -24,7 +24,7 @@ try:
 except ImportError:  # pragma: no cover  (módulo importado fora do pacote)
     import foto_arquivo
 
-try:  # o formato vive fora do pacote (também usado pelo caminho em C++); `prototypes/` precisa estar no caminho
+try:  # o formato vive fora do pacote (também usado pelo caminho em C++); `viewport/` precisa estar no caminho
     from formato_malha import DTYPE_OBJETO, DTYPE_VERTICE, LoteMalha
 except ImportError:  # pragma: no cover  (módulo executado fora do pacote)
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

@@ -17,8 +17,8 @@ from pathlib import Path
 import pytest
 
 RAIZ = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(RAIZ / "prototypes"))
-sys.path.insert(0, str(RAIZ / "prototypes" / "s04" / "sondas"))
+sys.path.insert(0, str(RAIZ / "viewport"))
+sys.path.insert(0, str(RAIZ / "tools" / "s04" / "sondas"))
 sys.path.insert(0, str(RAIZ / "tests"))
 
 from viewport_qrhi import processo_malhas  # noqa: E402

@@ -1,17 +1,17 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Formato de vértices e de objetos é o mesmo em Python e em C++. Lê os números escritos no código C++ (sem
-precisar compilar) e compara com `prototypes/formato_malha.py`; se um lado mudar sem o outro, este teste falha."""
+precisar compilar) e compara com `viewport/formato_malha.py`; se um lado mudar sem o outro, este teste falha."""
 import ast
 import re
 import sys
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(RAIZ / "prototypes"))
+sys.path.insert(0, str(RAIZ / "viewport"))
 
 import formato_malha as fm  # noqa: E402
 
-NUCLEO = RAIZ / "prototypes" / "s04" / "obimcore" / "nucleo"
+NUCLEO = RAIZ / "native" / "obimcore" / "nucleo"
 
 
 def _numeros(arquivo, nomes):
@@ -45,11 +45,11 @@ def test_posicao_do_vertice_fica_no_inicio():
 
 
 def test_carregador_e_fluxo_a_usam_o_mesmo_formato():
-    sys.path.insert(0, str(RAIZ / "prototypes"))
+    sys.path.insert(0, str(RAIZ / "viewport"))
     from viewport_qrhi import carregador
     assert carregador.DTYPE_VERTICE is fm.DTYPE_VERTICE and carregador.DTYPE_OBJETO is fm.DTYPE_OBJETO
     assert carregador.LoteMalha is fm.LoteMalha
-    assert "viewport_qrhi" not in (RAIZ / "prototypes" / "s04" / "fluxo_a" / "fluxo_a.py").read_text(encoding="utf-8")
+    assert "viewport_qrhi" not in (RAIZ / "tools" / "s04" / "fluxo_a" / "fluxo_a.py").read_text(encoding="utf-8")
 
 
 def test_tipos_numpy_escritos_na_ponte_cpp_sao_os_mesmos():

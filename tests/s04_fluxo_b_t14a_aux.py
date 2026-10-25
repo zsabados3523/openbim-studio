@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Filho do teste do fluxo B, parte 2a (tests/test_s04_fluxo_b_paredes.py, "Parte 2a" de prototypes/s04/fluxo_b/CONTRATO.md), em PROCESSO À PARTE: queda ou impasse da trava
+"""Filho do teste do fluxo B, parte 2a (tests/test_s04_fluxo_b_paredes.py, "Parte 2a" de tools/s04/fluxo_b/CONTRATO.md), em PROCESSO À PARTE: queda ou impasse da trava
 (itens 1 e 4 do lote 22) viram falha limpa do teste, sem derrubar nem travar o pytest. Uso: `localidade T N PASTA` ou `corrida K N`; imprime `RESULTADO {json}`."""
 import json
 import locale

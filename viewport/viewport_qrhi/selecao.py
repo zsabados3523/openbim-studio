@@ -6,7 +6,7 @@ de cada objeto (vetorizado em numpy), ordena pela entrada do raio e só testa tr
 cuja caixa pode ainda vencer o melhor acerto (parada antecipada).
 
 Congelado: este arquivo é a versão em Python da seleção. O produto usa a versão em C++
-(`prototypes/s04/obimcore/nucleo/selecao.*`). Só corrigir defeito aqui; recurso novo vai para o C++ (ADR-004).
+(`native/obimcore/nucleo/selecao.*`). Só corrigir defeito aqui; recurso novo vai para o C++ (ADR-004).
 """
 from __future__ import annotations
 

@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 from obrigatorio import pular_sem_tela
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "prototypes"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "viewport"))
 
 from PySide6.QtCore import QCoreApplication, QElapsedTimer, QEvent, QPointF, Qt  # noqa: E402
 from PySide6.QtGui import QMouseEvent  # noqa: E402

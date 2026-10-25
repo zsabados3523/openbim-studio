@@ -60,7 +60,7 @@ class TravaEspia:  # fica no lugar de `f.trava`: um Lock de verdade (não reentr
 @pytest.fixture
 def fa():
     if not (aux.PASTA / "fluxo_a.py").is_file():
-        pular("prototypes/s04/fluxo_a/fluxo_a.py ausente")
+        pular("tools/s04/fluxo_a/fluxo_a.py ausente")
     import fluxo_a
     return fluxo_a
 
@@ -198,7 +198,7 @@ def c_janela(res):
 @pytest.fixture(scope="module")
 def janela():
     if not (aux.PASTA / "fluxo_a.py").is_file():
-        pular("prototypes/s04/fluxo_a/fluxo_a.py ausente")
+        pular("tools/s04/fluxo_a/fluxo_a.py ausente")
     if importlib.util.find_spec("obimcore") is None:
         pular("módulo obimcore ausente")
     if not (os.environ.get("CI") or os.environ.get("OBIM_S04_TELA_VIRTUAL") == "1") if sys.platform == "win32" else not shutil.which("xvfb-run"):
@@ -233,7 +233,7 @@ def test_t15a_sem_janela_t_painel_continua_em_outra_thread(f):
 
 
 if __name__ == "__main__":  # python este_arquivo.py janela  (sob xvfb-run)
-    sys.path[:0] = [str(aux.PASTA), str(aux.RAIZ / "app"), str(aux.RAIZ / "prototypes")]
+    sys.path[:0] = [str(aux.PASTA), str(aux.RAIZ / "app"), str(aux.RAIZ / "viewport")]
     import faulthandler
     faulthandler.dump_traceback_later(max(int(os.environ.get("OBIM_LIMITE", "300")) - 20, 30), exit=True)
     r = {}

@@ -68,7 +68,7 @@ def _limpa():  # solta o histórico dos modelos DESTE caso (registro da classe) 
 @pytest.fixture(scope="module")
 def mods():
     try:
-        import s04_fluxo_aux  # noqa: F401  (põe a pasta do fluxo A, app, prototypes e scripts no caminho)
+        import s04_fluxo_aux  # noqa: F401  (põe a pasta do fluxo A, app, viewport e scripts no caminho)
         import fluxo_a
         import gerar_modelo_grande
         import ifcopenshell.guid

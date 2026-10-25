@@ -4,7 +4,7 @@
 Matrizes são numpy 4x4 em notação de linhas (v' = M @ v), convenção OpenGL.
 
 Congelado: este arquivo é a versão em Python da câmera. O produto usa a versão em C++
-(`prototypes/s04/obimcore/nucleo/camera.*`). Só corrigir defeito aqui; recurso novo vai para o C++ (ADR-004).
+(`native/obimcore/nucleo/camera.*`). Só corrigir defeito aqui; recurso novo vai para o C++ (ADR-004).
 """
 from __future__ import annotations
 

@@ -3,7 +3,7 @@
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "prototypes" / "viewport_qrhi"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "viewport" / "viewport_qrhi"))
 
 import medir  # noqa: E402
 

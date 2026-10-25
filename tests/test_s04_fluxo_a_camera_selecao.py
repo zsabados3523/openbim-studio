@@ -102,7 +102,7 @@ def c_corrida(res):
 def corrida():
     import s04_fluxo_aux as aux
     if not (aux.PASTA / "fluxo_a.py").is_file():
-        pular("prototypes/s04/fluxo_a/fluxo_a.py ausente")
+        pular("tools/s04/fluxo_a/fluxo_a.py ausente")
     if importlib.util.find_spec("obimcore") is None:
         pular("módulo obimcore ausente")
     if not (os.environ.get("CI") or os.environ.get("OBIM_S04_TELA_VIRTUAL") == "1") if sys.platform == "win32" else not shutil.which("xvfb-run"):
@@ -138,7 +138,7 @@ if __name__ == "__main__":
     import faulthandler
     faulthandler.dump_traceback_later(int(os.environ.get("OBIM_LIMITE", 600)) - 20, exit=True)
     sys.path.insert(0, str(ESTE.parent))
-    import s04_fluxo_aux  # noqa: F401  (põe prototypes/s04/fluxo_a, app/ e tests/ no caminho)
+    import s04_fluxo_aux  # noqa: F401  (põe tools/s04/fluxo_a, app/ e tests/ no caminho)
     import ifcopenshell  # noqa: F401  (antes do obimcore)
     nome = sys.argv[1]
     try:

@@ -14,9 +14,9 @@ import numpy as np
 
 AQUI = Path(__file__).resolve()
 RAIZ = AQUI.parent.parent
-PASTA = RAIZ / "prototypes" / "s04" / "fluxo_a"
+PASTA = RAIZ / "tools" / "s04" / "fluxo_a"
 ROTEIRO = PASTA / "roteiro_r.json"
-sys.path[:0] = [str(PASTA), str(RAIZ / "app"), str(RAIZ / "prototypes"), str(RAIZ / "scripts"), str(AQUI.parent)]  # só a pasta do fluxo (não prototypes/s04: `fluxo_a/` viraria pacote)
+sys.path[:0] = [str(PASTA), str(RAIZ / "app"), str(RAIZ / "viewport"), str(RAIZ / "scripts"), str(AQUI.parent)]  # só a pasta do fluxo (não tools/s04: `fluxo_a/` viraria pacote)
 FIRE = "Pset_WallCommon.FireRating"
 TIPO = {"cmd": "criar_tipo", "nome": "PAR15", "camadas_m": [0.02, 0.11, 0.02]}
 PAREDE = {"cmd": "criar_parede", "tipo": "PAR15", "comprimento": 4.0, "altura": 2.8, "espessura": 0.15}

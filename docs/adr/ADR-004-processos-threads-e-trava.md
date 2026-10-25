@@ -7,8 +7,8 @@ Status: aceito
 O modelo IFC vive numa única instância de `ifcopenshell.file` que o Python e o módulo C++ `obimcore` leem sem cópia (ADR-001). Isso levanta quatro perguntas: onde roda a geometria, se várias peças podem ser calculadas ao mesmo tempo, quem protege o modelo e em que thread roda um comando longo.
 
 Havia dois caminhos de geometria:
-- **Processo auxiliar** (`prototypes/viewport_qrhi/processo_malhas.py`, `spawn`): protegido (vigia de 20 s por peça, modo isolado, reinícios), mas com a segunda cópia do modelo na memória.
-- **Dentro do processo da janela** (`prototypes/s04/obimcore/nucleo/malha.cpp`): uma cópia só e edição rápida, mas sem proteção: uma peça ruim derruba o programa. Um `std::mutex` deixa uma passada de geometria por vez, com 1 thread, porque quatro passadas simultâneas derrubaram o processo em cerca de 10% das rodadas (contra 0 quedas em 55 em série). A causa provável, o registro global de mensagens do IfcOpenShell, é leitura de cabeçalhos, não experimento.
+- **Processo auxiliar** (`viewport/viewport_qrhi/processo_malhas.py`, `spawn`): protegido (vigia de 20 s por peça, modo isolado, reinícios), mas com a segunda cópia do modelo na memória.
+- **Dentro do processo da janela** (`native/obimcore/nucleo/malha.cpp`): uma cópia só e edição rápida, mas sem proteção: uma peça ruim derruba o programa. Um `std::mutex` deixa uma passada de geometria por vez, com 1 thread, porque quatro passadas simultâneas derrubaram o processo em cerca de 10% das rodadas (contra 0 quedas em 55 em série). A causa provável, o registro global de mensagens do IfcOpenShell, é leitura de cabeçalhos, não experimento.
 
 A trava do modelo era só uma convenção (`threading.Lock` no fluxo A; o C++ lia sem conferir trava).
 
@@ -48,7 +48,7 @@ Linux de referência: RTX 3070, tela real. Windows: CI, desenho por software (WA
 Várias margens são apertadas (1% a 4%) porque a forma mista e a forma em fatias quase empatam; um item da base sintética ficou 0,3% acima do limite e foi aceito como ruído, sem mudar a régua.
 
 ## Consequências
-- Dois caminhos de geometria para manter; precisam do mesmo formato de vértices (`prototypes/viewport_qrhi/formato_malha.py`).
+- Dois caminhos de geometria para manter; precisam do mesmo formato de vértices (`viewport/viewport_qrhi/formato_malha.py`).
 - Uma peça comum que trava na edição ainda derruba o processo; o diário (ADR-002) e a cópia de segurança limitam o dano.
 - Leitor demorado atrasa a próxima edição: leituras grandes copiam o que precisam e soltam a trava.
 - Memória do arquivo pesado: a meta vale pela soma do pico do pai com o maior pico entre os filhos, pela pior de 5 aberturas.
@@ -65,6 +65,6 @@ Várias margens são apertadas (1% a 4%) porque a forma mista e a forma em fatia
 
 ## O que ficou em aberto
 - Quatro números nunca foram medidos: custo de abrir o mesmo IFC duas vezes em série; custo de mandar uma edição pequena ao auxiliar; ganho de várias threads dentro de uma passada; resultado do experimento com registro de mensagens local por passada.
-- A forma 4C foi validada no protótipo (`prototypes/s04/fluxo_a/lote.py`), não no produto; a divisão em sub-lotes só foi medida no Linux em tela virtual.
+- A forma 4C foi validada no protótipo (`tools/s04/fluxo_a/lote.py`), não no produto; a divisão em sub-lotes só foi medida no Linux em tela virtual.
 - Windows com desenho por software (WARP): destruir o dispositivo D3D11 trava raramente (1 em 300 voltas, mesmo com o limite de 5 s em `Motor::parar()` que evita congelar ao sair). A correção de fundo (um dispositivo D3D11 por processo) é trabalho futuro.
 - Windows com placa real: não medido.

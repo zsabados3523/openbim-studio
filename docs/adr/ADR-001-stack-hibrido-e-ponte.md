@@ -7,8 +7,8 @@ Status: aceito
 O programa precisa de interface e comandos fáceis de escrever e de mudar (Python, PySide6, `ifcopenshell.api`) e de malha 3D, cena e desenho rápidos (C++). A pergunta era se vale manter as duas linguagens ou escrever tudo em C++.
 
 Para decidir, o mesmo fluxo foi construído de duas formas:
-- **A (híbrido):** PySide6 e `ifcopenshell.api` editam o modelo; o módulo C++ `obimcore` (ligado por nanobind) recebe o mesmo objeto `ifcopenshell.file`, sem cópia, e faz malha e desenho. Código em `prototypes/s04/fluxo_a/`.
-- **B (C++ puro):** o mesmo fluxo com IfcOpenShell em C++ e Qt Widgets. Código em `prototypes/s04/fluxo_b/`.
+- **A (híbrido):** PySide6 e `ifcopenshell.api` editam o modelo; o módulo C++ `obimcore` (ligado por nanobind) recebe o mesmo objeto `ifcopenshell.file`, sem cópia, e faz malha e desenho. Código em `tools/s04/fluxo_a/`.
+- **B (C++ puro):** o mesmo fluxo com IfcOpenShell em C++ e Qt Widgets. Código em `tools/s04/fluxo_b/`.
 
 As duas formas compartilham o núcleo C++ (malha, cena, viewport com thread de desenho própria, seleção). Por isso uma falha do núcleo vale para as duas.
 
@@ -43,7 +43,7 @@ Outros números: o módulo `obimcore` compila em 21,7 s (limpo) e 5,6 s (increme
 
 ## Consequências
 - O fluxo B fica congelado como referência de comparação: não vira produto nem recebe recurso novo.
-- O `obimcore` é o módulo nativo do produto; hoje mora em `prototypes/s04/obimcore/` e será movido para `native/obimcore/`. A camada de edição parte do fluxo A.
+- O `obimcore` é o módulo nativo do produto; mora em `native/obimcore/`. A camada de edição parte do fluxo A.
 - O núcleo C++ é o mesmo para qualquer casca de interface: um defeito de desempenho do desenho se corrige uma vez.
 - A folga de memória do arquivo pesado é pequena (42 MB, 0,7%): qualquer mudança no carregador ou no processo auxiliar exige medir o arquivo pesado de novo.
 

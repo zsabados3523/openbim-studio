@@ -163,7 +163,7 @@ def test_bytes_copia_sobe_so_o_lote_novo(viewport):  # hoje a sobra de capacidad
     assert abs(r["depois"] - r["antes"]) <= r["bytes_novo"] + 64 * 1024, f"bytes_copia {r['antes']} -> {r['depois']}: diferença {r['depois'] - r['antes']}"
 
 if __name__ == "__main__":
-    sys.path.insert(0, str(RAIZ / "prototypes"))
+    sys.path.insert(0, str(RAIZ / "viewport"))
     nome, *resto = sys.argv[1:]
     assert not {"obimcore", "PySide6.QtCore"} & sys.modules.keys(), "o teste importou Qt ou obimcore antes da ordem pedida"
     [importlib.import_module(m) for m in ("ifcopenshell", "obimcore")]

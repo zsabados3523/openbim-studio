@@ -297,7 +297,7 @@ def test_dados_lote_recusa_sequencia_desconhecida_e_limpa_com_value_error(viewpo
     assert not r["falhas"], "\n".join(r["falhas"])
 
 if __name__ == "__main__":
-    sys.path.insert(0, str(RAIZ / "prototypes"))
+    sys.path.insert(0, str(RAIZ / "viewport"))
     nome, *resto = sys.argv[1:]
     assert not {"obimcore", "PySide6.QtCore"} & sys.modules.keys(), "o teste importou Qt ou obimcore antes da ordem pedida"
     [importlib.import_module(m) for m in ("ifcopenshell", "obimcore")]

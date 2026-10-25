@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-import s04_fluxo_aux as aux  # noqa: F401  (põe prototypes/s04/fluxo_a, scripts e app no caminho)
+import s04_fluxo_aux as aux  # noqa: F401  (põe tools/s04/fluxo_a, scripts e app no caminho)
 
 OBRIGATORIO = os.environ.get("OBIM_S04_P1_OBRIGATORIO") == "1"
 

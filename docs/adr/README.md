@@ -4,7 +4,7 @@ Cada ADR registra uma decisão que afeta a estrutura do projeto: o contexto, as 
 
 | ADR | Tema | Código que explica |
 |---|---|---|
-| [001](ADR-001-stack-hibrido-e-ponte.md) | Stack híbrido Python + C++ e a ponte | `prototypes/s04/obimcore/` (módulo `obimcore`) |
+| [001](ADR-001-stack-hibrido-e-ponte.md) | Stack híbrido Python + C++ e a ponte | `native/obimcore/` (módulo `obimcore`) |
 | [002](ADR-002-modelo-de-dados-transacoes-e-oplog.md) | Modelo de dados, transações e diário | `app/openbim_app/transacao.py`, `diario.py`, `gravacao_atomica.py`, `gravacao_par.py` |
 | [004](ADR-004-processos-threads-e-trava.md) | Processos, threads e trava do modelo | `app/openbim_app/sessao_modelo.py`, viewport |
 | [005](ADR-005-dependencias-e-build.md) | Dependências, build e empacotamento | `environment.yml`, `packaging/` |

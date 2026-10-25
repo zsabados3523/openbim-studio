@@ -8,7 +8,7 @@
 
 namespace obim {
 namespace {
-constexpr size_t BYTES_OBJETO = 66, O_ID = 0, O_GUID = 4, N_GUID = 22, O_PI = 26, O_NI = 30, O_PV = 34, O_NV = 38, O_MIN = 42, O_MAX = 54;  // DTYPE_OBJETO de prototypes/formato_malha.py, empacotado (sem alinhamento); tests/test_formato_malha.py confere
+constexpr size_t BYTES_OBJETO = 66, O_ID = 0, O_GUID = 4, N_GUID = 22, O_PI = 26, O_NI = 30, O_PV = 34, O_NV = 38, O_MIN = 42, O_MAX = 54;  // DTYPE_OBJETO de viewport/formato_malha.py, empacotado (sem alinhamento); tests/test_formato_malha.py confere
 void caixa_de(Dados& d) {  // caixa dos vértices (pura, sem Python)
   for (size_t k = 0; k < d.v.size() / BYTES_VERTICE; ++k) {
     float f[3]; std::memcpy(f, d.v.data() + k * BYTES_VERTICE, 12);

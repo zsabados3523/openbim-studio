@@ -109,7 +109,7 @@ def rep():
 @pytest.fixture(scope="module")
 def conf():
     if not (aux.PASTA / "conferencias.py").is_file():
-        pular("prototypes/s04/fluxo_a/conferencias.py ausente")
+        pular("tools/s04/fluxo_a/conferencias.py ausente")
     if importlib.util.find_spec("obimcore") is None:
         pular("módulo obimcore ausente")
     if not (os.environ.get("CI") or os.environ.get("OBIM_S04_TELA_VIRTUAL") == "1") if sys.platform == "win32" else not shutil.which("xvfb-run"):
@@ -175,7 +175,7 @@ def test_t15c_iii_desenho_nao_passa_pelo_python_nem_pela_thread_da_janela(conf, 
 
 def test_t15c_iii_nenhum_arquivo_do_fluxo_mexe_na_janela_de_desenho():
     if not (aux.PASTA / "conferencias.py").is_file():
-        pular("prototypes/s04/fluxo_a/conferencias.py ausente")
+        pular("tools/s04/fluxo_a/conferencias.py ausente")
     for nome in ("fluxo_a.py", "lote.py", "conferencias.py"):
         for n, linha in enumerate((aux.PASTA / nome).read_text(encoding="utf-8").splitlines(), 1):
             assert not ("_cont" in linha and re.search(r"installEventFilter|\.connect\(|setMouseTracking|\.event\s*=", linha)), f"{nome}:{n}: mexe no contêiner da viewport: {linha.strip()}"

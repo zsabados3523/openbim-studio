@@ -179,7 +179,7 @@ def c_queda(res, segundos):  # item 3 do contrato: SEM espião (a subclasse muda
 @pytest.fixture(scope="module")
 def tela():
     if not (aux.PASTA / "lote.py").is_file():
-        pular("prototypes/s04/fluxo_a/lote.py ausente")
+        pular("tools/s04/fluxo_a/lote.py ausente")
     if not (os.environ.get("CI") or os.environ.get("OBIM_S04_TELA_VIRTUAL") == "1") if sys.platform == "win32" else not shutil.which("xvfb-run"):
         pular("sem tela virtual (xvfb-run; no Windows só no CI ou com OBIM_S04_TELA_VIRTUAL=1): nunca na tela real")
     from test_s04_viewport import caso
@@ -234,7 +234,7 @@ MEDIR = ("QTimer.singleShot(PARADO_MS, loop.quit)", "pulso.setInterval(PULSO_MS)
 
 def test_t15g_reguas_constantes_e_resto_de_lote_py_intactos():
     if not (aux.PASTA / "lote.py").is_file():
-        pular("prototypes/s04/fluxo_a/lote.py ausente")
+        pular("tools/s04/fluxo_a/lote.py ausente")
     import lote
     fonte = {k: inspect.getsource(getattr(lote, k)) for k in INTACTAS if k != "__main__"}
     fonte["__main__"] = (aux.PASTA / "lote.py").read_text(encoding="utf-8").split('if __name__ == "__main__":')[-1]

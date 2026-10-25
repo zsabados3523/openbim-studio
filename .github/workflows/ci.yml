@@ -36,9 +36,9 @@ jobs:
           exec > >(tee "$RUNNER_TEMP/obimcore.log") 2>&1
           trap 'rc=$?; if [ $rc -ne 0 ]; then msg=$(tail -n 40 "$RUNNER_TEMP/obimcore.log" | sed ":a;N;\$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g"); echo "::error title=obimcore falhou::$msg"; fi' EXIT
           set -e
-          CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04 | tee "$RUNNER_TEMP/b1.txt"
-          touch prototypes/s04/obimcore/ponte.cpp
-          bash prototypes/s04/obimcore/build.sh out/s04 | tee "$RUNNER_TEMP/b2.txt"
+          CLEAN=1 bash native/obimcore/build.sh out/s04 | tee "$RUNNER_TEMP/b1.txt"
+          touch native/obimcore/ponte.cpp
+          bash native/obimcore/build.sh out/s04 | tee "$RUNNER_TEMP/b2.txt"
           echo "obimcore ${RUNNER_OS}: limpo $(grep OBIMCORE "$RUNNER_TEMP/b1.txt") | incremental $(grep OBIMCORE "$RUNNER_TEMP/b2.txt")" >> "$GITHUB_STEP_SUMMARY"
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           export OBIM_CI=1  # liga todas as chaves de obrigatório (pulo vira falha; tests/conftest.py) (T04c entregou versao()["registro_ifc4"])
@@ -139,7 +139,7 @@ jobs:
       - name: Módulo obimcore (só compila; o oráculo R1 roda no linux-obimcore)
         if: matrix.modulo
         shell: bash -elo pipefail {0}
-        run: bash prototypes/s04/obimcore/build.sh out/s04
+        run: bash native/obimcore/build.sh out/s04
       - name: Viewport C++, parte 3 (S04-T06/T07; bloqueia o merge)
         if: matrix.parte == 3
         shell: bash -elo pipefail {0}
@@ -182,7 +182,7 @@ jobs:
         timeout-minutes: 40
         run: |
           # Sem janela: compara o IFC da biblioteca C++ com o do fluxo A (T13); o executável com janela (T14c) roda em tela virtual.
-          bash prototypes/s04/fluxo_b/build.sh out/s04
+          bash tools/s04/fluxo_b/build.sh out/s04
           export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
           OBIM_CI=1 pytest -q -rsP tests/test_s04_fluxo_b_paredes.py
           OBIM_CI=1 OBIM_S04_T14_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_fluxo_b_janela.py
@@ -354,9 +354,9 @@ jobs:
           exec > >(tee "$RUNNER_TEMP/obimcore.log") 2>&1
           trap 'rc=$?; if [ $rc -ne 0 ]; then msg=$(tail -n 40 "$RUNNER_TEMP/obimcore.log" | sed ":a;N;\$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g"); echo "::error title=obimcore falhou::$msg"; fi' EXIT
           set -e
-          CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04 | tee "$RUNNER_TEMP/b1.txt"
-          touch prototypes/s04/obimcore/ponte.cpp
-          bash prototypes/s04/obimcore/build.sh out/s04 | tee "$RUNNER_TEMP/b2.txt"
+          CLEAN=1 bash native/obimcore/build.sh out/s04 | tee "$RUNNER_TEMP/b1.txt"
+          touch native/obimcore/ponte.cpp
+          bash native/obimcore/build.sh out/s04 | tee "$RUNNER_TEMP/b2.txt"
           echo "obimcore ${RUNNER_OS}: limpo $(grep OBIMCORE "$RUNNER_TEMP/b1.txt") | incremental $(grep OBIMCORE "$RUNNER_TEMP/b2.txt")" >> "$GITHUB_STEP_SUMMARY"
       - name: Entregar o módulo obimcore e o pytest ao job instalador-windows (T17b; usa a ação de cache que já está fixada)
         shell: bash -elo pipefail {0}
@@ -400,7 +400,7 @@ jobs:
       - uses: ./.github/actions/ambiente-windows
       - name: Módulo obimcore (só o build limpo, para os testes deste job; o incremental e a entrega ao instalador estão no job windows-obimcore)
         shell: bash -elo pipefail {0}
-        run: CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04
+        run: CLEAN=1 bash native/obimcore/build.sh out/s04
       - name: Testes da ponte (S04-T03; oráculo R1-a a R1-i; bloqueia o merge; só na parte 1)
         if: matrix.parte == 1
         shell: bash -elo pipefail {0}
@@ -467,14 +467,14 @@ jobs:
       - uses: ./.github/actions/ambiente-windows
       - name: Módulo obimcore (só o build, para as medições; a ponte é testada no job windows-viewport-a)
         shell: bash -elo pipefail {0}
-        run: CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04
+        run: CLEAN=1 bash native/obimcore/build.sh out/s04
       - name: Medições das threads, números do Windows (S04-T15h; informativo, não bloqueia)
         shell: bash -elo pipefail {0}
         continue-on-error: true
         timeout-minutes: 15
         run: |
           # Só mede e guarda os números. Desenho por software (WARP): NÃO substitui o oficial com placa de vídeo real.
-          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          export PYTHONPATH="$(python -c 'import os; print(os.pathsep.join(os.path.abspath(d) for d in ("out/s04", "viewport")))')"
           export OBIM_S04_TELA_VIRTUAL=1 QSG_RHI_BACKEND=d3d11 QSG_RHI_PREFER_SOFTWARE_RENDERER=1 QT_QPA_PLATFORM=windows RHI=d3d11 LC_ALL=C  # as do passo anterior e as do subprocesso dos testes
           SAIDA="$(python -c 'import os; print(os.path.abspath("out/threads-ci"))')"
           mkdir -p "$SAIDA"
@@ -484,7 +484,7 @@ jobs:
             local arq="$1"; shift
             local t=$(date +%s) rc=0
             echo "::group::medição $arq"
-            (cd prototypes/s04/fluxo_a && "$@") || rc=$?
+            (cd tools/s04/fluxo_a && "$@") || rc=$?
             echo "::endgroup::"
             if [ $rc -eq 0 ] && [ -s "$SAIDA/$arq" ]; then
               echo "JSON_COMPACTO $arq $(python -c "$COMPACTO" "$SAIDA/$arq")"
@@ -528,7 +528,7 @@ jobs:
       - uses: ./.github/actions/ambiente-windows
       - name: Módulo obimcore (só o build, para os testes deste job; a ponte é testada no job windows-viewport-a)
         shell: bash -elo pipefail {0}
-        run: CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04
+        run: CLEAN=1 bash native/obimcore/build.sh out/s04
       - name: Viewport C++ (parte B, dividida em 3 grupos (T23d); S04-T06/T07; bloqueia o merge)
         shell: bash -elo pipefail {0}
         timeout-minutes: 30
@@ -571,10 +571,10 @@ jobs:
       - uses: ./.github/actions/ambiente-windows
       - name: Módulo obimcore (só o build, para os testes deste job; a ponte é testada no job windows-viewport-a)
         shell: bash -elo pipefail {0}
-        run: CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04
+        run: CLEAN=1 bash native/obimcore/build.sh out/s04
       - name: Fluxo B, build (T23d, as duas partes precisam do executável e da biblioteca)
         shell: bash -elo pipefail {0}
-        run: bash prototypes/s04/fluxo_b/build.sh out/s04
+        run: bash tools/s04/fluxo_b/build.sh out/s04
       - name: Fluxo B, paredes em C++ (S04-T13; bloqueia o merge; só na parte 1)
         if: matrix.parte == 1
         shell: bash -elo pipefail {0}
@@ -651,7 +651,7 @@ jobs:
           r=true; motivo="evento $EVENTO"
           if [ "$EVENTO" = "pull_request" ]; then
             if git fetch --no-tags --depth=1 origin "$BASE" 2>/dev/null && lista=$(git diff --name-only FETCH_HEAD HEAD); then
-              if grep -qE '^(packaging/|app/|prototypes/s04/obimcore/|tests/|environment[^/]*\.yml$|environment\.[^/]*\.lock$|pyproject[^/]*$|\.github/(workflows/ci\.yml|actions/)|scripts/(prune_packages|license_inventory|collect_package_licenses)\.py$|LICENSES/)' <<<"$lista"; then motivo="o PR mexe no empacotamento"; else r=false; motivo="o PR não mexe no empacotamento"; fi
+              if grep -qE '^(packaging/|app/|native/obimcore/|tests/|environment[^/]*\.yml$|environment\.[^/]*\.lock$|pyproject[^/]*$|\.github/(workflows/ci\.yml|actions/)|scripts/(prune_packages|license_inventory|collect_package_licenses)\.py$|LICENSES/)' <<<"$lista"; then motivo="o PR mexe no empacotamento"; else r=false; motivo="o PR não mexe no empacotamento"; fi
             else motivo="não consegui comparar com a base"; fi
           fi
           echo "instalador=$r" >> "$GITHUB_OUTPUT"

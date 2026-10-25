@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Testes do fluxo A (regras 1 a 8, medições e etapa 3; contrato em prototypes/s04/fluxo_a/CONTRATO.md).
-GUARDA: pula enquanto `prototypes/s04/fluxo_a/fluxo_a.py` não existir; FALHA com OBIM_S04_T11_OBRIGATORIO=1, OBIM_S04_T11B_OBRIGATORIO=1 ou OBIM_S04_T11C_OBRIGATORIO=1 (todo skip vira falha; só o caso da localidade no Windows segue sendo pulado, não se aplica lá). Casos sem janela rodam no processo;
+"""Testes do fluxo A (regras 1 a 8, medições e etapa 3; contrato em tools/s04/fluxo_a/CONTRATO.md).
+GUARDA: pula enquanto `tools/s04/fluxo_a/fluxo_a.py` não existir; FALHA com OBIM_S04_T11_OBRIGATORIO=1, OBIM_S04_T11B_OBRIGATORIO=1 ou OBIM_S04_T11C_OBRIGATORIO=1 (todo skip vira falha; só o caso da localidade no Windows segue sendo pulado, não se aplica lá). Casos sem janela rodam no processo;
 os gráficos rodam em SUBPROCESSO sob `xvfb-run` (nunca na tela real; Windows só no CI ou com OBIM_S04_TELA_VIRTUAL=1) e o roteiro R inteiro roda UMA vez.
 Premissas do teste: parede = prisma retangular = 12 triângulos; a base é `scripts/gerar_modelo_grande.py` com OBIM_S04_BASE paredes
 (padrão 300; oficial 3000); régua do CI virtual = mediana < limite e nenhum valor >= max(3 x limite, 250 ms) (M2, M2b, M3), M4 < 20 s, M5 pela régua do lote 11
@@ -52,7 +52,7 @@ def pular(msg):
 @pytest.fixture(scope="module")
 def fa():
     if not (PASTA / "fluxo_a.py").is_file():
-        pular("prototypes/s04/fluxo_a/fluxo_a.py ausente")
+        pular("tools/s04/fluxo_a/fluxo_a.py ausente")
     import fluxo_a
     return fluxo_a
 

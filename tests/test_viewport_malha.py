@@ -17,7 +17,7 @@ from PySide6.QtWidgets import QApplication
 
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(RAIZ / "prototypes"))
+sys.path.insert(0, str(RAIZ / "viewport"))
 
 from test_viewport_carregador import CarregadorMalhas, _carregar, m600  # noqa: E402,F401
 from viewport_qrhi.cubo_rhi import CuboViewport  # noqa: E402

@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "prototypes"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "viewport"))
 
 import _queda_alvos  # noqa: E402
 from test_viewport_processo import _tempo_carga, mapeadas1  # noqa: E402,F401

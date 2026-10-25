@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+version = 1
+
+# Copyright e licença padrão para todos os arquivos (os de código também têm cabeçalho SPDX próprio).
+[[annotations]]
+path = "**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 OpenBIM Studio contributors"
+SPDX-License-Identifier = "AGPL-3.0-or-later"

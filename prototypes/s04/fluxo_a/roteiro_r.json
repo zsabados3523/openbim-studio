@@ -1,0 +1,20 @@
+{
+  "versao": 1,
+  "descricao": "Roteiro R do LOTE_OPUS_9 §1.1 (igual para os fluxos A e B). 'n' = repeticoes (uma transacao cada); 'quantidade' = tamanho do lote.",
+  "passos": [
+    {"id": "1", "cmd": "abrir"},
+    {"id": "2", "cmd": "criar_tipo", "nome": "PAR15", "camadas_m": [0.02, 0.11, 0.02]},
+    {"id": "3", "cmd": "criar_parede", "n": 200, "tipo": "PAR15", "comprimento": 4.0, "altura": 2.8, "espessura": 0.15},
+    {"id": "3b", "cmd": "enquadrar"},
+    {"id": "3c", "cmd": "selecionar", "x": "centro", "y": "centro"},
+    {"id": "4a", "cmd": "editar_propriedades", "n": 200, "alvo": {"passo": "3"}, "nome": "Parede R-{r}", "propriedades": {"Pset_WallCommon.FireRating": "R60"}},
+    {"id": "4b", "cmd": "mudar_comprimento", "n": 200, "alvo": {"passo": "3"}, "comprimento": 5.0},
+    {"id": "4c", "cmd": "esperar", "ms": 3000},
+    {"id": "5a", "cmd": "animar_orbita", "graus_por_s": 30},
+    {"id": "5b", "cmd": "criar_paredes_lote", "quantidade": 1000, "tipo": "PAR15", "comprimento": 4.0, "altura": 2.8, "espessura": 0.15},
+    {"id": "5c", "cmd": "parar_animacao"},
+    {"id": "6a", "cmd": "desfazer"},
+    {"id": "6b", "cmd": "refazer"},
+    {"id": "7", "cmd": "gravar", "arquivo": "R_saida.ifc"}
+  ]
+}

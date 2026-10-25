@@ -1,0 +1,61 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: Ambiente openbim no Linux
+description: Cache de pacotes, conda-forge, ambiente openbim pela trava, registro da trava e localidade pt_BR (T23L; mesmos passos que o job linux tinha).
+runs:
+  using: composite
+  steps:
+    - name: Cache de pacotes do conda
+      id: cache_conda
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/conda_pkgs
+        key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'environment.*.lock', 'packaging/runtime-environment.yml', 'packaging/runtime-environment.*.lock') }}
+    - name: Pasta de pacotes do conda
+      shell: bash
+      run: |
+        echo "CONDA_PKGS_DIRS=$RUNNER_TEMP/conda_pkgs" >> "$GITHUB_ENV"
+        echo "::notice title=cache de pacotes::cache-hit=${{ steps.cache_conda.outputs.cache-hit }}"
+    - uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
+      with:
+        activate-environment: openbim
+        channels: conda-forge
+        conda-remove-defaults: "true"
+        channel-priority: strict
+        miniforge-version: latest
+    - name: Criar o ambiente (pela trava environment.linux-64.lock, se existir)
+      shell: bash -elo pipefail {0}
+      run: |
+        PLAT=linux-64
+        LOCK="environment.${PLAT}.lock"
+        if [ -f "$LOCK" ]; then
+          envs=$(conda env list); if grep -qE '^openbim[[:space:]]' <<<"$envs"; then conda install -n openbim -y -q --file "$LOCK"; else conda create -n openbim -y -q --file "$LOCK"; fi
+          echo "::notice title=ambiente::criado pela trava $LOCK"
+        else
+          conda env update -n openbim -f environment.yml -q
+          echo "::notice title=ambiente::sem trava para ${PLAT}; criado pelo environment.yml"
+        fi
+    - name: Trava do ambiente (informativo; o líder traz o arquivo ao repositório)
+      shell: bash -elo pipefail {0}
+      continue-on-error: true
+      run: |
+        PLAT=linux-64
+        mkdir -p out
+        conda list -n openbim --explicit --md5 > "out/environment.${PLAT}.lock"
+        if [ -f "environment.${PLAT}.lock" ]; then
+          if diff <(grep -v '^#' "environment.${PLAT}.lock" | tr -d '\r') <(grep -v '^#' "out/environment.${PLAT}.lock" | tr -d '\r') >/dev/null; then r="igual à do repositório"; else r="DIFERENTE da do repositório (atualizar)"; fi
+        else r="ainda não existe no repositório (trazer o artefato)"; fi
+        echo "::notice title=trava ${PLAT}::${r}"
+        echo "Trava do ambiente (${PLAT}): ${r}" >> "$GITHUB_STEP_SUMMARY"
+    - name: Localidade pt_BR na máquina descartável (T26; bloqueia o merge)
+      shell: bash
+      run: |
+        # RG-03: sem a localidade os testes da T26 pulariam sem avisar; agora o passo falha e a chave liga o "pulo vira falha".
+        sudo locale-gen pt_BR.UTF-8 >/dev/null 2>&1 || true
+        sudo update-locale >/dev/null 2>&1 || true
+        locais=$(locale -a); if grep -qi '^pt_BR\.utf-\?8$' <<<"$locais"; then
+          echo "OBIM_LOCALIDADE_OBRIGATORIA=1" >> "$GITHUB_ENV"
+          echo "::notice title=localidade pt_BR::criada"
+        else
+          echo "::error title=localidade pt_BR::não foi criada; os testes da T26 e do fluxo B não podem rodar"
+          exit 1
+        fi

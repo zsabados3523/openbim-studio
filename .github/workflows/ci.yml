@@ -1,0 +1,1003 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Uma nova alteração cancela a execução anterior do mesmo ramo (evita execuções penduradas).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Os nomes dos jobs linux, windows, appimage e instalador-windows são usados na regra de bloqueio de merge (proteger-main). Não renomear.
+  # (macos não bloqueia.)
+  # T23L: o job que se chamava `linux` virou as partes `linux-*`; o `linux` no fim só junta o resultado (nome da regra de bloqueio de merge).
+  # Os testes de cada parte são os mesmos de antes (mesmos comandos e variáveis); o tempo de cada arquivo foi medido com --durations=0.
+  # O módulo obimcore sai do `linux-obimcore` (que entrega ao `appimage`); as partes de teste que usam o módulo o compilam de novo (cerca de 25 s).
+  linux-obimcore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Início (relógio)
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/ambiente-linux
+      - name: Módulo obimcore (S04-T03; compila com a ponte e roda o oráculo R1-a a R1-i; bloqueia o merge)
+        shell: bash -elo pipefail {0}
+        run: |
+          # Ambiente criado pela trava (T01); nada é instalado aqui. Build limpo e depois incremental, com os tempos no resumo.
+          set +e
+          exec > >(tee "$RUNNER_TEMP/obimcore.log") 2>&1
+          trap 'rc=$?; if [ $rc -ne 0 ]; then msg=$(tail -n 40 "$RUNNER_TEMP/obimcore.log" | sed ":a;N;\$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g"); echo "::error title=obimcore falhou::$msg"; fi' EXIT
+          set -e
+          CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04 | tee "$RUNNER_TEMP/b1.txt"
+          touch prototypes/s04/obimcore/ponte.cpp
+          bash prototypes/s04/obimcore/build.sh out/s04 | tee "$RUNNER_TEMP/b2.txt"
+          echo "obimcore ${RUNNER_OS}: limpo $(grep OBIMCORE "$RUNNER_TEMP/b1.txt") | incremental $(grep OBIMCORE "$RUNNER_TEMP/b2.txt")" >> "$GITHUB_STEP_SUMMARY"
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          export OBIM_CI=1  # liga todas as chaves de obrigatório (pulo vira falha; tests/conftest.py) (T04c entregou versao()["registro_ifc4"])
+          QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_ponte.py
+          OBIM_S04_P1_OBRIGATORIO=1 QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_p1_trava_oraculo.py tests/test_s04_p1_obimcore_oraculo.py
+      - name: Entregar o módulo obimcore e o pytest ao job appimage (T17a; usa a ação de cache que já está fixada)
+        shell: bash -elo pipefail {0}
+        run: |
+          # O pytest é só Python puro: vai ao passo de teste do pacote, nunca para dentro dele. Cópia, para não depender do ambiente deste job.
+          site="$(python -c 'import _pytest, os; print(os.path.dirname(os.path.dirname(_pytest.__file__)))')"
+          mkdir -p "$RUNNER_TEMP/pytest_site" "$RUNNER_TEMP/obimcore_pacote"
+          for n in pytest _pytest pluggy iniconfig pygments py.py; do [ -e "$site/$n" ] && cp -a "$site/$n" "$RUNNER_TEMP/pytest_site/"; done
+          # Só os dois arquivos do módulo, como estão AGORA (o cache grava no fim do job, depois dos passos que vêm a seguir), e com o RPATH conferido.
+          cp out/s04/obimcore/__init__.py out/s04/obimcore/_obimcore*.so "$RUNNER_TEMP/obimcore_pacote/"
+          rp="$(LC_ALL=C readelf -d "$RUNNER_TEMP"/obimcore_pacote/_obimcore*.so | sed -n 's/.*\(RPATH\|RUNPATH\)[^[]*\[\(.*\)\]/\2/p')"
+          [ "$rp" = '$ORIGIN/../../env/lib' ] || { echo "::error title=RPATH do obimcore::esperava só \$ORIGIN/../../env/lib e achei '$rp'"; exit 1; }
+          ls "$RUNNER_TEMP/obimcore_pacote" "$RUNNER_TEMP/pytest_site"
+      - name: Guardar obimcore e pytest para o job appimage (a gravação acontece no fim do job, se tudo passar)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ runner.temp }}/obimcore_pacote
+            ${{ runner.temp }}/pytest_site
+          key: obimcore-${{ github.run_id }}
+          lookup-only: true
+      - name: Tempo total
+        if: always()
+        run: |
+          echo "### linux-obimcore: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
+
+  linux-testes:
+    name: linux-testes (${{ matrix.parte }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # Parte 1 = todo o resto (arquivo de teste novo cai nela sozinho); 2 = os mais lentos sem o módulo; 3 a 7 = os que usam o módulo.
+        parte: [1, 2, 3, 4, 5, 6, 7]
+        include:
+          - {parte: 1, modulo: false}
+          - {parte: 2, modulo: false}
+          - {parte: 3, modulo: true}
+          - {parte: 4, modulo: true}
+          - {parte: 5, modulo: true}
+          - {parte: 6, modulo: true}
+          - {parte: 7, modulo: true}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Início (relógio)
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/ambiente-linux
+      - name: Testes (partes 1 e 2; sem o módulo obimcore, e os testes que precisam dele pulam, como antes)
+        if: matrix.parte == 1 || matrix.parte == 2
+        shell: bash -elo pipefail {0}
+        run: |
+          # Em caso de falha, as últimas linhas viram anotação pública (o log completo exige login no GitHub).
+          set +e
+          if [ "${{ matrix.parte }}" = 1 ]; then
+            ALVO="tests --ignore=tests/test_s04_metas.py --ignore=tests/test_s04_t29b_reinicio_oraculo.py --ignore=tests/test_s04_abertura.py"
+          else
+            ALVO="tests/test_s04_metas.py tests/test_s04_t29b_reinicio_oraculo.py tests/test_s04_abertura.py"
+          fi
+          OBIM_S05_OBRIGATORIO=1 QT_QPA_PLATFORM=offscreen pytest -q -rs $ALVO > pytest.log 2>&1  # S05: pulo vira falha (só guarda)
+          rc=$?
+          cat pytest.log
+          if [ $rc -ne 0 ]; then
+            msg=$(tail -n 40 pytest.log | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=pytest falhou::$msg"
+          fi
+          exit $rc
+      - name: Testes de tela da S03 e desenho do cubo (tela virtual e Mesa por software; bloqueia o merge) (só na parte 1)
+        if: matrix.parte == 1
+        shell: bash -elo pipefail {0}
+        timeout-minutes: 20
+        run: |
+          # RG-03: estes testes pulavam sem tela (offscreen). Aqui rodam com Xvfb e Mesa (llvmpipe), e pulo vira falha (OBIM_TELA_OBRIGATORIA=1).
+          mkdir -p out/desenho
+          # Xvfb e Mesa vêm do próprio runner Ubuntu; se faltar, instala só no runner.
+          command -v xvfb-run >/dev/null || sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0
+          OBIM_TELA_OBRIGATORIA=1 OBIM_EXIGIR_DESENHO=1 OBIM_PNG_SAIDA=out/desenho LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe \
+            QT_QPA_PLATFORM=xcb xvfb-run -a -s "-screen 0 1280x1024x24" \
+            pytest -q -rs tests/test_viewport_qrhi.py tests/test_viewport_camera.py tests/test_viewport_malha.py tests/test_viewport_adaptador.py tests/test_viewport_responsivo.py tests/test_viewport_selecao.py
+          test -f out/desenho/cubo.png
+      - name: Autoteste do oráculo do instalador Windows (T17b; só bash e Python, sem Windows; bloqueia o merge) (só na parte 1)
+        if: matrix.parte == 1
+        shell: bash -elo pipefail {0}
+        run: |
+          out="$(bash packaging/windows/test_instalador_ponte.sh --autoteste)"
+          echo "$out"
+          [ "$(echo "$out" | tail -n 1)" = ok ] || { echo "::error title=autoteste do oráculo do instalador::a última linha não é 'ok'"; exit 1; }
+      - name: REUSE (ferramenta só no CI, ambiente separado) (só na parte 1)
+        if: matrix.parte == 1
+        shell: bash -elo pipefail {0}
+        run: |
+          conda create -n reuse -c conda-forge --override-channels reuse=6.2.0 -y
+          conda run -n reuse reuse lint
+      - name: Módulo obimcore (só compila; o oráculo R1 roda no linux-obimcore)
+        if: matrix.modulo
+        shell: bash -elo pipefail {0}
+        run: bash prototypes/s04/obimcore/build.sh out/s04
+      - name: Viewport C++, parte 3 (S04-T06/T07; bloqueia o merge)
+        if: matrix.parte == 3
+        shell: bash -elo pipefail {0}
+        timeout-minutes: 30
+        run: |
+          # O oráculo abre a tela virtual sozinho em subprocesso (xvfb-run no Linux). Nada na tela real.
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          OBIM_CI=1 pytest -q -rsP tests/test_s04_viewport.py tests/test_s04_metas.py
+      - name: Viewport C++, parte 4 (S04-T06/T07; bloqueia o merge)
+        if: matrix.parte == 4
+        shell: bash -elo pipefail {0}
+        timeout-minutes: 30
+        run: |
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          OBIM_CI=1 pytest -q -rsP tests/test_s04_viewport_b.py tests/test_s04_cena.py tests/test_s04_selecao.py tests/test_s04_profundidade.py tests/test_s04_fluxo_a.py tests/test_s04_fluxo_a_camera_selecao.py
+      - name: Viewport C++, parte 7 (S04-T06/T07; bloqueia o merge)
+        if: matrix.parte == 7
+        shell: bash -elo pipefail {0}
+        timeout-minutes: 30
+        run: |
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          OBIM_CI=1 pytest -q -rsP tests/test_s04_selecao_c.py tests/test_s04_abertura.py
+      - name: Viewport C++, parte 5 (T15, V1 e desenho por software; bloqueia o merge)
+        if: matrix.parte == 5
+        shell: bash -elo pipefail {0}
+        timeout-minutes: 30
+        run: |
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15a_threads_fluxo_a.py
+          OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15b_formas.py
+          OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15c_conferencias.py
+          OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15d_parede_pesada.py
+          OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15e_painel_ausente.py
+          OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t15g_postador.py
+          OBIM_CI=1 OBIM_S04_V1_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_v1_mista_oraculo.py tests/test_s04_v1_veredito_oraculo.py
+          OBIM_CI=1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe pytest -q -rsP tests/test_s04_viewport_software.py  # aviso de desenho por software (F0-RG-13)
+      - name: Fluxo B e sublotes (T13, T14c, V1c e T07e; bloqueia o merge) (só na parte 6)
+        if: matrix.parte == 6
+        shell: bash -elo pipefail {0}
+        timeout-minutes: 40
+        run: |
+          # Sem janela: compara o IFC da biblioteca C++ com o do fluxo A (T13); o executável com janela (T14c) roda em tela virtual.
+          bash prototypes/s04/fluxo_b/build.sh out/s04
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          OBIM_CI=1 pytest -q -rsP tests/test_s04_fluxo_b_paredes.py
+          OBIM_CI=1 OBIM_S04_T14_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_fluxo_b_janela.py
+          OBIM_CI=1 OBIM_S04_V1C_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_v1c_sublotes_oraculo.py
+          OBIM_CI=1 OBIM_S04_T07E_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t07e_parar_oraculo.py
+      - name: Tempo total
+        if: always()
+        run: |
+          echo "### linux-testes (${{ matrix.parte }}): tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
+
+  # Passos que só informam (nunca bloqueiam): ficam fora do needs do `linux`, como o windows-medicoes.
+  linux-informativo:
+    needs: [linux-obimcore, linux-testes]  # só começa depois: não ocupa vaga de máquina (limite de trabalhos ao mesmo tempo) enquanto os obrigatórios esperam
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - name: Início (relógio)
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/ambiente-linux
+      - name: Inventário de licenças e canal
+        shell: bash -elo pipefail {0}
+        run: |
+          mkdir -p out
+          python scripts/license_inventory.py out/license-inventory.md --informativo
+      - name: Sonda da thread de desenho (S04-T05; informativo, não bloqueia)
+        shell: bash -elo pipefail {0}
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          # Desenho por software (Linux: tela virtual + Mesa). Nenhuma janela na tela real.
+          mkdir -p out/s04_sonda
+          B="$(python -c 'import os; print(os.path.abspath("out/s04_sonda/build"))')"; O="$(python -c 'import os; print(os.path.abspath("out/s04_sonda"))')"
+          cmake -S prototypes/s04/sonda_desenho -B "$B" -G Ninja -DCMAKE_BUILD_TYPE=Release -DOBIM_SAIDA="$O" -DCMAKE_PREFIX_PATH="$CONDA_PREFIX"
+          cmake --build "$B" --config Release
+          QT_QPA_PLATFORM=xcb LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x800x24" python prototypes/s04/sonda_desenho/sonda.py "$O" out/s04_sonda/sonda.json; rc=$?
+          cat out/s04_sonda/sonda.json || true
+          echo "::notice title=sonda da thread de desenho no ${RUNNER_OS}::$(python -c "import json; r=json.load(open('out/s04_sonda/sonda.json')); print('rc=$rc meta_atingida=%s' % r.get('meta_atingida'), {k:v.get('maior_intervalo_ms') for k,v in r['fases'].items() if isinstance(v,dict)})" || echo sem resultado)"
+          echo "Sonda da thread de desenho (${RUNNER_OS}): código $rc, relatório em out/s04_sonda/sonda.json" >> "$GITHUB_STEP_SUMMARY"
+          true
+      - name: Gravação do roteiro (experimento T12; não bloqueia)
+        shell: bash -elo pipefail {0}
+        continue-on-error: true
+        run: |
+          mkdir -p out/video
+          if QT_QPA_PLATFORM=offscreen python tests/video/gravar_roteiro.py out/video docs/acceptance/amostras/casa-simples.ifc; then r=gravou; else r="FALHOU (experimento, não bloqueia)"; fi
+          echo "Gravação do roteiro (${RUNNER_OS}): ${r}" >> "$GITHUB_STEP_SUMMARY"
+      - name: Pacote do app esqueleto
+        run: tar czf out/app.tar.gz app/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: openbim-ci-linux
+          path: out/
+          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
+      - name: Tempo total
+        if: always()
+        run: |
+          echo "### linux-informativo: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
+
+  # Mantém o nome `linux` (regra de bloqueio de merge): passa só se TODOS os jobs paralelos acima que bloqueiam passarem.
+  linux:
+    if: always()
+    needs: [linux-obimcore, linux-testes]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Todos os jobs do Linux passaram
+        env:
+          RESULTADOS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "resultados: $RESULTADOS"
+          for r in $RESULTADOS; do [ "$r" = success ] || { echo "::error title=linux::algum job do Linux não passou ($RESULTADOS)"; exit 1; }; done
+
+  # Windows em jobs paralelos (T25). O job `windows` no fim só junta o resultado: o nome é o usado na regra de bloqueio de merge.
+  windows-testes:
+    name: windows-testes (${{ matrix.parte }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # T23d: parte 2 e 3 = os arquivos mais lentos (tempo medido); parte 1 = todo o resto. Arquivo de teste novo cai na parte 1 sozinho.
+          - {parte: 1, alvo: "tests --ignore=tests/test_s04_metas.py --ignore=tests/test_s04_t29b_reinicio_oraculo.py --ignore=tests/test_s04_abertura.py --ignore=tests/test_s04_t15g_postador.py --ignore=tests/test_viewport_processo.py"}
+          - {parte: 2, alvo: "tests/test_s04_metas.py tests/test_s04_t29b_reinicio_oraculo.py"}
+          - {parte: 3, alvo: "tests/test_s04_abertura.py tests/test_s04_t15g_postador.py tests/test_viewport_processo.py"}
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Início (relógio)
+        shell: bash
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/ambiente-windows
+      - name: Testes
+        shell: bash -elo pipefail {0}
+        run: |
+          # Em caso de falha, as últimas linhas viram anotação pública (o log completo exige login no GitHub).
+          set +e
+          OBIM_S05_OBRIGATORIO=1 QT_QPA_PLATFORM=offscreen pytest -q -rs ${{ matrix.alvo }} > pytest.log 2>&1  # S05: pulo vira falha (só guarda)
+          rc=$?
+          cat pytest.log
+          if [ $rc -ne 0 ]; then
+            msg=$(tail -n 40 pytest.log | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=pytest falhou::$msg"
+          fi
+          exit $rc
+      - name: Desenho do cubo com WARP do Direct3D 11 (T25; informativo, não bloqueia) (só na parte 1)
+        if: matrix.parte == 1
+        shell: bash -elo pipefail {0}
+        continue-on-error: true
+        run: |
+          mkdir -p out/desenho
+          set +e
+          # Tentativa 1: pede o rasterizador por software (WARP); tentativa 2: adaptador padrão do runner.
+          for modo in warp padrao; do
+            if [ "$modo" = warp ]; then export QSG_RHI_PREFER_SOFTWARE_RENDERER=1; else unset QSG_RHI_PREFER_SOFTWARE_RENDERER; fi
+            OBIM_EXIGIR_DESENHO=1 OBIM_PNG_SAIDA=out/desenho QT_QPA_PLATFORM=windows QSG_RHI_BACKEND=d3d11 \
+              pytest -q -s -rs tests/test_viewport_qrhi.py > "out/desenho/pytest-desenho-$modo.log" 2>&1
+            rc=$?
+            cat "out/desenho/pytest-desenho-$modo.log"
+            if [ $rc -eq 0 ] && [ -f out/desenho/cubo.png ]; then r="DESENHA no modo $modo ($(grep 'RHI backend' "out/desenho/pytest-desenho-$modo.log" | head -n 1))"; break; fi
+            r="NÃO DESENHA (código $rc, último modo $modo): $(tail -n 3 "out/desenho/pytest-desenho-$modo.log" | tr '\n' ' ' | cut -c1-300)"
+          done
+          echo "::notice title=desenho do cubo no Windows::${r}"
+          echo "Desenho do cubo (Windows): ${r}" >> "$GITHUB_STEP_SUMMARY"
+          # T27: reabertura da janela 3D (P17) no Windows, no mesmo modo gráfico em que o laço acima parou. Informativo: o resultado vai ao aviso e ao resumo, nunca bloqueia.
+          OBIM_TELA_OBRIGATORIA=1 QT_QPA_PLATFORM=windows QSG_RHI_BACKEND=d3d11 \
+            pytest -q -s -rs tests/test_viewport_adaptador.py > out/desenho/pytest-reabertura.log 2>&1
+          rc=$?
+          cat out/desenho/pytest-reabertura.log
+          if [ $rc -eq 0 ]; then r2="PASSOU no modo $modo"; else r2="FALHOU (código $rc, modo $modo): $(tail -n 3 out/desenho/pytest-reabertura.log | tr '\n' ' ' | cut -c1-300)"; fi
+          echo "::notice title=reabertura da janela 3D no Windows::${r2}"
+          echo "Reabertura da janela 3D, P17 (Windows): ${r2}" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+      - name: Inventário de licenças e canal (só na parte 1)
+        if: matrix.parte == 1
+        shell: bash -elo pipefail {0}
+        run: |
+          mkdir -p out
+          python scripts/license_inventory.py out/license-inventory.md --informativo
+      - name: Gravação do roteiro (experimento T12; não bloqueia) (só na parte 1)
+        if: matrix.parte == 1
+        shell: bash -elo pipefail {0}
+        continue-on-error: true
+        run: |
+          mkdir -p out/video
+          if QT_QPA_PLATFORM=offscreen python tests/video/gravar_roteiro.py out/video docs/acceptance/amostras/casa-simples.ifc; then r=gravou; else r="FALHOU (experimento, não bloqueia)"; fi
+          echo "Gravação do roteiro (${RUNNER_OS}): ${r}" >> "$GITHUB_STEP_SUMMARY"
+      - name: Pacote do que o job gerou
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p out
+          tar czf out/app.tar.gz app/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: openbim-ci-windows-testes-${{ matrix.parte }}
+          path: out/
+          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
+      - name: Tempo total
+        if: always()
+        shell: bash
+        run: |
+          echo "### windows-testes: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
+
+  # T23b: o módulo obimcore do Windows (build limpo + incremental + entrega ao instalador) em trabalho próprio, para o instalador-windows
+  # não esperar o windows-viewport-a inteiro. Bloqueia o merge (está no needs de `windows`); a chave do cache e os arquivos são os mesmos de antes.
+  windows-obimcore:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Início (relógio)
+        shell: bash
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/ambiente-windows
+      - name: Módulo obimcore (build limpo, touch ponte.cpp, build incremental; bloqueia o merge; os 21 testes da ponte rodam no windows-viewport-a)
+        shell: bash -elo pipefail {0}
+        run: |
+          # Ambiente criado pela trava (T01); nada é instalado aqui. Build limpo e depois incremental, com os tempos no resumo.
+          set +e
+          exec > >(tee "$RUNNER_TEMP/obimcore.log") 2>&1
+          trap 'rc=$?; if [ $rc -ne 0 ]; then msg=$(tail -n 40 "$RUNNER_TEMP/obimcore.log" | sed ":a;N;\$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g"); echo "::error title=obimcore falhou::$msg"; fi' EXIT
+          set -e
+          CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04 | tee "$RUNNER_TEMP/b1.txt"
+          touch prototypes/s04/obimcore/ponte.cpp
+          bash prototypes/s04/obimcore/build.sh out/s04 | tee "$RUNNER_TEMP/b2.txt"
+          echo "obimcore ${RUNNER_OS}: limpo $(grep OBIMCORE "$RUNNER_TEMP/b1.txt") | incremental $(grep OBIMCORE "$RUNNER_TEMP/b2.txt")" >> "$GITHUB_STEP_SUMMARY"
+      - name: Entregar o módulo obimcore e o pytest ao job instalador-windows (T17b; usa a ação de cache que já está fixada)
+        shell: bash -elo pipefail {0}
+        run: |
+          # O pytest é só Python puro: vai ao passo de teste do pacote, nunca para dentro dele. Cópia, para não depender do ambiente deste job.
+          site="$(cygpath -u "$(python -c 'import _pytest, os; print(os.path.dirname(os.path.dirname(_pytest.__file__)))')")"
+          mkdir -p "$RUNNER_TEMP/pytest_site" "$RUNNER_TEMP/obimcore_pacote"
+          for n in pytest _pytest pluggy iniconfig pygments packaging colorama py.py; do [ -e "$site/$n" ] && cp -a "$site/$n" "$RUNNER_TEMP/pytest_site/"; done
+          # Só o __init__.py e o .pyd, como estão AGORA (o cache grava no fim do job, depois dos passos que vêm a seguir); exatamente um .pyd.
+          cp out/s04/obimcore/__init__.py out/s04/obimcore/_obimcore*.pyd "$RUNNER_TEMP/obimcore_pacote/"
+          n=$(ls "$RUNNER_TEMP"/obimcore_pacote/_obimcore*.pyd | wc -l)
+          [ "$n" = 1 ] || { echo "::error title=obimcore::esperava 1 _obimcore*.pyd e achei $n"; exit 1; }
+          ls -l "$RUNNER_TEMP/obimcore_pacote" "$RUNNER_TEMP/pytest_site"
+      - name: Guardar obimcore e pytest para o job instalador-windows (a gravação acontece no fim do job, se tudo passar)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ runner.temp }}/obimcore_pacote
+            ${{ runner.temp }}/pytest_site
+          key: obimcore-win-${{ github.run_id }}
+          lookup-only: true
+      - name: Tempo total
+        if: always()
+        shell: bash
+        run: |
+          echo "### windows-obimcore: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
+
+  windows-viewport-a:
+    name: windows-viewport-a (${{ matrix.parte }})
+    strategy:
+      fail-fast: false
+      matrix:
+        parte: [1, 2, 3]
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Início (relógio)
+        shell: bash
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/ambiente-windows
+      - name: Módulo obimcore (só o build limpo, para os testes deste job; o incremental e a entrega ao instalador estão no job windows-obimcore)
+        shell: bash -elo pipefail {0}
+        run: CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04
+      - name: Testes da ponte (S04-T03; oráculo R1-a a R1-i; bloqueia o merge; só na parte 1)
+        if: matrix.parte == 1
+        shell: bash -elo pipefail {0}
+        run: |
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          export OBIM_CI=1  # liga todas as chaves de obrigatório (pulo vira falha; tests/conftest.py) (T04c entregou versao()["registro_ifc4"])
+          QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_ponte.py
+          OBIM_S04_P1_OBRIGATORIO=1 QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_p1_trava_oraculo.py tests/test_s04_p1_obimcore_oraculo.py
+      - name: Viewport C++ (parte A, dividida em 3 grupos (T23d); S04-T06/T07; bloqueia o merge)
+        shell: bash -elo pipefail {0}
+        timeout-minutes: 30
+        env:
+          PARTE: ${{ matrix.parte }}
+        run: |
+          # O oráculo abre a tela virtual sozinho em subprocesso (xvfb-run no Linux; no Windows, WARP). Nada na tela real.
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          export OBIM_S04_TELA_VIRTUAL=1 QSG_RHI_BACKEND=d3d11 QSG_RHI_PREFER_SOFTWARE_RENDERER=1  # WARP, como no passo do cubo
+          T15="OBIM_CI=1 OBIM_S04_T15_OBRIGATORIO=1"
+          case "$PARTE" in
+            1)
+              OBIM_CI=1 pytest -q -rsP --durations=10 tests/test_s04_viewport_b.py
+              env $T15 pytest -q -rsP tests/test_s04_t15a_threads_fluxo_a.py ;;
+            2)
+              OBIM_CI=1 pytest -q -rsP --durations=10 tests/test_s04_fluxo_a.py tests/test_s04_fluxo_a_camera_selecao.py tests/test_s04_profundidade.py
+              env $T15 pytest -q -rsP tests/test_s04_t15b_formas.py
+              env $T15 pytest -q -rsP tests/test_s04_t15d_parede_pesada.py
+              env $T15 pytest -q -rsP tests/test_s04_t15e_painel_ausente.py ;;
+            3)
+              env $T15 pytest -q -rsP tests/test_s04_t15c_conferencias.py
+              env $T15 pytest -q -rsP tests/test_s04_t15g_postador.py
+              OBIM_CI=1 OBIM_S04_V1_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_v1_mista_oraculo.py tests/test_s04_v1_veredito_oraculo.py
+              OBIM_CI=1 OBIM_S04_V1C_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_v1c_sublotes_oraculo.py
+              OBIM_CI=1 OBIM_S04_T07E_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_t07e_parar_oraculo.py ;;
+          esac
+      - name: Pacote do que o job gerou
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p out
+          tar czf out/app.tar.gz app/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: openbim-ci-windows-viewport-a-${{ matrix.parte }}
+          path: out/
+          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
+      - name: Tempo total
+        if: always()
+        shell: bash
+        run: |
+          echo "### windows-viewport-a: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
+
+  # Informativo (T23a): as medições das threads saíram do windows-viewport-a para não alongar a fila. Fora do `needs` do `windows`; não bloqueia o merge.
+  windows-medicoes:
+    needs: windows  # T23c: informativo; começa depois da fila crítica para não tomar vaga de máquina dela
+    if: ${{ !cancelled() }}
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Início (relógio)
+        shell: bash
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/ambiente-windows
+      - name: Módulo obimcore (só o build, para as medições; a ponte é testada no job windows-viewport-a)
+        shell: bash -elo pipefail {0}
+        run: CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04
+      - name: Medições das threads, números do Windows (S04-T15h; informativo, não bloqueia)
+        shell: bash -elo pipefail {0}
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          # Só mede e guarda os números (relatório docs/state/reports/F0-S04-threads.md). Desenho por software (WARP): NÃO substitui o oficial com placa de vídeo real.
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          export OBIM_S04_TELA_VIRTUAL=1 QSG_RHI_BACKEND=d3d11 QSG_RHI_PREFER_SOFTWARE_RENDERER=1 QT_QPA_PLATFORM=windows RHI=d3d11 LC_ALL=C  # as do passo anterior e as do subprocesso dos testes
+          SAIDA="$(python -c 'import os; print(os.path.abspath("out/threads-ci"))')"
+          mkdir -p "$SAIDA"
+          COMPACTO='import json,sys; print(json.dumps(json.load(open(sys.argv[1], encoding="utf-8")), separators=(",", ":")))'
+          CAIRAM=""
+          medir() {  # medir ARQUIVO.json comando...: roda na pasta do fluxo A, imprime o JSON compacto no log e uma linha no resumo; se cair, segue para a próxima
+            local arq="$1"; shift
+            local t=$(date +%s) rc=0
+            echo "::group::medição $arq"
+            (cd prototypes/s04/fluxo_a && "$@") || rc=$?
+            echo "::endgroup::"
+            if [ $rc -eq 0 ] && [ -s "$SAIDA/$arq" ]; then
+              echo "JSON_COMPACTO $arq $(python -c "$COMPACTO" "$SAIDA/$arq")"
+              echo "- \`$arq\`: ok, $(wc -c < "$SAIDA/$arq" | tr -d ' ') bytes, $(( $(date +%s) - t )) s (WARP, ${RUNNER_OS})" >> "$GITHUB_STEP_SUMMARY"
+            else
+              CAIRAM="$CAIRAM $arq(código $rc)"
+              echo "- \`$arq\`: CAIU (código $rc) em $(( $(date +%s) - t )) s" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          }
+          echo "### Medições das threads no ${RUNNER_OS} (informativo; WARP, não é placa de vídeo real)" >> "$GITHUB_STEP_SUMMARY"
+          medir threads.json python lote.py "$SAIDA/threads.json" --base 300 --quantidade 1000 --rodadas 3
+          medir conferencias.json python conferencias.py "$SAIDA/conferencias.json" --base 300 --quantidade 1000 --rodadas 3
+          medir pesada.json python -c 'import sys, ifcopenshell, lote; lote.main_pesada([sys.argv[1], "--base", "300", "--aberturas", "150", "--rodadas", "3"])' "$SAIDA/pesada.json"
+          if [ -n "$CAIRAM" ]; then
+            echo "::error title=medições das threads::caíram:$CAIRAM (as outras seguiram; passo informativo, não bloqueia)"
+            exit 1
+          fi
+      - name: Tempo total
+        if: always()
+        shell: bash
+        run: |
+          echo "### windows-medicoes: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
+
+  windows-viewport-b:
+    name: windows-viewport-b (${{ matrix.parte }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # T23d: balanceado por tempo de pytest medido (metas é o arquivo mais lento)
+          - {parte: 1, alvo: "tests/test_s04_metas.py"}
+          - {parte: 2, alvo: "tests/test_s04_viewport.py tests/test_s04_selecao_c.py tests/test_s04_viewport_software.py"}
+          - {parte: 3, alvo: "tests/test_s04_abertura.py tests/test_s04_cena.py tests/test_s04_selecao.py"}
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Início (relógio)
+        shell: bash
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/ambiente-windows
+      - name: Módulo obimcore (só o build, para os testes deste job; a ponte é testada no job windows-viewport-a)
+        shell: bash -elo pipefail {0}
+        run: CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04
+      - name: Viewport C++ (parte B, dividida em 3 grupos (T23d); S04-T06/T07; bloqueia o merge)
+        shell: bash -elo pipefail {0}
+        timeout-minutes: 30
+        run: |
+          # O oráculo abre a tela virtual sozinho em subprocesso (xvfb-run no Linux; no Windows, WARP). Nada na tela real.
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          export OBIM_S04_TELA_VIRTUAL=1 QSG_RHI_BACKEND=d3d11 QSG_RHI_PREFER_SOFTWARE_RENDERER=1  # WARP, como no passo do cubo
+          OBIM_CI=1 pytest -q -rsP --durations=10 ${{ matrix.alvo }}
+      - name: Pacote do que o job gerou
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p out
+          tar czf out/app.tar.gz app/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: openbim-ci-windows-viewport-b-${{ matrix.parte }}
+          path: out/
+          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
+      - name: Tempo total
+        if: always()
+        shell: bash
+        run: |
+          echo "### windows-viewport-b: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
+
+  windows-fluxo-b:
+    name: windows-fluxo-b (${{ matrix.parte }})
+    strategy:
+      fail-fast: false
+      matrix:
+        parte: [1, 2]
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Início (relógio)
+        shell: bash
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/ambiente-windows
+      - name: Módulo obimcore (só o build, para os testes deste job; a ponte é testada no job windows-viewport-a)
+        shell: bash -elo pipefail {0}
+        run: CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04
+      - name: Fluxo B, build (T23d, as duas partes precisam do executável e da biblioteca)
+        shell: bash -elo pipefail {0}
+        run: bash prototypes/s04/fluxo_b/build.sh out/s04
+      - name: Fluxo B, paredes em C++ (S04-T13; bloqueia o merge; só na parte 1)
+        if: matrix.parte == 1
+        shell: bash -elo pipefail {0}
+        timeout-minutes: 20
+        run: |
+          # Sem janela: compara o IFC da biblioteca C++ com o do fluxo A (saída igual).
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          OBIM_CI=1 pytest -q -rsP tests/test_s04_fluxo_b_paredes.py
+      - name: Fluxo B, executável com janela (S04-T14c; bloqueia o merge; só na parte 2)
+        if: matrix.parte == 2
+        shell: bash -elo pipefail {0}
+        timeout-minutes: 40
+        run: |
+          # O build.sh do passo anterior já gerou fluxo_b_janela ao lado do módulo. Tela virtual (xvfb-run no Linux; WARP no Windows), nada na tela real.
+          # O oráculo roda o fluxo A de referência (roteiro R) e o executável de B com a mesma base; autotestes de localidade, `ler`, corrida e memória sem janela.
+          export PYTHONPATH="$(python -c 'import os; print(os.path.abspath("out/s04"))')"
+          export OBIM_S04_TELA_VIRTUAL=1  # WARP, como no passo do viewport
+          OBIM_CI=1 OBIM_S04_T14_OBRIGATORIO=1 pytest -q -rsP tests/test_s04_fluxo_b_janela.py
+      - name: Pacote do que o job gerou
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p out
+          tar czf out/app.tar.gz app/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: openbim-ci-windows-fluxo-b-${{ matrix.parte }}
+          path: out/
+          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
+      - name: Tempo total
+        if: always()
+        shell: bash
+        run: |
+          echo "### windows-fluxo-b: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
+
+  # Informativo: fora da regra de bloqueio e fora do caminho do `windows` (a sonda esgota 3 min por conta própria).
+  windows-sonda:
+    needs: windows  # T23c: informativo; começa depois da fila crítica para não tomar vaga de máquina dela
+    if: ${{ !cancelled() }}
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Início (relógio)
+        shell: bash
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/ambiente-windows
+      - name: Módulo obimcore (só o build, para os testes deste job; a ponte é testada no job windows-viewport-a)
+        shell: bash -elo pipefail {0}
+        run: CLEAN=1 bash prototypes/s04/obimcore/build.sh out/s04
+      - name: Sonda da thread de desenho (S04-T05; informativo, não bloqueia)
+        shell: bash -elo pipefail {0}
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          # Desenho por software (Linux: tela virtual + Mesa; Windows: WARP). Nenhuma janela na tela real.
+          mkdir -p out/s04_sonda
+          B="$(python -c 'import os; print(os.path.abspath("out/s04_sonda/build"))')"; O="$(python -c 'import os; print(os.path.abspath("out/s04_sonda"))')"
+          if [ "${RUNNER_OS}" = "Windows" ]; then GEN=(-A x64); else GEN=(-G Ninja); fi
+          cmake -S prototypes/s04/sonda_desenho -B "$B" "${GEN[@]}" -DCMAKE_BUILD_TYPE=Release -DOBIM_SAIDA="$O" -DCMAKE_PREFIX_PATH="$CONDA_PREFIX"
+          cmake --build "$B" --config Release
+          QT_QPA_PLATFORM=windows RHI=d3d11 python prototypes/s04/sonda_desenho/sonda.py "$O" out/s04_sonda/sonda.json; rc=$?
+          cat out/s04_sonda/sonda.json || true
+          echo "::notice title=sonda da thread de desenho no ${RUNNER_OS}::$(python -c "import json; r=json.load(open('out/s04_sonda/sonda.json')); print('rc=$rc meta_atingida=%s' % r.get('meta_atingida'), {k:v.get('maior_intervalo_ms') for k,v in r['fases'].items() if isinstance(v,dict)})" || echo sem resultado)"
+          true
+      - name: Pacote do que o job gerou
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p out
+          tar czf out/app.tar.gz app/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: openbim-ci-windows-sonda
+          path: out/
+          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
+      - name: Tempo total
+        if: always()
+        shell: bash
+        run: |
+          echo "### windows-sonda: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
+
+  # Mantém o nome `windows` (regra de bloqueio de merge): passa só se TODOS os jobs paralelos acima passarem.
+  windows:
+    if: always()
+    needs: [windows-testes, windows-obimcore, windows-viewport-a, windows-viewport-b, windows-fluxo-b]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Conferir que todo job do Windows que bloqueia está no needs (T23a)
+        run: python3 scripts/conferir_ci_windows.py .github/workflows/ci.yml
+      - name: Todos os jobs do Windows passaram
+        env:
+          RESULTADOS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "resultados: $RESULTADOS"
+          for r in $RESULTADOS; do [ "$r" = success ] || { echo "::error title=windows::algum job do Windows não passou ($RESULTADOS)"; exit 1; }; done
+
+  # Instalador do Windows em job próprio: roda ao mesmo tempo que o job windows, em vez de depois dele.
+  instalador-windows:
+    runs-on: windows-latest
+    needs: windows-obimcore  # T17b/T23b: o módulo obimcore é compilado no windows-obimcore e entra no instalador pronto (o pacote não tem compilador)
+    env:
+      PLAT: win-64
+    timeout-minutes: 75  # era 60; o R1-j acrescenta uma instalação e os 9 casos do pytest
+    steps:
+      - name: Início (relógio)
+        shell: bash
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Detecta se o empacotamento mudou (decide se o instalador é montado e testado)
+        id: detecta
+        shell: bash
+        env:
+          EVENTO: ${{ github.event_name }}
+          BASE: ${{ github.base_ref }}
+        run: |
+          # push (main) e tag: sempre. Pull request: só se o diff contra a base toca o empacotamento, o módulo obimcore ou os testes que o instalador roda (T17b). Na dúvida, true.
+          r=true; motivo="evento $EVENTO"
+          if [ "$EVENTO" = "pull_request" ]; then
+            if git fetch --no-tags --depth=1 origin "$BASE" 2>/dev/null && lista=$(git diff --name-only FETCH_HEAD HEAD); then
+              if grep -qE '^(packaging/|app/|prototypes/s04/obimcore/|tests/|environment[^/]*\.yml$|environment\.[^/]*\.lock$|pyproject[^/]*$|\.github/(workflows/ci\.yml|actions/)|scripts/(prune_packages|license_inventory|collect_package_licenses)\.py$|LICENSES/)' <<<"$lista"; then motivo="o PR mexe no empacotamento"; else r=false; motivo="o PR não mexe no empacotamento"; fi
+            else motivo="não consegui comparar com a base"; fi
+          fi
+          echo "instalador=$r" >> "$GITHUB_OUTPUT"
+          echo "::notice title=instalador::instalador=$r ($motivo)"
+      - name: Módulo obimcore e pytest vindos do job windows-obimcore (T17b/T23b; falha se não vierem)
+        if: steps.detecta.outputs.instalador == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ runner.temp }}/obimcore_pacote
+            ${{ runner.temp }}/pytest_site
+          key: obimcore-win-${{ github.run_id }}
+          fail-on-cache-miss: true
+      - name: Cache de pacotes do conda
+        if: steps.detecta.outputs.instalador == 'true'
+        id: cache_conda
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/conda_pkgs
+          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'environment.*.lock', 'packaging/runtime-environment.yml', 'packaging/runtime-environment.*.lock') }}
+      - name: Pasta de pacotes do conda
+        if: steps.detecta.outputs.instalador == 'true'
+        shell: bash
+        run: |
+          echo "CONDA_PKGS_DIRS=$RUNNER_TEMP/conda_pkgs" >> "$GITHUB_ENV"
+          echo "::notice title=cache de pacotes::cache-hit=${{ steps.cache_conda.outputs.cache-hit }}"
+      - uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
+        if: steps.detecta.outputs.instalador == 'true'
+        with:
+          activate-environment: openbim
+          channels: conda-forge
+          conda-remove-defaults: "true"
+          channel-priority: strict
+          miniforge-version: "26.7.2-1"  # ver .github/actions/ambiente-windows/action.yml
+      - name: Instalador Windows (ambiente de runtime e NSIS)
+        if: steps.detecta.outputs.instalador == 'true'
+        shell: bash -elo pipefail {0}
+        run: |
+          trap 'rc=$?; if [ $rc -ne 0 ]; then msg=$(tail -n 40 "$RUNNER_TEMP/passo.log" | sed ":a;N;\$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g"); echo "::error title=instalador falhou::$msg"; fi' EXIT
+          exec > >(tee "$RUNNER_TEMP/passo.log") 2>&1
+          mkdir -p out
+          t0=$(date +%s)
+          # Ambiente de runtime (o que vai ao usuário): pela trava, se existir (F0-RG-10; PO.md A3); senão pelo .yml
+          LOCK="packaging/runtime-environment.${PLAT}.lock"
+          if [ -f "$LOCK" ]; then conda create -p "$RUNNER_TEMP/rt" --file "$LOCK" -y -q; echo "::notice title=ambiente de runtime::criado pela trava $LOCK"
+          else conda env create -f packaging/runtime-environment.yml -p "$RUNNER_TEMP/rt" -y -q; echo "::notice title=ambiente de runtime::sem trava para ${PLAT}; criado pelo .yml"; fi
+          conda list -p "$RUNNER_TEMP/rt" --explicit --md5 > "out/runtime-environment.${PLAT}.lock"
+          if [ -f "$LOCK" ] && diff <(grep -v '^#' "$LOCK" | tr -d '\r') <(grep -v '^#' "out/runtime-environment.${PLAT}.lock" | tr -d '\r') >/dev/null; then echo "::notice title=trava do runtime ${PLAT}::igual à do repositório"
+          else echo "::notice title=trava do runtime ${PLAT}::ausente ou DIFERENTE da do repositório (atualizar com o conteúdo abaixo)"; echo "=====INICIO-TRAVA-RUNTIME-${PLAT}====="; tr -d '\r' < "out/runtime-environment.${PLAT}.lock"; echo "=====FIM-TRAVA-RUNTIME-${PLAT}====="; fi
+          echo "Ambiente de runtime criado em $(( $(date +%s) - t0 )) s" | tee -a "$GITHUB_STEP_SUMMARY"
+          # NSIS não vem mais no windows-latest (Server 2025): usa o pacote conda-forge `nsis` (só ferramenta, não entra no instalador)
+          conda create -n nsis -c conda-forge --override-channels nsis=3.12=h4c425fd_1 -y -q
+          export MAKENSIS="$(find "$(conda info --base)/envs/nsis" -name makensis.exe | head -n 1)"
+          echo "makensis: $MAKENSIS"
+          OBIMCORE_DIR="$(cygpath -u "$RUNNER_TEMP")/obimcore_pacote" bash packaging/windows/build_installer.sh "$RUNNER_TEMP/rt" "$RUNNER_TEMP/inst-out" 2>&1 | tail -n 45 | tee -a "$GITHUB_STEP_SUMMARY"
+          ls -l "$RUNNER_TEMP/inst-out/OpenBIM-Studio-Setup.exe" | tee -a "$GITHUB_STEP_SUMMARY"
+          size=$(stat -c %s "$RUNNER_TEMP/inst-out/OpenBIM-Studio-Setup.exe")
+          echo "Instalador (T17b, com obimcore): $size bytes; o módulo soma $(cat "$RUNNER_TEMP"/obimcore_pacote/_obimcore*.pyd "$RUNNER_TEMP"/obimcore_pacote/__init__.py | wc -c) bytes sem compressão. Para comparar com o tamanho de antes (sem o módulo), ver o resumo da última execução no main." | tee -a "$GITHUB_STEP_SUMMARY"
+          test "$size" -le 600000000 || { echo "::error::instalador acima de 600 MB (ADR-005 §9: não cortar em silêncio, levar ao PO)"; exit 1; }
+          cp "$RUNNER_TEMP/inst-out/OpenBIM-Studio-Setup.exe" "$RUNNER_TEMP/inst-out/licencas-coletadas.txt" out/
+      - name: R1-j, o módulo dentro do instalador (T17b; instala em silêncio, roda o oráculo e desinstala; bloqueia o merge porque o job instalador-windows é obrigatório)
+        if: steps.detecta.outputs.instalador == 'true'
+        shell: bash  # sem login: um shell de login ativaria o ambiente conda e poria DLLs dele no PATH do oráculo
+        timeout-minutes: 30
+        run: |
+          set +e
+          export MSYS2_ARG_CONV_EXCL='*'  # o bash do Git for Windows não pode reescrever /S, /D= nem _?=
+          t0=$(date +%s)
+          DEST="$(cygpath -w "$RUNNER_TEMP")\\OpenBIM-ponte"  # sem espaços (o /D= do NSIS não aceita)
+          D="$(cygpath -u "$DEST")"
+          fim() {  # fim "mensagem": erro com o fim do log do passo
+            msg=$(tail -n 45 "$RUNNER_TEMP/ponte-inst.log" 2>/dev/null | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=R1-j no instalador falhou::$1 $msg"; exit 1
+          }
+          "$PWD/out/OpenBIM-Studio-Setup.exe" /S "/D=$DEST" & pid=$!; wait "$pid"; rc=$?  # como o test_installer.sh; o limite é o do passo (30 min)
+          [ "$rc" = 0 ] || fim "instalação em silêncio saiu com código $rc"
+          t1=$(date +%s)
+          OBIM_PYTEST_SITE="$RUNNER_TEMP/pytest_site" timeout 1500 bash packaging/windows/test_instalador_ponte.sh "$DEST" > "$RUNNER_TEMP/ponte-inst.log" 2>&1; rc=$?
+          cat "$RUNNER_TEMP/ponte-inst.log"
+          [ "$rc" = 0 ] || fim "oráculo reprovou (código $rc)"
+          t2=$(date +%s)
+          # desinstala para o test_installer.sh começar de uma pasta limpa; _?= faz o desinstalador esperar (sem isso ele devolve o controle logo)
+          timeout 300 "$D/Uninstall.exe" /S "_?=$DEST"; rc=$?
+          sleep 3; rm -f "$D/Uninstall.exe"
+          [ "$rc" = 0 ] || fim "desinstalador saiu com código $rc"
+          for x in env app licenses; do [ ! -e "$D/$x" ] || fim "sobrou $x depois de desinstalar"; done
+          rmdir "$D" 2>/dev/null
+          echo "R1-j no instalador: instalação $((t1-t0)) s, oráculo $((t2-t1)) s, desinstalação $(( $(date +%s)-t2 )) s" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=R1-j::obimcore dentro do instalador, R1-a, R1-d, R1-e e R1-i verdes; runtime do Visual C++ compatível (prova 7)"
+      - name: Teste do instalador (instala, abre, desinstala)
+        if: steps.detecta.outputs.instalador == 'true'
+        shell: bash
+        timeout-minutes: 30
+        run: |
+          set +e
+          timeout 1500 bash packaging/windows/test_installer.sh "$PWD/out/OpenBIM-Studio-Setup.exe" "$(cygpath -w "$RUNNER_TEMP")\\OpenBIM-teste" > "$RUNNER_TEMP/teste.log" 2>&1
+          rc=$?
+          cat "$RUNNER_TEMP/teste.log"
+          if [ $rc -ne 0 ]; then
+            msg=$(tail -n 40 "$RUNNER_TEMP/teste.log" | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=teste do instalador falhou (código $rc)::$msg"
+            exit $rc
+          fi
+          echo "Instalação, abertura e desinstalação sem sobras: OK" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.detecta.outputs.instalador == 'true'
+        with:
+          name: openbim-instalador-windows
+          path: out/
+          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
+      - name: Tempo total
+        if: always()
+        shell: bash
+        run: |
+          echo "### instalador windows: tempo total do job até aqui: $(( $(date +%s) - T0 )) s" >> "$GITHUB_STEP_SUMMARY"
+
+  # Melhor esforço (R12): falha vira aviso e não entra na regra de bloqueio de merge.
+
+  macos:
+    runs-on: macos-14
+    continue-on-error: true
+    steps:
+      - name: Início (relógio)
+        shell: bash
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
+        with:
+          environment-file: environment.yml
+          activate-environment: openbim
+          channels: conda-forge
+          conda-remove-defaults: "true"
+          channel-priority: strict
+          miniforge-version: latest
+      - name: Testes
+        id: testes
+        continue-on-error: true  # macOS é experimental: a falha vira aviso e o job não aparece como falha (monitor do PO)
+        shell: bash -elo pipefail {0}
+        run: |
+          # Em caso de falha, as últimas linhas viram anotação pública (o log completo exige login no GitHub).
+          set +e
+          QT_QPA_PLATFORM=offscreen pytest -q -rs tests > pytest.log 2>&1
+          rc=$?
+          cat pytest.log
+          if [ $rc -ne 0 ]; then
+            msg=$(tail -n 40 pytest.log | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=pytest falhou::$msg"
+          fi
+          exit $rc
+      - name: Inventário de licenças e canal
+        shell: bash -elo pipefail {0}
+        run: |
+          mkdir -p out
+          python scripts/license_inventory.py out/license-inventory.md --informativo
+      - name: Pacote do app esqueleto
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p out
+          tar czf out/app.tar.gz app/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: openbim-ci-macos
+          path: out/
+          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
+      - name: Tempo total
+        if: always()
+        shell: bash
+        run: |
+          echo "### macos: tempo total do job até aqui: $(( $(date +%s) - T0 )) s (build limpo, sem cache do ambiente conda; incremental não medido)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Aviso (macOS não bloqueia merge)
+        if: failure() || steps.testes.outcome == 'failure'
+        shell: bash
+        run: |
+          echo "::warning title=macOS::job macOS falhou; melhor esforço, não bloqueia merge. Registrar o motivo em docs/state/LOG.md."
+          echo "AVISO: o job macOS falhou (não bloqueia merge)." >> "$GITHUB_STEP_SUMMARY"
+
+  # Gera o AppImage (pacote Linux) a cada alteração. Bloqueia o merge: o job `appimage` é obrigatório na regra proteger-main. Não renomear.
+  appimage:
+    runs-on: ubuntu-latest
+    needs: linux-obimcore  # T17a/T23L: o módulo obimcore é compilado no linux-obimcore e entra no pacote pronto (o pacote não tem compilador)
+    timeout-minutes: 45
+    steps:
+      - name: Início (relógio)
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Cache de pacotes do conda
+        id: cache_conda
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/conda_pkgs
+          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml', 'environment.*.lock', 'packaging/runtime-environment.yml', 'packaging/runtime-environment.*.lock') }}
+      - name: Pasta de pacotes do conda
+        shell: bash
+        run: |
+          echo "CONDA_PKGS_DIRS=$RUNNER_TEMP/conda_pkgs" >> "$GITHUB_ENV"
+          echo "::notice title=cache de pacotes::cache-hit=${{ steps.cache_conda.outputs.cache-hit }}"
+      - uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
+        with:
+          activate-environment: openbim-runtime
+          channels: conda-forge
+          conda-remove-defaults: "true"
+          channel-priority: strict
+          miniforge-version: latest
+      - name: Criar o ambiente de runtime (pela trava, se existir; F0-RG-10, PO.md A3)
+        shell: bash -elo pipefail {0}
+        run: |
+          PLAT=linux-64
+          LOCK="packaging/runtime-environment.${PLAT}.lock"
+          if [ -f "$LOCK" ]; then conda install -n openbim-runtime -y -q --file "$LOCK"; echo "::notice title=ambiente de runtime::criado pela trava $LOCK"
+          else conda env update -n openbim-runtime -f packaging/runtime-environment.yml -q; echo "::notice title=ambiente de runtime::sem trava para ${PLAT}; criado pelo .yml"; fi
+          mkdir -p out
+          conda list -n openbim-runtime --explicit --md5 > "out/runtime-environment.${PLAT}.lock"
+          if [ -f "$LOCK" ] && diff <(grep -v '^#' "$LOCK" | tr -d '\r') <(grep -v '^#' "out/runtime-environment.${PLAT}.lock" | tr -d '\r') >/dev/null; then echo "::notice title=trava do runtime ${PLAT}::igual à do repositório"
+          else echo "::notice title=trava do runtime ${PLAT}::ausente ou DIFERENTE da do repositório (atualizar com o conteúdo abaixo)"; echo "=====INICIO-TRAVA-RUNTIME-${PLAT}====="; tr -d '\r' < "out/runtime-environment.${PLAT}.lock"; echo "=====FIM-TRAVA-RUNTIME-${PLAT}====="; fi
+      - name: Módulo obimcore e pytest vindos do job linux (T17a; falha se não vierem)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ runner.temp }}/obimcore_pacote
+            ${{ runner.temp }}/pytest_site
+          key: obimcore-${{ github.run_id }}
+          fail-on-cache-miss: true
+      - name: Ferramenta appimagetool (versão fixa 1.9.1, sha256 conferido)
+        run: |
+          curl -fsSL -o appimagetool.AppImage https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          echo "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  appimagetool.AppImage" | sha256sum -c -
+          chmod +x appimagetool.AppImage
+      - name: Montar o AppImage
+        shell: bash -elo pipefail {0}
+        run: |
+          set +e
+          OBIMCORE_DIR="$RUNNER_TEMP/obimcore_pacote" RUNTIME_ENV="$CONDA_PREFIX" bash packaging/linux/build_appimage.sh "$RUNNER_TEMP/ai" "$PWD/appimagetool.AppImage" > ai.log 2>&1
+          rc=$?
+          tail -n 20 ai.log
+          if [ $rc -ne 0 ]; then
+            msg=$(tail -n 40 ai.log | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=AppImage falhou::$msg"
+            exit $rc
+          fi
+      - name: libfuse2 (o AppImage montado de verdade precisa dela; sem ela o usuário vê o programa não abrir)
+        run: sudo apt-get install -y libfuse2t64
+      - name: Testar o AppImage (licenças, extração, troca de biblioteca, tamanho)
+        run: |
+          set +e
+          IMG="$RUNNER_TEMP/ai/OpenBIM-Studio-x86_64.AppImage"
+          OBIM_EXIGIR_FUSE=1 QT_QPA_PLATFORM=offscreen timeout 900 bash packaging/linux/test_appimage.sh "$IMG" > teste-ai.log 2>&1
+          rc=$?
+          cat teste-ai.log
+          if [ $rc -ne 0 ]; then
+            msg=$(tail -n 45 teste-ai.log | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=teste do AppImage falhou::$msg"
+            exit $rc
+          fi
+          size=$(stat -c %s "$IMG"); echo "AppImage: $((size/1000000)) MB"
+          test "$size" -le 600000000 || { echo "::error::AppImage acima de 600 MB"; exit 1; }
+          echo "::notice title=AppImage::$((size/1000000)) MB, testes de licença e troca de biblioteca OK"
+          echo "AppImage (T17a, com obimcore): $size bytes; o módulo soma $(cat "$RUNNER_TEMP"/obimcore_pacote/* | wc -c) bytes sem compressão. Para comparar com o tamanho de antes (sem o módulo), ver o resumo da última execução no main." >> "$GITHUB_STEP_SUMMARY"
+      - name: R1-j, o módulo dentro do AppImage (T17a; bloqueia o merge porque o job appimage é obrigatório na regra proteger-main)
+        run: |
+          set +e
+          IMG="$RUNNER_TEMP/ai/OpenBIM-Studio-x86_64.AppImage"
+          OBIM_PYTEST_SITE="$RUNNER_TEMP/pytest_site" QT_QPA_PLATFORM=offscreen timeout 1500 bash packaging/linux/test_appimage_ponte.sh "$IMG" > ponte-ai.log 2>&1
+          rc=$?
+          cat ponte-ai.log
+          if [ $rc -ne 0 ]; then
+            msg=$(tail -n 45 ponte-ai.log | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=R1-j no AppImage falhou::$msg"
+            exit $rc
+          fi
+          echo "::notice title=R1-j::obimcore dentro do AppImage, R1-a, R1-d, R1-e e R1-i verdes"
+      - name: Empacotar (tar.gz mantém a permissão de executar)
+        run: |
+          mkdir -p out
+          tar -czf out/OpenBIM-Studio-x86_64.AppImage.tar.gz -C "$RUNNER_TEMP/ai" OpenBIM-Studio-x86_64.AppImage
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: openbim-appimage
+          path: out/
+          retention-days: 7  # build de teste, não é versão publicada (decisão do PO, lote opus 2)
+      - name: Tempo total
+        if: always()
+        run: |
+          echo "::notice title=tempo do job appimage::$(( $(date +%s) - T0 )) s"
+          echo "Tempo do job appimage: $(( $(date +%s) - T0 )) s (inclui montar, testar e o R1-j; não inclui a espera pelo job linux)" >> "$GITHUB_STEP_SUMMARY"

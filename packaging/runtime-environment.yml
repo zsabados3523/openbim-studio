@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Ambiente de RUNTIME para os pacotes Linux e Windows (ADR-005 §5 item 6). Mesmas versoes fixas de
+# environment.yml, sem compiladores, cmake, ninja, nanobind e pytest. Fonte unica: conda-forge.
+name: openbim-runtime
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.12
+  - occt=8.0.1
+  - ifcopenshell=0.9.0
+  - pyside6=6.11.2
+  - qt6-main=6.11.2
+  # Sem MKL (licença proprietária da Intel, decisão do PO em 2026-10-11): BLAS livre (OpenBLAS) em todos os sistemas
+  - libblas=*=*openblas

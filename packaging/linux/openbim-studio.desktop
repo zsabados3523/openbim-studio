@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=OpenBIM Studio
+Name[pt_BR]=OpenBIM Studio
+Comment=Programa BIM aberto
+Comment[pt_BR]=Programa BIM aberto para projeto de arquitetura
+Exec=AppRun %F
+Icon=openbim-studio
+Terminal=false
+Categories=Graphics;Engineering;
+MimeType=application/x-extension-ifc;

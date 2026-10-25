@@ -1,0 +1,19 @@
+<!--
+SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+# Fontes das bibliotecas distribuídas
+
+Este pacote traz bibliotecas livres do canal conda-forge, nas versões e compilações exatas listadas abaixo. O código-fonte de cada uma pode ser obtido de duas formas:
+
+1. Pelo canal conda-forge: cada pacote tem um repositório de receita (`https://github.com/conda-forge/<nome>-feedstock`) que aponta para o código original de cada projeto, na versão listada.
+2. Por pedido: para as bibliotecas LGPL/GPL, o endereço exato do código e da receita de cada pacote está na tabela abaixo. Se não conseguir obter algum código-fonte, abra uma issue em https://github.com/zsabados3523/openbim-studio.
+
+O código do OpenBIM Studio (AGPL-3.0-or-later) e os scripts de montagem estão em https://github.com/zsabados3523/openbim-studio.
+
+Os pacotes marcados "removido na montagem" (vtk, viskores, ffmpeg e dependências) constam da trava do ambiente, mas foram retirados do AppImage (ver `licenses/REMOVIDOS.md`): nada deles e distribuido.
+
+Lista de pacotes (arquivo de trava do ambiente de runtime, linux-64). Cada linha é o endereço exato de um pacote: nome-versão-build.
+
+```
+@@LISTA@@
+```

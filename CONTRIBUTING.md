@@ -24,6 +24,14 @@ Para aprender como um recurso deve funcionar, use apenas:
 
 **Não aceitamos:** engenharia reversa ou inspeção de binários e formatos proprietários (`.rvt`, `.rfa`, `.pln`, DWG por SDK fechado); SDKs fechados (ODA, RealDWG); ícones, telas, textos de ajuda ou marcas de outros programas; trechos de normas ABNT em código, documentos ou testes.
 
+## Como escolher e entregar uma tarefa
+1. Veja as [issues com o rótulo `tarefa`](../../issues?q=is%3Aopen+label%3Atarefa). Cada uma diz o objetivo, os arquivos que podem mudar, os testes que precisam passar e as decisões (ADRs) que valem.
+2. Comente "pego essa" na issue e espere a confirmação, para duas pessoas não fazerem o mesmo trabalho.
+3. Faça um fork, crie um ramo e implemente só o que a issue pede. PR com no máximo 400 linhas próprias; se passar, divida.
+4. Abra o PR com o modelo preenchido. O CI (`linux` e `windows`) precisa ficar verde. A revisão é feita por quem mantém o projeto.
+5. Tarefas do tipo **crítica** (gravação de arquivo, transações, junções) exigem que os testes sejam escritos por outra pessoa ou IA, não por quem implementa. A issue diz quem escreve os testes.
+6. Ideia nova ou funcionalidade inspirada em outro software: abra primeiro uma issue "Ficha de pesquisa".
+
 ## Ficha de pesquisa
 Toda funcionalidade inspirada em outro software precisa de uma ficha antes da proposta de implementação. Abra uma issue (ou escreva no texto do PR) com este modelo:
 

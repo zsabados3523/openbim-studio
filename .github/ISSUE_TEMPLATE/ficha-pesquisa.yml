@@ -1,0 +1,37 @@
+name: Ficha de pesquisa
+description: Funcionalidade inspirada em outro software (obrigatória antes da proposta)
+title: "Ficha: "
+labels: ["pesquisa"]
+body:
+  - type: input
+    id: funcionalidade
+    attributes: {label: Funcionalidade}
+    validations: {required: true}
+  - type: input
+    id: referencia
+    attributes: {label: Software de referência (nome e versão)}
+  - type: textarea
+    id: fontes
+    attributes:
+      label: Fontes consultadas
+      description: Documentação pública, norma aberta, código aberto com licença identificada.
+    validations: {required: true}
+  - type: textarea
+    id: comportamento
+    attributes:
+      label: Como o recurso se comporta
+      description: Com suas palavras, sem copiar texto nem tela.
+    validations: {required: true}
+  - type: checkboxes
+    id: limites
+    attributes:
+      label: Confirmo que
+      options:
+        - label: Não houve engenharia reversa, nem SDK fechado, nem cópia de ícones, telas ou textos de ajuda.
+          required: true
+  - type: input
+    id: licenca
+    attributes: {label: Licença de código que pretende reaproveitar (SPDX ou "nenhum")}
+  - type: textarea
+    id: decisao
+    attributes: {label: Decisão proposta}

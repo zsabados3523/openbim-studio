@@ -1,0 +1,45 @@
+name: Tarefa para contribuir
+description: Uma etapa do projeto aberta a quem quiser desenvolver
+title: "Tarefa: "
+labels: ["tarefa"]
+body:
+  - type: textarea
+    id: objetivo
+    attributes:
+      label: Objetivo
+      description: O que deve existir no fim, em poucas frases, e por que importa.
+    validations:
+      required: true
+  - type: textarea
+    id: arquivos
+    attributes:
+      label: Arquivos que podem mudar
+      description: Pastas e arquivos permitidos. Fora disso, abra outra issue.
+    validations:
+      required: true
+  - type: textarea
+    id: testes
+    attributes:
+      label: Como saber que está pronto
+      description: Testes que precisam passar (com caminho) e comportamento esperado. Não afrouxe número nem caso de teste existente.
+    validations:
+      required: true
+  - type: textarea
+    id: decisoes
+    attributes:
+      label: Decisões que valem aqui
+      description: ADRs em docs/adr/ e regras de licença que se aplicam.
+  - type: input
+    id: tamanho
+    attributes:
+      label: Tamanho estimado
+      description: PR com no máximo 400 linhas próprias. Se passar, dividir antes.
+  - type: dropdown
+    id: classe
+    attributes:
+      label: Tipo
+      options:
+        - Comum (testes escritos junto)
+        - Crítica (gravação, transações, junções: testes escritos por outra pessoa ou IA)
+    validations:
+      required: true

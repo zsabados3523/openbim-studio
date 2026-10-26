@@ -15,6 +15,14 @@ QT_QPA_PLATFORM=offscreen pytest
 
 CI runs the same on Linux and Windows; both must be green to merge. Do not send code without tests.
 
+## How to pick and deliver a task
+1. Browse the [issues labeled `tarefa`](../../issues?q=is%3Aopen+label%3Atarefa). Each states the goal, the files that may change, the tests that must pass and the decisions (ADRs) that apply.
+2. Comment "taking this" on the issue and wait for confirmation, so two people do not do the same work.
+3. Fork, create a branch and implement only what the issue asks. PRs have at most 400 own lines; split if larger.
+4. Open the PR with the template filled in. CI (`linux` and `windows`) must be green. Maintainers review.
+5. **Critical** tasks (file writing, transactions, joins) require tests written by a different person or AI than the implementer. The issue says who writes the tests.
+6. New idea or feature inspired by other software: open a "Ficha de pesquisa" issue first.
+
 ## Research only from public sources
 To learn how a feature should work, use only:
 - public documentation and online help of other programs;

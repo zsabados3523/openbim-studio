@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Transação única IFC + lateral, desfazer e refazer (ADR-002 §4.1, §4.2 e §4.8). Sem Qt, sem `obimcore`.
+"""Transação única IFC + lateral, desfazer e refazer (ADR-002 §4.1, §4.2, §4.6 e §4.8). Sem Qt, sem `obimcore`.
 Uma transação nossa = um `Transaction` do ifcopenshell + as operações do lateral; fora dela `arquivo.transaction` é uma sentinela que recusa edição.
-Tudo roda em `SessaoModelo.escrever()`. Limite de memória: fora deste módulo (`limite_bytes` só guardado; `descartados` = 0)."""
+Tudo roda em `SessaoModelo.escrever()`. Limite de memória sobre histórico mais refazer dos dois lados."""
+import json
 import sys
 from collections import namedtuple
 from contextlib import contextmanager
@@ -155,10 +156,23 @@ def _resumo_lado(ops, avanco):
     return (cr, al, ap) if avanco else (ap, al, cr)
 
 
+def _custo_passo(ops, lado_ops):
+    from openbim_app.diario import codificar_ifc
+
+    dados = {"ifc": codificar_ifc(ops), "lado": list(lado_ops)}
+    raw = json.dumps(dados, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
+    return len(raw) * 12
+
+
 class Historico:
-    def __init__(self, sessao, lateral, limite_bytes=None, codificar=None, anotar=None):
-        self._lat, self.limite_bytes, self._codificar, self._anotar = lateral, limite_bytes, codificar or (lambda ops: None), anotar
-        self._lh, self._lf, self._aberta, self._quebrado = [], [], False, False  # lateral: histórico e refazer (o IFC guarda as dele)
+    def __init__(self, sessao, lateral, limite_bytes=256 * 1024 * 1024, codificar=None, anotar=None, avisar=None):
+        if isinstance(limite_bytes, bool) or (limite_bytes is not None and (not isinstance(limite_bytes, int) or limite_bytes <= 0)):
+            raise ValueError("limite_bytes deve ser inteiro > 0 ou None")
+        self._lat, self._limite_bytes, self._codificar, self._anotar, self._avisar = (
+            lateral, limite_bytes, codificar or (lambda ops: None), anotar, avisar
+        )
+        self._lh, self._lf, self._ch, self._cf = [], [], [], []  # lateral e custos: histórico e refazer (o IFC guarda as dele)
+        self._descartados, self._aberta, self._quebrado = 0, False, False
         with sessao.escrever() as esc:  # abre escrever() próprio: dentro de outro escrever() da mesma thread dá ReentradaProibida
             a = self._arquivo = esc.arquivo
             if a.transaction is not None:
@@ -169,7 +183,32 @@ class Historico:
     pode_desfazer = property(lambda s: bool(s._lh))
     pode_refazer = property(lambda s: bool(s._lf))
     quebrado = property(lambda s: s._quebrado)
-    descartados = property(lambda s: 0)
+    descartados = property(lambda s: s._descartados)
+
+    @property
+    def limite_bytes(self):
+        return self._limite_bytes
+
+    @limite_bytes.setter
+    def limite_bytes(self, novo):
+        if isinstance(novo, bool) or (novo is not None and (not isinstance(novo, int) or novo <= 0)):
+            raise ValueError("limite_bytes deve ser inteiro > 0 ou None")
+        self._limite_bytes = novo
+        if not self._aberta:
+            self._podar()
+
+    def _podar(self):
+        if self._limite_bytes is None:
+            return
+        a = self._arquivo
+        custo_total = sum(self._ch) + sum(self._cf)
+        min_hist = 1 if not self._lf else 0
+        while len(self._lh) > min_hist and custo_total > self._limite_bytes:
+            custo_removido = self._ch.pop(0)
+            self._lh.pop(0)
+            a.history.pop(0)
+            custo_total -= custo_removido
+            self._descartados += 1
 
     def _pre(self, esc):
         a = esc.arquivo  # TravaNaoSegura se vencido
@@ -240,15 +279,18 @@ class Historico:
             a.end_transaction()
             a.transaction = self._sent
             self._lf.clear()
+            self._cf.clear()
             try:
                 t.resumo = Resumo(*_resumo_ifc(a, tx.operations, True), *_resumo_lado(t.lado.ops, True))
                 self._anotar and self._anotar("transacao", enc, t.lado.ops)
                 self._lh.append(t.lado.ops)
+                self._ch.append(_custo_passo(tx.operations, t.lado.ops))
             except BaseException:  # o passo sai dos dois lados (e o refazer anterior já se perdeu no end_transaction)
                 self._lado(t.lado.ops, False)
                 self._ifc(a, True)
                 a.future.pop()
                 raise
+            self._podar()
 
     def _abortar(self, a, tx, t, causa):  # antes do end_transaction: discard (nunca undo) e o lateral volta
         self._lado(t.lado.ops, False)
@@ -263,7 +305,11 @@ class Historico:
     def _mover(self, esc, desfazer):
         a = self._pre(esc)
         de, para = (self._lh, self._lf) if desfazer else (self._lf, self._lh)
-        if not de: return None
+        de_c, para_c = (self._ch, self._cf) if desfazer else (self._cf, self._ch)
+        if not de:
+            if desfazer and not self._lh and self._descartados > 0 and self._avisar:
+                self._avisar("desfazer impossível: passos foram descartados por limite de memória")
+            return None
         lado_ops, tr = de[-1], (a.history if desfazer else a.future)[-1]
         self._ifc(a, desfazer)  # IFC primeiro; se falhar o lateral não é mexido
         aplicado = False
@@ -273,6 +319,7 @@ class Historico:
             resumo = Resumo(*_resumo_ifc(a, tr.operations, not desfazer), *_resumo_lado(lado_ops, not desfazer))
             self._anotar and self._anotar("desfazer" if desfazer else "refazer", self._codificar(tr.operations), lado_ops)
             para.append(de.pop())
+            para_c.append(de_c.pop())
         except BaseException:  # tudo volta: modelo e lateral (só o que já foi aplicado)
             if aplicado:
                 self._aplicar_lado(lado_ops, desfazer)
@@ -294,5 +341,7 @@ class Historico:
     def encerrar(self):
         a = self._arquivo
         a.history.clear(), a.future.clear(), self._lh.clear(), self._lf.clear()
+        self._ch.clear(), self._cf.clear()
+        self._descartados = 0
         a.transaction = None
         ifcopenshell.file.registry.pop(int(a.this), None)

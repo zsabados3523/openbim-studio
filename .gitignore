@@ -38,12 +38,12 @@ graphify-out/
 # Andaime de desenvolvimento (links locais do repositório privado; nunca versionar)
 /CLAUDE.md
 /AGENTS.md
-/v2/
-/docs/state/
-/docs/arquivo/
-/docs/acceptance/
-/docs/review/
-/docs/research/
-/docs/design/
-/docs/adr-completo/
+/v2
+/docs/state
+/docs/arquivo
+/docs/acceptance
+/docs/review
+/docs/research
+/docs/design
+/docs/adr-completo
 /docs/PAINEL_DO_PROJETO.md

@@ -1,0 +1,399 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+"""Testes de oráculo do F0-S05-T09a: endurecimento do diário de transações (`app/openbim_app/diario.py`, ADR-002 §4.4, §4.7 e §4.8).
+Não editar este arquivo na implementação; quem tira os `@AINDA_NAO` (xfail estrito) é o autor do oráculo depois da implementação.
+CONTRATO:
+1. `Diario.abrir` sobre diário existente não trunca no lugar: troca atômica (arquivo novo e rename), guarda o conteúdo antigo em
+   `diario-descartado.obimlog` na mesma pasta (se já existir um, não o sobrescreve: guarda os dois) e queda/erro no meio do `abrir` deixa o antigo
+   íntegro, sem criar `diario-descartado*` antes da hora nem deixar `.tmp` órfão.
+2. Erro de `os.fsync` na thread do temporizador é guardado e levantado uma vez no próximo `anotar`, `sincronizar` ou `fechar`; o diário fica quebrado
+   (`anotar` e `sincronizar` seguintes levantam `HistoricoQuebrado`; `fechar` após o erro já ter subido fecha o descritor sem levantar erro).
+3. `recuperar` confere `obim_sha256` da base contra o `lateral` informado (sha diferente: não aplica nada e avisa); `ler_diario` (e por consequência
+   `recuperar`) rejeita registro após a `base` com `tipo` fora de `("transacao", "desfazer", "refazer")`, parando ali com aviso como no buraco em `seq`.
+4. `Diario.__init__`: se o disco enche ao gravar o registro `base`, o arquivo é fechado e o erro sobe (pode ser apagado/renomeado logo depois).
+5. Erro que não é `OSError` dentro de `_cortar` não esconde o erro original (o original sobe, a foto volta e o diário fica quebrado).
+6. `Diario.zerar(seq)`: atualiza `seq` da `base` para `seq_dado`, remove registros com `seq <= seq_dado`, mantém os de `seq > seq_dado` (`seq` continua
+   crescente), usa a trava do diário (não mistura com `anotar` concorrente) e é idempotente.
+MUTANTES PENSADOS: M1.1..M1.4 (abrir/descartado/atomicidade), M2.1..M2.4 (fsync no timer), M3.1..M3.6 (obim_sha256 e tipo inválido),
+M4.1..M4.2 (__init__ fecha no ENOSPC), M5.1..M5.2 (_cortar com erro não-OSError), M6.1..M6.5 (zerar e trava)."""
+import builtins
+import errno
+import hashlib
+import io
+import json
+import os
+import threading
+import zlib
+from pathlib import Path
+
+import pytest
+import s05_t05_aux as X
+from s05_conteudo_aux import _limpa, base_ifc  # noqa: F401  (fixtures)
+from s05_t05_aux import LADO, caminho_diario, igual, mod, recuperar, sha
+from test_s05_t05_diario_oraculo import _sem_injecao, casa, local, registros_crus, sessoes  # noqa: F401  (fixtures)
+from test_s05_t05_enospc_oraculo import CABE, _tx
+
+AINDA_NAO = pytest.mark.xfail(strict=True, reason="T09a: endurecimento do diário ainda não implementado em diario.py")
+
+
+class DiscoDiario:
+    livre, erro_escrita, erro_corte, ao_escrever, abertos = None, None, None, None, []
+
+
+def _escrever_lim(real, b):
+    if DiscoDiario.ao_escrever is not None: return DiscoDiario.ao_escrever(real, b)  # noqa: E701
+    if DiscoDiario.livre is None: return real(b)  # noqa: E701
+    if DiscoDiario.livre <= 0:
+        if DiscoDiario.erro_escrita is not None: raise DiscoDiario.erro_escrita  # noqa: E701
+        raise OSError(errno.ENOSPC, "No space left on device (ensaio)")
+    n = real(bytes(memoryview(b)[:DiscoDiario.livre]))
+    DiscoDiario.livre -= n
+    return n
+
+
+def _cortar_lim(real, *a):
+    if DiscoDiario.erro_corte is not None: raise DiscoDiario.erro_corte  # noqa: E701
+    return real(*a)
+
+
+class _RawDiario(io.FileIO):
+    _pasta, _eh_fd = None, None
+
+    def _eh_diario(self):
+        if getattr(self, "_no_diario", False): return True  # noqa: E701
+        if _RawDiario._pasta is None: return False  # noqa: E701
+        return bool(_RawDiario._eh_fd and _RawDiario._eh_fd(self.fileno())) if isinstance(self.name, int) else Path(str(self.name)).resolve().parent == _RawDiario._pasta
+
+    def write(self, b):
+        return _escrever_lim(super().write, b) if self._eh_diario() else super().write(b)
+
+    def truncate(self, size=None):
+        return _cortar_lim(super().truncate, size) if self._eh_diario() else super().truncate(size)
+
+
+@pytest.fixture
+def disco_diario(monkeypatch, local):
+    abrir, wr, ftr, pasta = builtins.open, os.write, os.ftruncate, caminho_diario(local).parent
+    pasta.mkdir(parents=True, exist_ok=True)
+    _RawDiario._pasta, DiscoDiario.abertos = pasta.resolve(), []
+
+    def eh_fd(fd):
+        return any(os.path.exists(p) and os.path.samestat(os.fstat(fd), os.stat(p)) for p in pasta.iterdir())
+
+    _RawDiario._eh_fd = eh_fd
+
+    def open_(f, mode="r", buffering=-1, *a, **k):
+        no_diario = eh_fd(f) if isinstance(f, int) else Path(str(f)).resolve().parent == _RawDiario._pasta
+        if not ("b" in mode and bool(set(mode) & set("wax+")) and no_diario):
+            return abrir(f, mode, buffering, *a, **k)
+        raw = _RawDiario(f, mode.replace("b", ""), closefd=k.get("closefd", True))
+        raw._no_diario = True
+        DiscoDiario.abertos.append(raw)
+        return raw if buffering == 0 else (io.BufferedRandom if "+" in mode else io.BufferedWriter)(raw)
+
+    for alvo, nome, v in ((builtins, "open", open_), (io, "open", open_), (os, "fdopen", open_), (io, "FileIO", _RawDiario),
+                          (os, "write", lambda fd, b: _escrever_lim(lambda x: wr(fd, x), b) if eh_fd(fd) else wr(fd, b)),
+                          (os, "ftruncate", lambda fd, n: _cortar_lim(ftr, fd, n) if eh_fd(fd) else ftr(fd, n))):
+        monkeypatch.setattr(alvo, nome, v)
+    yield DiscoDiario
+    DiscoDiario.livre = DiscoDiario.erro_escrita = DiscoDiario.erro_corte = DiscoDiario.ao_escrever = None
+    DiscoDiario.abertos, _RawDiario._pasta, _RawDiario._eh_fd = [], None, None
+
+
+def _recalcular_linha(linha_bytes, **trocas):
+    reg = {**json.loads(linha_bytes.split(b" ", 1)[1].decode("utf-8")), **trocas}
+    raw = json.dumps(reg, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
+    return b"%08x " % (zlib.crc32(raw) & 0xFFFFFFFF) + raw
+
+
+def test_regua_auxiliares_e_diario_basico(local, casa, sessoes):
+    D, s, cam = mod(), sessoes(casa), caminho_diario(local)
+    s.passo("transacao")
+    nova = _recalcular_linha(cam.read_bytes()[:-1].split(b"\n")[1], tipo="refazer")
+    assert nova.startswith(b"%08x " % (zlib.crc32(nova.split(b" ", 1)[1]) & 0xFFFFFFFF)) and len(D.ler_diario(str(cam))[0]) == 2
+
+
+@AINDA_NAO
+def test_1a_abrir_sobre_existente_preserva_descartados(local, casa, sessoes):
+    """M1.1 e M1.2: abrir não trunca sem guardar em diario-descartado.obimlog; se já existir um, guarda os dois."""
+    D, cam, descartado, s1 = mod(), caminho_diario(local), caminho_diario(local).parent / "diario-descartado.obimlog", sessoes(casa)
+    for k in ("transacao", "transacao", "desfazer"):
+        s1.passo(k)
+    f1, _ = s1.foto(), s1.fechar()
+    b1, (regs1, av1) = cam.read_bytes(), D.ler_diario(str(cam))
+    assert av1 == [] and len(regs1) == 4
+    s2 = sessoes(casa)
+    assert descartado.exists() and descartado.read_bytes() == b1 and D.ler_diario(str(descartado)) == (regs1, [])
+    igual(recuperar(casa, descartado)[0], f1, "recuperar a partir do primeiro diario-descartado.obimlog")
+    assert [r["tipo"] for r in registros_crus(cam)] == ["base"]
+    s2.passo("transacao"), s2.fechar()
+    b2, (regs2, av2) = cam.read_bytes(), D.ler_diario(str(cam))
+    assert av2 == [] and len(regs2) == 2 and b2 != b1
+    sessoes(casa).fechar()
+    arqs_desc = [p for p in cam.parent.iterdir() if p.name != "diario.obimlog" and "descartado" in p.name]
+    assert descartado.exists() and {b1, b2}.issubset({p.read_bytes() for p in arqs_desc})
+    for b, esp in ((b1, regs1), (b2, regs2)):
+        assert D.ler_diario(str(next(x for x in arqs_desc if x.read_bytes() == b))) == (esp, [])
+
+
+@AINDA_NAO
+@pytest.mark.parametrize("livre, erro", [(0, None), (CABE, None), (CABE, SystemExit(99))])
+def test_1b_abrir_atomico_queda_no_meio_mantem_diario_antigo_integro(local, casa, sessoes, disco_diario, livre, erro):
+    """M1.3 e M1.4: queda/erro no meio do abrir não trunca nem perde o diário antigo, nem cria descartado/tmp órfão."""
+    D, cam, s1 = mod(), caminho_diario(local), sessoes(casa)
+    s1.passo("transacao"), s1.passo("transacao")
+    f1, _ = s1.foto(), s1.fechar()
+    b1, (regs1, _) = cam.read_bytes(), D.ler_diario(str(cam))
+    disco_diario.livre, disco_diario.erro_escrita = livre, erro
+    with pytest.raises(SystemExit if erro is not None else OSError):
+        D.Diario.abrir(LADO, str(casa))
+    disco_diario.livre = disco_diario.erro_escrita = None
+    assert all(r.closed for r in disco_diario.abertos), "arquivo temporário ficou aberto após falha no abrir"
+    assert not list(cam.parent.glob("diario-descartado*"))
+    if erro is None:
+        assert not list(cam.parent.glob("*.tmp*")) and [p.name for p in cam.parent.iterdir()] == ["diario.obimlog"]
+    assert cam.exists() and cam.read_bytes() == b1 and D.ler_diario(str(cam)) == (regs1, [])
+    igual(recuperar(casa, cam)[0], f1, "recuperar diário antigo após queda no abrir")
+
+
+@AINDA_NAO
+def test_2_erro_fsync_no_temporizador_propaga_e_quebra(local, casa, sessoes, monkeypatch):
+    """M2.1..M2.4: erro de os.fsync na thread do timer sobe no próximo anotar, sincronizar ou fechar, e quebra o diário."""
+    D = mod()
+    import openbim_app.transacao as T
+
+    s_anotar, d_sinc, d_fech = sessoes(casa), D.Diario.abrir("lado-sinc", str(casa)), D.Diario.abrir("lado-fech", str(casa))
+    cam_an, cam_si, cam_fech = caminho_diario(local), caminho_diario(local, "lado-sinc"), caminho_diario(local, "lado-fech")
+    caminhos = (cam_an, cam_si, cam_fech)
+    real_fsync, falhar, threads_timer, pronto, vistos = os.fsync, True, [], threading.Event(), set()
+
+    def fsync(fd):
+        st = os.fstat(fd)
+        qual = next((i for i, c in enumerate(caminhos) if c.exists() and os.path.samestat(st, os.stat(c))), None)
+        if falhar and qual is not None and threading.current_thread() is not threading.main_thread():
+            threads_timer.append(threading.current_thread()), vistos.add(qual)
+            len(vistos) == len(caminhos) and pronto.set()
+            raise OSError(errno.EIO, "falha de fsync no temporizador (ensaio)")
+        return real_fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", fsync)
+    try:
+        s_anotar.passo("transacao")
+        f1, tam1 = s_anotar.foto(), cam_an.stat().st_size
+        d_sinc.anotar("transacao", [], []), d_fech.anotar("transacao", [], [])
+        assert pronto.wait(timeout=8), f"temporizador de fsync não disparou para os 3 diários: {len(vistos)}/3"
+        [t.join(timeout=2) for t in threads_timer]
+        falhar = False  # prova que o erro levantado a seguir foi guardado do timer, não de um novo fsync
+        with pytest.raises(OSError) as e_an:
+            _tx(s_anotar, "nome")
+        assert e_an.value.errno == errno.EIO and cam_an.stat().st_size == tam1
+        igual(s_anotar.foto(), f1, "erro do timer no anotar: a transação não voltou")
+        for fn in (lambda: s_anotar.passo("transacao"), lambda: s_anotar.passo("desfazer"), s_anotar.d.sincronizar):
+            with pytest.raises(T.HistoricoQuebrado):
+                fn()
+        assert cam_an.stat().st_size == tam1
+        s_anotar.d.fechar()
+        assert s_anotar.d._f.closed
+        with pytest.raises(OSError) as e_si:
+            d_sinc.sincronizar()
+        assert e_si.value.errno == errno.EIO
+        for fn in (d_sinc.sincronizar, lambda: d_sinc.anotar("transacao", [], [])):
+            with pytest.raises(T.HistoricoQuebrado):
+                fn()
+        d_sinc.fechar()
+        assert d_sinc._f.closed
+        os.replace(cam_si, ren_si := cam_si.with_name("sinc-fechado-check.obimlog")), os.unlink(ren_si)
+        with pytest.raises(OSError) as e_fe:
+            d_fech.fechar()
+        assert e_fe.value.errno == errno.EIO and d_fech._f.closed
+        os.replace(cam_fech, renomeado := cam_fech.with_name("fechado-check.obimlog")), os.unlink(renomeado)
+    finally:
+        falhar = False
+        for d in (d_sinc, d_fech):
+            try:
+                d.fechar()
+            except OSError:
+                pass
+
+
+@AINDA_NAO
+def test_3a_recuperar_confere_obim_sha256_contra_lateral(local, casa):
+    """M3.1..M3.3: recuperar confere obim_sha256 da base contra o lateral informado; se diferir, não aplica nada e avisa."""
+    D = mod()
+    from openbim_app.lateral import Lateral
+    from test_s05_t04_transacao_oraculo import Real
+
+    objs_base = {"notas": {"n0": {"texto": "inicial", "v": 1}}}
+    sha_base = hashlib.sha256(Lateral(objs_base).canonico()).hexdigest()
+    f, c, plano = X.preparar(casa)
+    d = D.Diario.abrir(LADO, str(casa), obim_sha256=sha_base)
+    r = Real(f, c, lateral=Lateral(objs_base), codificar=D.codificar_ifc, anotar=d.anotar)
+    try:
+        r.tx([plano.op("nome"), ("lado_alterar", "notas", "n0", [plano.paredes[0]])])
+        r.tx([plano.op("mover"), plano.op("lado_criar")])
+        foto_final = r.foto()
+    finally:
+        d.fechar(), r.h.encerrar()
+    cam = caminho_diario(local)
+    foto_ifc_puro = X.R.foto(X.R.ifcopenshell.open(str(casa)), Lateral(objs_base))
+    f_ok, av_ok, _, _ = recuperar(casa, cam, lateral=Lateral(objs_base))
+    assert av_ok == []
+    igual(f_ok, foto_final, "recuperar com lateral de sha igual ao obim_sha256 da base")
+    objs_outro = {"notas": {"n0": {"texto": "alterado por fora", "v": 2}}}
+    f_dif, av_dif, _, lat_dif = recuperar(casa, cam, lateral=Lateral(objs_outro))
+    assert av_dif and lat_dif.obter("notas", "n0") == {"texto": "alterado por fora", "v": 2}
+    igual(f_dif, X.R.foto(X.R.ifcopenshell.open(str(casa)), Lateral(objs_outro)), "aplicou diário com lateral divergente")
+    f_sem, av_sem, _, _ = recuperar(casa, cam, lateral=None)
+    assert av_sem
+    igual(f_sem, X.R.foto(X.R.ifcopenshell.open(str(casa)), Lateral()), "aplicou diário quando faltava o lateral da base")
+    d2 = D.Diario.abrir("lado-sem-obim", str(casa), obim_sha256=None)
+    f2, c2, plano2 = X.preparar(casa)
+    r2 = Real(f2, c2, codificar=D.codificar_ifc, anotar=d2.anotar)
+    try:
+        r2.tx([plano2.op("nome")])
+    finally:
+        d2.fechar(), r2.h.encerrar()
+    f_inv, av_inv, _, _ = recuperar(casa, caminho_diario(local, "lado-sem-obim"), lateral=Lateral(objs_base))
+    assert av_inv
+    igual(f_inv, foto_ifc_puro, "aplicou diário com obim_sha256=None sobre lateral com dados")
+
+
+@AINDA_NAO
+@pytest.mark.parametrize("tipo_ruim", ["desconhecido", "base", "salvar", "", None, 42])
+def test_3b_tipo_desconhecido_para_com_aviso(local, casa, sessoes, tmp_path, tipo_ruim):
+    """M3.4..M3.6: ler_diario (e recuperar) rejeita registro após a base com tipo desconhecido, parando ali com aviso."""
+    D, s = mod(), sessoes(casa)
+    fotos = [s.foto()]
+    for k in ("transacao", "transacao", "desfazer", "transacao", "transacao"):
+        s.passo(k), fotos.append(s.foto())
+    ls, j, falso = caminho_diario(local).read_bytes()[:-1].split(b"\n"), 3, tmp_path / "falso.obimlog"
+    falso.write_bytes(b"\n".join(ls[:j] + [_recalcular_linha(ls[j], tipo=tipo_ruim)] + ls[j + 1 :]) + b"\n")
+    regs, av = D.ler_diario(str(falso))
+    assert len(regs) == j and av, f"tipo={tipo_ruim!r}: ler_diario devolveu {len(regs)} registros e avisos={av}"
+    f_rec, av_rec, _, _ = recuperar(casa, falso)
+    assert av_rec
+    igual(f_rec, fotos[j - 1], f"tipo={tipo_ruim!r}: recuperar não parou no registro {j}")
+
+
+@AINDA_NAO
+@pytest.mark.parametrize("livre", [0, CABE])
+@pytest.mark.parametrize("via_abrir", [False, True])
+def test_4_init_disco_cheio_fecha_arquivo_e_permite_remover(local, casa, disco_diario, livre, via_abrir):
+    """M4.1 e M4.2: se o disco enche ao gravar o registro base em __init__, o arquivo é fechado e o erro sobe."""
+    D, cam = mod(), caminho_diario(local)
+    base = {"v": 1, "seq": 0, "tipo": "base", "hora": "2026-10-26T00:00:00+00:00", "ifc_sha256": sha(casa),
+            "ifc_tamanho": casa.stat().st_size, "ifc_caminho": str(casa), "obim_sha256": None, "lado_id": LADO}
+    disco_diario.livre = livre
+    with pytest.raises(OSError) as e:
+        D.Diario.abrir(LADO, str(casa)) if via_abrir else D.Diario(cam, LADO, base)
+    disco_diario.livre = None
+    assert e.value.errno == errno.ENOSPC and disco_diario.abertos and all(r.closed for r in disco_diario.abertos)
+    for p in list(cam.parent.iterdir()):
+        os.replace(p, destino := p.with_name(p.name + ".renomeado")), os.unlink(destino)
+
+
+@AINDA_NAO
+@pytest.mark.parametrize("erro_corte", [RuntimeError("falha interna em truncate"), ValueError("seek/truncate inválido")])
+def test_5_erro_nao_oserror_em_cortar_preserva_erro_original_e_contexto(local, casa, sessoes, disco_diario, erro_corte):
+    """M5.1 e M5.2: erro não-OSError em _cortar não esconde o erro original; original sobe, foto volta e diário quebra."""
+    import openbim_app.transacao as T
+
+    s, cam = sessoes(casa), caminho_diario(local)
+    s.passo("transacao"), s.passo("transacao")
+    f0, disco_diario.livre, disco_diario.erro_corte = s.foto(), CABE, erro_corte
+    with pytest.raises(OSError) as e:
+        _tx(s, "nome")
+    disco_diario.livre = disco_diario.erro_corte = None
+    assert e.value.errno == errno.ENOSPC, f"erro original foi escondido por: {e.value!r}"
+    igual(s.foto(), f0, "passo não foi revertido após falha dupla na escrita e no corte")
+    tam = cam.stat().st_size
+    with pytest.raises(T.HistoricoQuebrado):
+        s.passo("transacao")
+    assert cam.stat().st_size == tam
+
+
+@AINDA_NAO
+def test_6a_zerar_mantem_maiores_seq_crescente_e_idempotente(local, casa, sessoes, tmp_path):
+    """M6.1..M6.4: zerar(seq) atualiza seq da base, remove seq <= dado, mantém seq > dado crescente e é idempotente."""
+    D, s, cam = mod(), sessoes(casa), caminho_diario(local)
+    for k in ("transacao", "transacao", "desfazer", "transacao", "transacao"):
+        s.passo(k)
+    ops_4_5 = [(r["tipo"], r["ifc"], r["lado"]) for r in registros_crus(cam)[4:6]]
+    s.d.zerar(0)
+    regs_0, av_0 = D.ler_diario(str(cam))
+    assert av_0 == [] and regs_0[0]["seq"] == 0 and [r["seq"] for r in regs_0[1:]] == [1, 2, 3, 4, 5]
+    s.d.zerar(3)
+    regs_z1, av_z1 = D.ler_diario(str(cam))
+    assert av_z1 == [] and regs_z1[0]["tipo"] == "base" and regs_z1[0]["seq"] == 3 and [r["seq"] for r in regs_z1[1:]] == [4, 5]
+    assert [(r["tipo"], r["ifc"], r["lado"]) for r in regs_z1[1:]] == ops_4_5 and not list(cam.parent.glob("*descartado*"))
+    ls_z1, sem_4 = cam.read_bytes().splitlines(keepends=True), tmp_path / "sem4.obimlog"
+    sem_4.write_bytes(ls_z1[0] + ls_z1[2])
+    regs_buraco, av_buraco = D.ler_diario(str(sem_4))
+    assert regs_buraco == [regs_z1[0]] and len(av_buraco) == 1 and "buraco" in av_buraco[0]
+    s.d.zerar(3), s.d.zerar(2)
+    assert D.ler_diario(str(cam)) == (regs_z1, []), "zerar(seq) não foi idempotente"
+    s.passo("transacao"), s.passo("desfazer")
+    regs_novos, av_novos = D.ler_diario(str(cam))
+    assert av_novos == [] and [r["seq"] for r in regs_novos] == [3, 4, 5, 6, 7]
+    s.d.zerar(7), s.d.zerar(7)
+    regs_vazio, av_vazio = D.ler_diario(str(cam))
+    assert av_vazio == [] and len(regs_vazio) == 1 and regs_vazio[0]["tipo"] == "base" and regs_vazio[0]["seq"] == 7
+    s.passo("transacao")
+    regs_fim, av_fim = D.ler_diario(str(cam))
+    assert av_fim == [] and [r["seq"] for r in regs_fim] == [7, 8]
+
+
+@AINDA_NAO
+def test_6b_zerar_usa_trava_e_nao_mistura_com_anotar_concorrente(local, casa, disco_diario):
+    """M6.5: zerar(seq) usa a trava do diário (espera anotar em curso terminar e não corrompe em concorrência)."""
+    D, cam = mod(), caminho_diario(local)
+    d = D.Diario.abrir(LADO, str(casa))
+    ev_no_meio, ev_liberar, erros_z, t_anotar, t_zerar = threading.Event(), threading.Event(), [], None, None
+    try:
+        d.anotar("transacao", [], [["notas", "n1", None, {"v": 1}]]), d.anotar("transacao", [], [["notas", "n2", None, {"v": 2}]])
+
+        def write_pausado(real, b):
+            disco_diario.ao_escrever, meio = None, max(1, len(b) // 2)
+            n1, _ = real(bytes(memoryview(b)[:meio])), ev_no_meio.set()
+            assert ev_liberar.wait(timeout=5)
+            return n1 + real(bytes(memoryview(b)[meio:]))
+
+        def rodar(fn, lista_erros):
+            try:
+                fn()
+            except BaseException as e:  # noqa: BLE001
+                lista_erros.append(e)
+
+        disco_diario.ao_escrever = write_pausado
+        t_anotar = threading.Thread(target=lambda: d.anotar("transacao", [], [["notas", "n3", None, {"v": 3}]]))
+        t_anotar.start()
+        assert ev_no_meio.wait(timeout=5)
+        t_zerar = threading.Thread(target=rodar, args=(lambda: d.zerar(1), erros_z))
+        t_zerar.start(), t_zerar.join(timeout=0.15)
+        if erros_z: raise erros_z[0]  # noqa: E701
+        assert t_zerar.is_alive(), "zerar(seq) não esperou a trava do diário durante anotar concorrente"
+        ev_liberar.set(), t_anotar.join(timeout=5), t_zerar.join(timeout=5)
+        assert not erros_z and D.ler_diario(str(cam))[1] == [] and [r["seq"] for r in D.ler_diario(str(cam))[0]] == [1, 2, 3]
+        erros, evs = [], {s: threading.Event() for s in range(4, 25, 2)}
+
+        def anotar_lote():
+            try:
+                for i in range(4, 34):
+                    d.anotar("transacao", [], [["notas", f"n{i}", None, {"v": i}]]), i in evs and evs[i].set()
+            finally:
+                [ev.set() for ev in evs.values()]
+
+        def zerar_lote():
+            d.zerar(2)
+            for s, ev in evs.items():
+                assert ev.wait(timeout=5)
+                d.zerar(s)
+
+        t1, t2 = threading.Thread(target=rodar, args=(anotar_lote, erros)), threading.Thread(target=rodar, args=(zerar_lote, erros))
+        t1.start(), t2.start()
+        t1.join(timeout=10), t2.join(timeout=10)
+        regs_fim, av_fim = D.ler_diario(str(cam))
+        assert not erros and av_fim == [] and regs_fim[0]["seq"] == 24 and [r["seq"] for r in regs_fim[1:]] == list(range(25, 34))
+    finally:
+        disco_diario.ao_escrever, _ = None, ev_liberar.set()
+        t_anotar is not None and t_anotar.join(timeout=2), t_zerar is not None and t_zerar.join(timeout=2)
+        d.fechar()

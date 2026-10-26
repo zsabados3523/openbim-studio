@@ -8,6 +8,7 @@ import json
 import math
 import os
 import re
+import shutil
 import sys
 import threading
 import uuid
@@ -147,6 +148,9 @@ def ler_diario(caminho):
         if not regs and reg.get("tipo") != "base":
             _avisar_parar(avisos, n, "não começa pelo registro base")
             break
+        if regs and reg.get("tipo") not in ("transacao", "desfazer", "refazer"):
+            _avisar_parar(avisos, n, "tem tipo desconhecido")
+            break
         if regs and reg["seq"] != regs[-1]["seq"] + 1:
             _avisar_parar(avisos, n, "tem buraco na numeração")
             break
@@ -178,6 +182,14 @@ def recuperar(ifc_caminho, diario_caminho, lateral=None):
     if base.get("ifc_sha256") != _sha256(ifc_caminho):
         avisos.append("o diário é de outro arquivo base (sha256 diferente); nada foi aplicado")
         return arquivo, lat, avisos
+    obim_sha = base.get("obim_sha256")
+    if obim_sha is not None:
+        if lateral is None or hashlib.sha256(lateral.canonico()).hexdigest() != obim_sha:
+            avisos.append("o diário é de outro arquivo lateral (obim_sha256 diferente); nada foi aplicado")
+            return arquivo, lat, avisos
+    elif lateral is not None and lateral.canonico() != b"{}":
+        avisos.append("o diário não tem lateral, mas foi informado lateral com dados; nada foi aplicado")
+        return arquivo, lat, avisos
     for reg in regs[1:]:
         tr = Transaction(arquivo)
         tr.operations = decodificar_ifc(reg.get("ifc") or [])
@@ -192,8 +204,14 @@ class Diario:
         self.caminho, self.lado_id = Path(caminho), lado_id
         self._seq, self._timer, self._fechado, self._quebrado = 0, None, False, False
         self._lock = threading.RLock()
-        self._f = open(self.caminho, "wb", buffering=0)
-        self._gravar(base)
+        self._erro_fsync = None
+        self._base = dict(base)
+        self._f = open(self.caminho, "w+b", buffering=0)
+        try:
+            self._gravar(base)
+        except BaseException:
+            self._f.close()
+            raise
         self._seq = 1
 
     @classmethod
@@ -205,7 +223,58 @@ class Diario:
             "ifc_sha256": _sha256(ifc_caminho), "ifc_tamanho": os.stat(ifc_caminho).st_size,
             "ifc_caminho": str(ifc_caminho), "obim_sha256": obim_sha256, "lado_id": lado_id,
         }
-        return cls(caminho, lado_id, base)
+        if not caminho.exists():
+            return cls(caminho, lado_id, base)
+
+        tmp = caminho.with_name(caminho.name + ".tmp")
+        try:
+            d = cls(tmp, lado_id, base)
+            try:
+                os.fsync(d._f.fileno())
+            finally:
+                d._f.close()
+        except BaseException:
+            if tmp.exists():
+                try:
+                    tmp.unlink()
+                except OSError:
+                    pass
+            raise
+
+        desc = caminho.parent / "diario-descartado.obimlog"
+        n = 1
+        while desc.exists():
+            desc = caminho.parent / f"diario-descartado-{n}.obimlog"
+            n += 1
+
+        try:
+            try:
+                os.link(caminho, desc)
+            except OSError:
+                shutil.copy2(caminho, desc)
+            os.replace(tmp, caminho)
+        except BaseException:
+            if desc.exists():
+                try:
+                    desc.unlink()
+                except OSError:
+                    pass
+            if tmp.exists():
+                try:
+                    tmp.unlink()
+                except OSError:
+                    pass
+            raise
+
+        d.caminho = caminho
+        try:
+            d._f = open(caminho, "r+b", buffering=0)
+            d._f.seek(0, os.SEEK_END)
+        except BaseException:
+            if getattr(d, "_f", None) and not d._f.closed:
+                d._f.close()
+            raise
+        return d
 
     def _linha(self, reg):
         raw = json.dumps(reg, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
@@ -223,7 +292,7 @@ class Diario:
         try:
             self._f.truncate(pos)
             self._f.seek(pos)
-        except OSError:
+        except BaseException:
             self._quebrado = True
             raise
 
@@ -233,9 +302,6 @@ class Diario:
     def anotar(self, tipo, ifc, lado):
         if tipo not in ("transacao", "desfazer", "refazer"):
             raise ValueError(f"tipo de registro inválido: {tipo!r}")
-        reg = {"v": 1, "seq": self._seq, "tipo": tipo, "hora": _hora(),
-               "ifc": _jsonable(ifc), "lado": _jsonable(list(lado))}
-        linha = self._linha(reg)
         ponto, falha = os.environ.get("OBIM_S05_MORRER_EM"), os.environ.get("OBIM_S05_FALHA_EM")
         if falha == "anotar_antes":
             raise OSError("falha simulada antes de anotar no diário")
@@ -244,8 +310,15 @@ class Diario:
         with self._lock:
             if self._fechado:
                 raise ValueError("diário já fechado")
+            if self._erro_fsync is not None:
+                err = self._erro_fsync
+                self._erro_fsync = None
+                raise err
             if self._quebrado:
                 raise HistoricoQuebrado("diário quebrado; reabra pela recuperação")
+            reg = {"v": 1, "seq": self._seq, "tipo": tipo, "hora": _hora(),
+                   "ifc": _jsonable(ifc), "lado": _jsonable(list(lado))}
+            linha = self._linha(reg)
             pos = self._f.tell()
             try:
                 if ponto == "anotar_meio" or falha == "anotar_meio":
@@ -257,8 +330,8 @@ class Diario:
             except BaseException:
                 try:
                     self._cortar(pos)
-                except OSError:
-                    pass
+                except BaseException:
+                    self._quebrado = True
                 raise
             if ponto == "anotar_depois":
                 os._exit(86)
@@ -276,15 +349,32 @@ class Diario:
     def _acordar(self):
         with self._lock:
             self._timer = None
-            if self._fechado:
+            if self._fechado or self._quebrado:
                 return
-        self.sincronizar()
+            try:
+                os.fsync(self._f.fileno())
+            except BaseException as e:
+                self._quebrado = True
+                self._erro_fsync = e
 
     def sincronizar(self):
         with self._lock:
             if self._fechado:
                 return
-            os.fsync(self._f.fileno())
+            if self._erro_fsync is not None:
+                err = self._erro_fsync
+                self._erro_fsync = None
+                raise err
+            if self._quebrado:
+                raise HistoricoQuebrado("diário quebrado; reabra pela recuperação")
+            try:
+                os.fsync(self._f.fileno())
+            except BaseException:
+                if self._timer is not None:
+                    self._timer.cancel()
+                    self._timer = None
+                self._quebrado = True
+                raise
 
     def fechar(self):
         with self._lock:
@@ -294,5 +384,67 @@ class Diario:
             if self._timer is not None:
                 self._timer.cancel()
                 self._timer = None
-            os.fsync(self._f.fileno())
-            self._f.close()
+            err = self._erro_fsync
+            self._erro_fsync = None
+            try:
+                if not self._quebrado and err is None:
+                    os.fsync(self._f.fileno())
+            finally:
+                self._f.close()
+            if err is not None:
+                raise err
+
+    def zerar(self, seq):
+        with self._lock:
+            if self._fechado:
+                raise ValueError("diário já fechado")
+            if self._erro_fsync is not None:
+                err = self._erro_fsync
+                self._erro_fsync = None
+                raise err
+            if self._quebrado:
+                raise HistoricoQuebrado("diário quebrado; reabra pela recuperação")
+            if seq <= self._base.get("seq", 0):
+                return
+            try:
+                self._f.seek(0)
+                linhas = self._f.read().splitlines(keepends=True)
+                if not linhas or not linhas[0].endswith(b"\n"):
+                    raise HistoricoQuebrado("registro base corrompido")
+                m0 = _LINHA.fullmatch(linhas[0].rstrip(b"\r\n"))
+                if not m0 or int(m0[1], 16) != zlib.crc32(m0[2]) & 0xFFFFFFFF:
+                    raise HistoricoQuebrado("registro base corrompido")
+                base = json.loads(m0[2].decode("utf-8"))
+            except BaseException:
+                self._quebrado = True
+                raise
+            base["seq"] = seq
+            linhas_manter = [self._linha(base)]
+            max_seq = seq
+            for linha in linhas[1:]:
+                if not linha.endswith(b"\n"):
+                    break
+                m = _LINHA.fullmatch(linha.rstrip(b"\r\n"))
+                if not m or int(m[1], 16) != zlib.crc32(m[2]) & 0xFFFFFFFF:
+                    break
+                try:
+                    reg = json.loads(m[2].decode("utf-8"))
+                except Exception:
+                    break
+                r_seq = reg.get("seq", 0)
+                if r_seq > seq:
+                    linhas_manter.append(linha)
+                    if r_seq > max_seq:
+                        max_seq = r_seq
+            novo = b"".join(linhas_manter)
+            try:
+                self._f.seek(0)
+                self._escrever(novo)
+                self._f.truncate(len(novo))
+                self._f.seek(len(novo))
+            except BaseException:
+                self._quebrado = True
+                raise
+            self._base = base
+            self._seq = max(self._seq, max_seq + 1)
+            self._agendar()

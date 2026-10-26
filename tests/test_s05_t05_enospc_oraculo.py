@@ -20,12 +20,14 @@ CABE = 7
 
 
 class Disco:  # livre: None = sem limite; n = bytes que ainda cabem. corte_falha: truncate e ftruncate do diário recusam
-    livre, corte_falha, caminhos = None, False, []
+    livre, corte_falha, caminhos, erro = None, False, [], None
 
 
 def _escrever(real, b):
     if Disco.livre is None: return real(b)  # noqa: E701
-    if Disco.livre <= 0: raise OSError(errno.ENOSPC, "No space left on device (ensaio)")  # noqa: E701
+    if Disco.livre <= 0:
+        if Disco.erro is not None: raise Disco.erro  # noqa: E701
+        raise OSError(errno.ENOSPC, "No space left on device (ensaio)")  # noqa: E701
     n = real(bytes(memoryview(b)[:Disco.livre]))
     Disco.livre -= n
     return n
@@ -61,7 +63,7 @@ def disco(monkeypatch, local):
                           (os, "ftruncate", lambda fd, n: _cortar(ftr, fd, n) if eh(fd) else ftr(fd, n))):
         monkeypatch.setattr(alvo, nome, v)
     yield Disco
-    Disco.livre, Disco.corte_falha = None, False
+    Disco.livre, Disco.corte_falha, Disco.erro = None, False, None
 
 
 def _tx(s, tipo):  # transação de uma operação: "nome" = registro pequeno, "parede" = grande (mais que o buffer)
@@ -117,3 +119,28 @@ def test_8b_corte_que_falha_quebra_o_diario(local, casa, sessoes, disco):
     f, _, _, _ = recuperar(casa, cam)
     igual(f, f0, "recuperar do diário quebrado: só o que foi confirmado antes")
     assert [r["tipo"] for r in D.ler_diario(str(cam))[0]] == ["base", "transacao", "transacao"]
+
+
+@pytest.mark.parametrize("exc", [KeyboardInterrupt, SystemExit])
+@pytest.mark.parametrize("tipo, cabe", [("nome", CABE), ("parede", CABE)])
+def test_8c_interrupcao_na_escrita_nao_suja_o_diario(local, casa, sessoes, disco, exc, tipo, cabe):
+    D = mod()
+    s, cam = sessoes(casa), caminho_diario(local)
+    s.passo("transacao"), s.passo("transacao")
+    f0, disco.livre, disco.erro = s.foto(), cabe, exc("interrupcao")
+    with pytest.raises(exc):
+        _tx(s, tipo)
+    assert disco.livre == 0, "o registro que falhou era menor que o pedaço que cabia"
+    igual(s.foto(), f0, "interrupção no anotar: o passo não voltou")
+    disco.livre, disco.erro = None, None
+    _tx(s, "nome")
+    assert D.ler_diario(str(cam))[1] == [], "sobrou resto do registro que falhou depois da linha seguinte"
+    s.passo("transacao"), s.passo("desfazer")
+    regs, av = D.ler_diario(str(cam))
+    seqs = [r["seq"] for r in regs]
+    assert av == [] and [r["tipo"] for r in regs] == ["base"] + ["transacao"] * 4 + ["desfazer"], ([r["tipo"] for r in regs], av)
+    assert seqs == list(range(seqs[0], seqs[0] + len(seqs))), f"seq repetido ou com buraco: {seqs}"
+    f, av2, _, _ = recuperar(casa, cam)
+    igual(f, s.foto(), "recuperar depois da interrupção: só os passos confirmados")
+    assert av2 == []
+

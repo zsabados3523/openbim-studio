@@ -195,3 +195,209 @@ def test_r9_fsync_da_copia_do_bak_ao_desfazer(segunda):
         c.resolver()
     assert r.trocas == [("Casa.ifc", True)], f"C19: Casa.ifc voltado do .bak sem fsync da cópia: {r.trocas}"
     assert X.estado_par(c.destino, c.antigo, c.novo, c.pasta) == ("antigo", [])
+
+
+import errno
+import shutil
+
+
+@pytest.mark.parametrize("variante", ["outro_caminho", "destino_alterado", "gravacao_ilegivel", "bak_sumido"])
+def test_r10_pendencia_que_nao_se_resolve_recusa(proj, monkeypatch, variante):
+    """Caso 2: pendência que não sai recusa a gravação sem mexer em nada (mutante N2a)."""
+    gp()
+    _pendente(proj, monkeypatch)
+    destino = proj.destino
+    if variante == "outro_caminho":
+        copia_dir = proj.destino.parent.parent / "obra_copia"
+        copia_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(proj.destino.parent, copia_dir, dirs_exist_ok=True)
+        destino = copia_dir / "Casa.ifc"
+    elif variante == "destino_alterado":
+        proj.destino.with_suffix(".obim").write_bytes(b"corrompido")
+    elif variante == "gravacao_ilegivel":
+        (proj.pasta / "gravacao.json").write_text("{lixo", encoding="utf-8")
+    elif variante == "bak_sumido":
+        virar_byte(proj.destino.with_name("Casa.obim.tmp"))
+        proj.destino.with_name("Casa.ifc.bak").unlink()
+
+    antes_pset = proj.pset()
+    pastas = (destino.parent, proj.pasta) if destino == proj.destino else (destino.parent, proj.destino.parent, proj.pasta)
+    antes_disco = X.foto_pastas(*pastas)
+    chamadas_antes = list(proj.chamadas)
+
+    with pytest.raises(Exception) as ei:
+        proj.gravar(destino=destino, seq=SEQ + 1)
+    assert "gravacao.json" in str(ei.value), f"erro não cita gravacao.json: {ei.value}"
+    assert proj.chamadas == chamadas_antes, "chamou ao_concluir"
+    assert proj.pset() == antes_pset, f"revisão mudou: antes {antes_pset}, depois {proj.pset()}"
+    assert X.foto_pastas(*pastas) == antes_disco, "mudou bytes no disco"
+
+
+@pytest.mark.parametrize("falha", ["unlink_final", "troca_obim"])
+def test_r11_unlink_final_recusado_uma_vez_conclui_e_o_carimbo_fica(proj, monkeypatch, falha):
+    """Caso 3: resolvedor conclui na hora e o carimbo fica (mutante N3)."""
+    gp()
+    proj.gravar()
+    um = proj.antigo()
+    proj.tx(2)
+    novo2 = proj.novo(2)
+    monkeypatch.setattr(time, "sleep", lambda s: None)
+
+    if falha == "unlink_final":
+        unlink_real = os.unlink
+        falhou = []
+
+        def unlink_uma_vez(p, *a, **k):
+            if os.path.basename(str(p)) == "gravacao.json" and not falhou:
+                falhou.append(True)
+                raise OSError(errno.EIO, "falha simulada no unlink final")
+            return unlink_real(p, *a, **k)
+
+        monkeypatch.setattr(os, "unlink", unlink_uma_vez)
+    else:
+        recusa = TrocaRecusada(proj.destino.with_suffix(".obim"), 6)
+        monkeypatch.setattr(os, "replace", recusa)
+
+    proj.chamadas.clear()
+    with pytest.raises(Exception):
+        proj.gravar()
+
+    if falha == "unlink_final":
+        assert falhou == [True]
+        assert [c[0] for c in proj.chamadas] == [SEQ, SEQ]
+    else:
+        assert recusa.tentativas >= 6
+        assert [c[0] for c in proj.chamadas] == [SEQ]
+
+    assert not (proj.pasta / "gravacao.json").exists(), "gravacao.json não sumiu"
+    assert X.estado_par(proj.destino, um, novo2, proj.pasta) == ("novo", [])
+    assert proj.pset() == (LADO, 2), f"ADR §4.5: carimbo na memória voltou: {proj.pset()}"
+
+    dois = proj.antigo()
+    proj.tx(3)
+    novo3 = proj.novo(3)
+    proj.gravar()
+    assert proj.pset() == (LADO, 3)
+    assert X.estado_par(proj.destino, dois, novo3, proj.pasta) == ("novo", [])
+    man, _ = X.ler_obim(proj.destino.with_suffix(".obim"))
+    assert man["Revisao"] == 3
+
+
+def test_r12_recusa_por_pendencia_nao_pula_revisao(proj, monkeypatch):
+    """Caso 4: recusa por pendência que não sai não mexe na Revisao da memória (mutante N7)."""
+    gp()
+    um, dois = _pendente(proj, monkeypatch)
+    antes = proj.pset()
+    proj.tx(3)
+    tres = proj.novo(3)
+    with pytest.MonkeyPatch.context() as mp, pytest.raises(Exception) as ei:
+        mp.setattr(os, "replace", TrocaRecusada(proj.destino.with_suffix(".obim"), 10**6))
+        proj.gravar(seq=SEQ + 1)
+    assert "gravacao.json" in str(ei.value), f"a mensagem não cita gravacao.json: {ei.value}"
+    assert proj.pset() == antes, f"recusa por pendência alterou a revisão na memória: {proj.pset()} != {antes}"
+
+    proj.gravar(seq=SEQ + 1)
+    assert proj.pset() == (LADO, 3), f"revisão pulou ou não avançou: {proj.pset()}"
+    assert X.estado_par(proj.destino, um, tres, proj.pasta) == ("novo", [])
+
+
+@pytest.mark.parametrize("variante", ["autosave_novo", "autosave_antigo"])
+def test_r13_falha_depois_do_gravacao_json_sem_carimbo(proj, monkeypatch, variante):
+    """Caso 5: autosave que falha depois do gravacao.json sem carimbo e sem histórico (mutante N11)."""
+    gp()
+    proj.gravar()
+    um_usuario = proj.antigo()
+    pset_antes = proj.pset()
+
+    auto = proj.pasta / "autosave" / "Casa.ifc"
+    auto.parent.mkdir(parents=True, exist_ok=True)
+    antigo_auto = None
+    if variante == "autosave_antigo":
+        proj.gravar(historico=None, carimbo=False, destino=auto)
+        antigo_auto = (auto.read_bytes(), auto.with_suffix(".obim").read_bytes())
+
+    proj.tx(2)
+    pset_apos_tx = proj.pset()
+
+    monkeypatch.setattr(proj.s, "escrever", lambda *a, **k: pytest.fail("sem carimbo abriu escrever()"))
+
+    t = None
+    with pytest.MonkeyPatch.context() as mp, pytest.raises(Exception) as ei:
+        t = Traco(mp, proj.s, {(("replace", "gravacao.json", "depois")): lambda: virar_byte(auto.with_name("Casa.ifc.tmp"))})
+        proj.gravar(historico=None, carimbo=False, destino=auto)
+
+    assert t is not None and ("replace", "gravacao.json") in t.ev
+    assert "Casa.ifc" in str(ei.value)
+    assert not isinstance(ei.value, (AttributeError, TypeError)), f"erro indevido com historico=None: {ei.value!r}"
+    assert proj.pset() == pset_apos_tx == pset_antes
+    assert proj.antigo() == um_usuario, "par do usuário foi afetado"
+    assert not (proj.pasta / "gravacao.json").exists()
+    assert X.sobras(auto, proj.pasta) == []
+
+    if variante == "autosave_novo":
+        assert not auto.exists() and not auto.with_suffix(".obim").exists()
+    else:
+        assert (auto.read_bytes(), auto.with_suffix(".obim").read_bytes()) == antigo_auto
+
+
+def test_r14_pendencia_que_o_resolvedor_desfaz_deixa_gravar(proj, monkeypatch):
+    """Caso 6: pendência desfeita antes de gravar não impede a gravação nova (mutante N12)."""
+    gp()
+    um, dois = _pendente(proj, monkeypatch)
+    virar_byte(proj.destino.with_name("Casa.obim.tmp"))
+    seqs = []
+    proj.gravar(seq=SEQ + 1, ao_concluir=seqs.append)
+    assert seqs == [SEQ + 1], f"ao_concluir inesperado: {seqs}"
+    assert not list(proj.pasta.glob("gravacao*")), "sobrou gravacao* em pasta_projeto"
+    assert proj.pset() == (LADO, 3), f"revisão inesperada: {proj.pset()}"
+    novo = proj.novo(3)
+    assert X.estado_par(proj.destino, um, novo) == ("novo", [])
+    assert (proj.destino.with_name("Casa.ifc.bak").read_bytes(), proj.destino.with_name("Casa.obim.bak").read_bytes()) == tuple(um)
+    man, _ = X.ler_obim(proj.destino.with_suffix(".obim"))
+    assert man["Revisao"] == 3
+
+
+@pytest.mark.parametrize("variante", ["autosave_novo", "autosave_antigo"])
+def test_r15_falha_antes_do_gravacao_json_sem_carimbo(proj, monkeypatch, variante):
+    """Mutante N11a: falha antes de gravacao.json sem carimbo e com historico=None não tenta reverter carimbo."""
+    gp()
+    proj.gravar()
+    um_usuario = proj.antigo()
+    pset_antes = proj.pset()
+
+    auto = proj.pasta / "autosave" / "Casa.ifc"
+    auto.parent.mkdir(parents=True, exist_ok=True)
+    antigo_auto = None
+    if variante == "autosave_antigo":
+        proj.gravar(historico=None, carimbo=False, destino=auto)
+        antigo_auto = (auto.read_bytes(), auto.with_suffix(".obim").read_bytes())
+
+    proj.tx(2)
+    pset_apos_tx = proj.pset()
+
+    monkeypatch.setattr(proj.s, "escrever", lambda *a, **k: pytest.fail("sem carimbo abriu escrever()"))
+
+    real_replace = os.replace
+
+    def replace_recusa(src, dst, *a, **k):
+        if os.path.basename(str(dst)) == "gravacao.json":
+            raise OSError(errno.EIO, "falha simulada no replace de gravacao.json.tmp")
+        return real_replace(src, dst, *a, **k)
+
+    with pytest.MonkeyPatch.context() as mp, pytest.raises(OSError) as ei:
+        mp.setattr(os, "replace", replace_recusa)
+        proj.gravar(historico=None, carimbo=False, destino=auto)
+
+    assert not isinstance(ei.value, (AttributeError, TypeError)), f"erro indevido com historico=None: {ei.value!r}"
+    assert "falha simulada no replace de gravacao.json.tmp" in str(ei.value)
+    assert not (proj.pasta / "gravacao.json").exists(), "gravacao.json não deve existir"
+    assert proj.pset() == pset_apos_tx == pset_antes
+    assert proj.antigo() == um_usuario, "par do usuário foi afetado"
+    assert X.sobras(auto, proj.pasta) == []
+
+    if variante == "autosave_novo":
+        assert not auto.exists() and not auto.with_suffix(".obim").exists()
+    else:
+        assert (auto.read_bytes(), auto.with_suffix(".obim").read_bytes()) == antigo_auto
+
+

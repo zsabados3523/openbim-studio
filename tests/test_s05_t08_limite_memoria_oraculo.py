@@ -104,7 +104,7 @@ def test_1_padrao_256mb_desligado_e_custo_por_memoria(novo):
     for _ in range(4):
         d_off.tx([("mover", w)])
     c_deduzido = _achar_corte(d_off, teto=150_000, passo=500) // 4
-    assert tams[-1] * 10 <= c_deduzido <= tams[-1] * 14, f"custo comportamental ({c_deduzido} B) longe de JSON×12 ({tams[-1] * 12} B)"
+    assert tams[-1] * 11.5 <= c_deduzido <= tams[-1] * 12.5, f"custo comportamental ({c_deduzido} B) longe de JSON×12 ({tams[-1] * 12} B)"
     # Limite de 30 KB: cabem >10 edições leves de nome (~1,5 KB cada), depois começa a descartar; 1 parede pesada (~88 KB) fica sozinha.
     d, _ = novo(limite_bytes=30_000)
     for _ in range(12):
@@ -219,6 +219,13 @@ def test_3_refazer_intacto_e_ciclo_completo_com_descarte_automatico(novo):
     for idx in (4, 5):
         assert d.refazer() is not None
         igual(d, fotos[idx], f"refazer preservado mesmo acima do limite: foto {idx}")
+    assert _pilhas(d) == (2, 0, False) and d.h.descartados == 4
+    # Nova transação com `future` não vazio deve zerar também o custo acumulado de `future` (sem descarte fantasma).
+    d.h.limite_bytes = int(3.5 * c)
+    d.tx([("mover", w), ("lado_alterar", "notas", "nr", [w])])
+    assert d.desfazer() is not None and d.desfazer() is not None and _pilhas(d) == (1, 2, True)
+    d.tx([("mover", w), ("lado_alterar", "notas", "nr", [w])])
+    assert _pilhas(d) == (2, 0, False) and d.h.descartados == 4
     # Ciclo completo com descarte automático pelo teto: 6 transações (teto para 3) -> desfazer até o fim (com aviso) -> refazer completo.
     avisos = []
     d2, plano2 = novo(limite_bytes=int(3.5 * c), avisar=avisos.append)
@@ -327,7 +334,7 @@ def test_6_aviso_so_no_desfazer_impossivel_e_repetido(novo):
     assert d.desfazer() is None and len(avisos) == 2
     assert d.refazer() is not None and d.refazer() is None and len(avisos) == 2
     d.h.encerrar()
-    assert d.h.descartados == 0 and not d.h.pode_desfazer and not d.h.pode_refazer
+    assert d.h.descartados == 0 and not d.h.pode_desfazer and not d.h.pode_refazer and d.desfazer() is None and len(avisos) == 2
 
 
 @AINDA_NAO
@@ -375,11 +382,14 @@ def test_7_descarte_nunca_no_meio_nem_em_transacao_abortada(novo):
         flag[0] = False
         assert X.pilhas(d) == (2, 0, True, False) and d.h.descartados == 0
         igual(d, f2, f"depois de falha em {erro.__name__}")
+    d.tx([("nome", w)])
+    assert d.h.descartados == 0 and X.pilhas(d) == (3, 0, True, False)
+    assert d.desfazer() is not None and not A.R.diferencas(d.foto(), f2)
     assert d.desfazer() is not None and not A.R.diferencas(d.foto(), f1)
     assert d.desfazer() is not None and not A.R.diferencas(d.foto(), f0)
-    d.refazer(), d.refazer()
+    d.refazer(), d.refazer(), d.refazer()
     with d.s.escrever() as esc, d.h.transacao(esc) as t:
         aplicar(("nome", w), t.ifc, t.lado, d.c)
         d.h.limite_bytes = 1_000
-        assert d.h.descartados == 0 and len(t.ifc.history) == 2 and d.h.pode_desfazer, "descartou antes do fim da transação"
-    assert d.h.descartados == 2 and X.pilhas(d) == (1, 0, True, False)
+        assert d.h.descartados == 0 and len(t.ifc.history) == 3 and d.h.pode_desfazer, "descartou antes do fim da transação"
+    assert d.h.descartados == 3 and X.pilhas(d) == (1, 0, True, False)

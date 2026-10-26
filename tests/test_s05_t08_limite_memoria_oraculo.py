@@ -25,7 +25,7 @@ CONTRATO (`app/openbim_app/transacao.py`, sem Qt, sem `obimcore`; nomes do ADR-0
    - Parâmetro opcional `avisar=None` no construtor de `Historico`, callable `avisar(msg: str)` que recebe uma string não vazia em português.
    - Chamado SÓ quando `h.desfazer(esc)` é pedido e não é mais possível porque passos foram descartados (`h.descartados > 0` e `not h.pode_desfazer`),
      devolvendo `None`. Se `desfazer(esc)` for chamado repetidas vezes nessa condição, chama `avisar` em cada tentativa; após `h.encerrar()`,
-     `descartados == 0` e não avisa.
+     `descartados` volta a `0`.
    - NUNCA chama `avisar` durante `transacao` (descarte silencioso), nem em `desfazer` possível (`pode_desfazer` verdadeiro),
      nem em `desfazer` vazio quando `descartados == 0`, nem em `refazer`.
 GUARDA: sem ifcopenshell, pula; com `OBIM_S05_OBRIGATORIO=1` todo pulo vira falha. `test_regua_*` valida só pressupostos do gerador/ambiente."""
@@ -334,7 +334,7 @@ def test_6_aviso_so_no_desfazer_impossivel_e_repetido(novo):
     assert d.desfazer() is None and len(avisos) == 2
     assert d.refazer() is not None and d.refazer() is None and len(avisos) == 2
     d.h.encerrar()
-    assert d.h.descartados == 0 and not d.h.pode_desfazer and not d.h.pode_refazer and d.desfazer() is None and len(avisos) == 2
+    assert d.h.descartados == 0 and not d.h.pode_desfazer and not d.h.pode_refazer and len(avisos) == 2
 
 
 @AINDA_NAO

@@ -42,8 +42,6 @@ from s05_t04_aux import SEMENTE, aplicar, igual
 from test_s05_t04_transacao_oraculo import Real, _pilhas, novo  # noqa: F401  (fixture `novo`)
 from test_s05_t05_diario_oraculo import _sem_injecao, casa, local  # noqa: F401  (fixtures)
 
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="T08: limite de memória do desfazer ainda não implementado em transacao.py")
-
 
 def _tam_json_diario(ifc_codificado, lado_ops):
     return len(json.dumps({"ifc": ifc_codificado, "lado": list(lado_ops)}, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8"))
@@ -85,7 +83,6 @@ def test_regua_pressupostos_gerador_e_ambiente(novo):
     assert m1 - m0 > 150_000, f"tracemalloc não mediu o acúmulo de 40 passos sem limite no ambiente: {m1 - m0} B"
 
 
-@AINDA_NAO
 def test_1_padrao_256mb_desligado_e_custo_por_memoria(novo):
     """M1: padrão 256 MiB, `None` desliga, ajustável; custo ~ JSON×12 deduzido pelo comportamento; passo > limite fica sozinho."""
     D = X.mod()
@@ -124,7 +121,6 @@ def test_1_padrao_256mb_desligado_e_custo_por_memoria(novo):
     assert d.h.descartados == 0 and X.pilhas(d) == (0, 0, False, False)
 
 
-@AINDA_NAO
 def test_2_descarta_mais_antigo_dos_dois_lados_religa_e_desfaz_restante(novo):
     """M1 + régua T04: descarta os mais antigos dos dois lados juntos, aceita desligar/religar `limite_bytes=None` e desfaz o restante."""
     d, plano = novo(limite_bytes=None)
@@ -186,7 +182,6 @@ def test_2_descarta_mais_antigo_dos_dois_lados_religa_e_desfaz_restante(novo):
     igual(d2, fotos2[k], f"gerador T04: base retida no passo {k}")
 
 
-@AINDA_NAO
 def test_3_refazer_intacto_e_ciclo_completo_com_descarte_automatico(novo):
     """M2 + ADR-002 §4.6: limite vale sobre `history + future`, `future` nunca é cortado, e o ciclo completo transação->desfazer->refazer bate."""
     d, plano = novo(limite_bytes=None)
@@ -248,7 +243,6 @@ def test_3_refazer_intacto_e_ciclo_completo_com_descarte_automatico(novo):
     assert _pilhas(d2) == (3, 0, False) and d2.refazer() is None and len(avisos) == 1
 
 
-@AINDA_NAO
 def test_4_diario_intacto_e_recuperacao_completa(local, casa):
     """M2: descartar passos antigos da memória não apaga nem corrompe o diário (T05); `recuperar` reconstrói desde a base original."""
     D = X.mod()
@@ -274,7 +268,6 @@ def test_4_diario_intacto_e_recuperacao_completa(local, casa):
     X.R.ifcopenshell.file.registry.pop(int(arq_rec.this), None)
 
 
-@AINDA_NAO
 def test_5_memoria_estavel_tracemalloc_sequencia_longa(novo):
     """Critério 5 (T00 / ADR-002 §4.6): memória medida com `tracemalloc` (amostras 20, 60, 120, 200) fica estável em razão do custo real."""
     d, plano = novo(limite_bytes=None)
@@ -308,7 +301,6 @@ def test_5_memoria_estavel_tracemalloc_sequencia_longa(novo):
         assert medidas[amostra] < 9.0 * custo_real_1, f"memória retida no passo {amostra} acima de 9 passos reais ({custo_real_1:.0f} B): {medidas}"
 
 
-@AINDA_NAO
 def test_6_aviso_so_no_desfazer_impossivel_e_repetido(novo):
     """M1 + contrato novo: descarte é silencioso; `avisar` só dispara em `desfazer` com histórico vazio e `descartados > 0` (e zera em `encerrar`)."""
     avisos = []
@@ -337,7 +329,6 @@ def test_6_aviso_so_no_desfazer_impossivel_e_repetido(novo):
     assert d.h.descartados == 0 and not d.h.pode_desfazer and not d.h.pode_refazer and len(avisos) == 2
 
 
-@AINDA_NAO
 def test_7_descarte_nunca_no_meio_nem_em_transacao_abortada(novo):
     """ADR-002 §4.6: nunca descarta no meio de uma transação aberta, nem quando a transação aborta ou falha em `codificar`/`anotar`."""
     falhar_cod, falhar_an = [False], [False]
@@ -393,3 +384,17 @@ def test_7_descarte_nunca_no_meio_nem_em_transacao_abortada(novo):
         d.h.limite_bytes = 1_000
         assert d.h.descartados == 0 and len(t.ifc.history) == 3 and d.h.pode_desfazer, "descartou antes do fim da transação"
     assert d.h.descartados == 3 and X.pilhas(d) == (1, 0, True, False)
+
+
+def test_8_custo_inclui_o_lado_lateral(novo):
+    """M1 + ADR-002 §4.6 (M14): o custo de cada passo inclui as operações do lateral (passo dominado pelo lateral vs IFC mínimo)."""
+    tams, txt = [], "x" * 3_000
+    d, plano = novo(limite_bytes=None, codificar=X.mod().codificar_ifc, anotar=lambda _, ifc, lado: tams.append(_tam_json_diario(ifc, lado)))
+    for i, w in enumerate([plano.paredes[0]] * 5):
+        with d.s.escrever() as esc, d.h.transacao(esc) as t:
+            aplicar(("nome", w), t.ifc, t.lado, d.c), t.lado.criar("notas", f"nl_{i}", {"texto": txt, "alvos": [w]})
+        if i == 3:
+            c_lat = _achar_corte(d, teto=180_000, passo=500) // 4
+            d.h.limite_bytes = int(2.5 * c_lat)
+            assert c_lat > 35_000 and tams[-1] * 11.5 <= c_lat <= tams[-1] * 12.5 and d.h.descartados == 2 and d.tx([("nome", w)]) and d.h.descartados == 2
+    assert X.pilhas(d) == (3, 0, True, False) and d.h.descartados == 3

@@ -384,3 +384,17 @@ def test_7_descarte_nunca_no_meio_nem_em_transacao_abortada(novo):
         d.h.limite_bytes = 1_000
         assert d.h.descartados == 0 and len(t.ifc.history) == 3 and d.h.pode_desfazer, "descartou antes do fim da transação"
     assert d.h.descartados == 3 and X.pilhas(d) == (1, 0, True, False)
+
+
+def test_8_custo_inclui_o_lado_lateral(novo):
+    """M1 + ADR-002 §4.6 (M14): o custo de cada passo inclui as operações do lateral (passo dominado pelo lateral vs IFC mínimo)."""
+    tams, txt = [], "x" * 3_000
+    d, plano = novo(limite_bytes=None, codificar=X.mod().codificar_ifc, anotar=lambda _, ifc, lado: tams.append(_tam_json_diario(ifc, lado)))
+    for i, w in enumerate([plano.paredes[0]] * 5):
+        with d.s.escrever() as esc, d.h.transacao(esc) as t:
+            aplicar(("nome", w), t.ifc, t.lado, d.c), t.lado.criar("notas", f"nl_{i}", {"texto": txt, "alvos": [w]})
+        if i == 3:
+            c_lat = _achar_corte(d, teto=180_000, passo=500) // 4
+            d.h.limite_bytes = int(2.5 * c_lat)
+            assert c_lat > 35_000 and tams[-1] * 11.5 <= c_lat <= tams[-1] * 12.5 and d.h.descartados == 2 and d.tx([("nome", w)]) and d.h.descartados == 2
+    assert X.pilhas(d) == (3, 0, True, False) and d.h.descartados == 3

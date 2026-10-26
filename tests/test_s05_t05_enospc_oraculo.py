@@ -121,16 +121,19 @@ def test_8b_corte_que_falha_quebra_o_diario(local, casa, sessoes, disco):
     assert [r["tipo"] for r in D.ler_diario(str(cam))[0]] == ["base", "transacao", "transacao"]
 
 
-@pytest.mark.parametrize("exc", [KeyboardInterrupt, SystemExit])
-@pytest.mark.parametrize("tipo, cabe", [("nome", CABE), ("parede", CABE)])
-def test_8c_interrupcao_na_escrita_nao_suja_o_diario(local, casa, sessoes, disco, exc, tipo, cabe):
+@pytest.mark.parametrize("erro", [KeyboardInterrupt, SystemExit])
+@pytest.mark.parametrize("tipo, cabe", [("nome", CABE), ("parede", CABE), ("parede", 5000)])
+def test_8c_interrupcao_na_escrita_nao_suja_o_diario(local, casa, sessoes, disco, erro, tipo, cabe):
     D = mod()
     s, cam = sessoes(casa), caminho_diario(local)
     s.passo("transacao"), s.passo("transacao")
-    f0, disco.livre, disco.erro = s.foto(), cabe, exc("interrupcao")
-    with pytest.raises(exc):
+    tam_antes = cam.stat().st_size
+    f0, disco.livre, disco.erro = s.foto(), cabe, erro
+    with pytest.raises(erro):
         _tx(s, tipo)
     assert disco.livre == 0, "o registro que falhou era menor que o pedaço que cabia"
+    assert cam.stat().st_size == tam_antes, "diário não foi truncado após interrupção"
+    assert D.ler_diario(str(cam))[1] == [], "sobrou resto do registro imediatamente após interrupção"
     igual(s.foto(), f0, "interrupção no anotar: o passo não voltou")
     disco.livre, disco.erro = None, None
     _tx(s, "nome")

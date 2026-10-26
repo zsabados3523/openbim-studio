@@ -32,8 +32,6 @@ from s05_t05_aux import LADO, caminho_diario, igual, mod, recuperar, sha
 from test_s05_t05_diario_oraculo import _sem_injecao, casa, local, registros_crus, sessoes  # noqa: F401  (fixtures)
 from test_s05_t05_enospc_oraculo import CABE, _tx
 
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="T09a: endurecimento do diário ainda não implementado em diario.py")
-
 
 class DiscoDiario:
     livre, erro_escrita, erro_corte, ao_escrever, abertos = None, None, None, None, []
@@ -112,7 +110,6 @@ def test_regua_auxiliares_e_diario_basico(local, casa, sessoes):
     assert nova.startswith(b"%08x " % (zlib.crc32(nova.split(b" ", 1)[1]) & 0xFFFFFFFF)) and len(D.ler_diario(str(cam))[0]) == 2
 
 
-@AINDA_NAO
 def test_1a_abrir_sobre_existente_preserva_descartados(local, casa, sessoes):
     """M1.1 e M1.2: abrir não trunca sem guardar em diario-descartado.obimlog; se já existir um, guarda os dois."""
     D, cam, descartado, s1 = mod(), caminho_diario(local), caminho_diario(local).parent / "diario-descartado.obimlog", sessoes(casa)
@@ -135,7 +132,6 @@ def test_1a_abrir_sobre_existente_preserva_descartados(local, casa, sessoes):
         assert D.ler_diario(str(next(x for x in arqs_desc if x.read_bytes() == b))) == (esp, [])
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("livre, erro", [(0, None), (CABE, None), (CABE, SystemExit(99))])
 def test_1b_abrir_atomico_queda_no_meio_mantem_diario_antigo_integro(local, casa, sessoes, disco_diario, livre, erro):
     """M1.3 e M1.4: queda/erro no meio do abrir não trunca nem perde o diário antigo, nem cria descartado/tmp órfão."""
@@ -155,7 +151,6 @@ def test_1b_abrir_atomico_queda_no_meio_mantem_diario_antigo_integro(local, casa
     igual(recuperar(casa, cam)[0], f1, "recuperar diário antigo após queda no abrir")
 
 
-@AINDA_NAO
 def test_2_erro_fsync_no_temporizador_propaga_e_quebra(local, casa, sessoes, monkeypatch):
     """M2.1..M2.4: erro de os.fsync na thread do timer sobe no próximo anotar, sincronizar ou fechar, e quebra o diário."""
     D = mod()
@@ -215,7 +210,6 @@ def test_2_erro_fsync_no_temporizador_propaga_e_quebra(local, casa, sessoes, mon
                 pass
 
 
-@AINDA_NAO
 def test_3a_recuperar_confere_obim_sha256_contra_lateral(local, casa):
     """M3.1..M3.3: recuperar confere obim_sha256 da base contra o lateral informado; se diferir, não aplica nada e avisa."""
     D = mod()
@@ -226,7 +220,8 @@ def test_3a_recuperar_confere_obim_sha256_contra_lateral(local, casa):
     sha_base = hashlib.sha256(Lateral(objs_base).canonico()).hexdigest()
     f, c, plano = X.preparar(casa)
     d = D.Diario.abrir(LADO, str(casa), obim_sha256=sha_base)
-    r = Real(f, c, lateral=Lateral(objs_base), codificar=D.codificar_ifc, anotar=d.anotar)
+    r = Real(f, c, codificar=D.codificar_ifc, anotar=d.anotar)
+    r.lat._criar("notas", "n0", objs_base["notas"]["n0"])
     try:
         r.tx([plano.op("nome"), ("lado_alterar", "notas", "n0", [plano.paredes[0]])])
         r.tx([plano.op("mover"), plano.op("lado_criar")])
@@ -257,7 +252,6 @@ def test_3a_recuperar_confere_obim_sha256_contra_lateral(local, casa):
     igual(f_inv, foto_ifc_puro, "aplicou diário com obim_sha256=None sobre lateral com dados")
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("tipo_ruim", ["desconhecido", "base", "salvar", "", None, 42])
 def test_3b_tipo_desconhecido_para_com_aviso(local, casa, sessoes, tmp_path, tipo_ruim):
     """M3.4..M3.6: ler_diario (e recuperar) rejeita registro após a base com tipo desconhecido, parando ali com aviso."""
@@ -274,7 +268,6 @@ def test_3b_tipo_desconhecido_para_com_aviso(local, casa, sessoes, tmp_path, tip
     igual(f_rec, fotos[j - 1], f"tipo={tipo_ruim!r}: recuperar não parou no registro {j}")
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("livre", [0, CABE])
 @pytest.mark.parametrize("via_abrir", [False, True])
 def test_4_init_disco_cheio_fecha_arquivo_e_permite_remover(local, casa, disco_diario, livre, via_abrir):
@@ -291,7 +284,6 @@ def test_4_init_disco_cheio_fecha_arquivo_e_permite_remover(local, casa, disco_d
         os.replace(p, destino := p.with_name(p.name + ".renomeado")), os.unlink(destino)
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("erro_corte", [RuntimeError("falha interna em truncate"), ValueError("seek/truncate inválido")])
 def test_5_erro_nao_oserror_em_cortar_preserva_erro_original_e_contexto(local, casa, sessoes, disco_diario, erro_corte):
     """M5.1 e M5.2: erro não-OSError em _cortar não esconde o erro original; original sobe, foto volta e diário quebra."""
@@ -311,7 +303,6 @@ def test_5_erro_nao_oserror_em_cortar_preserva_erro_original_e_contexto(local, c
     assert cam.stat().st_size == tam
 
 
-@AINDA_NAO
 def test_6a_zerar_mantem_maiores_seq_crescente_e_idempotente(local, casa, sessoes, tmp_path):
     """M6.1..M6.4: zerar(seq) atualiza seq da base, remove seq <= dado, mantém seq > dado crescente e é idempotente."""
     D, s, cam = mod(), sessoes(casa), caminho_diario(local)
@@ -342,7 +333,6 @@ def test_6a_zerar_mantem_maiores_seq_crescente_e_idempotente(local, casa, sessoe
     assert av_fim == [] and [r["seq"] for r in regs_fim] == [7, 8]
 
 
-@AINDA_NAO
 def test_6b_zerar_usa_trava_e_nao_mistura_com_anotar_concorrente(local, casa, disco_diario):
     """M6.5: zerar(seq) usa a trava do diário (espera anotar em curso terminar e não corrompe em concorrência)."""
     D, cam = mod(), caminho_diario(local)

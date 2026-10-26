@@ -156,10 +156,8 @@ def _resumo_lado(ops, avanco):
     return (cr, al, ap) if avanco else (ap, al, cr)
 
 
-def _custo_passo(ops, lado_ops):
-    from openbim_app.diario import codificar_ifc
-
-    dados = {"ifc": codificar_ifc(ops), "lado": list(lado_ops)}
+def _custo_passo(ifc_enc, lado_ops):
+    dados = {"ifc": ifc_enc, "lado": list(lado_ops)}
     raw = json.dumps(dados, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
     return len(raw) * 12
 
@@ -169,10 +167,10 @@ class Historico:
         if isinstance(limite_bytes, bool) or (limite_bytes is not None and (not isinstance(limite_bytes, int) or limite_bytes <= 0)):
             raise ValueError("limite_bytes deve ser inteiro > 0 ou None")
         self._lat, self._limite_bytes, self._codificar, self._anotar, self._avisar = (
-            lateral, limite_bytes, codificar or (lambda ops: None), anotar, avisar
+            lateral, limite_bytes, codificar, anotar, avisar
         )
         self._lh, self._lf, self._ch, self._cf = [], [], [], []  # lateral e custos: histórico e refazer (o IFC guarda as dele)
-        self._descartados, self._aberta, self._quebrado = 0, False, False
+        self._descartados, self._aberta, self._quebrado, self._poda_pendente = 0, False, False, False
         with sessao.escrever() as esc:  # abre escrever() próprio: dentro de outro escrever() da mesma thread dá ReentradaProibida
             a = self._arquivo = esc.arquivo
             if a.transaction is not None:
@@ -196,9 +194,12 @@ class Historico:
         self._limite_bytes = novo
         if not self._aberta:
             self._podar()
+        else:
+            self._poda_pendente = True
 
     def _podar(self):
-        if self._limite_bytes is None:
+        self._poda_pendente = False
+        if self._limite_bytes is None or self._arquivo is None or self._quebrado:
             return
         a = self._arquivo
         custo_total = sum(self._ch) + sum(self._cf)
@@ -261,6 +262,8 @@ class Historico:
             yield a
         finally:
             self._aberta = False
+            if self._poda_pendente and not self._quebrado:
+                self._podar()
 
     @contextmanager
     def transacao(self, esc):
@@ -270,7 +273,13 @@ class Historico:
             tx, t = a.transaction, SimpleNamespace(ifc=a, lado=_Lado(self._lat), resumo=None)
             try:
                 yield t
-                enc = self._codificar(tx.operations)
+                enc = self._codificar(tx.operations) if self._codificar else None
+                if enc is not None:
+                    custo_ifc = enc
+                else:
+                    from openbim_app.diario import codificar_ifc
+                    custo_ifc = codificar_ifc(tx.operations)
+                custo = _custo_passo(custo_ifc, t.lado.ops)
                 if a.transaction is not tx:
                     raise RuntimeError("a transação do arquivo foi trocada por terceiros")
             except BaseException as e:
@@ -280,12 +289,17 @@ class Historico:
             a.transaction = self._sent
             self._lf.clear()
             self._cf.clear()
+            n0 = len(self._lh)
             try:
                 t.resumo = Resumo(*_resumo_ifc(a, tx.operations, True), *_resumo_lado(t.lado.ops, True))
                 self._anotar and self._anotar("transacao", enc, t.lado.ops)
                 self._lh.append(t.lado.ops)
-                self._ch.append(_custo_passo(tx.operations, t.lado.ops))
+                self._ch.append(custo)
             except BaseException:  # o passo sai dos dois lados (e o refazer anterior já se perdeu no end_transaction)
+                if len(self._lh) > n0:
+                    self._lh.pop()
+                if len(self._ch) > n0:
+                    self._ch.pop()
                 self._lado(t.lado.ops, False)
                 self._ifc(a, True)
                 a.future.pop()
@@ -317,7 +331,7 @@ class Historico:
             self._aplicar_lado(lado_ops, not desfazer)
             aplicado = True
             resumo = Resumo(*_resumo_ifc(a, tr.operations, not desfazer), *_resumo_lado(lado_ops, not desfazer))
-            self._anotar and self._anotar("desfazer" if desfazer else "refazer", self._codificar(tr.operations), lado_ops)
+            self._anotar and self._anotar("desfazer" if desfazer else "refazer", self._codificar(tr.operations) if self._codificar else None, lado_ops)
             para.append(de.pop())
             para_c.append(de_c.pop())
         except BaseException:  # tudo volta: modelo e lateral (só o que já foi aplicado)
@@ -340,8 +354,12 @@ class Historico:
 
     def encerrar(self):
         a = self._arquivo
-        a.history.clear(), a.future.clear(), self._lh.clear(), self._lf.clear()
+        if a is not None:
+            a.history.clear(), a.future.clear()
+            a.transaction = None
+            ifcopenshell.file.registry.pop(int(a.this), None)
+            self._arquivo = None
+        self._lh.clear(), self._lf.clear()
         self._ch.clear(), self._cf.clear()
         self._descartados = 0
-        a.transaction = None
-        ifcopenshell.file.registry.pop(int(a.this), None)
+        self._sent = None

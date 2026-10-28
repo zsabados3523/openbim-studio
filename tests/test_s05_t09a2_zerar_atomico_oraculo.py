@@ -9,13 +9,17 @@ CONTRATO de `zerar(seq)` (o que já valia no T09a continua: base com `seq`, regi
   continua utilizável (não fica quebrado: `anotar` segue no arquivo antigo e um `zerar` depois funciona).
 - Queda do processo em qualquer ponto: o diário no disco é o antigo inteiro (antes da troca) ou o novo inteiro (depois), sempre legível sem aviso; o
   temporário que sobrar some no próximo `Diario.abrir`, que guarda no `diario-descartado.obimlog` exatamente o que estava no disco.
+- Depois da troca, a pasta do diário recebe `os.fsync` (como `gravacao_atomica.confirmar`; exigido fora do Windows, onde não se abre pasta).
+- Falha ao REABRIR o diário depois da troca: o erro sobe, o disco tem o diário novo inteiro, o diário fica quebrado (`anotar` seguinte levanta
+  `HistoricoQuebrado`) e `fechar()` é silencioso.
 - Na pasta do diário não sobra nada além de `diario.obimlog` e `diario-descartado*`. Só APIs portáveis (nada de `/proc`, `O_TMPFILE`, `fcntl`).
 Os nomes privados usados aqui (`_f`, `_quebrado`, `_base`) já são do T09a. Falha injetada por `os.fsync`/`os.replace` espiões e pela fixture
 `disco_diario` do T09a (disco cheio e EIO de escrita só nos arquivos da pasta do diário). Queda: processo filho com `os._exit(86)`."""
-import errno, json, os, subprocess, sys  # noqa: E401
+import builtins, errno, io, json, os, stat, subprocess, sys  # noqa: E401
 from pathlib import Path
 import pytest
 from s05_conteudo_aux import _limpa, base_ifc  # noqa: F401  (fixtures)
+from openbim_app.transacao import HistoricoQuebrado
 from s05_t05_aux import AQUI, LADO, RAIZ, caminho_diario, mod
 from test_s05_t05_diario_oraculo import _sem_injecao, casa, local, registros_crus  # noqa: F401  (fixtures)
 from test_s05_t09a_diario_oraculo import disco_diario  # noqa: F401  (fixture)
@@ -69,14 +73,19 @@ def test_zerar_feliz_reabre_e_continua_anotando(local, casa):  # regressão (pas
 
 @AINDA_NAO
 def test_ordem_temporario_fsync_fecha_e_troca(local, casa):
-    # M: reescrever no lugar; sem fsync do temporário; fsync depois da troca; troca com o descritor antigo aberto (falha no Windows); não reabrir
+    # M: reescrever no lugar; sem fsync do temporário; fsync depois da troca; troca com o descritor antigo aberto (falha no Windows); não reabrir;
+    #    sem fsync da pasta depois da troca (fora do Windows)
     D, cam = mod(), caminho_diario(local)
     d = _quatro(D, casa)
     fsync_real, replace_real, ev = os.fsync, os.replace, []
     f_antigo = d._f
 
     def fsync_espia(fd):
-        _outro_da_pasta(fd, cam) and ev.append("fsync_tmp")
+        st = os.fstat(fd)
+        if stat.S_ISDIR(st.st_mode):
+            os.path.samestat(st, os.stat(cam.parent)) and ev.append("fsync_pasta")
+        elif _outro_da_pasta(fd, cam):
+            ev.append("fsync_tmp")
         return fsync_real(fd)
 
     def replace_espia(src, dst, *a, **k):
@@ -91,11 +100,62 @@ def test_ordem_temporario_fsync_fecha_e_troca(local, casa):
             d.zerar(2)
         assert "troca_com_antigo_fechado" in ev and ev.index("fsync_tmp") < ev.index("troca_com_antigo_fechado"), ev
         assert ev.count("troca_com_antigo_fechado") == 1 and "troca_com_antigo_aberto" not in ev, ev
+        if sys.platform != "win32":
+            assert "fsync_pasta" in ev[ev.index("troca_com_antigo_fechado"):], f"sem fsync da pasta depois da troca: {ev}"
         assert _seqs(D, cam) == NOVO and _sobras(cam) == [] and not d._f.closed
         d.anotar("transacao", [], [["notas", "n5", None, {"v": 5}]])
         assert _seqs(D, cam) == NOVO + [("transacao", 5)]
     finally:
         d.fechar()
+
+
+def _mesmo(a, b):
+    return os.path.normcase(os.path.abspath(os.fspath(a))) == os.path.normcase(os.path.abspath(os.fspath(b)))
+
+
+@AINDA_NAO
+def test_falha_ao_reabrir_depois_da_troca_quebra_e_disco_fica_novo(local, casa):
+    # M: engolir o erro da reabertura; seguir anotando no descritor velho (fechado ou do arquivo antigo); fechar() que levanta
+    D, cam = mod(), caminho_diario(local)
+    d = _quatro(D, casa)
+    replace_real, open_real, io_open_real, os_open_real, trocou, recusas = os.replace, builtins.open, io.open, os.open, [], []
+
+    def replace_espia(src, dst, *a, **k):
+        r = replace_real(src, dst, *a, **k)
+        _mesmo(dst, cam) and trocou.append(True)
+        return r
+
+    def recusar(caminho):
+        if trocou and not isinstance(caminho, int) and _mesmo(caminho, cam):
+            recusas.append(os.fspath(caminho))
+            raise OSError(errno.EIO, "falha simulada ao reabrir o diário", str(caminho))
+
+    def open_falha(f, *a, **k):
+        recusar(f)
+        return open_real(f, *a, **k)
+
+    def io_open_falha(f, *a, **k):
+        recusar(f)
+        return io_open_real(f, *a, **k)
+
+    def os_open_falha(f, *a, **k):
+        recusar(f)
+        return os_open_real(f, *a, **k)
+
+    try:
+        with pytest.MonkeyPatch.context() as mp:
+            for alvo, nome, v in ((os, "replace", replace_espia), (builtins, "open", open_falha), (io, "open", io_open_falha), (os, "open", os_open_falha)):
+                mp.setattr(alvo, nome, v)
+            with pytest.raises(OSError) as exc:
+                d.zerar(2)
+        assert exc.value.errno == errno.EIO and trocou and recusas, (exc.value, trocou, recusas)
+        assert _seqs(D, cam) == NOVO and _sobras(cam) == [], "o disco deveria ter o diário novo inteiro"
+        with pytest.raises(HistoricoQuebrado):
+            d.anotar("transacao", [], [["notas", "n5", None, {"v": 5}]])
+        assert _seqs(D, cam) == NOVO
+    finally:
+        d.fechar()  # silencioso: não levanta
+    assert _seqs(D, cam) == NOVO
 
 
 FALHAS = ["escrita_enospc", "escrita_eio", "fsync_tmp_eio", "troca_eio"]

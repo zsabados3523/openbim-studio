@@ -31,7 +31,6 @@ from s05_t05_aux import igual, sha
 from test_s05_t05_diario_oraculo import local  # noqa: F401
 from test_s05_t09b_autosave_oraculo import fabrica  # noqa: F401
 
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="T09c1a: abrir_projeto ainda não existe")
 
 
 def _cair(p):  # a sessão morre sem gravar: solta os arquivos e não descarta nada
@@ -89,7 +88,6 @@ def _tx(p, tag):
         X7.mudar(t.ifc, t.lado.criar, tag)
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("com_obim", [True, False])
 def test_01_abertura_limpa_nao_pergunta_e_liga_o_diario(fabrica, abre, com_obim):  # noqa: F811
     # M: pergunta sem trabalho; lateral não lido do Casa.obim; histórico sem anotar no diário; aviso à toa
@@ -106,7 +104,6 @@ def test_01_abertura_limpa_nao_pergunta_e_liga_o_diario(fabrica, abre, com_obim)
     assert p.diario.caminho == D.pasta_projeto(c.lado_id) / "diario" / "diario.obimlog"
 
 
-@AINDA_NAO
 def test_02_sim_recupera_do_diario_sem_gravar_no_casa_e_sobrevive_a_nova_queda(fabrica, abre):  # noqa: F811
     # M: texto/hora errados; perguntar 2x; gravar por cima do Casa.ifc; histórico com passos; nova queda perde o recuperado
     c = fabrica()
@@ -125,7 +122,6 @@ def test_02_sim_recupera_do_diario_sem_gravar_no_casa_e_sobrevive_a_nova_queda(f
     assert _pasta(c) == antes
 
 
-@AINDA_NAO
 def test_03_nao_descarta_o_diario_e_nao_pergunta_de_novo(fabrica, abre):  # noqa: F811
     # M: aplicar mesmo com Não; apagar o diário sem descartado; perguntar de novo na reabertura
     c = fabrica()
@@ -155,7 +151,6 @@ def _outro_obim(c):  # outro lateral no Casa.obim, mesmo manifesto
         [z.writestr(f"{k}/{i}.json", json.dumps(o)) for k, d in objs.items() for i, o in d.items()]
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("mexe,auto", [(_outro_casa, False), (_outro_obim, False)], ids=["ifc", "obim"])
 def test_04_base_que_nao_casa_avisa_e_nao_aplica(fabrica, abre, mexe, auto):  # noqa: F811
     # M: aplicar sobre outro arquivo; aceitar autosave cuja origem_ifc_sha256 não é o Casa.ifc; perguntar; não avisar; manter o diário vivo
@@ -207,7 +202,6 @@ def _morrer_gravando(c, monkeypatch, estado):  # gravação normal da cena morre
     c.obim.with_name(c.obim.name + ".tmp").unlink()
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("estado", ["E7", "E6"])
 def test_05_ordem_gravacao_json_antes_do_diario(fabrica, abre, monkeypatch, estado):  # noqa: F811
     # M: ler o diário antes do gravacao.json; concluir com o ao_concluir de outra sessão; reaplicar registros já gravados
@@ -230,7 +224,6 @@ def test_05_ordem_gravacao_json_antes_do_diario(fabrica, abre, monkeypatch, esta
     igual(_foto(p), esperado, f"{estado}: gravacao.json resolvido antes do diário")
 
 
-@AINDA_NAO
 def test_06_pendencia_do_par_que_nao_se_resolve_avisa_e_nao_mexe(fabrica, abre, monkeypatch):  # noqa: F811
     # M: apagar o gravacao.json; mexer no Casa.ifc; aplicar o diário sobre arquivo de outro programa
     c = fabrica()

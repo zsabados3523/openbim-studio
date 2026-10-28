@@ -11,10 +11,8 @@ from test_s05_t05_diario_oraculo import local  # noqa: F401
 from test_s05_t09b_autosave_oraculo import fabrica  # noqa: F401
 from test_s05_t09c_abrir_projeto_oraculo import _Morte, _avisou, _disco, _foto, _morrer, _outro_casa, _pasta, _texto, _tx, abre  # noqa: F401
 
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="T09c1b: abrir_projeto ainda não olha o autosave")
 
 
-@AINDA_NAO
 def test_06b_autosave_de_outro_casa_nao_se_aplica(fabrica, abre):  # noqa: F811
     # M: aceitar autosave cuja origem_ifc_sha256 não é o Casa.ifc atual
     c = fabrica()
@@ -29,7 +27,6 @@ def test_06b_autosave_de_outro_casa_nao_se_aplica(fabrica, abre):  # noqa: F811
     igual(_foto(p), _disco(c), "autosave de outro Casa.ifc")
 
 
-@AINDA_NAO
 def test_07_autosave_sem_registro_alem_da_base_e_recuperado(fabrica, abre):  # noqa: F811
     # M: só perguntar com registros além da base; aplicar sobre o Casa.ifc; exigir origem errada
     c = fabrica()
@@ -45,7 +42,6 @@ def test_07_autosave_sem_registro_alem_da_base_e_recuperado(fabrica, abre):  # n
     assert _pasta(c) == antes
 
 
-@AINDA_NAO
 def test_08_base_no_bak_do_autosave_e_aceita(fabrica, abre, monkeypatch):  # noqa: F811
     # nota 5 da revisão do T09a2: o zerar falhou antes da troca e a base aponta o autosave anterior, hoje o .bak
     # M: aceitar só o autosave atual; ler o lateral do .obim errado
@@ -70,7 +66,6 @@ def test_08_base_no_bak_do_autosave_e_aceita(fabrica, abre, monkeypatch):  # noq
     igual(_foto(p), esperado, "base no .bak do autosave")
 
 
-@AINDA_NAO
 def test_08b_pendencia_do_autosave_resolvida_na_abertura(fabrica, abre, monkeypatch):  # noqa: F811
     # nota 1 da revisão do oráculo: o salvar() do autosave morre em E6 (Casa.ifc do autosave trocado, .obim não; o .obim.tmp fica)
     # M: não resolver a pendência de autosave/ no passo 2 (aí nem o autosave nem o .bak casam com a base)
@@ -117,7 +112,6 @@ def _destino_alterado(c):  # gravacao.json legível, mas o autosave/Casa.ifc nã
                        "ifc": lado(c.auto_ifc), "obim": lado(c.auto_obim)}).encode("utf-8")
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("gerar,estado", [(_ilegivel, "gravacao_ilegivel"), (_destino_alterado, "destino_alterado")],
                          ids=["ilegivel", "destino_alterado"])
 def test_09_pendencia_irresoluvel_em_autosave_tem_saida(fabrica, abre, gerar, estado):  # noqa: F811

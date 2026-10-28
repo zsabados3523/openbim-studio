@@ -21,7 +21,6 @@ from s05_t05_aux import igual, sha
 from test_s05_t05_diario_oraculo import local  # noqa: F401
 from test_s05_t09b_autosave_oraculo import _vazia, fabrica  # noqa: F401
 
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="T09c2: gravação normal ainda não ligada ao diário e ao autosave")
 
 
 def _base(c):
@@ -33,7 +32,6 @@ def _base(c):
 _lat_obim = lambda c: Lateral(X7.ler_obim(c.obim)[1])  # noqa: E731
 
 
-@AINDA_NAO
 def test_01_gravar_normal_zera_com_base_no_casa_e_recupera_depois(fabrica):  # noqa: F811
     # o defeito do cartão: gravar, fazer transação e cair dava "outro arquivo" e nada era recuperado
     # M: zerar sem ifc_caminho/obim_sha256; sha do lateral atual (não o gravado); não apagar o autosave; não limpar o sujo; sem carimbo
@@ -55,7 +53,6 @@ def test_01_gravar_normal_zera_com_base_no_casa_e_recupera_depois(fabrica):  # n
     igual(foto, esperado, "gravar, transação, cair")
 
 
-@AINDA_NAO
 def test_02_apos_gravacao_normal_marca_o_seq_dado(fabrica):  # noqa: F811
     # M: marcar o último anotado em vez do seq dado (perde o "sujo" da transação que entrou depois)
     c = fabrica()
@@ -67,7 +64,6 @@ def test_02_apos_gravacao_normal_marca_o_seq_dado(fabrica):  # noqa: F811
     assert c.auto.salvar() is False
 
 
-@AINDA_NAO
 def test_03_gravar_normal_passa_o_seq_do_retrato(fabrica, monkeypatch):  # noqa: F811
     # M: seq lido depois da gravação; apos_gravacao_normal dentro do ler(); zerar levando a transação que entrou depois
     c = fabrica()
@@ -83,7 +79,6 @@ def test_03_gravar_normal_passa_o_seq_do_retrato(fabrica, monkeypatch):  # noqa:
     assert vistos == [2] and _base(c)[1] == [3] and c.auto.salvar() is True
 
 
-@AINDA_NAO
 def test_04_erro_ao_apagar_o_autosave_sobe_e_nada_se_perde(fabrica, monkeypatch):  # noqa: F811
     # M: engolir o OSError; marcar o salvo só depois de apagar; desfazer a gravação por causa do erro
     c = fabrica()
@@ -113,7 +108,6 @@ def test_04_erro_ao_apagar_o_autosave_sobe_e_nada_se_perde(fabrica, monkeypatch)
     assert c.auto_ifc.exists() and c.auto.salvar() is False
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("modo", ["escrever", "ler"])
 def test_05_parar_dentro_da_sessao_levanta_e_nao_trava(fabrica, modo):  # noqa: F811
     # M: parar() que espera a thread presa no ler() (trava para sempre); parar() que para mesmo assim

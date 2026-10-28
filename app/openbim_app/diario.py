@@ -276,6 +276,43 @@ class Diario:
             raise
         return d
 
+    @classmethod
+    def continuar(cls, caminho, lado_id, base, ultimo_seq):
+        caminho = Path(caminho)
+        d = cls.__new__(cls)
+        d.caminho, d.lado_id = caminho, lado_id
+        d._seq = ultimo_seq + 1
+        d._timer, d._fechado, d._quebrado = None, False, False
+        d._lock = threading.RLock()
+        d._erro_fsync = None
+        d._base = dict(base)
+        d._f = open(caminho, "r+b", buffering=0)
+        pos = 0
+        linhas = d._f.read().splitlines(keepends=True)
+        for linha in linhas:
+            if not linha.endswith(b"\n"):
+                break
+            m = _LINHA.fullmatch(linha.rstrip(b"\r\n"))
+            if not m or int(m[1], 16) != zlib.crc32(m[2]) & 0xFFFFFFFF:
+                break
+            try:
+                reg = json.loads(m[2].decode("utf-8"))
+            except Exception:
+                break
+            if not isinstance(reg, dict) or not isinstance(reg.get("seq"), int):
+                break
+            pos += len(linha)
+            if reg.get("seq") == ultimo_seq:
+                break
+        d._f.truncate(pos)
+        d._f.seek(pos)
+        if pos < sum(len(l) for l in linhas):
+            try:
+                os.fsync(d._f.fileno())
+            except OSError:
+                pass
+        return d
+
     def _linha(self, reg):
         raw = json.dumps(reg, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
         return b"%08x " % zlib.crc32(raw) + raw + b"\n"

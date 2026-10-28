@@ -1,39 +1,35 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo do F0-S05-T09b: autosave na pasta local (`app/openbim_app/autosave.py`, `diario.py`, `gravacao_par.py`; ADR-002 §4.5, §4.7 e §4.8).
-Não editar na implementação; quem retira os `@AINDA_NAO` (xfail estrito) é o autor do oráculo, depois da implementação.
+"""Oráculo do F0-S05-T09b, autosave (`autosave.py`, `diario.py`, `gravacao_par.py`; ADR-002 §4.5, §4.7, §4.8). Quem tira os `@AINDA_NAO` é o autor.
 CONTRATO: `openbim_app.autosave`: `INTERVALO_AUTOSAVE_S = 300`; `Autosave(sessao, historico, lateral, diario, lado_id, ifc_origem, intervalo_s=...)`.
 - `anotar(tipo, ifc, lado)` delega a `diario.anotar` (é o `anotar` do `Historico`). `salvar() -> bool`, síncrono: False sem transação anotada desde a
   última gravação normal ou autosave (não toca no disco); senão grava o par em `pasta_projeto(lado_id)/"autosave"/<nome de ifc_origem>` (+ `.obim`) com
-  `gravar_par(..., carimbo=False, pasta_projeto=<autosave/>, autosave=True, origem_ifc_sha256=<sha256 de ifc_origem>)` e devolve True. Nunca escreve no
-  par do usuário, não abre `escrever()`, o histórico não ganha passo. `gravar_par(..., autosave=False, origem_ifc_sha256=None)`: os campos
-  `"autosave": true` e `"origem_ifc_sha256"` vão ao manifesto só com `autosave=True`. `Diario.ultimo_seq`: seq do último registro (0 só com a base).
-- A: `Diario.zerar(seq, *, ifc_caminho=None, obim_sha256=None)`: com os opcionais, a base nova traz `ifc_caminho`, `ifc_sha256` e `ifc_tamanho` do arquivo
-  dado e o `obim_sha256` dado; sem eles, mantém os da base atual; `seq` até a base: nada muda. O autosave zera com o `.ifc` dele e o sha do lateral.
+  `gravar_par(..., carimbo=False, pasta_projeto=<autosave/>, autosave=True, origem_ifc_sha256=<sha256 de ifc_origem lido NESTE salvar()>)`, True.
+  Serializado por trava própria (nunca a de `anotar()`): um 2º `salvar()` simultâneo espera o 1º. Não toca no par do usuário, não abre `escrever()`, o
+  histórico não ganha passo. `gravar_par(..., autosave=False, origem_ifc_sha256=None)`: `"autosave": true` e `"origem_ifc_sha256"` no manifesto só com
+  `autosave=True`. `Diario.ultimo_seq`: seq do último registro (0 só com a base).
+- A: `Diario.zerar(seq, *, ifc_caminho=None, obim_sha256=None)`: com os opcionais, a base nova traz `ifc_caminho`, `ifc_sha256`, `ifc_tamanho` do arquivo e
+  o `obim_sha256` dados; sem eles, mantém os da base; `seq` até a base: nada muda. O autosave zera com o `.ifc` dele e o sha do lateral.
 - B: antes de gravar, `salvar` resolve a pendência herdada em `autosave/` com `resolver_gravacao_pendente(<autosave/>, destino, ao_concluir=None)`.
-- C: o seq zerado é o do RETRATO (o `ler()` que escreve o IFC): transação anterior ao retrato sai do diário, a posterior fica nele e mantém o "sujo";
-  `anotar()` de outra thread durante `salvar()` nunca trava.
+- C: o seq zerado, o passado ao `ao_concluir` e o do `gravacao.json` é o do RETRATO (o `ler()` que escreve o IFC): transação anterior ao retrato sai do
+  diário, a posterior fica e mantém o "sujo"; `anotar()` de outra thread durante `salvar()` nunca trava.
 - `apos_gravacao_normal()` apaga só o conteúdo de `autosave/` e limpa o "sujo". `iniciar()`/`parar()`: UMA thread daemon (iniciar 2x = 1) que chama
-  `self.salvar()` a cada `intervalo_s` e segue rodando depois de erro; o erro de um ciclo fica guardado (ciclo seguinte sem erro não o apaga) e é levantado
-  UMA vez no próximo `salvar()` de fora da thread ou em `parar()`; `parar()` sem iniciar é inofensivo e idempotente; depois dele, nenhuma thread dele viva.
-Sincronização: só `Event`, `join` e espera por condição (`esperar_ate`), todos com prazo; nenhum sleep decide ordem. Mutantes: `# M` de cada caso."""
+  `self.salvar()` a cada `intervalo_s` e segue depois de erro; o erro fica guardado (ciclo seguinte sem erro não o apaga) e sai UMA vez no próximo
+  `salvar()` de fora da thread (que levanta e NÃO grava) ou em `parar()` (para, faz `join` e só então levanta); `parar()` sem iniciar é inofensivo e
+  idempotente; depois dele, nenhuma thread dele viva. Sincronização: `Event`, `join` e `esperar_ate`, com prazo; sleep não decide ordem."""
 from contextlib import contextmanager
 import errno, hashlib, json, os, subprocess, sys, threading, time  # noqa: E401
 from pathlib import Path
 import pytest, openbim_app.diario as D, openbim_app.gravacao_atomica as GA, openbim_app.gravacao_par as GP  # noqa: E401
-from openbim_app.lateral import Lateral
-from openbim_app.sessao_modelo import SessaoModelo
-from openbim_app.transacao import Historico
+from openbim_app.lateral import Lateral; from openbim_app.sessao_modelo import SessaoModelo; from openbim_app.transacao import Historico  # noqa: E702
 import s05_conteudo_aux as R, s05_t05_aux as X5, s05_t07_aux as X7  # noqa: E401
 from s05_conteudo_aux import _limpa, base_ifc, exigir  # noqa: F401
-from s05_t05_aux import LADO, igual, sha
+from s05_t05_aux import LADO, igual, sha; from test_s05_t06_gravacao_atomica_oraculo import TrocaRecusada  # noqa: E702
 from test_s05_t05_diario_oraculo import _sem_injecao, local  # noqa: F401
-from test_s05_t06_gravacao_atomica_oraculo import TrocaRecusada
 
 AINDA_NAO = pytest.mark.xfail(strict=True, reason="T09b: autosave ainda não implementado")
 
-def mod():
-    import openbim_app.autosave as A  # primeira linha dos casos @AINDA_NAO: falha aqui enquanto o módulo não existir
-    return A
+def mod():  # primeira linha dos casos @AINDA_NAO: falha aqui enquanto o módulo não existir
+    import openbim_app.autosave as A; return A  # noqa: E702
 
 def esperar_ate(cond, onde, prazo=10.0):  # espera por condição (não por tempo); falha se o prazo estourar
     fim = time.monotonic() + prazo
@@ -56,7 +52,6 @@ class CenaAuto:
         if criar_auto:
             kw = dict(sessao=s.sessao, historico=s.h, lateral=s.lat, diario=s.diario, lado_id=s.lado_id, ifc_origem=s.casa)
             s.auto = mod().Autosave(**kw, **({} if intervalo_s is None else {"intervalo_s": intervalo_s}))
-
     pasta_proj = property(lambda s: D.pasta_projeto(s.lado_id))
     pasta_auto = property(lambda s: s.pasta_proj / "autosave")
     auto_ifc = property(lambda s: s.pasta_auto / s.casa.name)
@@ -65,15 +60,11 @@ class CenaAuto:
     pset = lambda s: X7.pset_obim(s.f)  # noqa: E731
     pilhas = lambda s: (len(s.f.history), len(s.f.future), s.h.pode_desfazer, s.h.pode_refazer, s.h.descartados)  # noqa: E731
     sha_lat = lambda s: hashlib.sha256(s.lat.canonico()).hexdigest()  # noqa: E731
-
     def tx(s, tag, dentro=None):
         with s.sessao.escrever() as esc, s.h.transacao(esc) as t:
-            dentro and dentro()
-            X7.mudar(t.ifc, t.lado.criar, tag)
-
+            dentro and dentro(); X7.mudar(t.ifc, t.lado.criar, tag)  # noqa: E702
     def passo(s, refazer=False):
         with s.sessao.escrever() as esc: return (s.h.refazer if refazer else s.h.desfazer)(esc)  # noqa: E701
-
     def fechar(s):
         if s.auto is not None:
             try: s.auto.parar()  # noqa: E701
@@ -101,8 +92,7 @@ _vazia = lambda p: not p.exists() or list(p.iterdir()) == []  # noqa: E731
 def test_regua_auxiliares_e_montagem(fabrica, com_obim):  # a montagem não depende do autosave (sem o FileExistsError da revisão)
     c = fabrica(criar_auto=False, com_obim=com_obim)
     assert c.casa.exists() and c.obim.exists() is com_obim and c.diario.caminho.exists()
-    c.tx(1)
-    assert [r["tipo"] for r in _base(c)[1]] == ["transacao"]
+    c.tx(1); assert [r["tipo"] for r in _base(c)[1]] == ["transacao"]  # noqa: E702
 
 @AINDA_NAO
 def test_01_sem_transacao_salvar_false_e_constante(fabrica, monkeypatch):  # M: constante != 300; sujo inicial; sujo antes de diario.anotar dar certo
@@ -110,8 +100,7 @@ def test_01_sem_transacao_salvar_false_e_constante(fabrica, monkeypatch):  # M: 
     c = fabrica(); sha_par = (sha(c.casa), sha(c.obim))  # noqa: E702
     assert c.diario.ultimo_seq == 0 and c.auto.salvar() is False and _vazia(c.pasta_auto)
     with pytest.raises(RuntimeError), c.sessao.escrever() as esc, c.h.transacao(esc) as t:
-        X7.mudar(t.ifc, t.lado.criar, 99)
-        raise RuntimeError("abortada")
+        X7.mudar(t.ifc, t.lado.criar, 99); raise RuntimeError("abortada")  # noqa: E702
     assert c.diario.ultimo_seq == 0 and c.auto.salvar() is False
     monkeypatch.setenv("OBIM_S05_FALHA_EM", "anotar_antes")
     with pytest.raises(OSError): c.tx(98)  # noqa: E701
@@ -180,13 +169,10 @@ FILHO_MORTE_AUTOSAVE = """import json, os, sys
 from pathlib import Path
 cfg = json.loads(sys.argv[1]); sys.path[:0] = [cfg["app"], cfg["tests"]]; os.environ["OBIM_PASTA_LOCAL"] = cfg["local"]
 import ifcopenshell, s05_t07_aux as X7, openbim_app.autosave as A, openbim_app.diario as D
-from openbim_app.lateral import Lateral
-from openbim_app.sessao_modelo import SessaoModelo
-from openbim_app.transacao import Historico
+from openbim_app.lateral import Lateral; from openbim_app.sessao_modelo import SessaoModelo; from openbim_app.transacao import Historico
 casa = Path(cfg["casa"]); f = ifcopenshell.open(str(casa)); s, lat = SessaoModelo(f), Lateral(X7.ler_obim(casa.with_suffix(".obim"))[1])
 d = D.Diario.abrir(cfg["lado"], str(casa), obim_sha256=cfg["obim_sha"]); auto = None
-h = Historico(s, lat, codificar=D.codificar_ifc, anotar=lambda t, i, l: auto.anotar(t, i, l))
-auto = A.Autosave(s, h, lat, d, cfg["lado"], casa)
+h = Historico(s, lat, codificar=D.codificar_ifc, anotar=lambda t, i, l: auto.anotar(t, i, l)); auto = A.Autosave(s, h, lat, d, cfg["lado"], casa)
 with s.escrever() as esc, h.transacao(esc) as t: X7.mudar(t.ifc, t.lado.criar, 1)
 assert auto.salvar() is True
 with s.escrever() as esc, h.transacao(esc) as t: X7.mudar(t.ifc, t.lado.criar, 2)
@@ -197,8 +183,7 @@ os.environ["OBIM_S05_MORRER_EM"] = cfg["ponto"]; auto.salvar()
 @pytest.mark.parametrize("ponto", ["conferir", "bak"])
 def test_06_morte_no_meio_do_autosave_preserva_anterior_e_recupera(tmp_path, base_ifc, local, ponto):  # noqa: F811
     # M: gravar direto no destino (sem .tmp); pendência herdada resolvida com o ao_concluir da sessão nova (B: seq órfão vai ao diário novo)
-    A = mod()
-    c = CenaAuto(tmp_path / "obra", base_ifc, criar_auto=False)  # fotos esperadas no MESMO par do usuário (o pset tem GlobalId próprio)
+    A, c = mod(), CenaAuto(tmp_path / "obra", base_ifc, criar_auto=False)  # fotos esperadas no MESMO par do usuário (o pset tem GlobalId próprio)
     obim_sha, casa = c.sha_lat(), c.casa
     c.tx(1); f1 = c.foto(); c.tx(2); f2 = c.foto(); c.fechar()  # noqa: E702
     cfg = {"app": str(X5.RAIZ / "app"), "tests": str(X5.AQUI), "local": str(local), "casa": str(casa), "lado": LADO, "obim_sha": obim_sha, "ponto": ponto}
@@ -214,8 +199,7 @@ def test_06_morte_no_meio_do_autosave_preserva_anterior_e_recupera(tmp_path, bas
     assert av_rec == [] and (ponto != "bak" or (pasta_auto / "gravacao.json").exists())
     igual(foto_rec, f2, "Caso 6: recuperar auto_1 + diário após morte no 2º autosave")
     s2, d2, auto2 = SessaoModelo(arq_rec), D.Diario.abrir(LADO, str(casa), obim_sha256=obim_sha), None  # sessão nova, diário novo (seq 0)
-    h2 = Historico(s2, lat_rec, codificar=D.codificar_ifc, anotar=lambda t, i, l: auto2.anotar(t, i, l))
-    auto2 = A.Autosave(s2, h2, lat_rec, d2, LADO, casa)
+    h2 = Historico(s2, lat_rec, codificar=D.codificar_ifc, anotar=lambda t, i, l: auto2.anotar(t, i, l)); auto2 = A.Autosave(s2, h2, lat_rec, d2, LADO, casa)  # noqa: E702
     try:
         with s2.escrever() as esc, h2.transacao(esc) as t: X7.mudar(t.ifc, t.lado.criar, 3)  # noqa: E701
         f3 = R.foto(arq_rec, lat_rec)
@@ -245,33 +229,28 @@ def test_07_falha_enospc_em_salvar_propaga_e_mantem_sujo(fabrica):  # M: engolir
 
 @AINDA_NAO
 def test_08_apos_gravacao_normal_apaga_so_autosave_e_limpa_sujo(fabrica):  # M: apagar pasta_projeto inteira; não limpar sujo; mexer no diário
-    c = fabrica()
-    c.tx(1); assert c.auto.salvar() is True  # noqa: E702
+    c = fabrica(); c.tx(1); assert c.auto.salvar() is True  # noqa: E702
     c.tx(2); assert c.auto.salvar() is True  # noqa: E702
     assert c.auto_ifc.with_name("Casa.ifc.bak").exists() and c.auto_obim.with_name("Casa.obim.bak").exists()
     c.tx(3); sentinela = c.pasta_proj / "outro_arquivo.txt"; sentinela.write_text("preservar", encoding="utf-8")  # noqa: E702  (sujo antes)
     sha_par, bytes_diario = (sha(c.casa), sha(c.obim)), c.diario.caminho.read_bytes()
-    c.auto.apos_gravacao_normal()
-    assert _vazia(c.pasta_auto) and (sha(c.casa), sha(c.obim)) == sha_par
+    c.auto.apos_gravacao_normal(); assert _vazia(c.pasta_auto) and (sha(c.casa), sha(c.obim)) == sha_par
     assert c.diario.caminho.read_bytes() == bytes_diario and sentinela.read_text(encoding="utf-8") == "preservar" and c.auto.salvar() is False
     c.auto.apos_gravacao_normal(); c.tx(4); assert c.auto.salvar() is True  # noqa: E702  (idempotente com a pasta vazia)
 
 @AINDA_NAO
 def test_09_retrato_em_ler_seq_do_retrato_e_sem_deadlock(fabrica):  # Caso 9 + C
-    # M: retrato fora de ler(); seq lido antes do retrato (tx anterior ao retrato fica duplicada no diário); sujo=False no fim de salvar()
+    # M: retrato fora de ler(); seq (zerar ou gravacao.json) lido antes do retrato (tx anterior ao retrato duplicada); sujo=False no fim de salvar()
     #    (perde a tx pós-retrato); trava própria segurada em salvar() e pedida em anotar() (deadlock: o join com prazo reprova)
     c = fabrica(); c.tx(1)  # noqa: E702
     ler_real, write_real, ordem, erros, no_retrato, esc = c.sessao.ler, R.ifcopenshell.file.write, [], [], {}, []
-
     def fio(tag, **kw):  # transação em outra thread; daemon para um deadlock reprovar sem prender o pytest
         def alvo():
             try: c.tx(tag, **kw)  # noqa: E701
             except BaseException as e: erros.append(e)  # noqa: BLE001, E701
         t = threading.Thread(target=alvo, daemon=True); t.start(); return t  # noqa: E702
-
     def juntar(t, onde):
         t.join(timeout=20); assert not t.is_alive(), f"deadlock: anotar() de outra thread {onde} do retrato, durante salvar()"
-
     @contextmanager
     def ler_sinc(espera=None):  # cada ler() que salvar() pede sem segurar nenhum: antes dele entra uma transação (janela antes do retrato)
         livre = threading.current_thread() is threading.main_thread() and c.sessao.estado()["leitores"] == 0
@@ -281,7 +260,6 @@ def test_09_retrato_em_ler_seq_do_retrato_e_sem_deadlock(fabrica):  # Caso 9 + C
             yield arq
         if livre and esc:
             juntar(esc[0], "depois")
-
     def write_sinc(self, caminho, *a, **k):
         if threading.current_thread() is threading.main_thread() and not no_retrato:
             no_retrato.update(estado=c.sessao.estado(), seq=c.diario.ultimo_seq, foto=c.foto()); ordem.append("retrato")  # noqa: E702
@@ -289,11 +267,15 @@ def test_09_retrato_em_ler_seq_do_retrato_e_sem_deadlock(fabrica):  # Caso 9 + C
             esperar_ate(lambda: c.sessao.estado()["esperando_escrever"] == 1, "escritor parado na porta durante o retrato")
             r = write_real(self, caminho, *a, **k); ordem.append("retrato_fim"); return r  # noqa: E702
         return write_real(self, caminho, *a, **k)
-
+    def replace_espia(src, dst, *a, **k):  # o seq do gravacao.json do autosave, lido na troca atômica dele
+        Path(dst) == c.pasta_auto / "gravacao.json" and seq_gj.append(json.loads(Path(src).read_text(encoding="utf-8"))["seq"])
+        return replace_real(src, dst, *a, **k)
+    replace_real, seq_gj = os.replace, []
     with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(c.sessao, "ler", ler_sinc); mp.setattr(R.ifcopenshell.file, "write", write_sinc)  # noqa: E702
+        mp.setattr(c.sessao, "ler", ler_sinc); mp.setattr(R.ifcopenshell.file, "write", write_sinc); mp.setattr(os, "replace", replace_espia)  # noqa: E702
         assert c.auto.salvar() is True
     n = ordem.count("antes")
+    assert seq_gj == [1 + n], f"C: gravacao.json com seq {seq_gj}, retrato {1 + n}"
     assert not erros and n >= 1 and ordem == ["antes"] * n + ["retrato", "retrato_fim", "escrita_entrou"], (erros, ordem)
     assert no_retrato["estado"]["leitores"] == 1 and no_retrato["estado"]["escritor"] is None and no_retrato["seq"] == 1 + n
     igual(_foto_auto(c.auto_ifc, c.auto_obim), no_retrato["foto"], "Caso 9: autosave = retrato")
@@ -312,7 +294,6 @@ def test_10_thread_iniciar_parar_erro_guardado_e_idempotencia(fabrica, monkeypat
     c = fabrica(intervalo_s=0.01)
     c.auto.parar(), c.auto.parar()  # parar() sem iniciar é inofensivo e idempotente
     real, fase, ev, chamadores = type(c.auto).salvar, ["ok"], {k: threading.Event() for k in ("ok", "guardado", "erro_parar")}, set()
-
     def espiao(*a, **k):  # o salvar() que a thread chama; de fora da thread vai direto ao real
         if threading.current_thread() is threading.main_thread():
             return real(c.auto, *a, **k)
@@ -326,14 +307,11 @@ def test_10_thread_iniciar_parar_erro_guardado_e_idempotencia(fabrica, monkeypat
             raise OSError(errno.ENOSPC if qual == "erro_salvar" else errno.EIO, f"falha na thread ({qual})")
         fase[0] == "apos_erro_salvar" and ev["guardado"].set()  # a thread voltou a chamar salvar(): o erro anterior já foi guardado
         return False  # "segura": a thread roda, mas não mexe em nada até o caso pedir
-
     def do_autosave():  # threads novas, fora o Timer do fsync do diário
         return {t for t in threading.enumerate() if getattr(getattr(t, "function", None), "__self__", None) is not c.diario} - fios_antes
-
     monkeypatch.setattr(c.auto, "salvar", espiao); c.tx(1); fios_antes = set(threading.enumerate())  # noqa: E702
     c.auto.iniciar(), c.auto.iniciar()
-    assert ev["ok"].wait(timeout=20), "a thread não chamou salvar()"
-    novos = do_autosave()
+    assert ev["ok"].wait(timeout=20), "a thread não chamou salvar()"; novos = do_autosave()  # noqa: E702
     assert len(novos) == 1 and all(t.daemon for t in novos) and chamadores == novos and c.auto_ifc.exists() and c.auto.salvar() is False
     c.tx(2); fase[0] = "erro_salvar"  # noqa: E702
     assert ev["guardado"].wait(timeout=20), "a thread parou depois do erro"
@@ -341,8 +319,7 @@ def test_10_thread_iniciar_parar_erro_guardado_e_idempotencia(fabrica, monkeypat
     assert exc_s.value.errno == errno.ENOSPC and c.auto.salvar() is True and c.auto.salvar() is False
     c.tx(3); fase[0] = "erro_parar"; assert ev["erro_parar"].wait(timeout=20)  # noqa: E702
     with pytest.raises(OSError) as exc_p: c.auto.parar()  # noqa: E701
-    assert exc_p.value.errno == errno.EIO
-    c.auto.parar()  # idempotente: não levanta o erro uma 2ª vez
+    assert exc_p.value.errno == errno.EIO; c.auto.parar()  # noqa: E702  (idempotente: não levanta o erro uma 2ª vez)
     assert not do_autosave(), f"thread residual após parar(): {do_autosave()}"
     assert c.auto.salvar() is True and c.auto.salvar() is False
 
@@ -351,9 +328,9 @@ def _gravar_normal(c):
                   seq=c.diario.ultimo_seq, carimbo=True, ao_concluir=c.diario.zerar)
 
 @AINDA_NAO
-def test_11_pendencia_isolada_entre_autosave_e_gravacao_normal(fabrica, monkeypatch):  # M: pasta_projeto do autosave = pasta do projeto
+def test_11_pendencia_isolada_entre_autosave_e_gravacao_normal(fabrica, monkeypatch):  # M: pasta_projeto = pasta do projeto; origem do __init__
     monkeypatch.setattr(time, "sleep", lambda s: None)  # só encurta as novas tentativas da troca recusada
-    c = fabrica(); c.tx(1)  # noqa: E702
+    c = fabrica(); c.tx(1); sha_origem_1 = sha(c.casa)  # noqa: E702
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(os, "replace", TrocaRecusada(c.auto_obim, 10**6))
         with pytest.raises(Exception): c.auto.salvar()  # noqa: E701
@@ -361,6 +338,7 @@ def test_11_pendencia_isolada_entre_autosave_e_gravacao_normal(fabrica, monkeypa
         _gravar_normal(c)
         assert c.pset() == (c.lado_id, 2) and (c.pasta_auto / "gravacao.json").exists()
     c.tx(2); assert c.auto.salvar() is True and not (c.pasta_auto / "gravacao.json").exists()  # noqa: E702
+    assert X7.ler_obim(c.auto_obim)[0]["origem_ifc_sha256"] == sha(c.casa) != sha_origem_1, "origem velha (lida antes da gravação normal)"
     c.tx(3)
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(os, "replace", TrocaRecusada(c.obim, 10**6))
@@ -397,3 +375,26 @@ def test_13_zerar_refaz_a_base_com_ifc_e_obim_novos(fabrica, tmp_path):  # decis
     assert (base2, [r["seq"] for r in resto2]) == (base, [3])
     c.diario.zerar(3); base3, resto3 = _base(c)  # noqa: E702
     assert (base3["seq"], base3["ifc_sha256"], base3["obim_sha256"], resto3, c.diario.ultimo_seq) == (3, sha(nova), sha_nova, [], 3)
+
+@AINDA_NAO
+def test_14_salvar_serializado_sem_disputar_temporarios(fabrica):  # lote 84 item 3
+    # M: salvar() sem trava própria (o 2º entra em ler(), apaga/disputa .tmp e gravacao.json); 2º salvar() que desiste em vez de esperar
+    c = fabrica(); c.tx(1)  # noqa: E702
+    write_real, parado, solta, res, escritas = R.ifcopenshell.file.write, threading.Event(), threading.Event(), {}, []
+    def write_sinc(self, caminho, *a, **k):  # a 1ª chamada fica parada no meio do retrato até o caso soltar
+        nome = threading.current_thread().name; escritas.append(nome); nome == "primeira" and (parado.set(), solta.wait(timeout=20))  # noqa: E702
+        return write_real(self, caminho, *a, **k)
+    def chamar(nome):
+        def alvo():
+            try: res[nome] = c.auto.salvar()  # noqa: E701
+            except BaseException as e: res[nome] = e  # noqa: BLE001, E701
+        t = threading.Thread(name=nome, target=alvo, daemon=True); t.start(); return t  # noqa: E702
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(R.ifcopenshell.file, "write", write_sinc)
+        t1 = chamar("primeira"); assert parado.wait(timeout=20)  # noqa: E702
+        t2 = chamar("segunda"); t2.join(timeout=0.5)  # noqa: E702  (espera negativa com prazo: a 2ª não pode entrar)
+        assert t2.is_alive() and escritas == ["primeira"] and c.sessao.estado()["leitores"] == 1, (escritas, res)
+        solta.set(); t1.join(timeout=20); t2.join(timeout=20)  # noqa: E702
+    assert not t1.is_alive() and not t2.is_alive() and res == {"primeira": True, "segunda": False}, res
+    assert escritas == ["primeira"] and X7.sobras(c.auto_ifc, c.pasta_auto) == []
+    igual(_foto_auto(c.auto_ifc, c.auto_obim), c.foto(), "item 3: autosave inteiro depois de dois salvar() juntos")

@@ -24,7 +24,6 @@ from s05_t05_aux import AQUI, LADO, RAIZ, caminho_diario, mod
 from test_s05_t05_diario_oraculo import _sem_injecao, casa, local, registros_crus  # noqa: F401  (fixtures)
 from test_s05_t09a_diario_oraculo import disco_diario  # noqa: F401  (fixture)
 
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="T09a2: zerar ainda reescreve o diário no lugar")
 
 
 def _sobras(cam):  # tudo na pasta do diário além dele e dos descartados
@@ -71,7 +70,6 @@ def test_zerar_feliz_reabre_e_continua_anotando(local, casa):  # regressão (pas
     assert _seqs(D, cam) == [("base", 5), ("transacao", 6)]
 
 
-@AINDA_NAO
 def test_ordem_temporario_fsync_fecha_e_troca(local, casa):
     # M: reescrever no lugar; sem fsync do temporário; fsync depois da troca; troca com o descritor antigo aberto (falha no Windows); não reabrir;
     #    sem fsync da pasta depois da troca (fora do Windows)
@@ -113,7 +111,6 @@ def _mesmo(a, b):
     return os.path.normcase(os.path.abspath(os.fspath(a))) == os.path.normcase(os.path.abspath(os.fspath(b)))
 
 
-@AINDA_NAO
 def test_falha_ao_reabrir_depois_da_troca_quebra_e_disco_fica_novo(local, casa):
     # M: engolir o erro da reabertura; seguir anotando no descritor velho (fechado ou do arquivo antigo); fechar() que levanta
     D, cam = mod(), caminho_diario(local)
@@ -161,7 +158,6 @@ def test_falha_ao_reabrir_depois_da_troca_quebra_e_disco_fica_novo(local, casa):
 FALHAS = ["escrita_enospc", "escrita_eio", "fsync_tmp_eio", "troca_eio"]
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("ponto", FALHAS)
 def test_falha_antes_da_troca_mantem_antigo_integro_e_utilizavel(local, casa, disco_diario, monkeypatch, ponto):
     # M: reescrever no lugar (disco cheio corta o diário); temporário que sobra; quebrar o diário numa falha que não tocou nele;
@@ -234,7 +230,6 @@ print("zerar terminou sem passar pelo ponto", ponto, flush=True)
 """
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("ponto, esperado", [("fsync_tmp", "velho"), ("antes_da_troca", "velho"), ("depois_da_troca", "novo")])
 def test_queda_em_cada_ponto_deixa_antigo_ou_novo_inteiro(local, casa, ponto, esperado):
     # M: reescrever no lugar (nunca passa pelos pontos: filho termina com 0); troca antes do fsync; abrir que não limpa o temporário órfão

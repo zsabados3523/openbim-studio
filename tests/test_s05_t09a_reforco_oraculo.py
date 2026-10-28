@@ -146,9 +146,13 @@ def test_r3_abrir_falha_no_replace_unico_preserva_antigo_sem_orfaos(local, casa,
         d2.fechar()
 
 
-@pytest.mark.parametrize("subcaso", ["a_enospc", "b_eio_read", "c_crc_base"])
+AINDA_NAO_T09A2 = pytest.mark.xfail(strict=True, reason="T09a2: zerar ainda reescreve o diário no lugar")
+
+
+@pytest.mark.parametrize("subcaso", [pytest.param("a_enospc", marks=AINDA_NAO_T09A2), "b_eio_read", "c_crc_base"])
 def test_r4_zerar_falhas_escrita_leitura_e_crc_base(local, casa, disco_diario, monkeypatch, subcaso):
-    """R4: (a) ENOSPC em zerar quebra e mantém _base['seq']; (b) EIO em read quebra e anotar levanta HistoricoQuebrado sem sobrescrever base; (c) CRC errado na base levanta HistoricoQuebrado."""
+    """R4: (a, revisto no T09a2) ENOSPC em zerar sobe, o diário no disco fica com os mesmos bytes, sem temporário, não quebra e segue anotando;
+    (b) EIO em read quebra e anotar levanta HistoricoQuebrado sem sobrescrever base; (c) CRC errado na base levanta HistoricoQuebrado."""
     D, cam = mod(), caminho_diario(local)
     d = D.Diario.abrir(LADO, str(casa))
     try:
@@ -156,13 +160,16 @@ def test_r4_zerar_falhas_escrita_leitura_e_crc_base(local, casa, disco_diario, m
         d.anotar("transacao", [], [["notas", "n2", None, {"v": 2}]])
         assert d._base["seq"] == 0
         if subcaso == "a_enospc":
+            bruto_antes, regs_antes = cam.read_bytes(), D.ler_diario(str(cam))
             disco_diario.livre = 16
             with pytest.raises(OSError) as exc_a:
                 d.zerar(1)
             disco_diario.livre = None
-            assert exc_a.value.errno == errno.ENOSPC and d._quebrado and d._base["seq"] == 0
-            with pytest.raises(HistoricoQuebrado):
-                d.anotar("transacao", [], [])
+            assert exc_a.value.errno == errno.ENOSPC and not d._quebrado and d._base["seq"] == 0
+            assert cam.read_bytes() == bruto_antes and D.ler_diario(str(cam)) == regs_antes and regs_antes[1] == []
+            assert sorted(p.name for p in cam.parent.iterdir()) == [cam.name], "sobrou temporário na pasta do diário"
+            d.anotar("transacao", [], [])
+            assert [r["seq"] for r in D.ler_diario(str(cam))[0]] == [0, 1, 2, 3]
         elif subcaso == "b_eio_read":
             bruto_antes = cam.read_bytes()
             linha_base_antes = bruto_antes.splitlines(keepends=True)[0]

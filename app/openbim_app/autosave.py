@@ -6,7 +6,7 @@ import threading
 from pathlib import Path
 
 from .diario import pasta_projeto
-from .gravacao_par import gravar_par, resolver_gravacao_pendente
+from .gravacao_par import gravar_par
 
 INTERVALO_AUTOSAVE_S = 300
 
@@ -36,7 +36,7 @@ class Autosave:
         self._salvar_lock = threading.Lock()
         self._thread = None
         self._thread_lock = threading.Lock()
-        self._parar_ev = threading.Event()
+        self._parar_ev = None
         self._erro_thread = None
 
     def anotar(self, tipo, ifc, lado):
@@ -45,12 +45,13 @@ class Autosave:
             self._max_anotado_seq = self._diario.ultimo_seq
 
     def salvar(self) -> bool:
-        if threading.current_thread() is not self._thread:
-            with self._thread_lock:
-                err = self._erro_thread
+        with self._thread_lock:
+            fora_da_thread = threading.current_thread() is not self._thread
+            err = self._erro_thread if fora_da_thread else None
+            if fora_da_thread:
                 self._erro_thread = None
-            if err is not None:
-                raise err
+        if err is not None:
+            raise err
         with self._salvar_lock:
             with self._sujo_lock:
                 if self._max_anotado_seq <= self._seq_salvo:
@@ -58,13 +59,16 @@ class Autosave:
             pasta_auto = pasta_projeto(self._lado_id) / "autosave"
             destino_auto = pasta_auto / self._ifc_origem.name
             pasta_auto.mkdir(parents=True, exist_ok=True)
-            resolver_gravacao_pendente(pasta_auto, destino_auto, ao_concluir=None)
 
             seq_salvo = [0]
+            sha_lat = [None]
+
+            def obter_seq():
+                sha_lat[0] = hashlib.sha256(self._lateral.canonico()).hexdigest()
+                return self._diario.ultimo_seq
 
             def ao_concluir(seq_final):
-                sha_lat = hashlib.sha256(self._lateral.canonico()).hexdigest()
-                self._diario.zerar(seq_final, ifc_caminho=destino_auto, obim_sha256=sha_lat)
+                self._diario.zerar(seq_final, ifc_caminho=destino_auto, obim_sha256=sha_lat[0])
                 seq_salvo[0] = seq_final
 
             origem_sha = _sha256(self._ifc_origem)
@@ -75,7 +79,7 @@ class Autosave:
                 destino=destino_auto,
                 pasta_projeto=pasta_auto,
                 lado_id=self._lado_id,
-                seq=lambda: self._diario.ultimo_seq,
+                seq=obter_seq,
                 carimbo=False,
                 ao_concluir=ao_concluir,
                 autosave=True,
@@ -104,13 +108,14 @@ class Autosave:
         with self._thread_lock:
             if self._thread is not None and self._thread.is_alive():
                 return
-            self._parar_ev.clear()
-            self._thread = threading.Thread(target=self._loop, daemon=True)
+            ev = threading.Event()
+            self._parar_ev = ev
+            self._thread = threading.Thread(target=self._loop, args=(ev,), daemon=True)
             self._thread.start()
 
-    def _loop(self):
-        while not self._parar_ev.wait(self._intervalo_s):
-            if self._parar_ev.is_set():
+    def _loop(self, parar_ev):
+        while not parar_ev.wait(self._intervalo_s):
+            if parar_ev.is_set():
                 break
             try:
                 self.salvar()
@@ -122,11 +127,15 @@ class Autosave:
     def parar(self):
         with self._thread_lock:
             t = self._thread
-            self._parar_ev.set()
+            ev = self._parar_ev
+            if ev is not None:
+                ev.set()
         if t is not None:
-            t.join(timeout=10)
+            t.join()
             with self._thread_lock:
-                self._thread = None
+                if self._thread is t:
+                    self._thread = None
+                    self._parar_ev = None
         with self._thread_lock:
             err = self._erro_thread
             self._erro_thread = None

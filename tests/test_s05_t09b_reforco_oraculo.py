@@ -20,14 +20,11 @@ from s05_t05_aux import igual, sha
 from test_s05_t05_diario_oraculo import _sem_injecao, local  # noqa: F401
 from test_s05_t09b_autosave_oraculo import _base, _rec_auto, fabrica  # noqa: F401
 
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="T09b: correção da revisão (R1/R2) ainda não aplicada")
-
 
 def _threads_novas(c, antes):  # threads novas, fora o Timer do fsync do diário
     return {t for t in threading.enumerate() if getattr(getattr(t, "function", None), "__self__", None) is not c.diario} - antes
 
 
-@AINDA_NAO
 def test_r1_parar_espera_salvar_lento_e_iniciar_de_novo_cria_uma_thread(fabrica, monkeypatch):
     # M: join(timeout=...) que volta com a thread viva; _thread=None com a thread viva; Event de parada reaproveitado (a antiga revive no iniciar())
     c = fabrica(intervalo_s=0.01)
@@ -85,7 +82,6 @@ def test_r1_parar_espera_salvar_lento_e_iniciar_de_novo_cria_uma_thread(fabrica,
     assert not _threads_novas(c, antes), f"thread residual depois do 2º parar(): {_threads_novas(c, antes)}"
 
 
-@AINDA_NAO
 def test_r2_sha_do_lateral_do_retrato_quando_o_resolvedor_conclui_fora_do_ler(fabrica, monkeypatch):
     # M: sha do lateral calculado no ao_concluir (depois de uma transação pós-retrato, a base aponta para outro lateral e recuperar recusa)
     c = fabrica()

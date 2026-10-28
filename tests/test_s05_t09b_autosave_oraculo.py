@@ -26,8 +26,6 @@ from s05_conteudo_aux import _limpa, base_ifc, exigir  # noqa: F401
 from s05_t05_aux import LADO, igual, sha; from test_s05_t06_gravacao_atomica_oraculo import TrocaRecusada  # noqa: E702
 from test_s05_t05_diario_oraculo import _sem_injecao, local  # noqa: F401
 
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="T09b: autosave ainda não implementado")
-
 def mod():  # primeira linha dos casos @AINDA_NAO: falha aqui enquanto o módulo não existir
     import openbim_app.autosave as A; return A  # noqa: E702
 
@@ -94,7 +92,6 @@ def test_regua_auxiliares_e_montagem(fabrica, com_obim):  # a montagem não depe
     assert c.casa.exists() and c.obim.exists() is com_obim and c.diario.caminho.exists()
     c.tx(1); assert [r["tipo"] for r in _base(c)[1]] == ["transacao"]  # noqa: E702
 
-@AINDA_NAO
 def test_01_sem_transacao_salvar_false_e_constante(fabrica, monkeypatch):  # M: constante != 300; sujo inicial; sujo antes de diario.anotar dar certo
     assert mod().INTERVALO_AUTOSAVE_S == 300
     c = fabrica(); sha_par = (sha(c.casa), sha(c.obim))  # noqa: E702
@@ -107,7 +104,6 @@ def test_01_sem_transacao_salvar_false_e_constante(fabrica, monkeypatch):  # M: 
     monkeypatch.delenv("OBIM_S05_FALHA_EM")
     assert c.diario.ultimo_seq == 0 and c.auto.salvar() is False and (sha(c.casa), sha(c.obim)) == sha_par and _vazia(c.pasta_auto)
 
-@AINDA_NAO
 def test_02_com_transacao_grava_autosave_manifesto_zera_diario_e_recupera(fabrica):
     # M: destino fora de autosave/; manifesto sem autosave/origem; zerar(seq errado); zerar sem ifc_caminho/obim_sha256 (A); ultimo_seq errado
     c = fabrica(); sha_origem = sha(c.casa); c.tx(1), c.tx(2), c.passo()  # noqa: E702
@@ -123,7 +119,6 @@ def test_02_com_transacao_grava_autosave_manifesto_zera_diario_e_recupera(fabric
     assert (base["ifc_sha256"], base["ifc_tamanho"], base["obim_sha256"]) == (sha(c.auto_ifc), c.auto_ifc.stat().st_size, c.sha_lat())
     c.diario.zerar(1); assert c.diario.ultimo_seq == 3 and c.auto.salvar() is False  # noqa: E702
 
-@AINDA_NAO
 def test_03_segunda_transacao_depois_do_autosave_diario_e_recuperacao(fabrica):  # M: zerar apaga a 2ª tx; autosave muda sem salvar(); 2º não zera
     c = fabrica(); c.tx(1), c.tx(2)  # noqa: E702
     assert c.auto.salvar() is True and c.diario.ultimo_seq == 2
@@ -140,7 +135,6 @@ def test_03_segunda_transacao_depois_do_autosave_diario_e_recuperacao(fabrica): 
     foto_rec2, av_rec2 = _rec_auto(c); assert av_rec2 == []  # noqa: E702
     igual(foto_rec2, c.foto(), "Caso 3: recuperar após 2º autosave")
 
-@AINDA_NAO
 @pytest.mark.parametrize("com_obim", [True, False], ids=["com_obim_usuario", "sem_obim_usuario"])
 def test_04_arquivos_do_usuario_nunca_mudam(fabrica, com_obim):  # M: destino = ifc_origem; .obim do usuário criado/gravado; origem_ifc_sha256 errado
     c = fabrica(com_obim=com_obim)
@@ -152,7 +146,6 @@ def test_04_arquivos_do_usuario_nunca_mudam(fabrica, com_obim):  # M: destino = 
         man, _ = X7.ler_obim(c.auto_obim)
         assert man.get("autosave") is True and man.get("origem_ifc_sha256") == sha_ifc
 
-@AINDA_NAO
 @pytest.mark.parametrize("com_pset", [True, False], ids=["com_pset", "sem_pset"])
 def test_05_historico_revisao_e_lado_id_inalterados(fabrica, com_pset):  # M: carimbo=True; salvar abre escrever(); passo novo no histórico
     c = fabrica(com_pset=com_pset, com_obim=com_pset); c.tx(1), c.tx(2), c.passo()  # noqa: E702
@@ -179,7 +172,6 @@ with s.escrever() as esc, h.transacao(esc) as t: X7.mudar(t.ifc, t.lado.criar, 2
 os.environ["OBIM_S05_MORRER_EM"] = cfg["ponto"]; auto.salvar()
 """
 
-@AINDA_NAO
 @pytest.mark.parametrize("ponto", ["conferir", "bak"])
 def test_06_morte_no_meio_do_autosave_preserva_anterior_e_recupera(tmp_path, base_ifc, local, ponto):  # noqa: F811
     # M: gravar direto no destino (sem .tmp); pendência herdada resolvida com o ao_concluir da sessão nova (B: seq órfão vai ao diário novo)
@@ -213,7 +205,6 @@ def test_06_morte_no_meio_do_autosave_preserva_anterior_e_recupera(tmp_path, bas
     finally:
         auto2.parar(), d2.fechar(), h2.encerrar()
 
-@AINDA_NAO
 def test_07_falha_enospc_em_salvar_propaga_e_mantem_sujo(fabrica):  # M: engolir o erro; zerar antes de gravar; limpar sujo no erro
     c = fabrica(); sha_par = (sha(c.casa), sha(c.obim)); c.tx(1)  # noqa: E702
     regs_antes, _ = D.ler_diario(str(c.diario.caminho))
@@ -227,7 +218,6 @@ def test_07_falha_enospc_em_salvar_propaga_e_mantem_sujo(fabrica):  # M: engolir
     base, resto = _base(c)
     assert resto == [] and base["seq"] == 1 and c.auto.salvar() is False
 
-@AINDA_NAO
 def test_08_apos_gravacao_normal_apaga_so_autosave_e_limpa_sujo(fabrica):  # M: apagar pasta_projeto inteira; não limpar sujo; mexer no diário
     c = fabrica(); c.tx(1); assert c.auto.salvar() is True  # noqa: E702
     c.tx(2); assert c.auto.salvar() is True  # noqa: E702
@@ -238,7 +228,6 @@ def test_08_apos_gravacao_normal_apaga_so_autosave_e_limpa_sujo(fabrica):  # M: 
     assert c.diario.caminho.read_bytes() == bytes_diario and sentinela.read_text(encoding="utf-8") == "preservar" and c.auto.salvar() is False
     c.auto.apos_gravacao_normal(); c.tx(4); assert c.auto.salvar() is True  # noqa: E702  (idempotente com a pasta vazia)
 
-@AINDA_NAO
 def test_09_retrato_em_ler_seq_do_retrato_e_sem_deadlock(fabrica):  # Caso 9 + C
     # M: retrato fora de ler(); seq (zerar ou gravacao.json) lido antes do retrato (tx anterior ao retrato duplicada); sujo=False no fim de salvar()
     #    (perde a tx pós-retrato); trava própria segurada em salvar() e pedida em anotar() (deadlock: o join com prazo reprova)
@@ -287,7 +276,6 @@ def test_09_retrato_em_ler_seq_do_retrato_e_sem_deadlock(fabrica):  # Caso 9 + C
     base, resto = _base(c)
     assert resto == [] and base["seq"] == 2 + n
 
-@AINDA_NAO
 def test_10_thread_iniciar_parar_erro_guardado_e_idempotencia(fabrica, monkeypatch):
     # M: thread não daemon; iniciar 2x = 2 threads; erro da thread perdido (ou apagado por ciclo seguinte sem erro); erro levantado 2x;
     #    parar() sem join (thread residual); parar() sem iniciar levanta; thread para de rodar depois do erro
@@ -327,7 +315,6 @@ def _gravar_normal(c):
     GP.gravar_par(sessao=c.sessao, historico=c.h, lateral=c.lat, destino=c.casa, pasta_projeto=c.pasta_proj, lado_id=c.lado_id,
                   seq=c.diario.ultimo_seq, carimbo=True, ao_concluir=c.diario.zerar)
 
-@AINDA_NAO
 def test_11_pendencia_isolada_entre_autosave_e_gravacao_normal(fabrica, monkeypatch):  # M: pasta_projeto = pasta do projeto; origem do __init__
     monkeypatch.setattr(time, "sleep", lambda s: None)  # só encurta as novas tentativas da troca recusada
     c = fabrica(); c.tx(1); sha_origem_1 = sha(c.casa)  # noqa: E702
@@ -347,7 +334,6 @@ def test_11_pendencia_isolada_entre_autosave_e_gravacao_normal(fabrica, monkeypa
         c.tx(4); assert c.auto.salvar() is True and c.auto_ifc.exists()  # noqa: E702
         assert not (c.pasta_auto / "gravacao.json").exists() and (c.pasta_proj / "gravacao.json").exists()
 
-@AINDA_NAO
 def test_12_gravacao_normal_sem_campos_autosave_no_manifesto(fabrica):  # M: campos do autosave sempre no manifesto
     c = fabrica(criar_auto=False); c.tx(1)  # noqa: E702
     novo_esp = X7.Novo(2, c.lado_id, R.foto(c.f, sem_pset_obim=True), bytes(c.lat.canonico()))
@@ -357,7 +343,6 @@ def test_12_gravacao_normal_sem_campos_autosave_no_manifesto(fabrica):  # M: cam
     man, _ = X7.ler_obim(c.obim)
     assert set(man) == X7.CAMPOS and not man.get("autosave") and "origem_ifc_sha256" not in man
 
-@AINDA_NAO
 def test_13_zerar_refaz_a_base_com_ifc_e_obim_novos(fabrica, tmp_path):  # decisão A
     # M: opcionais posicionais; ignorar ifc_caminho/obim_sha256; trocar a base com seq até a base (antes do retorno cedo); sem opcionais apaga campos
     c = fabrica(criar_auto=False); c.tx(1), c.tx(2)  # noqa: E702
@@ -376,7 +361,6 @@ def test_13_zerar_refaz_a_base_com_ifc_e_obim_novos(fabrica, tmp_path):  # decis
     c.diario.zerar(3); base3, resto3 = _base(c)  # noqa: E702
     assert (base3["seq"], base3["ifc_sha256"], base3["obim_sha256"], resto3, c.diario.ultimo_seq) == (3, sha(nova), sha_nova, [], 3)
 
-@AINDA_NAO
 def test_14_salvar_serializado_sem_disputar_temporarios(fabrica):  # lote 84 item 3
     # M: salvar() sem trava própria (o 2º entra em ler(), apaga/disputa .tmp e gravacao.json); 2º salvar() que desiste em vez de esperar
     c = fabrica(); c.tx(1)  # noqa: E702

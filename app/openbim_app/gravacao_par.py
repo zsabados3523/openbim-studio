@@ -104,11 +104,15 @@ def _editar_carimbo(sessao, historico, lado, revisao, remover=False):
             ifcopenshell.api.run("pset.edit_pset", arquivo, pset=ps, properties=props)
 
 
-def _manifesto(destino, prep, projeto, lado_id, revisao):
-    return {"formato": FORMATO, "versao_formato": VERSAO_FORMATO, "provisorio": True, "LadoId": lado_id,
-            "Revisao": revisao, "ifc_nome": Path(destino).name, "ifc_sha256": prep.sha256, "ifc_tamanho": prep.tamanho,
-            "ifc_projeto_globalid": projeto.GlobalId, "programa_versao": VERSAO_PROGRAMA,
-            "data": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+def _manifesto(destino, prep, projeto, lado_id, revisao, autosave=False, origem_ifc_sha256=None):
+    man = {"formato": FORMATO, "versao_formato": VERSAO_FORMATO, "provisorio": True, "LadoId": lado_id,
+           "Revisao": revisao, "ifc_nome": Path(destino).name, "ifc_sha256": prep.sha256, "ifc_tamanho": prep.tamanho,
+           "ifc_projeto_globalid": projeto.GlobalId, "programa_versao": VERSAO_PROGRAMA,
+           "data": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+    if autosave:
+        man["autosave"] = True
+        man["origem_ifc_sha256"] = origem_ifc_sha256
+    return man
 
 
 def _escrever_obim(caminho, lateral, manifesto):
@@ -202,10 +206,11 @@ def _resolver_antes_de_gravar(destino, pasta, ao_concluir):
     return resultado
 
 
-def gravar_par(sessao, historico, lateral, destino, pasta_projeto, lado_id, seq, carimbo=True, ao_concluir=None):
+def gravar_par(sessao, historico, lateral, destino, pasta_projeto, lado_id, seq, carimbo=True, ao_concluir=None,
+               autosave=False, origem_ifc_sha256=None):
     """Grava o par; carimba `Revisao` + 1 e `LadoId` (o definitivo = o provisório). Devolve os dois `Gravado`."""
     destino, obim, pasta = Path(destino), _obim(destino), Path(pasta_projeto)
-    _resolver_antes_de_gravar(destino, pasta, ao_concluir)
+    _resolver_antes_de_gravar(destino, pasta, None if autosave else ao_concluir)
     existia, lado_antes, revisao_antes = _ler_carimbo(sessao)
     if carimbo:
         novo_lado = lado_antes if lado_antes is not None else lado_id
@@ -219,11 +224,13 @@ def gravar_par(sessao, historico, lateral, destino, pasta_projeto, lado_id, seq,
     try:
         with sessao.ler() as arquivo:
             proj = arquivo.by_type("IfcProject")[0]
+            seq_val = seq() if callable(seq) else seq
             ifc_prep = GA.preparar(destino, lambda tmp: arquivo.write(str(tmp)), conferir=GA.conferir_ifc)
-            manifesto = _manifesto(destino, ifc_prep, proj, novo_lado, nova_revisao)
+            manifesto = _manifesto(destino, ifc_prep, proj, novo_lado, nova_revisao,
+                                   autosave=autosave, origem_ifc_sha256=origem_ifc_sha256)
             obim_prep = GA.preparar(obim, lambda tmp: _escrever_obim(tmp, lateral, manifesto), conferir=_conferir_obim)
             _gravar_gravacao(pasta, _dados_gravacao(destino, obim, ifc_prep, obim_prep, ifc_antigo, obim_antigo,
-                                                    novo_lado, nova_revisao, seq))
+                                                    novo_lado, nova_revisao, seq_val))
             com_gravacao, etapa = True, "gravacao"
             _conferir_temporario(ifc_prep)
             gravado_ifc = GA.confirmar(ifc_prep)
@@ -231,7 +238,7 @@ def gravar_par(sessao, historico, lateral, destino, pasta_projeto, lado_id, seq,
             gravado_obim = GA.confirmar(obim_prep)
             etapa = "ao_concluir"
             if ao_concluir is not None:
-                ao_concluir(seq)
+                ao_concluir(seq_val)
             etapa = "trocado"
             os.unlink(str(pasta / "gravacao.json"))
     except BaseException:

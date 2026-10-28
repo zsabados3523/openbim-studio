@@ -394,7 +394,12 @@ class Diario:
             if err is not None:
                 raise err
 
-    def zerar(self, seq):
+    @property
+    def ultimo_seq(self):
+        with self._lock:
+            return self._seq - 1
+
+    def zerar(self, seq, *, ifc_caminho=None, obim_sha256=None):
         with self._lock:
             if self._fechado:
                 raise ValueError("diário já fechado")
@@ -419,6 +424,12 @@ class Diario:
                 self._quebrado = True
                 raise
             base["seq"] = seq
+            if ifc_caminho is not None:
+                base["ifc_caminho"] = str(ifc_caminho)
+                base["ifc_sha256"] = _sha256(ifc_caminho)
+                base["ifc_tamanho"] = os.stat(ifc_caminho).st_size
+            if obim_sha256 is not None:
+                base["obim_sha256"] = obim_sha256
             linhas_manter = [self._linha(base)]
             max_seq = seq
             for linha in linhas[1:]:

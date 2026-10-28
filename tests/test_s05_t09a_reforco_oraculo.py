@@ -146,10 +146,9 @@ def test_r3_abrir_falha_no_replace_unico_preserva_antigo_sem_orfaos(local, casa,
         d2.fechar()
 
 
-AINDA_NAO_T09A2 = pytest.mark.xfail(strict=True, reason="T09a2: zerar ainda reescreve o diário no lugar")
 
 
-@pytest.mark.parametrize("subcaso", [pytest.param("a_enospc", marks=AINDA_NAO_T09A2), "b_eio_read", "c_crc_base"])
+@pytest.mark.parametrize("subcaso", ["a_enospc", "b_eio_read", "c_crc_base"])
 def test_r4_zerar_falhas_escrita_leitura_e_crc_base(local, casa, disco_diario, monkeypatch, subcaso):
     """R4: (a, revisto no T09a2) ENOSPC em zerar sobe, o diário no disco fica com os mesmos bytes, sem temporário, não quebra e segue anotando;
     (b) EIO em read quebra e anotar levanta HistoricoQuebrado sem sobrescrever base; (c) CRC errado na base levanta HistoricoQuebrado."""

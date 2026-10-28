@@ -448,14 +448,68 @@ class Diario:
                     if r_seq > max_seq:
                         max_seq = r_seq
             novo = b"".join(linhas_manter)
+            tmp = self.caminho.with_name(self.caminho.name + ".tmp")
+            trocou = False
+            f_antigo_fechado = False
+            f_tmp = None
             try:
-                self._f.seek(0)
-                self._escrever(novo)
-                self._f.truncate(len(novo))
-                self._f.seek(len(novo))
+                f_tmp = open(tmp, "w+b", buffering=0)
+                try:
+                    vistos = 0
+                    while vistos < len(novo):
+                        n = f_tmp.write(novo[vistos:])
+                        if not n:
+                            raise OSError("escrita sem avanço no diário")
+                        vistos += n
+                    os.fsync(f_tmp.fileno())
+                finally:
+                    f_tmp.close()
+                    f_tmp = None
+
+                self._f.close()
+                f_antigo_fechado = True
+
+                os.replace(tmp, self.caminho)
+                trocou = True
+
+                if sys.platform != "win32":
+                    fd_pasta = os.open(self.caminho.parent, os.O_RDONLY)
+                    try:
+                        os.fsync(fd_pasta)
+                    finally:
+                        os.close(fd_pasta)
+
+                self._f = open(self.caminho, "a+b", buffering=0)
+                self._f.seek(0, os.SEEK_END)
             except BaseException:
-                self._quebrado = True
+                if f_tmp is not None and not f_tmp.closed:
+                    try:
+                        f_tmp.close()
+                    except BaseException:
+                        pass
+                if not trocou:
+                    if tmp.exists():
+                        try:
+                            tmp.unlink()
+                        except OSError:
+                            pass
+                    if f_antigo_fechado:
+                        try:
+                            self._f = open(self.caminho, "a+b", buffering=0)
+                            self._f.seek(0, os.SEEK_END)
+                        except BaseException:
+                            self._quebrado = True
+                    else:
+                        try:
+                            self._f.seek(0, os.SEEK_END)
+                        except BaseException:
+                            pass
+                else:
+                    self._quebrado = True
                 raise
+
+            if self._timer is not None:
+                self._timer.cancel()
+                self._timer = None
             self._base = base
             self._seq = max(self._seq, max_seq + 1)
-            self._agendar()

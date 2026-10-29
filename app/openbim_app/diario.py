@@ -111,6 +111,15 @@ def _sha256(caminho):
     return h.hexdigest()
 
 
+def _proximo_descartado(pasta):
+    desc = pasta / "diario-descartado.obimlog"
+    n = 1
+    while desc.exists():
+        desc = pasta / f"diario-descartado-{n}.obimlog"
+        n += 1
+    return desc
+
+
 def _avisar_parar(avisos, n, motivo):
     avisos.append(f"linha {n + 1} do diário {motivo}; os registros seguintes foram ignorados")
 
@@ -241,11 +250,7 @@ class Diario:
                     pass
             raise
 
-        desc = caminho.parent / "diario-descartado.obimlog"
-        n = 1
-        while desc.exists():
-            desc = caminho.parent / f"diario-descartado-{n}.obimlog"
-            n += 1
+        desc = _proximo_descartado(caminho.parent)
 
         try:
             try:
@@ -274,6 +279,50 @@ class Diario:
             if getattr(d, "_f", None) and not d._f.closed:
                 d._f.close()
             raise
+        return d
+
+    @classmethod
+    def continuar(cls, caminho, lado_id, base, ultimo_seq):
+        caminho = Path(caminho)
+        d = cls.__new__(cls)
+        d.caminho, d.lado_id = caminho, lado_id
+        d._seq = ultimo_seq + 1
+        d._timer, d._fechado, d._quebrado = None, False, False
+        d._lock = threading.RLock()
+        d._erro_fsync = None
+        d._base = dict(base)
+        d._f = open(caminho, "r+b", buffering=0)
+        pos = 0
+        linhas = d._f.read().splitlines(keepends=True)
+        for linha in linhas:
+            if not linha.endswith(b"\n"):
+                break
+            m = _LINHA.fullmatch(linha.rstrip(b"\r\n"))
+            if not m or int(m[1], 16) != zlib.crc32(m[2]) & 0xFFFFFFFF:
+                break
+            try:
+                reg = json.loads(m[2].decode("utf-8"))
+            except Exception:
+                break
+            if not isinstance(reg, dict) or not isinstance(reg.get("seq"), int):
+                break
+            pos += len(linha)
+            if reg.get("seq") == ultimo_seq:
+                break
+        total = sum(len(l) for l in linhas)
+        if pos < total:
+            # guarda os bytes cortados antes de truncar
+            with open(_proximo_descartado(caminho.parent), "wb") as f:
+                f.write(b"".join(linhas)[pos:])
+                f.flush()
+                os.fsync(f.fileno())
+        d._f.truncate(pos)
+        d._f.seek(pos)
+        if pos < total:
+            try:
+                os.fsync(d._f.fileno())
+            except OSError:
+                pass
         return d
 
     def _linha(self, reg):
@@ -409,7 +458,10 @@ class Diario:
                 raise err
             if self._quebrado:
                 raise HistoricoQuebrado("diário quebrado; reabra pela recuperação")
-            if seq <= self._base.get("seq", 0):
+            base_seq = self._base.get("seq", 0)
+            if seq < base_seq:
+                return
+            if seq == base_seq and ifc_caminho is None and obim_sha256 is None:
                 return
             try:
                 self._f.seek(0)

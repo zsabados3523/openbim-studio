@@ -202,7 +202,7 @@ def _parte_po_arcos():
     f = ifcopenshell.open(str(PO))
     on, off = _svg(f, True), _svg(f, False)
     (SAIDA / "po_planta_door_arcs_on.svg").write_text(on, encoding="utf-8")
-    print("\n## casa-2pav (planta), door-arcs ligado e desligado")
+    print("\n## modelo de referencia (planta), door-arcs ligado e desligado")
     print(f"schema: {f.schema}; bytes com/sem door-arcs: {len(on)} / {len(off)}; saida igual: {on == off}")
     print(f"portas (IfcDoor): {len(f.by_type('IfcDoor'))}; grupos IfcDoor na planta: {on.count('class=\"IfcDoor\"')}")
     print(f"IfcDoor tem atributo OperationType: {any(hasattr(d, 'OperationType') for d in f.by_type('IfcDoor'))}")
@@ -227,7 +227,7 @@ def _parte_po_tempo(n):
     guid = sm._anotar_corte(fc, mn, mx, float((mn[1] + mx[1]) / 2))
     t_pl, _ = sm._medir(lambda: sm._svg_motor(f, False), n)
     t_co, _ = sm._medir(lambda: sm._svg_motor(fc, False, guid), n)
-    print(f"\n## Tempo casa-2pav, motor a1, media de {n} execucoes")
+    print(f"\n## Tempo modelo de referencia, motor a1, media de {n} execucoes")
     print(f"planta: {t_pl:.3f} s; corte: {t_co:.3f} s; meta 10 s: {'sim' if max(t_pl, t_co) <= 10 else 'nao'}")
 
 

@@ -202,8 +202,12 @@ def _svg_d(f, eixo, valor, corte):
 
 
 def _metricas(svg):
+    # "linhas" = tags <path|line|polyline>; um path do ifcopenshell pode ter varios subcaminhos, entao nao e
+    # comparavel entre o motor a (poucos paths grandes) e o d (um path por contorno).
     linhas = len(re.findall(r"<(?:path|line|polyline)\b", svg))
     hachura = bool(re.search(r"<pattern\b|hatch", svg, re.IGNORECASE))
+    # so acha arco SVG (comando A); o ifcopenshell desenha o arco de porta como polilinha, entao "nao" aqui
+    # NAO prova ausencia de arco (ver T01b).
     arco = bool(re.search(r'\sd="[^"]*\bA[\s\d.,-]', svg))
     return linhas, hachura, arco
 
@@ -217,6 +221,12 @@ def _medir(fn, n):
     return statistics.mean(tempos), ultimo
 
 
+def _svg_motor_corte(f, poly, guid):
+    if guid is None:  # sem anotacao o serializador geraria uma PLANTA e gravaria como corte
+        raise RuntimeError("corte sem anotacao: medida descartada")
+    return _svg_motor(f, poly, guid)
+
+
 def _avaliar(nome, caminho, n, saida):
     fp, fc = ifcopenshell.open(str(caminho)), ifcopenshell.open(str(caminho))
     mn, mx = _caixa(fp)
@@ -227,8 +237,8 @@ def _avaliar(nome, caminho, n, saida):
     except Exception as e:
         falhas_modelo.append(f"corte sem anotacao ({type(e).__name__}: {str(e)[:80]})")
     casos = {
-        "a1": {"planta": lambda: _svg_motor(fp, False), "corte": lambda: _svg_motor(fc, False, guid)},
-        "a2": {"planta": lambda: _svg_motor(fp, True), "corte": lambda: _svg_motor(fc, True, guid)},
+        "a1": {"planta": lambda: _svg_motor(fp, False), "corte": lambda: _svg_motor_corte(fc, False, guid)},
+        "a2": {"planta": lambda: _svg_motor(fp, True), "corte": lambda: _svg_motor_corte(fc, True, guid)},
         "d": {"planta": lambda: _svg_d(fp, 2, ALTURA_PLANTA, False), "corte": lambda: _svg_d(fp, 1, y_corte, True)},
     }
     linhas = []

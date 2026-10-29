@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo do F0-S05-T11, protótipo de merge por GlobalId (ADR-002 §4.1 e §4.7; `v2/02` §6.7; insumo para a 2.0, não é portão). Quem tira os
-`@AINDA_NAO` é o autor deste oráculo, em commit próprio. Auxiliar: `tests/s05_t11_aux.py`.
+"""Oráculo do F0-S05-T11, protótipo de merge por GlobalId (ADR-002 §4.1 e §4.7; `v2/02` §6.7; insumo para a 2.0, não é portão). Marcadores `@AINDA_NAO` já retirados pelo autor. Auxiliar: `tests/s05_t11_aux.py`.
 CONTRATO (pacote `prototypes/s05/merge/`, sem Qt, sem `obimcore`; o teste faz `sys.path.insert(0, <raiz>/prototypes/s05)` e `import merge`):
 - `juntar(base, a, b) -> Resultado`. `base`, `a`, `b` = pares `(arquivo, lateral)`: `arquivo` = `ifcopenshell.file`, `lateral` = `openbim_app.lateral.Lateral`.
   `a` e `b` saem da MESMA base gravada (ids STEP da base iguais nas três); os ids STEP NOVOS de `a` e `b` colidem (criam o mesmo número com conteúdo diferente).
@@ -21,17 +20,14 @@ import s05_conteudo_aux as R
 import s05_t11_aux as X
 from s05_conteudo_aux import _limpa, base_ifc  # noqa: F401  (fixtures)
 
-AINDA_NAO = pytest.mark.xfail(strict=True, raises=ImportError, reason="T11: prototypes/s05/merge ainda não existe")
 
 
-@AINDA_NAO
 def test_200_edicoes_disjuntas_juntam(tmp_path):  # casos 1 e 2 do cartão (a ordem inversa está em test_ordem_nao_importa)
     c = X.cenario(tmp_path, com_conflitos=False)
     assert c.conflitos == [] and all(x["criar"] >= 15 and x["apagar"] >= 15 for x in c.cont)
     X.confere(X.juntar_fn()(c.base, c.a, c.b), c, tmp_path, "juntar(base, A, B)")
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("com_conflitos", [False, True])
 def test_ordem_nao_importa(tmp_path, com_conflitos):
     c = X.cenario(tmp_path, com_conflitos)
@@ -41,7 +37,6 @@ def test_ordem_nao_importa(tmp_path, com_conflitos):
     assert R.diferencas(X.foto((ab.modelo, ab.lateral)), X.foto((ba.modelo, ba.lateral))) == [] and sorted(ab.conflitos) == sorted(ba.conflitos)
 
 
-@AINDA_NAO
 def test_20_elementos_nas_duas_copias_sao_exatamente_os_conflitos(tmp_path):  # caso 3: 10 com o mesmo atributo, 10 com atributos diferentes (granularidade: o elemento)
     c = X.cenario(tmp_path, com_conflitos=True)
     assert len(c.conflitos) == 20 and all("/" not in g for g in c.conflitos)
@@ -53,7 +48,6 @@ def test_20_elementos_nas_duas_copias_sao_exatamente_os_conflitos(tmp_path):  # 
     X.confere(r, c, tmp_path, "20 conflitos")
 
 
-@AINDA_NAO
 def test_criar_contra_criar_e_alterar_contra_alterar_sao_conflitos(base_ifc, tmp_path):  # mesmo GlobalId criado com conteúdo diferente; mesmo objeto do lateral
     base, A, B = X.duas(base_ifc)
     for g in X.CONF_ADD:
@@ -67,7 +61,6 @@ def test_criar_contra_criar_e_alterar_contra_alterar_sao_conflitos(base_ifc, tmp
     X.confere(r, c, tmp_path, "criar/alterar contra o mesmo")
 
 
-@AINDA_NAO
 def test_editar_contra_apagar_e_conflito_e_nada_muda(base_ifc, tmp_path):  # nos dois sentidos, no IFC e no lateral; sem outra edição o resultado é a própria base
     base, A, B = X.duas(base_ifc)
     w, rel = A.paredes(A.andares()[0]), A.andares()[0].ContainsElements[0].GlobalId
@@ -79,7 +72,6 @@ def test_editar_contra_apagar_e_conflito_e_nada_muda(base_ifc, tmp_path):  # nos
     X.confere(X.juntar_fn()(c.base, c.a, c.b), c, tmp_path, "editar contra apagar")
 
 
-@AINDA_NAO
 def test_criacao_identica_nas_duas_copias_nao_duplica(base_ifc, tmp_path):
     base, A, B = X.duas(base_ifc)
     gid = "0criacaoIdenticaGemea1"
@@ -93,7 +85,6 @@ def test_criacao_identica_nas_duas_copias_nao_duplica(base_ifc, tmp_path):
     assert [e.GlobalId for e in r.modelo.by_type("IfcWall")].count(gid) == (0 if r.conflitos else 1)
 
 
-@AINDA_NAO
 def test_mesmo_pavimento_nao_e_conflito_e_a_relacao_junta_as_duas_listas(base_ifc, tmp_path):  # ADR §4.1 regra 2: a relação nunca é dona
     base, A, B = X.duas(base_ifc)
     andar = A.andares()[0]
@@ -109,7 +100,6 @@ def test_mesmo_pavimento_nao_e_conflito_e_a_relacao_junta_as_duas_listas(base_if
     assert r.modelo.by_guid(rel.GlobalId).RelatingStructure.GlobalId == andar.GlobalId
 
 
-@AINDA_NAO
 def test_copia_igual_a_base_e_identidade(base_ifc, tmp_path):
     base, A, B = X.duas(base_ifc)
     A.parede(A.andares()[0]), A.apagar(A.paredes(A.andares()[1])[0]), A.nome(A.paredes(A.andares()[0])[0]), A.lado["notas"].pop("n1")
@@ -118,3 +108,15 @@ def test_copia_igual_a_base_e_identidade(base_ifc, tmp_path):
     X.confere(juntar(c.base, c.a, c.b), c._replace(esperada=c.fotos[1]), tmp_path, "juntar(base, A, base)")
     X.confere(juntar(c.base, c.b, c.a), c._replace(esperada=c.fotos[1]), tmp_path, "juntar(base, base, A)")
     X.confere(juntar(c.base, c.b, c.b), c._replace(esperada=c.fotos[0]), tmp_path, "juntar(base, base, base)")
+
+
+def test_entidade_solta_nova_nao_entra_no_modelo(base_ifc, tmp_path):  # sem GlobalId e sem ninguém que a use: só entra o que um elemento alcança
+    base, A, B = X.duas(base_ifc)
+    A.f.create_entity("IfcCartesianPoint", Coordinates=(123.5, 456.5, 789.5)), B.f.create_entity("IfcCartesianPoint", Coordinates=(-1.5, -2.5, -3.5))
+    g = A.paredes(A.andares()[0])[0]
+    A.nome(g, "A renomeou")  # uma edição de verdade, para o merge não ser trivial
+    r = X.juntar_fn()(base, A.par(), B.par())
+    pontos = [tuple(p.Coordinates) for p in r.modelo.by_type("IfcCartesianPoint")]
+    assert (123.5, 456.5, 789.5) not in pontos and (-1.5, -2.5, -3.5) not in pontos, "entidade solta nova entrou no modelo"
+    assert len(pontos) == len(base[0].by_type("IfcCartesianPoint")) and r.conflitos == []
+    assert r.modelo.by_guid(g).Name == "A renomeou"

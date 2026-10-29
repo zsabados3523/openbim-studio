@@ -8,7 +8,7 @@ CONTRATO: `openbim_app.autosave`: `INTERVALO_AUTOSAVE_S = 300`; `Autosave(sessao
   histórico não ganha passo. `gravar_par(..., autosave=False, origem_ifc_sha256=None)`: `"autosave": true` e `"origem_ifc_sha256"` no manifesto só com
   `autosave=True`. `Diario.ultimo_seq`: seq do último registro (0 só com a base).
 - A: `Diario.zerar(seq, *, ifc_caminho=None, obim_sha256=None)`: com os opcionais, a base nova traz `ifc_caminho`, `ifc_sha256`, `ifc_tamanho` do arquivo e
-  o `obim_sha256` dados; sem eles, mantém os da base; `seq` até a base: nada muda. O autosave zera com o `.ifc` dele e o sha do lateral.
+  o `obim_sha256` dados; sem eles, mantém os da base; `seq` abaixo da base: nada muda; `seq` == base com os opcionais refaz a base (T09c5); `seq` == base sem eles: nada muda. O autosave zera com o `.ifc` dele e o sha do lateral.
 - B: antes de gravar, `salvar` resolve a pendência herdada em `autosave/` com `resolver_gravacao_pendente(<autosave/>, destino, ao_concluir=None)`.
 - C: o seq zerado, o passado ao `ao_concluir` e o do `gravacao.json` é o do RETRATO (o `ler()` que escreve o IFC): transação anterior ao retrato sai do
   diário, a posterior fica e mantém o "sujo"; `anotar()` de outra thread durante `salvar()` nunca trava.
@@ -344,7 +344,7 @@ def test_12_gravacao_normal_sem_campos_autosave_no_manifesto(fabrica):  # M: cam
     assert set(man) == X7.CAMPOS and not man.get("autosave") and "origem_ifc_sha256" not in man
 
 def test_13_zerar_refaz_a_base_com_ifc_e_obim_novos(fabrica, tmp_path):  # decisão A
-    # M: opcionais posicionais; ignorar ifc_caminho/obim_sha256; trocar a base com seq até a base (antes do retorno cedo); sem opcionais apaga campos
+    # M: opcionais posicionais; ignorar ifc_caminho/obim_sha256; trocar a base com seq abaixo da base (antes do retorno cedo); sem opcionais apaga campos
     c = fabrica(criar_auto=False); c.tx(1), c.tx(2)  # noqa: E702
     with pytest.raises(TypeError): c.diario.zerar(2, str(c.casa))  # noqa: E701
     nova = tmp_path / "base_nova" / "Casa.ifc"; nova.parent.mkdir(); c.f.write(str(nova))  # noqa: E702
@@ -356,7 +356,7 @@ def test_13_zerar_refaz_a_base_com_ifc_e_obim_novos(fabrica, tmp_path):  # decis
     assert os.path.samefile(base["ifc_caminho"], nova) and c.diario.ultimo_seq == 2
     c.tx(3); foto_rec, av, _, _ = X5.recuperar(nova, c.diario.caminho, lateral=Lateral(lat_nova)); assert av == []  # noqa: E702
     igual(foto_rec, c.foto(), "A: recuperar da base nova + diário")
-    c.diario.zerar(2, ifc_caminho=c.casa, obim_sha256="0" * 64); base2, resto2 = _base(c)  # noqa: E702  (até a base: nada muda)
+    c.diario.zerar(1, ifc_caminho=c.casa, obim_sha256="0" * 64); base2, resto2 = _base(c)  # noqa: E702  (abaixo da base: nada muda; T09c5 mudou de 2 para 1)
     assert (base2, [r["seq"] for r in resto2]) == (base, [3])
     c.diario.zerar(3); base3, resto3 = _base(c)  # noqa: E702
     assert (base3["seq"], base3["ifc_sha256"], base3["obim_sha256"], resto3, c.diario.ultimo_seq) == (3, sha(nova), sha_nova, [], 3)

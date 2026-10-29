@@ -77,6 +77,7 @@ def _ser(f, st, itens):
 
 
 def _geom_svg(svg_str):
+    # Nota: comprimento e aproximado (arcos A e comandos relativos nao tratados).
     pts = []
     tot_len = 0.0
     for d in re.findall(r'\sd=\"([^\"]+)\"', svg_str):
@@ -266,6 +267,8 @@ def main(argv=None):
             pecas, gd = _d(sm, sel, "planta", y_meio)
             ts.append(time.perf_counter() - t0)
         t_d = _media(ts)
+        # Nota: dt_bbox (~0.028 s) nao e somado no total de d faixa porque geo_t ja esta
+        # na base e o calculo de bbox e residual (<0.03 s), nao alterando os totais arredondados.
         t1, t4, tN = geo_t[1] + t_d, geo_t[4] + t_d, geo_t[N] + t_d
         tot[("d", "planta", filtro)] = {"n": len(sel), "ser": t_d, "t1": t1, "t4": t4, "tN": tN,
                                         "paths": "-", "polilinhas": pecas, "g": gd, "bb_cost": 0.0}
@@ -307,6 +310,8 @@ def main(argv=None):
             pecas, gd = _d(sm, sel, "corte", y_meio)
             ts.append(time.perf_counter() - t0)
         t_d = _media(ts)
+        # Nota: dt_bbox (~0.028 s) nao e somado no total de d faixa porque geo_t ja esta
+        # na base e o calculo de bbox e residual (<0.03 s), nao alterando os totais arredondados.
         t1, t4, tN = geo_t[1] + t_d, geo_t[4] + t_d, geo_t[N] + t_d
         tot[("d", "corte", filtro)] = {"n": len(sel), "ser": t_d, "t1": t1, "t4": t4, "tN": tN,
                                        "paths": "-", "polilinhas": pecas, "g": gd, "bb_cost": 0.0}

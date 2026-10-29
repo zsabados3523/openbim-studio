@@ -268,7 +268,7 @@ def main(argv=None):
             ts.append(time.perf_counter() - t0)
         t_d = _media(ts)
         # Nota: dt_bbox (~0.028 s) nao e somado no total de d faixa porque geo_t ja esta
-        # na base e o calculo de bbox e residual (<0.03 s), nao alterando os totais arredondados.
+        # na base; o bbox custa ~0,03 s e NAO foi somado nesta linha (diferenca de centesimos, ver relatorio).
         t1, t4, tN = geo_t[1] + t_d, geo_t[4] + t_d, geo_t[N] + t_d
         tot[("d", "planta", filtro)] = {"n": len(sel), "ser": t_d, "t1": t1, "t4": t4, "tN": tN,
                                         "paths": "-", "polilinhas": pecas, "g": gd, "bb_cost": 0.0}
@@ -311,7 +311,7 @@ def main(argv=None):
             ts.append(time.perf_counter() - t0)
         t_d = _media(ts)
         # Nota: dt_bbox (~0.028 s) nao e somado no total de d faixa porque geo_t ja esta
-        # na base e o calculo de bbox e residual (<0.03 s), nao alterando os totais arredondados.
+        # na base; o bbox custa ~0,03 s e NAO foi somado nesta linha (diferenca de centesimos, ver relatorio).
         t1, t4, tN = geo_t[1] + t_d, geo_t[4] + t_d, geo_t[N] + t_d
         tot[("d", "corte", filtro)] = {"n": len(sel), "ser": t_d, "t1": t1, "t4": t4, "tN": tN,
                                        "paths": "-", "polilinhas": pecas, "g": gd, "bb_cost": 0.0}

@@ -23,6 +23,10 @@ class LateralRecusado(ValueError):
     """Lateral ilegível, fora do formato ou de versão que só abre para leitura."""
 
 
+class IfcInvalido(ValueError):
+    """IFC ausente, ilegível ou sem IfcProject."""
+
+
 @dataclass(frozen=True)
 class Resultado:
     caso: str
@@ -44,11 +48,40 @@ def _ler_obim(caminho):
         return obim_zip.ler(caminho)
     except obim_zip.ObimInvalido as e:
         raise LateralRecusado(f"{Path(caminho).name} recusado: {e}") from e
+    except OSError as e:
+        raise LateralRecusado(f"{Path(caminho).name} não pôde ser lido: {e}") from e
+
+
+def _ler_ifc(caminho):
+    nome = Path(caminho).name
+    try:
+        arquivo = ifcopenshell.open(str(caminho))
+    except Exception as e:
+        raise IfcInvalido(f"{nome} não pôde ser lido: {e}") from e
+    if not arquivo.by_type("IfcProject"):
+        raise IfcInvalido(f"{nome} sem IfcProject")
+    return arquivo
+
+
+_CAMPOS = ("ifc_projeto_globalid", "ifc_nome", "ifc_sha256", "Revisao")
 
 
 def _confere_lateral(caminho, leitura):
+    nome = Path(caminho).name
     if leitura.somente_leitura:
-        raise LateralRecusado(f"{Path(caminho).name} é de versão que este programa só abre para leitura")
+        raise LateralRecusado(f"{nome} é de versão que este programa só abre para leitura")
+    manifesto = leitura.manifesto
+    for campo in _CAMPOS:
+        if campo not in manifesto:
+            raise LateralRecusado(f"{nome} sem {campo}")
+    revisao = manifesto["Revisao"]
+    if not isinstance(revisao, int) or isinstance(revisao, bool):
+        raise LateralRecusado(f"{nome} com Revisao que não é inteiro")
+
+
+def _confere_lado(caminho, leitura, pset):
+    if pset is not None and "LadoId" not in leitura.manifesto:
+        raise LateralRecusado(f"{Path(caminho).name} sem LadoId")
 
 
 def _numero_documento(d):
@@ -77,8 +110,9 @@ def _pset(arquivo):
 
 
 def _par(ifc, obim, leitura, via_obim):
-    arquivo = ifcopenshell.open(str(ifc))
+    arquivo = _ler_ifc(ifc)
     pset, projeto = _pset(arquivo)
+    _confere_lado(obim, leitura, pset)
     vistas = _vistas(arquivo)
     guids = {a.GlobalId for a in vistas}
     identificacoes = [_numero_documento(d) for d in arquivo.by_type("IfcDocumentInformation") if d.Scope == "SHEET"]
@@ -88,11 +122,13 @@ def _par(ifc, obim, leitura, via_obim):
     manifesto = leitura.manifesto
     versao = leitura.versao_original
     base = dict(via_obim=via_obim, versao_lateral=versao, ifc=ifc, obim=obim, vistas_preservadas=len(vistas), ambiguas=ambiguas)
-    if manifesto.get("ifc_projeto_globalid") != projeto.GlobalId or (pset is not None and manifesto.get("LadoId") != pset.get("LadoId")):
+    lado_pset = pset.get("LadoId") if pset is not None else None
+    if manifesto["ifc_projeto_globalid"] != projeto.GlobalId or (lado_pset is not None and manifesto["LadoId"] != lado_pset):
         return Resultado("D5", D5, D5_OP, estilo_padrao=True, vinculado=False, **base)
-    if pset is not None and manifesto.get("Revisao") is not None and manifesto["Revisao"] > pset.get("Revisao", 0):
+    revisao_pset = pset.get("Revisao") if pset is not None else None
+    if isinstance(revisao_pset, int) and not isinstance(revisao_pset, bool) and manifesto["Revisao"] > revisao_pset:
         return Resultado("D3", D3, D3_OP, vinculado=True, **base)
-    if manifesto.get("ifc_sha256") == _sha256(ifc):
+    if manifesto["ifc_sha256"] == _sha256(ifc):
         return Resultado("D6" if via_obim else "D1", vinculado=True, **base)
     n = _problematicas(leitura, guids) + repetidas
     return Resultado("D2", D2.format(n), D2_OP, referencias_quebradas=n, vinculado=True, **base)
@@ -118,13 +154,13 @@ def classificar(caminho, obim=None):
         _confere_lateral(entrada, leitura)
         nome = leitura.manifesto.get("ifc_nome")
         achado = entrada.parent / nome if isinstance(nome, str) and _nome_seguro(nome) else None
-        if achado is None or not achado.exists():
+        if achado is None or not achado.is_file():
             return Resultado("D6", D6.format(nome), D6_OP, via_obim=True, versao_lateral=leitura.versao_original, obim=entrada)
         return _par(achado, entrada, leitura, True)
     ifc = entrada
     obim_path = Path(obim) if obim is not None else ifc.with_suffix(".obim")
     if not obim_path.exists():
-        arquivo = ifcopenshell.open(str(ifc))
+        arquivo = _ler_ifc(ifc)
         pset, _ = _pset(arquivo)
         vistas = len(_vistas(arquivo))
         if pset is None:

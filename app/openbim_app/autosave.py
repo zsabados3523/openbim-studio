@@ -3,6 +3,7 @@
 import datetime
 import hashlib
 import json
+import os
 import shutil
 import threading
 import zipfile
@@ -12,6 +13,7 @@ from typing import Any
 
 import ifcopenshell
 
+from . import divergencia as _divergencia
 from .diario import Diario, codificar_ifc, lado_id_de, ler_diario, pasta_projeto, recuperar
 from .gravacao_par import gravar_par, resolver_gravacao_pendente
 from .lateral import Lateral
@@ -19,6 +21,21 @@ from .sessao_modelo import ModeloOcupado, ReentradaProibida, SessaoModelo
 from .transacao import Historico
 
 INTERVALO_AUTOSAVE_S = 300
+
+
+class LateralAlheio(ValueError):
+    """Gravação do par com lateral de outro projeto pendente de escolha."""
+
+    def __init__(self, obim=""):
+        if isinstance(obim, Path):
+            msg = f"Lateral alheio pendente de escolha ({obim.name})"
+        elif obim and ("/" in str(obim) or "\\" in str(obim)):
+            msg = f"Lateral alheio pendente de escolha ({Path(obim).name})"
+        elif obim:
+            msg = str(obim)
+        else:
+            msg = "Lateral alheio pendente de escolha"
+        super().__init__(msg)
 
 
 def _sha256(caminho):
@@ -75,10 +92,25 @@ class Projeto:
     avisos: list[str]
     pendencia: str
     divergencia: object = None
+    lateral_alheio: Any = None
+
+    def escolher_lateral(self, opcao: str) -> None:
+        if self.lateral_alheio is None:
+            raise ValueError("Sem lateral alheio pendente de escolha")
+        if opcao == "cancelar":
+            return
+        if opcao == "criar_novo_lateral":
+            alheio = self.lateral_alheio
+            sha = _sha256(alheio)[:8]
+            destino = alheio.with_name(f"{alheio.name}.alheio-{sha}")
+            os.replace(alheio, destino)
+            self.lateral_alheio = None
+            return
+        raise ValueError(f"Opção inválida para lateral alheio: {opcao!r}")
 
 
 class Autosave:
-    def __init__(self, sessao, historico, lateral, diario, lado_id, ifc_origem, intervalo_s=INTERVALO_AUTOSAVE_S):
+    def __init__(self, sessao, historico, lateral, diario, lado_id, ifc_origem, intervalo_s=INTERVALO_AUTOSAVE_S, lateral_alheio=None):
         self._sessao = sessao
         self._historico = historico
         self._lateral = lateral
@@ -86,6 +118,7 @@ class Autosave:
         self._lado_id = lado_id
         self._ifc_origem = Path(ifc_origem)
         self._intervalo_s = intervalo_s
+        self._lateral_alheio = lateral_alheio
 
         self._sujo_lock = threading.Lock()
         self._max_anotado_seq = 0
@@ -96,6 +129,11 @@ class Autosave:
         self._thread_lock = threading.Lock()
         self._parar_ev = None
         self._erro_thread = None
+
+    def _obter_lateral_alheio(self):
+        if callable(self._lateral_alheio):
+            return self._lateral_alheio()
+        return self._lateral_alheio
 
     def anotar(self, tipo, ifc, lado):
         self._diario.anotar(tipo, ifc, lado)
@@ -163,6 +201,9 @@ class Autosave:
 
     def gravar_normal(self):
         with self._salvar_lock:
+            alheio = self._obter_lateral_alheio()
+            if alheio is not None:
+                raise LateralAlheio(alheio)
             seq_salvo = [0]
             sha_lat = [None]
 
@@ -277,7 +318,13 @@ def abrir_projeto(ifc_caminho, perguntar, divergencia=False) -> Projeto:
             if regs_c:
                 lat_sha = None
                 if obim_path.exists():
-                    lat_sha = hashlib.sha256(Lateral(_ler_obim(obim_path)).canonico()).hexdigest()
+                    try:
+                        if _divergencia.classificar(ifc_path).caso == "D5":
+                            lat_sha = hashlib.sha256(Lateral().canonico()).hexdigest()
+                        else:
+                            lat_sha = hashlib.sha256(Lateral(_ler_obim(obim_path)).canonico()).hexdigest()
+                    except ValueError:
+                        lat_sha = hashlib.sha256(Lateral(_ler_obim(obim_path)).canonico()).hexdigest()
                 d = Diario.continuar(diario_caminho, lado_id, regs_c[0], regs_c[-1]["seq"])
                 try:
                     d.zerar(seq, ifc_caminho=ifc_path, obim_sha256=lat_sha)
@@ -291,8 +338,24 @@ def abrir_projeto(ifc_caminho, perguntar, divergencia=False) -> Projeto:
     # Refresh disco após resolver pendência do par
     ifc_sha_disco = _sha256(ifc_path)
     arq_disco = ifcopenshell.open(str(ifc_path))
-    lateral_disco = Lateral(_ler_obim(obim_path)) if obim_path.exists() else Lateral()
-    lat_sha_disco = hashlib.sha256(lateral_disco.canonico()).hexdigest() if obim_path.exists() else None
+
+    lateral_alheio = None
+    classificacao = None
+    erro_div = None
+    if obim_path.exists():
+        try:
+            classificacao = _divergencia.classificar(ifc_path)
+            if classificacao.caso == "D5":
+                lateral_alheio = obim_path
+        except ValueError as e:
+            erro_div = e
+
+    if lateral_alheio is not None:
+        lateral_disco = Lateral()
+        lat_sha_disco = hashlib.sha256(lateral_disco.canonico()).hexdigest()
+    else:
+        lateral_disco = Lateral(_ler_obim(obim_path)) if obim_path.exists() else Lateral()
+        lat_sha_disco = hashlib.sha256(lateral_disco.canonico()).hexdigest() if obim_path.exists() else None
 
     # 2) Pendência e par do autosave em <pasta>/autosave/
     pasta_auto = pasta_proj / "autosave"
@@ -418,6 +481,11 @@ def abrir_projeto(ifc_caminho, perguntar, divergencia=False) -> Projeto:
         codificar=codificar_ifc,
         anotar=lambda tipo, ifc, lado: auto_ref[0].anotar(tipo, ifc, lado),
     )
+    pr = None
+
+    def _obter_alheio():
+        return pr.lateral_alheio if pr is not None else lateral_alheio
+
     autosave = Autosave(
         sessao=sessao,
         historico=historico,
@@ -425,6 +493,7 @@ def abrir_projeto(ifc_caminho, perguntar, divergencia=False) -> Projeto:
         diario=diario_obj,
         lado_id=lado_id,
         ifc_origem=ifc_path,
+        lateral_alheio=_obter_alheio,
     )
     auto_ref.append(autosave)
 
@@ -435,13 +504,16 @@ def abrir_projeto(ifc_caminho, perguntar, divergencia=False) -> Projeto:
 
     resultado_div = None
     if divergencia:
-        from . import divergencia as _divergencia
-
-        resultado_div = _divergencia.classificar(ifc_caminho)
-        if resultado_div.aviso:
+        if erro_div is not None:
+            raise erro_div
+        if classificacao is not None:
+            resultado_div = classificacao
+        else:
+            resultado_div = _divergencia.classificar(ifc_path)
+        if resultado_div is not None and resultado_div.aviso:
             avisos.append(resultado_div.aviso)
 
-    return Projeto(
+    pr = Projeto(
         caminho=ifc_path,
         lado_id=lado_id,
         arquivo=arquivo_final,
@@ -454,4 +526,6 @@ def abrir_projeto(ifc_caminho, perguntar, divergencia=False) -> Projeto:
         avisos=avisos,
         pendencia=pendencia,
         divergencia=resultado_div,
+        lateral_alheio=lateral_alheio,
     )
+    return pr

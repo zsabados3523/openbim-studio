@@ -9,7 +9,7 @@ CONTRATO `app/openbim_app/desenho/__init__.py` (vazio de lógica) e `desenho/sel
    `pavimento` step id do IfcBuildingStorey usado (None no corte sem pavimento); `faixa` None na planta, no corte ((xmin,ymin,zmin),(xmax,ymax,zmax))
    do volume de recorte NO MUNDO, EM METROS = (origem da vista + [0, tamanho]) x escala da unidade de comprimento do arquivo (`ifcopenshell.util.unit`;
    arquivo em milímetro: x 0,001; volume alinhado aos eixos; o IfcBlock nasce em 0,0,0 do posicionamento);
-   `ocultos_por_classe` dict {classe concreta: quantos elementos candidatos saíram por categoria oculta}; `sem_geometria` int (candidatos sem Representation).
+   `ocultos_por_classe` dict {classe concreta: quantos elementos candidatos saíram por categoria oculta}; `sem_geometria` int (candidatos sem Representation; no corte o candidato é todo IfcElement do modelo).
 3. Elemento desenhável = IfcElement (inclui IfcOpeningElement) com `Representation`. Fora: IfcAnnotation, IfcSpace, sem geometria (contados).
 4. PLANTA: candidatos = contidos (IfcRelContainedInSpatialStructure) no pavimento da vista, mais descendentes por IfcRelAggregates (em qualquer nível)
    dos contidos, mais as aberturas (IfcRelVoidsElement) dos candidatos e os preenchimentos dessas aberturas (IfcRelFillsElement; a porta pode nem estar
@@ -27,7 +27,6 @@ import pytest
 import s06_t07_aux as X
 from s05_conteudo_aux import _limpa, exigir  # noqa: F401  (fixture autouse)
 
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="F0-S06-T07a: openbim_app.desenho.selecao ainda não existe")
 MOD = pytest.mark.parametrize("esq,off,base", X.MODELOS)
 
 
@@ -38,7 +37,6 @@ def S():
 
 
 # ---------- planta ----------
-@AINDA_NAO
 @MOD
 def test_planta_so_do_pavimento_da_vista(esq, off, base):
     exigir()
@@ -53,7 +51,18 @@ def test_planta_so_do_pavimento_da_vista(esq, off, base):
         assert not any(f.by_id(j).is_a("IfcAnnotation") for j in s.ids)
 
 
-@AINDA_NAO
+def test_planta_nunca_calcula_geometria(monkeypatch):
+    exigir()
+    import ifcopenshell.geom as G
+    f, pavs, esperado = X.casa("IFC4", X.GEO, 0.0)
+    g = X.vista(f, "PLANTA", pavs[0])
+    def proibido(*a, **k):
+        raise AssertionError("planta não pode gerar geometria (custo do modelo inteiro)")
+    for nome in ("create_shape", "iterator"):
+        monkeypatch.setattr(G, nome, proibido)
+    assert X.nomes(f, S().selecionar(f, g)) == esperado[0]
+
+
 def test_planta_ignora_volume_da_vista():
     exigir()
     f, pavs, esperado = X.casa("IFC4", X.GEO, 0.0)
@@ -61,7 +70,6 @@ def test_planta_ignora_volume_da_vista():
     assert X.nomes(f, S().selecionar(f, g)) == esperado[0]
 
 
-@AINDA_NAO
 def test_ids_ordenados_deterministicos_e_congelados():
     exigir()
     f, pavs, _ = X.casa("IFC4")
@@ -72,7 +80,6 @@ def test_ids_ordenados_deterministicos_e_congelados():
         a.ids = ()
 
 
-@AINDA_NAO
 def test_pavimento_explicito_vale_no_lugar_do_da_vista():
     exigir()
     f, pavs, esperado = X.casa("IFC2X3")
@@ -83,7 +90,6 @@ def test_pavimento_explicito_vale_no_lugar_do_da_vista():
 
 
 # ---------- interruptor por categoria ----------
-@AINDA_NAO
 @MOD
 def test_moveis_ligados_por_padrao_e_oculta_so_a_categoria(esq, off, base):
     exigir()
@@ -98,7 +104,6 @@ def test_moveis_ligados_por_padrao_e_oculta_so_a_categoria(esq, off, base):
     assert s.ocultos_por_classe == {"IfcSlab": 1}
 
 
-@AINDA_NAO
 def test_categoria_inexistente_e_recusada():
     exigir()
     f, pavs, _ = X.casa("IFC4")
@@ -109,7 +114,6 @@ def test_categoria_inexistente_e_recusada():
 
 
 # ---------- erros ----------
-@AINDA_NAO
 def test_vista_sem_pavimento_ou_com_pavimento_invalido():
     exigir()
     import openbim_app.vistas_ifc as V
@@ -128,7 +132,6 @@ def test_vista_sem_pavimento_ou_com_pavimento_invalido():
         S().selecionar(f, "3zzzzzzzzzzzzzzzzzzzzz")
 
 
-@AINDA_NAO
 def test_vista_de_outro_programa_sem_tipo():
     exigir()
     import s06_t04_aux as A
@@ -139,7 +142,6 @@ def test_vista_de_outro_programa_sem_tipo():
         S().selecionar(f, a.GlobalId)
 
 
-@AINDA_NAO
 @MOD
 def test_nao_altera_o_ifc(esq, off, base):
     exigir()
@@ -153,7 +155,15 @@ def test_nao_altera_o_ifc(esq, off, base):
 
 
 # ---------- corte ----------
-@AINDA_NAO
+@MOD
+def test_corte_conta_candidatos_sem_geometria(esq, off, base):
+    exigir()
+    f, pavs, _ = X.casa(esq, off, base)  # 3 por pavimento (X, A, B) x 2; no corte o candidato é todo IfcElement do modelo
+    g = X.vista(f, "CORTE", pavs[0], origem=(off[0], off[1], base), tamanho=(10.0, 10.0, 6.0))
+    s = S().selecionar(f, g)
+    assert s.sem_geometria == 6 and len(s.ids) == 16
+
+
 @MOD
 def test_corte_cruza_faixa_de_qualquer_pavimento(esq, off, base):
     exigir()
@@ -168,7 +178,6 @@ def test_corte_cruza_faixa_de_qualquer_pavimento(esq, off, base):
     assert X.nomes(f, s) == dentro - {"movel_in"} and s.ocultos_por_classe == {X.MOVEL[esq]: 1}
 
 
-@AINDA_NAO
 def test_corte_sem_pavimento_nao_da_erro_e_faixa_mais_funda():
     exigir()
     f, pavs, dentro, fora = X.faixa("IFC4", X.GEO, 0.0)
@@ -179,7 +188,6 @@ def test_corte_sem_pavimento_nao_da_erro_e_faixa_mais_funda():
     assert X.nomes(f, S().selecionar(f, g2)) == dentro | {"fora_lo", "fora_hi"}
 
 
-@AINDA_NAO
 def test_corte_com_arquivo_em_milimetros():
     exigir()
     f, pavs, dentro, fora = X.faixa("IFC4", X.GEO, 0.0)
@@ -193,7 +201,6 @@ def test_corte_com_arquivo_em_milimetros():
 
 
 # ---------- medida ----------
-@AINDA_NAO
 def test_um_pavimento_de_tres_devolve_ate_40_por_cento():
     exigir()
     f, pavs = X.estrutura("IFC4", X.GEO, 0.0, n_pav=3)

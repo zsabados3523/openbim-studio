@@ -6,10 +6,10 @@ import ifcopenshell.guid
 import s06_t04_aux as A
 
 ESQUEMAS = ("IFC2X3", "IFC4")
-MOVEL = {"IFC2X3": "IfcFurnishingElement", "IFC4": "IfcFurniture"}  # classe concreta do móvel por esquema
+MOVEL = {"IFC2X3": "IfcFurnishingElement", "IFC4": "IfcFurniture", "IFC4X3": "IfcFurniture"}  # classe concreta do móvel por esquema
 GEO = (324550.0, 7405473.0)  # X/Y do modelo de 303 MB da T01h
 # (esquema, deslocamento XY, cota do térreo): cobre 2X3 e 4, perto e longe da origem, pavimento em cota 0, positiva e negativa
-MODELOS = [("IFC2X3", (0.0, 0.0), 0.0), ("IFC4", GEO, 0.0), ("IFC4", (0.0, 0.0), 12.5), ("IFC2X3", GEO, -1.5)]
+MODELOS = [("IFC2X3", (0.0, 0.0), 0.0), ("IFC4", GEO, 0.0), ("IFC4", (0.0, 0.0), 12.5), ("IFC2X3", GEO, -1.5), ("IFC4X3", (0.0, 0.0), 0.0)]
 
 
 def kw(f):

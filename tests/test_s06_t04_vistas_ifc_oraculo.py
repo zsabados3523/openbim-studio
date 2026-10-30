@@ -29,7 +29,6 @@ import s05_conteudo_aux as R
 import s06_t04_aux as A
 from s05_conteudo_aux import _limpa  # noqa: F401  (fixture autouse)
 
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="F0-S06-T04: openbim_app.vistas_ifc ainda não existe")
 
 
 @pytest.fixture(params=A.ESQUEMAS)
@@ -43,7 +42,6 @@ def ligados(f, a, b):  # existe alguma relação IFC que cita a e b?
 
 
 # ---------- formato (ADR-003 §3) ----------
-@AINDA_NAO
 def test_vista_formato_no_ifc(f):
     import openbim_app.vistas_ifc as V
     gid = V.criar_vista(f, "Planta Térreo", "PLANTA", escala="1:50", origem=(1.0, 2.0, 1.2), tamanho=(12.0, 8.0, 3.0))
@@ -65,7 +63,6 @@ def test_vista_formato_no_ifc(f):
     assert len([g for g in f.by_type("IfcGroup") if g.ObjectType == "DRAWINGS"]) == 1, "o grupo pai é um só"
 
 
-@AINDA_NAO
 def test_ler_e_listar_vistas(f):
     import openbim_app.vistas_ifc as V
     g1 = V.criar_vista(f, "Planta", "PLANTA", escala="1:50", origem=(1.0, 2.0, 1.2), tamanho=(12.0, 8.0, 3.0))
@@ -79,7 +76,6 @@ def test_ler_e_listar_vistas(f):
         V.ler_vista(f, "naoexiste")
 
 
-@AINDA_NAO
 def test_location_relativo_e_unico(f):
     import openbim_app.vistas_ifc as V
     gs = [V.criar_vista(f, "Planta", "PLANTA") for _ in range(3)] + [V.criar_vista(f, "Planta/2 \\ x", "CORTE")]
@@ -90,7 +86,6 @@ def test_location_relativo_e_unico(f):
     assert [V.ler_vista(f, g)["nome"] for g in gs[:3]] == ["Planta"] * 3 and len({A.vista_ifc(f, g)["doc"].Name for g in gs[:3]}) == 1
 
 
-@AINDA_NAO
 def test_prancha_formato_no_ifc(f):
     import openbim_app.vistas_ifc as V
     g1, g2 = V.criar_vista(f, "P1", "PLANTA"), V.criar_vista(f, "C1", "CORTE")
@@ -114,7 +109,6 @@ def test_prancha_formato_no_ifc(f):
         V.ler_prancha(f, "Z-99")
 
 
-@AINDA_NAO
 def test_chave_da_prancha_unica_e_exata(f):
     import openbim_app.vistas_ifc as V
     V.criar_vista(f, "P", "PLANTA")
@@ -133,7 +127,6 @@ def test_chave_da_prancha_unica_e_exata(f):
     assert sorted(p["numero"] for p in V.listar_pranchas(f)) == sorted(["A-01", "a-01", "A 1.2/B", "1"])
 
 
-@AINDA_NAO
 def test_apagar_vista_e_apagar_prancha_limpam_tudo(f):
     import openbim_app.vistas_ifc as V
     v0 = V.criar_vista(f, "V0", "PLANTA")
@@ -159,7 +152,6 @@ def test_apagar_vista_e_apagar_prancha_limpam_tudo(f):
         V.apagar_prancha(f, "P1")
 
 
-@AINDA_NAO
 def test_reabrir_mantem_globalid(f, tmp_path):
     import ifcopenshell
     import openbim_app.vistas_ifc as V
@@ -176,7 +168,6 @@ def test_reabrir_mantem_globalid(f, tmp_path):
 
 
 # ---------- IFC de outro programa e validador ----------
-@AINDA_NAO
 def test_ifc_de_outro_programa_sem_pset_nem_formato_nosso(f):
     import openbim_app.vistas_ifc as V
     ext = A.annotation(f, "Externa")
@@ -196,7 +187,6 @@ def test_ifc_de_outro_programa_sem_pset_nem_formato_nosso(f):
     assert f.by_guid(ext.GlobalId).Name == "Externa" and len(A.anotacoes_vista(f)) == 1
 
 
-@AINDA_NAO
 def test_pranchas_com_numero_repetido_sao_ambiguas(f):
     import openbim_app.vistas_ifc as V
     A.folha(f, "A-01", "um")
@@ -212,7 +202,6 @@ def test_pranchas_com_numero_repetido_sao_ambiguas(f):
     assert issubclass(V.PranchaAmbigua, ValueError) and R.diferencas(antes, R.foto(f)) == []
 
 
-@AINDA_NAO
 def test_arquivo_gravado_passa_no_validador(f):
     import ifcopenshell.validate as VAL
     import openbim_app.vistas_ifc as V

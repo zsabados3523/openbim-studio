@@ -24,7 +24,6 @@ import pytest
 import s06_t06_aux as X
 from s05_conteudo_aux import _limpa, exigir  # noqa: F401  (fixtures)
 
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="T06b: abrir_projeto ainda carrega e regrava o lateral de outro projeto")
 OUTRO_GID = "9zzzHZ1u8Ek9aBc3DeFgHi"
 OUTRO_LADO = "0a0a0a0a-1b1b-4c4c-9d9d-2e2e2e2e2e2e"
 TIPOS = ("globalid", "ladoid")
@@ -98,7 +97,6 @@ def obter(pr, c="vistas"):
 
 
 # 1) abrir
-@AINDA_NAO
 @pytest.mark.parametrize("div", [False, True])
 @pytest.mark.parametrize("tipo", TIPOS)
 def test_01_abrir_nao_carrega_nem_toca_o_alheio(p, abre, tipo, div):
@@ -113,7 +111,6 @@ def test_01_abrir_nao_carrega_nem_toca_o_alheio(p, abre, tipo, div):
 
 
 # 2) gravar sem escolha
-@AINDA_NAO
 @pytest.mark.parametrize("tipo", TIPOS)
 def test_02_gravar_sem_escolha_levanta_e_nao_escreve_nada(p, abre, tipo):
     import openbim_app.autosave as S
@@ -127,7 +124,6 @@ def test_02_gravar_sem_escolha_levanta_e_nao_escreve_nada(p, abre, tipo):
     assert revisao(pr) == rev and not (Path(pr.caminho).parent / "Casa.ifc.bak").exists()
 
 
-@AINDA_NAO
 def test_03_autosave_nao_regrava_o_alheio_nem_grava_conteudo_dele(p, abre):
     import openbim_app.diario as D
     ifc, ob, dados, mt = alheio(p)
@@ -141,7 +137,6 @@ def test_03_autosave_nao_regrava_o_alheio_nem_grava_conteudo_dele(p, abre):
 
 
 # 3) escolha
-@AINDA_NAO
 def test_04_cancelar_nao_grava_nem_move_e_a_pendencia_segue(p, abre):
     import openbim_app.autosave as S
     ifc, ob, dados, mt = alheio(p)
@@ -154,7 +149,6 @@ def test_04_cancelar_nao_grava_nem_move_e_a_pendencia_segue(p, abre):
     assert X.foto(p) == antes
 
 
-@AINDA_NAO
 def test_05_criar_novo_lateral_guarda_o_alheio_e_so_depois_grava_o_novo(p, abre):
     ifc, ob, dados, mt = alheio(p)
     pr = abre(ifc)
@@ -170,7 +164,6 @@ def test_05_criar_novo_lateral_guarda_o_alheio_e_so_depois_grava_o_novo(p, abre)
     assert not [n for n in RASTRO if (p / n).exists()]
 
 
-@AINDA_NAO
 def test_06_gravar_depois_da_escolha_e_reabrir_da_d1_sem_pendencia(p, abre):
     ifc, ob, dados, mt = alheio(p)
     pr = abre(ifc)
@@ -182,7 +175,6 @@ def test_06_gravar_depois_da_escolha_e_reabrir_da_d1_sem_pendencia(p, abre):
     assert guardado(p, dados).read_bytes() == dados
 
 
-@AINDA_NAO
 def test_07_reabrir_sem_escolher_segue_pendente_e_intacto(p, abre):
     ifc, ob, dados, mt = alheio(p)
     pr = abre(ifc)
@@ -191,7 +183,6 @@ def test_07_reabrir_sem_escolher_segue_pendente_e_intacto(p, abre):
     assert pr2.lateral_alheio is not None and obter(pr2) == [] and ob.read_bytes() == dados and ob.stat().st_mtime_ns == mt
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("opcao", ["", "apagar", "CANCELAR", None])
 def test_08_escolha_invalida_e_ValueError_sem_mexer(p, abre, opcao):
     ifc, ob, dados, mt = alheio(p)
@@ -202,7 +193,6 @@ def test_08_escolha_invalida_e_ValueError_sem_mexer(p, abre, opcao):
     assert X.foto(p) == antes and pr.lateral_alheio is not None
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("opcao", ["cancelar", "criar_novo_lateral"])
 def test_09_escolher_sem_pendencia_e_ValueError(p, abre, opcao):
     ifc, _ = X.fazer(p)
@@ -214,7 +204,6 @@ def test_09_escolher_sem_pendencia_e_ValueError(p, abre, opcao):
 
 
 # 4) queda
-@AINDA_NAO
 def test_10_falha_na_gravacao_depois_da_escolha_nao_perde_o_alheio(p, abre, monkeypatch):
     import openbim_app.autosave as S
     ifc, ob, dados, mt = alheio(p)
@@ -233,7 +222,6 @@ def test_10_falha_na_gravacao_depois_da_escolha_nao_perde_o_alheio(p, abre, monk
     assert guardado(p, dados).read_bytes() == dados and gravado(ob).manifesto["ifc_projeto_globalid"] == X.GID
 
 
-@AINDA_NAO
 def test_11_falha_ao_guardar_deixa_o_alheio_onde_estava_e_a_pendencia(p, abre, monkeypatch):
     import openbim_app.autosave as S
     ifc, ob, dados, mt = alheio(p)
@@ -283,7 +271,6 @@ def test_12_casos_sem_alheio_abrem_e_gravam_como_hoje(p, abre, fab, vistas, div)
     assert not list(p.glob("Casa.obim.alheio-*"))
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("fab", [_d1, _d2, _d3, _d4])
 def test_12b_sem_alheio_nao_ha_pendencia(p, abre, fab):
     pr = abre(fab(p))
@@ -299,3 +286,21 @@ def test_13_regua_o_alheio_da_fixture_e_de_fato_alheio(p):
     ifc2, ob2, _, _ = alheio(p / "b", "ladoid")
     assert gravado(ob2).manifesto["LadoId"] != X.LADO and gravado(ob2).manifesto["ifc_projeto_globalid"] == X.GID
     assert guardado(p, dados).name.startswith("Casa.obim.alheio-") and len(guardado(p, dados).name) == len("Casa.obim.alheio-") + 8
+
+
+# 6) lateral ilegível não é "alheio": segue como hoje (sem a flag abre; com a flag a recusa sobe, não é engolida)
+def test_14_lateral_ilegivel_sem_flag_abre_como_hoje_e_nao_vira_alheio(p, abre):
+    ifc, ob = X.fazer(p)
+    ob.write_bytes(b"lixo")
+    pr = abre(ifc)
+    assert obter(pr) == [] and ob.read_bytes() == b"lixo"
+    assert getattr(pr, "lateral_alheio", None) is None
+
+
+def test_15_lateral_ilegivel_com_flag_continua_levantando_LateralRecusado(p, abre):
+    import openbim_app.divergencia as DV
+    ifc, ob = X.fazer(p)
+    ob.write_bytes(b"lixo")
+    with pytest.raises(DV.LateralRecusado):
+        abre(ifc, True)
+    assert ob.read_bytes() == b"lixo"

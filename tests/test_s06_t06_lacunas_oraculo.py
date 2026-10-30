@@ -7,7 +7,7 @@
     `IfcInvalido(ValueError)` com o nome do IFC na mensagem; `ifc_nome` que aponta para pasta = IFC "não achado" (D6), usar `is_file()`.
 (c) Pset sem `LadoId` (ou sem `Revisao`) com `.obim` que os tem: só compara o que existe nos dois lados (globalid sempre); não vira D5 nem D3 por isso.
 (d) Documento que NÃO é SHEET não conta como prancha; `DocumentId` (IFC2X3) conta como `Identification`; `ambiguas` sai ordenada; hash do IFC em blocos.
-Marcadores `@AINDA_NAO` (xfail estrito) só nos casos que o código atual falha; o autor os tira depois."""
+Marcadores `@AINDA_NAO` já tirados (implementação feita)."""
 import builtins
 import io
 import os
@@ -18,11 +18,9 @@ import s06_t06_aux as X
 from s05_conteudo_aux import _limpa, exigir  # noqa: F401  (fixtures)
 from test_s06_t06_divergencia_oraculo import D2, D2_OP, D3, D3_OP, D5, D5_OP, D6, D6_OP, _local, _r, dv, p  # noqa: F401
 
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="F0-S06-T06 lacunas: decisão do líder ainda não implementada")
 OUTRO = "9zzzzzzzzzzzzzzzzzzzzz"
 
 
-@AINDA_NAO
 def test_pset_sem_revisao_nao_vira_d3_so_segue_o_hash(p):
     ifc, _ = X.fazer(p, rev=None, o_rev=5)
     _r(dv().classificar(ifc), "D1")
@@ -30,7 +28,6 @@ def test_pset_sem_revisao_nao_vira_d3_so_segue_o_hash(p):
     _r(dv().classificar(ifc), "D2", D2.format(0), D2_OP)
 
 
-@AINDA_NAO
 def test_pset_sem_ladoid_so_compara_o_globalid(p):
     ifc, _ = X.fazer(p, lado=None)
     _r(dv().classificar(ifc), "D1")
@@ -120,7 +117,6 @@ MANIFESTOS_RUINS = {"sem_globalid": {"ifc_projeto_globalid": X.APAGAR}, "sem_ifc
                     "revisao_bool": {"Revisao": True}, "revisao_nula": {"Revisao": None}, "sem_ladoid_com_pset": {"LadoId": X.APAGAR}}
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("entrada", ["ifc", "obim"])
 @pytest.mark.parametrize("como", list(MANIFESTOS_RUINS))
 def test_manifesto_incompleto_ou_com_tipo_errado_e_recusado(p, como, entrada):
@@ -136,7 +132,6 @@ def test_sem_ladoid_no_manifesto_e_ifc_sem_pset_e_normal(p):
     _r(dv().classificar(ifc), "D1", vinc=True)
 
 
-@AINDA_NAO
 @pytest.mark.skipif(os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0), reason="precisa de usuário comum com chmod")
 def test_obim_sem_permissao_de_leitura_e_recusado(p):
     ifc, ob = X.fazer(p)
@@ -148,7 +143,6 @@ def test_obim_sem_permissao_de_leitura_e_recusado(p):
         ob.chmod(0o644)
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("defeito", ["ausente", "lixo", "sem_projeto"])
 def test_ifc_ausente_ilegivel_ou_sem_projeto_levanta_ifcinvalido(p, defeito):
     import ifcopenshell
@@ -163,10 +157,23 @@ def test_ifc_ausente_ilegivel_ou_sem_projeto_levanta_ifcinvalido(p, defeito):
         dv().classificar(ifc)
 
 
-@AINDA_NAO
 def test_ifc_nome_apontando_para_pasta_e_ifc_nao_achado(p):
     ifc, ob = X.fazer(p, man={"ifc_nome": "pasta"})
     (p / "pasta").mkdir()
     r = dv().classificar(ob)
     _r(r, "D6", D6.format("pasta"), D6_OP, vistas=0, vinc=False)
     assert r.ifc is None and r.via_obim
+
+
+def test_revisao_booleana_no_pset_nao_conta_como_numero(p):  # True == 1 em Python: não pode virar D3
+    ifc, _ = X.fazer(p, rev=True, o_rev=5)
+    _r(dv().classificar(ifc), "D1")
+
+
+def test_ifc_nome_que_nao_e_texto_nao_quebra(p):
+    ifc, ob = X.fazer(p, man={"ifc_nome": 5})
+    try:
+        r = dv().classificar(ob)
+    except dv().LateralRecusado:
+        return  # recusar também é aceito
+    assert r.caso == "D6" and r.ifc is None

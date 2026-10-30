@@ -74,6 +74,7 @@ class Projeto:
     recuperado: bool
     avisos: list[str]
     pendencia: str
+    divergencia: object = None
 
 
 class Autosave:
@@ -255,7 +256,7 @@ class Autosave:
             raise err
 
 
-def abrir_projeto(ifc_caminho, perguntar) -> Projeto:
+def abrir_projeto(ifc_caminho, perguntar, divergencia=False) -> Projeto:
     ifc_path = Path(ifc_caminho).resolve()
     obim_path = ifc_path.with_suffix(".obim")
     avisos = []
@@ -432,6 +433,14 @@ def abrir_projeto(ifc_caminho, perguntar) -> Projeto:
             autosave._seq_salvo = regs[0].get("seq", 0)
             autosave._max_anotado_seq = regs[-1]["seq"]
 
+    resultado_div = None
+    if divergencia:
+        from . import divergencia as _divergencia
+
+        resultado_div = _divergencia.classificar(ifc_caminho)
+        if resultado_div.aviso:
+            avisos.append(resultado_div.aviso)
+
     return Projeto(
         caminho=ifc_path,
         lado_id=lado_id,
@@ -444,4 +453,5 @@ def abrir_projeto(ifc_caminho, perguntar) -> Projeto:
         recuperado=recuperado,
         avisos=avisos,
         pendencia=pendencia,
+        divergencia=resultado_div,
     )

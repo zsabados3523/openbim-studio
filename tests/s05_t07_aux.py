@@ -21,7 +21,7 @@ LADO = str(uuid.uuid5(uuid.UUID("2b1f6a40-7d0e-4c52-9a43-1c0de5a7f007"), "t07"))
 SEQ = 17
 SEMENTE = 20261023
 TEMPS = ("Casa.ifc.tmp", "Casa.obim.tmp", "Casa.ifc.bak.tmp", "Casa.obim.bak.tmp")
-CAMPOS = {"formato", "versao_formato", "provisorio", "LadoId", "Revisao", "ifc_nome", "ifc_sha256", "ifc_tamanho", "ifc_projeto_globalid",
+CAMPOS = {"formato", "versao_formato", "LadoId", "Revisao", "ifc_nome", "ifc_sha256", "ifc_tamanho", "ifc_projeto_globalid",
           "programa_versao", "data"}  # formato do par (ADR-002 §4.3)
 Antigo = namedtuple("Antigo", "ifc obim")  # bytes exatos do par de antes
 Novo = namedtuple("Novo", "revisao lado_id foto lado")  # o que o par novo tem de conter (foto sem o pset OBIM_Projeto; lado = json canônico)
@@ -112,7 +112,8 @@ def estado_par(destino, antigo=None, novo=None, pasta_projeto=None):
         return "?", prob + [f"{d.name} não abre: {e!r}"]
     faltam = CAMPOS - set(man)
     prob += [f"manifesto sem {sorted(faltam)}"] if faltam else []
-    confere = {"formato": "obim-lateral", "versao_formato": "0.1.0", "provisorio": True, "ifc_nome": d.name, "ifc_sha256": sha(bi),
+    prob += ["manifesto tem `provisorio` (0.2.0 não tem)"] if "provisorio" in man else []
+    confere = {"formato": "obim-lateral", "versao_formato": "0.2.0", "ifc_nome": d.name, "ifc_sha256": sha(bi),
                "ifc_tamanho": len(bi), "ifc_projeto_globalid": f.by_type("IfcProject")[0].GlobalId}
     prob += [f"manifesto {k} = {man.get(k)!r}, esperado {v!r}" for k, v in confere.items() if man.get(k) != v]
     try:
@@ -131,8 +132,8 @@ def estado_par(destino, antigo=None, novo=None, pasta_projeto=None):
     return "novo", prob
 
 
-def escrever_par_falso(destino, ifc_origem, objetos, revisao, lado_id=LADO, manifesto=None):
-    """Só para a régua: grava um par como o ADR-002 §4.3 descreve, sem o módulo de gravação; `manifesto` sobrescreve campos."""
+def escrever_par_falso(destino, ifc_origem, objetos, revisao, lado_id=LADO, manifesto=None, legado=False):
+    """Só para a régua: grava um par como o ADR-002 §4.3 descreve, sem o módulo de gravação; `manifesto` sobrescreve campos; `legado=True` = o 0.1.0 provisório da S05."""
     import ifcopenshell
     import ifcopenshell.api
     f = ifcopenshell.open(str(ifc_origem))
@@ -142,7 +143,7 @@ def escrever_par_falso(destino, ifc_origem, objetos, revisao, lado_id=LADO, mani
     d = Path(destino)
     f.write(str(d))
     b = d.read_bytes()
-    man = {"formato": "obim-lateral", "versao_formato": "0.1.0", "provisorio": True, "LadoId": lado_id, "Revisao": revisao, "ifc_nome": d.name,
+    man = {"formato": "obim-lateral", "versao_formato": "0.1.0" if legado else "0.2.0", **({"provisorio": True} if legado else {}), "LadoId": lado_id, "Revisao": revisao, "ifc_nome": d.name,
            "ifc_sha256": sha(b), "ifc_tamanho": len(b), "ifc_projeto_globalid": proj.GlobalId, "programa_versao": "0", "data": "2026-10-24T00:00:00Z",
            **(manifesto or {})}
     with zipfile.ZipFile(d.with_suffix(".obim"), "w") as z:

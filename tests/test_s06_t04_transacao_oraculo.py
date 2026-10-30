@@ -11,7 +11,6 @@ import s06_t04_aux as A
 from s05_conteudo_aux import _limpa  # noqa: F401  (fixture autouse)
 from s06_t04_sessao_aux import Sessao
 
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="F0-S06-T04: openbim_app.vistas_ifc ainda não existe")
 SEMENTE, N_OPS = 20261029, 10_000
 
 
@@ -23,7 +22,6 @@ def sessao(request):
     s.encerrar()
 
 
-@AINDA_NAO
 def test_desfazer_e_refazer_vista_e_prancha(sessao):
     import openbim_app.vistas_ifc as V
     s, f0 = sessao, sessao.foto()
@@ -56,7 +54,6 @@ def test_desfazer_e_refazer_vista_e_prancha(sessao):
     assert s.desfazer() is not None and R.diferencas(f2, s.foto()) == []
 
 
-@AINDA_NAO
 def test_erro_dentro_da_transacao_volta_tudo(sessao):
     import openbim_app.vistas_ifc as V
     s, f0 = sessao, sessao.foto()
@@ -73,7 +70,6 @@ def test_erro_dentro_da_transacao_volta_tudo(sessao):
     assert V.ler_prancha(s.f, "A-01")["titulo"] == "agora vai"
 
 
-@AINDA_NAO
 def test_chave_repetida_dentro_da_transacao_nao_suja(sessao):
     import openbim_app.vistas_ifc as V
     s = sessao
@@ -87,7 +83,6 @@ def test_chave_repetida_dentro_da_transacao_nao_suja(sessao):
     assert R.diferencas(f1, s.foto()) == []
 
 
-@AINDA_NAO
 def test_escrita_fora_da_transacao_e_recusada(sessao):
     import openbim_app.vistas_ifc as V
     from openbim_app.transacao import EdicaoForaDeTransacao
@@ -143,7 +138,6 @@ def _mistura(s, V, rnd, n):  # n operações INTEIRAS em transações de 1 a 3; 
     return vistas, pranchas
 
 
-@AINDA_NAO
 def test_dez_mil_operacoes_misturadas(sessao):
     import openbim_app.vistas_ifc as V
     s, f0 = sessao, sessao.foto()

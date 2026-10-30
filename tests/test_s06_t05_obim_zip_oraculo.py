@@ -25,6 +25,7 @@ DECISOES DO LIDER: ao tirar os marcadores o autor atualiza, em commit separado, 
 0.2.0 sem `provisorio` (só a versão; nada afrouxado; o implementador não toca). Esquema CC0 fica para a T13. Casos novos: `..._b_oraculo.py`.
 GUARDA: sem ifcopenshell, pula (falha com OBIM_S05_OBRIGATORIO=1). O caso 17 e o 20 não usam o módulo novo."""
 import json
+import os
 import zipfile
 from pathlib import Path
 
@@ -34,7 +35,6 @@ from s05_conteudo_aux import _limpa, base_ifc, exigir  # noqa: F401  (fixtures)
 from s05_t07_aux import LADO
 from test_s05_t07_par_oraculo import Proj
 
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="T05: obim_zip.py e o 0.2.0 ainda não existem")
 G1, G2 = "0$Fq3Zk1D5Pv2wX4yAbC_E", "3cUz$7rQ0aLm9XyN2bP_Hd"  # GlobalId tem `$` (alfabeto 0-9A-Za-z_$), 22 caracteres
 IDENT = "A-01.2 / rev B"  # Identification pode ter espaço, ponto e barra
 U = {n: f"{i:08x}-0000-4000-8000-00000000000{i}" for i, n in enumerate(("est", "v1", "v2", "p1", "p2", "vp1", "vp2", "vp3", "tb"), 1)}
@@ -73,7 +73,6 @@ def entradas(caminho):
     with zipfile.ZipFile(caminho) as z:
         return z.namelist()
 
-@AINDA_NAO
 def test_01_zip_comum_estrutura_e_manifesto(tmp_path):
     m, p = ob(), tmp_path / "Casa.obim"
     m.escrever(p, lat(), MAN, {f"titleblocks/{U['tb']}.svg": SVG})
@@ -90,7 +89,6 @@ def test_01_zip_comum_estrutura_e_manifesto(tmp_path):
     assert man["versao_formato"] == "0.2.0" and "provisorio" not in man and man["formato"] == "obim-lateral"
     assert man["x_futuro"] == {"k": [1, 2]}
 
-@AINDA_NAO
 def test_02_gravar_e_ler_identico(tmp_path):
     m, p = ob(), tmp_path / "Casa.obim"
     origem = lat()
@@ -103,7 +101,6 @@ def test_02_gravar_e_ler_identico(tmp_path):
     m.escrever(q, r.lateral, r.manifesto, r.extras)
     assert canon(m.ler(q).lateral) == canon(origem) and m.ler(q).extras == r.extras, "ler -> escrever -> ler muda algo"
 
-@AINDA_NAO
 def test_03_chave_com_dolar_e_identification_estranha(tmp_path):
     m, p = ob(), tmp_path / "Casa.obim"
     m.escrever(p, lat(), MAN)
@@ -146,7 +143,6 @@ RUINS = [("vista_guid repetido", _rep_vista), ("identification repetida", _rep_p
          ("viewport com escala zero", lambda: _com("viewports", "x", prancha="B", vista_guid=G1, x=0, y=0, escala=0)),
          ("viewport com escala negativa", lambda: _com("viewports", "x", prancha="B", vista_guid=G1, x=0, y=0, escala=-5))]
 
-@AINDA_NAO
 @pytest.mark.parametrize("sobre", [f for _, f in RUINS], ids=[n for n, _ in RUINS])
 def test_04_validacao_recusa_e_nao_grava(tmp_path, sobre):
     m, p = ob(), tmp_path / "Casa.obim"
@@ -154,7 +150,6 @@ def test_04_validacao_recusa_e_nao_grava(tmp_path, sobre):
         m.escrever(p, lat(**sobre()), MAN)
     assert not p.exists() and not list(tmp_path.iterdir()), f"sobrou arquivo depois da recusa: {list(tmp_path.iterdir())}"
 
-@AINDA_NAO
 def test_05_desconhecidos_sobrevivem_a_regravar(tmp_path):
     m, p, q = ob(), tmp_path / "a.obim", tmp_path / "b.obim"
     o = objetos(zzz_futuro={"u1": {"qualquer": [1, {"b": None}], "texto": "ç"}})
@@ -172,9 +167,12 @@ def test_05_desconhecidos_sobrevivem_a_regravar(tmp_path):
 
 PERIGOSAS = ["../fora.json", "/abs/x.json", "vistas/../../fora.json", "vistas\\x.json", "styles/../x.json"]
 
-@AINDA_NAO
 @pytest.mark.parametrize("nome", PERIGOSAS)
 def test_06_caminho_perigoso_recusado(tmp_path, nome):
+    if os.sep == "\\" and "\\" in nome:
+        # Guarda de plataforma: no Windows o zipfile troca "\\" por "/" ao nomear a entrada,
+        # entao este caso nao existe la (nenhum caso ou numero afrouxado).
+        pytest.skip("zipfile no Windows normaliza a barra invertida")
     m, p = ob(), tmp_path / "ruim.obim"
     with zipfile.ZipFile(p, "w") as z:
         z.writestr("manifest.json", json.dumps(MAN))
@@ -185,7 +183,6 @@ def test_06_caminho_perigoso_recusado(tmp_path, nome):
     with pytest.raises(ValueError):
         GP._conferir_obim(p)
 
-@AINDA_NAO
 def test_07_ler_recusa_sem_manifesto_ou_outro_formato(tmp_path):
     m = ob()
     a, b, c = tmp_path / "a.obim", tmp_path / "b.obim", tmp_path / "c.obim"
@@ -202,10 +199,9 @@ def test_07_ler_recusa_sem_manifesto_ou_outro_formato(tmp_path):
 def _par_0_1_0(tmp_path, base_ifc, notas=None):  # noqa: F811  (arquivo provisório da S05, feito pela régua que reproduz o formato dela)
     d = tmp_path / "antigo" / "Casa.ifc"
     d.parent.mkdir()
-    X.escrever_par_falso(d, base_ifc, {"notas": notas or {"n1": {"texto": "da S05", "ifc_guids": ["abc"]}}, "outra": {"o_1": {"v": 1.5}}}, 3)
+    X.escrever_par_falso(d, base_ifc, {"notas": notas or {"n1": {"texto": "da S05", "ifc_guids": ["abc"]}}, "outra": {"o_1": {"v": 1.5}}}, 3, legado=True)
     return d, d.with_suffix(".obim")
 
-@AINDA_NAO
 def test_08_migra_0_1_0_em_memoria(tmp_path, base_ifc):  # noqa: F811
     exigir()
     m = ob()
@@ -218,7 +214,6 @@ def test_08_migra_0_1_0_em_memoria(tmp_path, base_ifc):  # noqa: F811
     assert r.lateral.obter("notas", "n1") == {"texto": "da S05", "ifc_guids": ["abc"]} and r.lateral.obter("outra", "o_1") == {"v": 1.5}
     assert o.read_bytes() == bytes_antes, "ler mudou o arquivo (migra só em memória; regrava só ao gravar o par)"
 
-@AINDA_NAO
 @pytest.mark.parametrize("versao", ["0.3.0", "1.0.0", "2.4.1"])
 def test_09_versao_maior_abre_so_leitura_e_nada_se_perde(tmp_path, versao):
     m, p = ob(), tmp_path / "f.obim"
@@ -227,21 +222,19 @@ def test_09_versao_maior_abre_so_leitura_e_nada_se_perde(tmp_path, versao):
     assert r.somente_leitura is True and r.versao_original == versao and r.manifesto["novo_campo_v"] == 1
     assert canon(r.lateral) == canon(lat())
 
-@AINDA_NAO
 def test_10_versao_menor_nova_grava_e_preserva(tmp_path):
     m, p = ob(), tmp_path / "f.obim"
     m.escrever(p, lat(), {**MAN, "versao_formato": "0.2.1", "campo_021": [1]})
     r = m.ler(p)
     assert r.somente_leitura is False and r.manifesto["campo_021"] == [1]
 
-@AINDA_NAO
 def test_11_orfaos_sao_calculados_e_nunca_apagados(tmp_path):
     m, p = ob(), tmp_path / "f.obim"
     l = lat()
     assert m.orfaos(l, {G1, G2}, {IDENT}) == {"vistas": [], "pranchas": [], "viewports": []}
     sem_g2 = m.orfaos(l, {G1}, {IDENT})  # a vista G2 sumiu do IFC por fora do programa
     assert sem_g2 == {"vistas": [U["v2"]], "pranchas": [], "viewports": [U["vp2"]]}
-    assert m.orfaos(l, {G1, G2}, set())["pranchas"] == [U["p1"]] and m.orfaos(l, {G1, G2}, set())["viewports"] == []
+    assert m.orfaos(l, {G1, G2}, set())["pranchas"] == [U["p1"]] and sorted(m.orfaos(l, {G1, G2}, set())["viewports"]) == sorted((U["vp1"], U["vp2"]))  # ADR §6: prancha inexistente no IFC = viewport órfão
     assert sorted(m.orfaos(l, set(), set())["viewports"]) == sorted((U["vp1"], U["vp2"]))
     assert l.obter("viewports", U["vp2"]) is not None, "orfaos() apagou"
     m.escrever(p, l, MAN)  # gravar com órfãos não os apaga
@@ -254,7 +247,6 @@ def _fabrica(proj):
             for i, o in objs.items():
                 t.lado.criar(c, i, o)
 
-@AINDA_NAO
 def test_12_apagar_vista_apaga_so_os_viewports_dela_numa_transacao(proj):
     m = ob()
     _fabrica(proj)
@@ -280,7 +272,6 @@ def proj(tmp_path, base_ifc, monkeypatch):  # noqa: F811
     yield p
     p.h.encerrar()
 
-@AINDA_NAO
 def test_14_gravar_par_sai_0_2_0_com_estrutura_real(proj):
     m = ob()
     _fabrica(proj)
@@ -293,7 +284,6 @@ def test_14_gravar_par_sai_0_2_0_com_estrutura_real(proj):
     assert canon(r.lateral) == canon(proj.lat)
     assert not [n for n in entradas(o) if "$" in n] and not any(proj.pasta.glob("gravacao*"))
 
-@AINDA_NAO
 def test_15_gravar_par_repassa_manifesto_e_entradas_desconhecidas(proj):
     m = ob()
     _fabrica(proj)
@@ -309,10 +299,9 @@ def test_15_gravar_par_repassa_manifesto_e_entradas_desconhecidas(proj):
     assert r2.extras == {"assets/logo.png": b"\x89PNG\x00", f"titleblocks/{U['tb']}.svg": SVG}, "entrada desconhecida perdida"
     assert r2.lateral.obter("notas", "n2") is not None
 
-@AINDA_NAO
 def test_16_gravar_par_migra_0_1_0_e_guarda_o_bak(proj, base_ifc, tmp_path):  # noqa: F811
     m = ob()
-    X.escrever_par_falso(proj.destino, base_ifc, {"notas": {"n0": {"texto": "primeira"}}}, 5)
+    X.escrever_par_falso(proj.destino, base_ifc, {"notas": {"n0": {"texto": "primeira"}}}, 5, legado=True)
     antigo = X.Antigo(proj.destino.read_bytes(), proj.destino.with_suffix(".obim").read_bytes())
     proj.gravar()
     assert proj.destino.with_name("Casa.obim.bak").read_bytes() == antigo.obim and proj.destino.with_name("Casa.ifc.bak").read_bytes() == antigo.ifc
@@ -327,7 +316,7 @@ def _estado_intacto(proj, antigo):
 
 
 def _antes(proj, base_ifc, versao="0.1.0", **man):  # noqa: F811
-    X.escrever_par_falso(proj.destino, base_ifc, {"notas": {"n0": {"texto": "primeira"}}}, 5, manifesto={"versao_formato": versao, **man})
+    X.escrever_par_falso(proj.destino, base_ifc, {"notas": {"n0": {"texto": "primeira"}}}, 5, manifesto={"versao_formato": versao, **man}, legado=True)
     return X.Antigo(proj.destino.read_bytes(), proj.destino.with_suffix(".obim").read_bytes())
 
 
@@ -348,7 +337,6 @@ def test_17_falha_antes_do_diario_deixa_o_par_de_antes(proj, base_ifc, monkeypat
     _estado_intacto(proj, antigo)
     assert proj.chamadas == [] and proj.pset() is None, "ao_concluir chamado ou carimbo não voltou"
 
-@AINDA_NAO
 @pytest.mark.parametrize("sobre", [_rep_vista, _rep_prancha], ids=["vista_guid repetido", "identification repetida"])
 def test_18_gravar_par_com_lateral_invalido_nao_toca_no_par(proj, base_ifc, sobre):  # noqa: F811
     from openbim_app.lateral import Lateral
@@ -361,7 +349,6 @@ def test_18_gravar_par_com_lateral_invalido_nao_toca_no_par(proj, base_ifc, sobr
         proj.gravar()
     _estado_intacto(proj, antigo)
 
-@AINDA_NAO
 def test_19_gravar_par_recusa_obim_de_versao_maior(proj, base_ifc):  # noqa: F811
     _fabrica(proj)
     antigo = _antes(proj, base_ifc, versao="0.3.0", campo_novo=1)
@@ -370,7 +357,6 @@ def test_19_gravar_par_recusa_obim_de_versao_maior(proj, base_ifc):  # noqa: F81
     assert "Casa.obim" in str(e.value), "a mensagem tem de citar o arquivo (em português)"
     _estado_intacto(proj, antigo)
 
-@AINDA_NAO
 def test_20_conferir_obim_aceita_svg_e_entrada_desconhecida(tmp_path):
     import openbim_app.gravacao_par as GP
     p = tmp_path / "ok.obim"

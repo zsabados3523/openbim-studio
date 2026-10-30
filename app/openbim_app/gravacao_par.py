@@ -6,7 +6,6 @@ dele o resolvedor roda na hora. Sem Qt, sem `obimcore` e sem importar `diario.py
 import hashlib
 import json
 import os
-import re
 import shutil
 import zipfile
 from datetime import datetime, timezone
@@ -15,12 +14,12 @@ from pathlib import Path
 import ifcopenshell.api
 
 from . import gravacao_atomica as GA
+from . import obim_zip
 
-VERSAO_FORMATO = "0.1.0"
+VERSAO_FORMATO = obim_zip.VERSAO_FORMATO
 VERSAO_PROGRAMA = "0.1.0"
 FORMATO = "obim-lateral"
 _PSET = "OBIM_Projeto"
-_ENTRADA = re.compile(r"manifest\.json|[a-z_]{1,32}/[A-Za-z0-9_-]{1,64}\.json")
 
 
 def _sha(caminho):
@@ -104,38 +103,63 @@ def _editar_carimbo(sessao, historico, lado, revisao, remover=False):
             ifcopenshell.api.run("pset.edit_pset", arquivo, pset=ps, properties=props)
 
 
-def _manifesto(destino, prep, projeto, lado_id, revisao, autosave=False, origem_ifc_sha256=None):
-    man = {"formato": FORMATO, "versao_formato": VERSAO_FORMATO, "provisorio": True, "LadoId": lado_id,
-           "Revisao": revisao, "ifc_nome": Path(destino).name, "ifc_sha256": prep.sha256, "ifc_tamanho": prep.tamanho,
-           "ifc_projeto_globalid": projeto.GlobalId, "programa_versao": VERSAO_PROGRAMA,
-           "data": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+def _manifesto(destino, prep, projeto, lado_id, revisao, autosave=False, origem_ifc_sha256=None, base=None):
+    man = dict(base or {})
+    man.update({"formato": FORMATO, "versao_formato": VERSAO_FORMATO, "LadoId": lado_id,
+                "Revisao": revisao, "ifc_nome": Path(destino).name, "ifc_sha256": prep.sha256, "ifc_tamanho": prep.tamanho,
+                "ifc_projeto_globalid": projeto.GlobalId, "programa_versao": VERSAO_PROGRAMA,
+                "data": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")})
+    man.pop("provisorio", None)
     if autosave:
         man["autosave"] = True
         man["origem_ifc_sha256"] = origem_ifc_sha256
+    else:
+        man.pop("autosave", None)
+        man.pop("origem_ifc_sha256", None)
     return man
 
 
-def _escrever_obim(caminho, lateral, manifesto):
-    texto = json.dumps(manifesto, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
-    with zipfile.ZipFile(caminho, "w") as z:
-        z.writestr("manifest.json", texto.encode("utf-8"))
-        for colecao in lateral.colecoes():
-            for ident in lateral.ids(colecao):
-                z.writestr(f"{colecao}/{ident}.json", lateral.json_canonico(lateral.obter(colecao, ident)))
+def _escrever_obim(caminho, lateral, manifesto, extras=None):
+    obim_zip.escrever(caminho, lateral, manifesto, extras)
+
+
+def _manifesto_bruto(obim):
+    try:
+        with zipfile.ZipFile(obim) as z:
+            man = json.loads(z.read("manifest.json").decode("utf-8"))
+    except Exception:  # noqa: BLE001  (sem ZIP ou sem manifesto legível não há versão confiável)
+        return {}
+    return man if isinstance(man, dict) else {}
+
+
+def _ler_existente(obim):
+    if not Path(obim).exists():
+        return {}, {}
+    try:
+        lido = obim_zip.ler(obim)
+    except obim_zip.ObimInvalido:
+        man = _manifesto_bruto(obim)
+        familia = obim_zip._familia(man.get("versao_formato")) if man.get("formato") == FORMATO else None
+        if familia is not None and familia not in obim_zip._FAMILIAS:
+            raise ValueError(f"Não foi possível gravar {Path(obim).name}: o arquivo é de uma versão mais nova do que esta.") from None
+        return {}, {}
+    if lido.somente_leitura:
+        raise ValueError(f"Não foi possível gravar {Path(obim).name}: o arquivo é da versão {lido.versao_original}, mais nova do que esta.")
+    return lido.manifesto, lido.extras
 
 
 def _conferir_obim(caminho):
     try:
         with zipfile.ZipFile(caminho) as z:
             nomes = z.namelist()
+            for nome in nomes:
+                if obim_zip._perigosa(nome):
+                    raise ValueError(f"entrada com caminho perigoso no ZIP do lateral: {nome!r}")
             if "manifest.json" not in nomes:
                 raise ValueError("ZIP do lateral sem manifest.json")
             man = json.loads(z.read("manifest.json").decode("utf-8"))
-            if man.get("formato") != FORMATO or man.get("versao_formato") != VERSAO_FORMATO:
+            if not isinstance(man, dict) or man.get("formato") != FORMATO or man.get("versao_formato") != VERSAO_FORMATO:
                 raise ValueError("manifesto do lateral fora do formato")
-            for nome in nomes:
-                if not _ENTRADA.fullmatch(nome):
-                    raise ValueError(f"entrada inesperada no ZIP do lateral: {nome!r}")
     except zipfile.BadZipFile as e:
         raise ValueError(f"{Path(caminho).name} não é um ZIP válido") from e
 
@@ -211,6 +235,8 @@ def gravar_par(sessao, historico, lateral, destino, pasta_projeto, lado_id, seq,
     """Grava o par; carimba `Revisao` + 1 e `LadoId` (o definitivo = o provisório). Devolve os dois `Gravado`."""
     destino, obim, pasta = Path(destino), _obim(destino), Path(pasta_projeto)
     _resolver_antes_de_gravar(destino, pasta, None if autosave else ao_concluir)
+    obim_zip.validar(lateral)
+    base_man, extras = _ler_existente(obim)
     existia, lado_antes, revisao_antes = _ler_carimbo(sessao)
     if carimbo:
         novo_lado = lado_antes if lado_antes is not None else lado_id
@@ -227,8 +253,8 @@ def gravar_par(sessao, historico, lateral, destino, pasta_projeto, lado_id, seq,
             seq_val = seq() if callable(seq) else seq
             ifc_prep = GA.preparar(destino, lambda tmp: arquivo.write(str(tmp)), conferir=GA.conferir_ifc)
             manifesto = _manifesto(destino, ifc_prep, proj, novo_lado, nova_revisao,
-                                   autosave=autosave, origem_ifc_sha256=origem_ifc_sha256)
-            obim_prep = GA.preparar(obim, lambda tmp: _escrever_obim(tmp, lateral, manifesto), conferir=_conferir_obim)
+                                   autosave=autosave, origem_ifc_sha256=origem_ifc_sha256, base=base_man)
+            obim_prep = GA.preparar(obim, lambda tmp: _escrever_obim(tmp, lateral, manifesto, extras), conferir=_conferir_obim)
             _gravar_gravacao(pasta, _dados_gravacao(destino, obim, ifc_prep, obim_prep, ifc_antigo, obim_antigo,
                                                     novo_lado, nova_revisao, seq_val))
             com_gravacao, etapa = True, "gravacao"

@@ -25,6 +25,7 @@ DECISOES DO LIDER: ao tirar os marcadores o autor atualiza, em commit separado, 
 0.2.0 sem `provisorio` (só a versão; nada afrouxado; o implementador não toca). Esquema CC0 fica para a T13. Casos novos: `..._b_oraculo.py`.
 GUARDA: sem ifcopenshell, pula (falha com OBIM_S05_OBRIGATORIO=1). O caso 17 e o 20 não usam o módulo novo."""
 import json
+import os
 import zipfile
 from pathlib import Path
 
@@ -168,6 +169,10 @@ PERIGOSAS = ["../fora.json", "/abs/x.json", "vistas/../../fora.json", "vistas\\x
 
 @pytest.mark.parametrize("nome", PERIGOSAS)
 def test_06_caminho_perigoso_recusado(tmp_path, nome):
+    if os.sep == "\\" and "\\" in nome:
+        # Guarda de plataforma: no Windows o zipfile troca "\\" por "/" ao nomear a entrada,
+        # entao este caso nao existe la (nenhum caso ou numero afrouxado).
+        pytest.skip("zipfile no Windows normaliza a barra invertida")
     m, p = ob(), tmp_path / "ruim.obim"
     with zipfile.ZipFile(p, "w") as z:
         z.writestr("manifest.json", json.dumps(MAN))

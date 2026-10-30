@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Oráculo do F0-S06-T06, os 6 casos de divergência ao abrir. Fontes: ADR-003 §6 (textos e opções fixados) e §11 (T06 a a e), v2/02 §6.4 e Revisão 4,
-cartão T06. Só o autor do oráculo tira os `@AINDA_NAO` (xfail estrito). Auxiliares: `s06_t06_aux.py`. Mutantes para o revisor: `s06_t06_mutantes.md`.
+cartão T06. Só o autor do oráculo tira os `@AINDA_NAO` (xfail estrito; marcadores já tirados na implementação). Auxiliares: `s06_t06_aux.py`. Mutantes para o revisor: `s06_t06_mutantes.md`.
 CONTRATO (API PROPOSTA NESTE TESTE; o ADR fixa os textos, não os nomes). `openbim_app/divergencia.py`:
 - `classificar(caminho, obim=None) -> Resultado`. `caminho` = `.ifc` ou `.obim`. `obim` = lateral escolhido pelo usuário ("localizar arquivo"); sem ele, o lateral é
   `<mesmo nome>.obim` ao lado do IFC. Só LÊ: nunca cria, apaga ou regrava arquivo (nem do usuário nem na pasta do programa).
@@ -24,7 +24,6 @@ import pytest
 import s06_t06_aux as X
 from s05_conteudo_aux import _limpa, exigir  # noqa: F401  (fixtures)
 
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="F0-S06-T06: openbim_app.divergencia ainda não existe")
 D2 = "O modelo foi alterado em outro programa depois da última gravação. A documentação foi verificada: {} referências quebradas."
 D2_OP = ("abrir painel de referências", "continuar")
 D3, D3_OP = "A documentação é mais nova que o modelo.", ("abrir assim", "procurar outro IFC")
@@ -46,7 +45,7 @@ def p(tmp_path):
 
 
 def dv():
-    import openbim_app.divergencia as m  # primeira linha de cada caso @AINDA_NAO: hoje é ela que dá o xfail
+    import openbim_app.divergencia as m
     return m
 
 
@@ -74,7 +73,6 @@ def test_abrir_sem_parametro_nao_muda(p):
     assert pr.avisos == [] and getattr(pr, "divergencia", None) is None
 
 
-@AINDA_NAO
 def test_d1_casando_nada_a_avisar(p):
     ifc, ob = X.fazer(p)
     r = dv().classificar(ifc)
@@ -82,7 +80,6 @@ def test_d1_casando_nada_a_avisar(p):
     assert (r.ifc, r.obim, r.via_obim, r.versao_lateral, r.ambiguas) == (ifc, ob, False, "0.2.0", ())
 
 
-@AINDA_NAO
 def test_d1_lateral_legado_0_1_0_migra_sem_recusar(p):
     ifc, _ = X.fazer(p, versao="0.1.0")
     r = dv().classificar(ifc)
@@ -90,7 +87,6 @@ def test_d1_lateral_legado_0_1_0_migra_sem_recusar(p):
     assert r.versao_lateral == "0.1.0"
 
 
-@AINDA_NAO
 def test_d2_ifc_alterado_fora_conta_referencias_quebradas(p):
     ifc, ob = X.fazer(p)  # o .obim cita as vistas 1 e 2
     ifc2, _ = X.fazer(p / "novo", vistas=("1", "3"), obim=False)  # outro programa tirou a vista 2 e pôs a 3 (mesmo projeto, mesmo LadoId)
@@ -100,14 +96,12 @@ def test_d2_ifc_alterado_fora_conta_referencias_quebradas(p):
     assert r.vistas_preservadas == 2 and r.obim == ob
 
 
-@AINDA_NAO
 def test_d2_um_unico_byte_diferente_basta(p):
     ifc, _ = X.fazer(p)
     X.mudar_um_byte(ifc)
     _r(dv().classificar(ifc), "D2", D2.format(0), D2_OP, n=0)
 
 
-@AINDA_NAO
 def test_d2_identification_repetida_marca_ambigua_e_entra_na_contagem(p):
     ifc, _ = X.fazer(p, pranchas=("A-01",))
     ifc2, _ = X.fazer(p / "novo", pranchas=("A-01", "A-01", "B-02"), obim=False)
@@ -117,21 +111,18 @@ def test_d2_identification_repetida_marca_ambigua_e_entra_na_contagem(p):
     assert r.ambiguas == ("A-01",)
 
 
-@AINDA_NAO
 def test_d3_lateral_mais_novo_vem_antes_do_hash(p):
     ifc, _ = X.fazer(p, rev=2, o_rev=3)
     X.mudar_um_byte(ifc)  # IFC antigo restaurado: hash também difere, mas D3 manda
     _r(dv().classificar(ifc), "D3", D3, D3_OP)
 
 
-@AINDA_NAO
 def test_d3_borda_revisao_igual_nao_e_mais_nova(p):
     ifc, _ = X.fazer(p, rev=3, o_rev=3)
     X.mudar_um_byte(ifc)
     _r(dv().classificar(ifc), "D2", D2.format(0), D2_OP)
 
 
-@AINDA_NAO
 def test_d4_lateral_ausente_mantem_as_vistas_do_ifc_com_estilo_padrao(p):
     ifc, _ = X.fazer(p, obim=False)
     r = dv().classificar(ifc)
@@ -139,7 +130,6 @@ def test_d4_lateral_ausente_mantem_as_vistas_do_ifc_com_estilo_padrao(p):
     assert r.vistas_preservadas == X.contar_vistas(ifc) == 2 and r.obim is None
 
 
-@AINDA_NAO
 def test_d4_localizar_arquivo_vincula_o_lateral_escolhido(p, tmp_path):
     ifc, ob = X.fazer(p)
     guardado = tmp_path / "outro" / "achei.obim"
@@ -151,7 +141,6 @@ def test_d4_localizar_arquivo_vincula_o_lateral_escolhido(p, tmp_path):
     assert r.obim == guardado
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("troca", [{"o_gid": "9zzzzzzzzzzzzzzzzzzzzz"}, {"o_lado": "00000000-0000-4000-8000-000000000001"}], ids=["projeto", "LadoId"])
 def test_d5_lateral_de_outro_projeto_nao_vincula_sozinho(p, troca):
     ifc, _ = X.fazer(p, **troca)
@@ -160,13 +149,11 @@ def test_d5_lateral_de_outro_projeto_nao_vincula_sozinho(p, troca):
     assert r.referencias_quebradas == 0
 
 
-@AINDA_NAO
 def test_d5_vem_antes_de_d3(p):
     ifc, _ = X.fazer(p, rev=1, o_rev=9, o_gid="9zzzzzzzzzzzzzzzzzzzzz")
     assert dv().classificar(ifc).caso == "D5"
 
 
-@AINDA_NAO
 def test_d6_obim_direto_acha_o_ifc_ao_lado_por_ifc_nome(p):
     ifc, ob = X.fazer(p)
     r = dv().classificar(ob)
@@ -174,7 +161,6 @@ def test_d6_obim_direto_acha_o_ifc_ao_lado_por_ifc_nome(p):
     assert (r.ifc, r.obim, r.via_obim) == (ifc, ob, True)
 
 
-@AINDA_NAO
 def test_d6_achou_o_ifc_mas_o_par_diverge_mostra_a_divergencia(p):
     ifc, ob = X.fazer(p)
     X.mudar_um_byte(ifc)
@@ -183,7 +169,6 @@ def test_d6_achou_o_ifc_mas_o_par_diverge_mostra_a_divergencia(p):
     assert r.via_obim and r.ifc == ifc
 
 
-@AINDA_NAO
 def test_d6_nao_achou_pede_para_localizar(p):
     ifc, ob = X.fazer(p)
     ifc.unlink()
@@ -192,8 +177,7 @@ def test_d6_nao_achou_pede_para_localizar(p):
     assert r.ifc is None and r.via_obim
 
 
-@AINDA_NAO
-@pytest.mark.parametrize("nome", ["../Casa.ifc", "sub/Casa.ifc", "/etc/Casa.ifc"])
+@pytest.mark.parametrize("nome", ["../Casa.ifc", "sub/Casa.ifc", "/etc/Casa.ifc", "..", "."])
 def test_d6_ifc_nome_com_caminho_so_vale_ao_lado(p, nome):
     import json
     import zipfile
@@ -214,7 +198,6 @@ def test_d6_ifc_nome_com_caminho_so_vale_ao_lado(p, nome):
     assert r.caso == "D6" and r.aviso and r.ifc is None
 
 
-@AINDA_NAO
 def test_ifc_de_outro_programa_sem_pset_e_sem_obim_nao_avisa(p):
     ifc, _ = X.fazer(p, pset=False, obim=False)
     r = dv().classificar(ifc)
@@ -238,7 +221,6 @@ def _versao(ob, v):
     X.fazer(ob.parent, obim=True, versao=v)
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("como", list(RUINS))
 @pytest.mark.parametrize("entrada", ["ifc", "obim"])
 def test_lateral_corrompido_ou_futuro_e_recusado_sem_tocar_no_disco(p, como, entrada):
@@ -253,7 +235,6 @@ def test_lateral_corrompido_ou_futuro_e_recusado_sem_tocar_no_disco(p, como, ent
 CASOS = {"D1": {}, "D2": {"muda": True}, "D3": {"o_rev": 5}, "D4": {"obim": False}, "D5": {"o_gid": "9zzzzzzzzzzzzzzzzzzzzz"}}
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("caso", list(CASOS))
 def test_nenhum_caso_apaga_cria_ou_sobrescreve_arquivo_do_usuario(p, caso):
     import openbim_app.autosave as S
@@ -271,7 +252,6 @@ def test_nenhum_caso_apaga_cria_ou_sobrescreve_arquivo_do_usuario(p, caso):
     assert r1.caso == caso and ((r1.aviso in pr.avisos) if r1.aviso else True)
 
 
-@AINDA_NAO
 def test_abrir_projeto_com_d1_nao_acrescenta_aviso_e_sem_parametro_fica_none(p):
     import openbim_app.autosave as S
     ifc, _ = X.fazer(p)
@@ -280,3 +260,22 @@ def test_abrir_projeto_com_d1_nao_acrescenta_aviso_e_sem_parametro_fica_none(p):
     assert com.divergencia.caso == "D1" and com.avisos == []
     sem = S.abrir_projeto(ifc, lambda t: True)
     assert sem.divergencia is None and sem.avisos == []
+
+
+def test_d3_so_quando_o_lateral_e_mais_novo_lateral_mais_velho_nao_e_d3(p):
+    ifc, _ = X.fazer(p, rev=3, o_rev=2)
+    _r(dv().classificar(ifc), "D1")  # hash casa: lateral de revisão menor não é divergência
+    X.mudar_um_byte(ifc)
+    _r(dv().classificar(ifc), "D2", D2.format(0), D2_OP)
+
+
+def test_ifc_sem_pset_com_obim_ao_lado_segue_hash_sem_quebrar(p):  # lacuna fechada pelo autor: sem pset não há Revisao nem LadoId a comparar
+    ifc, _ = X.fazer(p, pset=False)
+    _r(dv().classificar(ifc), "D1")
+    X.mudar_um_byte(ifc)
+    _r(dv().classificar(ifc), "D2", D2.format(0), D2_OP)
+
+
+def test_d5_projeto_diferente_vale_mesmo_sem_pset_no_ifc(p):  # regra (2): ifc_projeto_globalid diferente é D5 com ou sem pset
+    ifc, _ = X.fazer(p, pset=False, o_gid="9zzzzzzzzzzzzzzzzzzzzz")
+    _r(dv().classificar(ifc), "D5", D5, D5_OP, padrao=True, vinc=False)

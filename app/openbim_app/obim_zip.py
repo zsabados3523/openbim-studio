@@ -44,6 +44,10 @@ def _bytes(obj):
         raise ObimInvalido(f"objeto fora do JSON puro: {e}") from e
 
 
+def _constante_invalida(constante):
+    raise ObimInvalido(f"constante numérica não permitida no JSON: {constante}")
+
+
 def _numero(v):
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 
@@ -118,7 +122,7 @@ def ler(caminho):
             if "manifest.json" not in nomes:
                 raise ObimInvalido("ZIP do lateral sem manifest.json")
             try:
-                manifesto = json.loads(z.read("manifest.json").decode("utf-8"))
+                manifesto = json.loads(z.read("manifest.json").decode("utf-8"), parse_constant=_constante_invalida)
             except (UnicodeDecodeError, json.JSONDecodeError) as e:
                 raise ObimInvalido(f"manifest.json ilegível: {e}") from e
             if not isinstance(manifesto, dict) or manifesto.get("formato") != FORMATO:
@@ -137,7 +141,7 @@ def ler(caminho):
                 achado = _ENTRADA.fullmatch(nome)
                 if achado is not None:
                     try:
-                        objeto = json.loads(z.read(nome).decode("utf-8"))
+                        objeto = json.loads(z.read(nome).decode("utf-8"), parse_constant=_constante_invalida)
                     except (UnicodeDecodeError, json.JSONDecodeError) as e:
                         raise ObimInvalido(f"entrada {nome!r} ilegível: {e}") from e
                     objetos.setdefault(achado.group(1), {})[achado.group(2)] = objeto

@@ -7,13 +7,19 @@ CONTRATO `app/openbim_app/desenho/planta.py` (sem Qt, sem rede, sem display; `de
    a 324550/7405473; o sinal do Y não é testado), `n_paths` (int = quantidade de `<path` no texto de `svg`), `selecao` (a `Selecao` da T07a), `tempos` (dict com
    `geo_s`, `write_s`, `finalize_s`, floats >= 0; só para medir), `unidade_escala` (float, metros por unidade de comprimento do arquivo: 1.0 em metro, 0.001 em milímetro),
    `altura_corte` (float, metros, no MUNDO).
-2. A seleção é `selecao.selecionar(ifc, gid_vista, categorias_ocultas=...)`; só esses elementos vão ao serializador (ver `test_s06_t07b_entrega_oraculo.py`). Vista de tipo
-   CORTE, vista sem pavimento, vista sem TargetView, categoria inexistente -> `selecao.SelecaoInvalida`; vista inexistente -> `vistas_ifc.VistaInexistente`.
-3. Altura do corte = Z NO MUNDO do pavimento (matriz de `ObjectPlacement` do `IfcBuildingStorey`, resolvida até a raiz, x escala da unidade) + 1,2 m. O volume da vista é
-   ignorado (como na seleção). Pavimento em cota 0, positiva, negativa; colocação absoluta ou relativa ao edifício; arquivo em m ou em mm.
-4. Como o motor: só aparece o que cruza o plano de corte (inclusive encostar); o que fica inteiro acima ou abaixo não aparece. A vista abaixo do corte (planta completa)
-   vem da anotação `DRAWING` horizontal do motor (`elevation-ref-guid` + `svg-without-storeys`): o texto traz o grupo `class="projection"` com ao menos 1 caminho. A anotação
-   do motor tem de cobrir elementos longe (150 m). O arquivo de entrada NÃO muda (`to_string` igual antes e depois): anotação só numa cópia ou removida no fim.
+2. A seleção é `selecao.selecionar(ifc, gid_vista, categorias_ocultas=...)`; só esses elementos vão ao serializador, MENOS os `IfcOpeningElement` (o vão da parede
+   continua furado; a abertura não é desenhada nem calculada). Vista de tipo CORTE, vista sem pavimento, vista sem TargetView, categoria inexistente -> `selecao.SelecaoInvalida`;
+   vista inexistente -> `vistas_ifc.VistaInexistente`.
+3. Altura do corte = Z NO MUNDO do pavimento (matriz de `ObjectPlacement` do `IfcBuildingStorey`, resolvida até a raiz, x escala da unidade) + H, com H = propriedade
+   `AlturaCorte` (número > 0, em metros acima do pavimento) do pset `OBIM_Vista` da vista, se existir (nome provisório, ADR-003 §3.1), senão 1,2 m; valor <= 0 ou que não é
+   número -> `SelecaoInvalida`. O volume (`IfcBlock`) da vista é ignorado. Pavimento em cota 0, positiva, negativa; colocação absoluta ou relativa ao edifício; m ou mm.
+4. PLANTA COMPLETA (ADR-006 §5): o que o corte atravessa sai em linha cheia no grupo do elemento (`ifc:guid`); o que fica inteiro abaixo do corte (móvel baixo, laje, viga, louça)
+   sai na projeção (grupo `class="projection"`, caminhos sem guid); o que fica inteiro acima não sai. Montagem provada com o motor 0.9.0 (ver `test_s06_t07b_completa_oraculo.py`):
+   sem anotação, SEM criar entidade no arquivo (nem durante a geração): `settings(ELEMENT_HIERARCHY=True)` com `section-height-from-storeys`, `svg-project` e `section-height` =
+   (altura do corte no mundo) - (`Elevation` do pavimento x escala), porque o motor soma o `Elevation` (que pode ser local ao edifício). O motor emite um grupo
+   `IfcBuildingStorey` por pavimento do arquivo e os de cima repetem a projeção: o texto final só traz o grupo do pavimento da vista (`ifc:guid` = o dele); `n_paths` conta o texto final.
+   Nenhum filtro apaga desenho: sólido a 600 m da própria origem sem vizinho aparece; elemento a 150 m aparece. O arquivo de entrada NÃO muda (`to_string` igual antes e depois,
+   inclusive se o serializador ou outra chamada levantar exceção no meio).
 5. Parede cortada = polilinha fechada com o contorno da parede; porta e janela cortadas abrem vão (a parede fica em 2, 3 pedaços); abertura que não cruza o corte não fura.
 6. Pavimento sem desenho (selecao vazia) -> `Planta` com `n_paths` 0 e `svg` válido, sem exceção. Determinístico. `threads` só muda o paralelismo, nunca o conjunto desenhado.
 GUARDA: sem ifcopenshell, pula (falha com OBIM_S05_OBRIGATORIO=1)."""

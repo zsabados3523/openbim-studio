@@ -5,8 +5,7 @@ Bug 1: `.obim` existente com `NaN`/`Infinity` no manifesto (ou em entrada) não 
 com mensagem que cita o nome e o IFC; nada é escrito, `ao_concluir` não roda, carimbo e histórico não mudam.
 Mutantes: N2 (`a//b.json`, `a/` e `vistas//x.json` recusados em `ler` e em `escrever`), N8 (`gravar_par(autosave=True, origem_ifc_sha256=)` grava `autosave` e a
 origem no manifesto; gravação normal tira os dois), N9 (`apagar_vista` com a vista em 2 pranchas apaga os 2 viewports, um desfazer volta tudo).
-`@AINDA_NAO` (xfail estrito) só onde o código de hoje falha (bugs 1 e 3, casos 01, 03, 04). Caso 02 (entrada com NaN), N2, N8 e N9 já passam no código de hoje: matam os mutantes, sem marcador (xfail
-estrito de caso que passa seria falha). Bug 2 (troca do `.obim` falha, resolvedor conclui) fica de fora: aguarda decisão do líder."""
+Marcadores `@AINDA_NAO` retirados depois da correção (T05c). Bug 2 (troca do `.obim` falha, resolvedor conclui) fica de fora: aguarda decisão do líder."""
 import json
 import zipfile
 
@@ -14,8 +13,6 @@ import pytest
 import s05_t07_aux as X
 from s05_conteudo_aux import _limpa, base_ifc, exigir  # noqa: F401
 from test_s06_t05_obim_zip_oraculo import G1, G2, IDENT, MAN, U, _fabrica, canon, lat, ob, objetos, proj  # noqa: F401
-
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="T05c: correção do bug 1 ou 3 ainda não feita")
 
 
 def _cru(o, manifesto_texto, entradas=None):
@@ -33,7 +30,6 @@ VALORES = ["NaN", "Infinity", "-Infinity"]
 
 
 # ---------- bug 1 ----------
-@AINDA_NAO
 @pytest.mark.parametrize("valor", VALORES)
 def test_01_ler_recusa_nao_finito_no_manifesto(tmp_path, valor):
     m, p = ob(), tmp_path / "f.obim"
@@ -50,7 +46,6 @@ def test_02_ler_recusa_nao_finito_em_entrada(tmp_path, valor):
         m.ler(p)
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("valor", VALORES)
 def test_03_gravar_par_sobrescreve_obim_com_nao_finito_e_guarda_o_antigo(proj, base_ifc, valor):  # noqa: F811
     m = ob()
@@ -69,7 +64,6 @@ def test_03_gravar_par_sobrescreve_obim_com_nao_finito_e_guarda_o_antigo(proj, b
 
 
 # ---------- bug 3 ----------
-@AINDA_NAO
 @pytest.mark.parametrize("nome", ["Casa.obim", "Casa.OBIM"])
 def test_04_destino_com_final_obim_recusado_no_comeco(proj, nome):
     antes = sorted(p.name for p in proj.destino.parent.rglob("*")) + sorted(p.name for p in proj.pasta.rglob("*"))

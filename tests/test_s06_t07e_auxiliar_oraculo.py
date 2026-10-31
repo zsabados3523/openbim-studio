@@ -14,11 +14,17 @@ morto (`kill` + `join`), canal fechado; a pasta só sai no `fechar()`. Erros (to
 `DesenhoCancelado`, `FalhaNoAuxiliar` (`.tipo`, `.mensagem`, `.rastro`; `str()` = `"<tipo>: <mensagem>"`), `ArquivoDivergente`, `ProtocoloInvalido`. Op `caixas`: resposta `{"ok": true,
 "caixas_envolventes": {"<id>": [xmin, ymin, zmin, xmax, ymax, zmax]} (metros, mundo), "falhas_geometria": [ids]}`; o filho confere cada `[id, GlobalId]` (senão `ArquivoDivergente`).
 Ganchos do filho (variáveis de ambiente lidas no filho, depois de `pronto`): `OBIM_TESTE_AUX_DORMIR_S`, `OBIM_TESTE_AUX_SAIR` (`os._exit`), `OBIM_TESTE_AUX_SEGV=1` (queda de verdade), `OBIM_TESTE_AUX_LEVANTAR=<texto>`.
-Caso 10 (trava ampliada) não tem marcador: passa hoje e tem de continuar passando."""
+Caso 10 (trava ampliada) não tem marcador: passa hoje e tem de continuar passando.
+[P] (escolhas do oráculo que a especificação não fixa; o Opus aprovou na revisão): `protocolo` fornecido é mantido e a versão != 1 pode sair de `preparar` ou de `executar`; `threads` padrão `min(8, os.cpu_count() or 1)`;
+a pasta só sai no `fechar()` (não no fim de cada `executar`); pasta em `tempfile.gettempdir()`; unidades da op `desenho` (parte 2); `SelecaoInvalida` para CORTE e `AlturaCorte` ruim (parte 2); ganchos lidos no filho depois do `pronto`;
+executor devolve a resposta crua. A trava do caso 10 também barra `from obim_geometria import processo` (mais estrita que a especificação, inofensiva)."""
+import inspect
 import json
 import multiprocessing
 import os
 import re
+import signal
+import sys
 import tempfile
 import threading
 import time
@@ -105,7 +111,17 @@ def test_caso3_queda_do_filho_nao_derruba_a_janela(tmp_aux, monkeypatch, gancho,
     assert isinstance(e.value, RuntimeError) and e.value.codigo_saida != 0
     if valor == "3":
         assert e.value.codigo_saida == 3
+    elif sys.platform == "win32":
+        pass  # [P] Windows: o ctypes pode virar OSError (saída 1); a e1 escolhe o mecanismo e mostra o código do CI
+    else:
+        assert e.value.codigo_saida == -signal.SIGSEGV  # queda de verdade, não um os._exit disfarçado
     _limpo(tmp_aux, f, antes)
+
+
+@AINDA_NAO_E1
+def test_limite_padrao_e_180_s():
+    X = _x()
+    assert X.LIMITE_PADRAO_S == 180 and inspect.signature(X.executar).parameters["limite_s"].default == 180
 
 
 @AINDA_NAO_E1
@@ -190,6 +206,36 @@ def test_caso11_json_puro_threads_e_um_filho_por_vez(tmp_aux, monkeypatch):
 
 
 @AINDA_NAO_E1
+def test_caso11_fila_atende_cancelar_e_a_espera_nao_conta_no_limite(tmp_aux, monkeypatch):
+    X = _x()
+    f, _ = T.modelo()
+    saida = {}
+
+    def pedido(nome, **kw):
+        t0 = time.monotonic()
+        try:
+            with X.preparar(f, _pedido(f)) as p:
+                saida[nome] = ("ok" if X.executar(p, **kw)["caixas_envolventes"] else "vazio")
+        except Exception as e:
+            saida[nome] = type(e).__name__
+        saida[nome + "_s"] = time.monotonic() - t0
+    monkeypatch.setenv("OBIM_TESTE_AUX_DORMIR_S", "4")
+    t1 = threading.Thread(target=pedido, args=("um",))
+    t1.start()
+    fim = time.monotonic() + 15
+    while len(multiprocessing.active_children()) < 1 and time.monotonic() < fim:
+        time.sleep(0.02)
+    monkeypatch.setenv("OBIM_TESTE_AUX_DORMIR_S", "0")  # o filho 1 já nasceu com o ambiente antigo
+    ev = threading.Event()
+    ths = [threading.Thread(target=pedido, args=("cancelado",), kwargs={"cancelar": ev}), threading.Thread(target=pedido, args=("esperou",), kwargs={"limite_s": 3})]
+    [t.start() for t in ths]
+    threading.Timer(0.5, ev.set).start()
+    [t.join(60) for t in ths + [t1]]
+    assert saida["cancelado"] == "DesenhoCancelado" and saida["cancelado_s"] < 2.5  # cancelar vale na fila
+    assert saida["esperou"] == "ok" and saida["um"] == "ok"  # ~4 s na fila com limite_s=3: a espera não conta no limite
+
+
+@AINDA_NAO_E1
 def test_caso9_janela_nao_carrega_geometria_com_filho_real(tmp_path):
     _x()
     f, _ = T.modelo()
@@ -197,7 +243,7 @@ def test_caso9_janela_nao_carrega_geometria_com_filho_real(tmp_path):
 
 
 # ---- caso 10: trava ampliada de app/ (sem marcador; o teste da regra 9 da S04 não muda) ----
-PROIBIDO = re.compile(r"ifcopenshell\.geom|from ifcopenshell import geom|ifcopenshell\.draw|serializers|\.iterator\(|obim_geometria\.(?!processo\b)|from obim_geometria import|import obim_geometria\b(?!\.processo)")
+PROIBIDO = re.compile(r"ifcopenshell\.geom|from ifcopenshell import geom|ifcopenshell\.draw|serializers|(?i:\.iterator\()|\bSURFACES_AND_SOLIDS\b|\bNATIVE\b|obim_geometria\.(?!processo\b)|from obim_geometria import|import obim_geometria\b(?!\.processo)")
 
 
 def proibidos(raiz):
@@ -210,7 +256,7 @@ def test_caso10_app_sem_geometria_nem_serializador_nem_iterator():
 
 
 @pytest.mark.parametrize("linha,barra", [("import ifcopenshell.geom", 1), ("from ifcopenshell import geom", 1), ("# ifcopenshell.draw", 1), ("x = G.serializers.svg", 1),
-                                         ("it = G.iterator(s, f)", 1), ("from obim_geometria.caixas import x", 1), ("from obim_geometria import desenho", 1),
+                                         ("it = G.iterator(s, f)", 1), ("x = W.SURFACES_AND_SOLIDS", 1), ("s.set('iterator-output', W.NATIVE)", 1), ("it = W.Iterator(s, f)", 1), ("from obim_geometria.caixas import x", 1), ("from obim_geometria import desenho", 1),
                                          ("import obim_geometria.local", 1), ("from obim_geometria.processo import entrada", 0), ("import ifcopenshell.ifcopenshell_wrapper as W", 0),
                                          ("W.schema_by_name('IFC4')", 0), ("import obim_geometria.processo", 0)])
 def test_caso10_o_verificador_pega_e_deixa_passar(tmp_path, linha, barra):

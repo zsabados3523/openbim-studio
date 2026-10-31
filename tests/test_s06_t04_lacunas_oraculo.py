@@ -22,7 +22,6 @@ import s05_conteudo_aux as R
 import s06_t04_aux as A
 from s05_conteudo_aux import _limpa  # noqa: F401  (fixture autouse)
 
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="T04c: vistas_ifc.py ainda tem o bug do parecer Opus (LOTE_OPUS_75)")
 
 
 @pytest.fixture(params=A.ESQUEMAS)
@@ -71,7 +70,6 @@ def doc_pai(f, filho):  # documento pai "DRAWINGS" ligado por IfcDocumentInforma
 
 
 # ---------- bug 1: documento compartilhado ----------
-@AINDA_NAO
 def test_documento_com_segunda_referencia_nao_e_apagado(f):
     import openbim_app.vistas_ifc as V
     g = V.criar_vista(f, "V", "PLANTA")
@@ -100,7 +98,6 @@ def test_documento_so_da_vista_continua_sendo_apagado(f):  # a regra nova não p
 
 
 # ---------- bug 2: documento filho de IfcDocumentInformationRelationship ----------
-@AINDA_NAO
 def test_documento_da_vista_filho_de_documento_pai(f):
     import openbim_app.vistas_ifc as V
     g = V.criar_vista(f, "V", "PLANTA")
@@ -112,7 +109,6 @@ def test_documento_da_vista_filho_de_documento_pai(f):
     assert not [d for d in f.by_type("IfcDocumentInformation") if d.Scope == "DRAWING"]
 
 
-@AINDA_NAO
 def test_prancha_filha_de_documento_pai_e_associada_ao_projeto(f):
     import openbim_app.vistas_ifc as V
     V.criar_prancha(f, "A-01", "x")
@@ -130,7 +126,6 @@ def test_prancha_filha_de_documento_pai_e_associada_ao_projeto(f):
 
 
 # ---------- bug 3: anotação renomeada ----------
-@AINDA_NAO
 def test_anotacao_renomeada_nao_deixa_grupo_orfao(f):
     import openbim_app.vistas_ifc as V
     zero = R.foto(f)
@@ -142,7 +137,6 @@ def test_anotacao_renomeada_nao_deixa_grupo_orfao(f):
     assert R.diferencas(zero, R.foto(f)) == []
 
 
-@AINDA_NAO
 def test_renomeada_com_outras_vistas_mantem_o_pai(f):
     import openbim_app.vistas_ifc as V
     g1, g2 = V.criar_vista(f, "A", "PLANTA"), V.criar_vista(f, "B", "CORTE")
@@ -164,7 +158,6 @@ def _com_segunda_relacao(f):
     return g, grupo, ext, r2
 
 
-@AINDA_NAO
 def test_grupo_com_segunda_relacao_de_outro_programa_sobrevive(f):
     if f.schema == "IFC2X3":
         pytest.skip("em IFC2X3 o inverso IsGroupedBy é 1:1: o cenário já é inválido antes de apagar")
@@ -202,7 +195,6 @@ def test_grupo_alheio_com_so_a_vista_nao_e_apagado(f):  # grupo de outro tipo (O
 
 
 # ---------- bug 5: Name None ----------
-@AINDA_NAO
 def test_titulo_e_nome_nao_textuais_sao_recusados(f):
     import openbim_app.vistas_ifc as V
     V.criar_vista(f, "P", "PLANTA")
@@ -218,7 +210,6 @@ def test_titulo_e_nome_nao_textuais_sao_recusados(f):
 
 
 # ---------- bug 6: origem ----------
-@AINDA_NAO
 def test_origem_invalida_e_recusada_antes_de_escrever(f):
     import openbim_app.vistas_ifc as V
     antes = R.foto(f)
@@ -232,7 +223,6 @@ def test_origem_invalida_e_recusada_antes_de_escrever(f):
 
 
 # ---------- bug 7: número da prancha no Location ----------
-@AINDA_NAO
 def test_numero_de_prancha_perigoso_nao_gera_location_perigoso(f):
     import openbim_app.vistas_ifc as V
     V.criar_vista(f, "P", "PLANTA")

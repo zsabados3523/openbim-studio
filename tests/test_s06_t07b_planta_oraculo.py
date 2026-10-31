@@ -7,13 +7,19 @@ CONTRATO `app/openbim_app/desenho/planta.py` (sem Qt, sem rede, sem display; `de
    a 324550/7405473; o sinal do Y não é testado), `n_paths` (int = quantidade de `<path` no texto de `svg`), `selecao` (a `Selecao` da T07a), `tempos` (dict com
    `geo_s`, `write_s`, `finalize_s`, floats >= 0; só para medir), `unidade_escala` (float, metros por unidade de comprimento do arquivo: 1.0 em metro, 0.001 em milímetro),
    `altura_corte` (float, metros, no MUNDO).
-2. A seleção é `selecao.selecionar(ifc, gid_vista, categorias_ocultas=...)`; só esses elementos vão ao serializador (ver `test_s06_t07b_entrega_oraculo.py`). Vista de tipo
-   CORTE, vista sem pavimento, vista sem TargetView, categoria inexistente -> `selecao.SelecaoInvalida`; vista inexistente -> `vistas_ifc.VistaInexistente`.
-3. Altura do corte = Z NO MUNDO do pavimento (matriz de `ObjectPlacement` do `IfcBuildingStorey`, resolvida até a raiz, x escala da unidade) + 1,2 m. O volume da vista é
-   ignorado (como na seleção). Pavimento em cota 0, positiva, negativa; colocação absoluta ou relativa ao edifício; arquivo em m ou em mm.
-4. Como o motor: só aparece o que cruza o plano de corte (inclusive encostar); o que fica inteiro acima ou abaixo não aparece. A vista abaixo do corte (planta completa)
-   vem da anotação `DRAWING` horizontal do motor (`elevation-ref-guid` + `svg-without-storeys`): o texto traz o grupo `class="projection"` com ao menos 1 caminho. A anotação
-   do motor tem de cobrir elementos longe (150 m). O arquivo de entrada NÃO muda (`to_string` igual antes e depois): anotação só numa cópia ou removida no fim.
+2. A seleção é `selecao.selecionar(ifc, gid_vista, categorias_ocultas=...)`; só esses elementos vão ao serializador, MENOS os `IfcOpeningElement` (o vão da parede
+   continua furado; a abertura não é desenhada nem calculada). Vista de tipo CORTE, vista sem pavimento, vista sem TargetView, categoria inexistente -> `selecao.SelecaoInvalida`;
+   vista inexistente -> `vistas_ifc.VistaInexistente`.
+3. Altura do corte = Z NO MUNDO do pavimento (matriz de `ObjectPlacement` do `IfcBuildingStorey`, resolvida até a raiz, x escala da unidade) + H, com H = propriedade
+   `AlturaCorte` (número > 0, em metros acima do pavimento) do pset `OBIM_Vista` da vista, se existir (nome provisório, ADR-003 §3.1), senão 1,2 m; valor <= 0 ou que não é
+   número -> `SelecaoInvalida`. O volume (`IfcBlock`) da vista é ignorado. Pavimento em cota 0, positiva, negativa; colocação absoluta ou relativa ao edifício; m ou mm.
+4. PLANTA COMPLETA (ADR-006 §5): o que o corte atravessa sai em linha cheia no grupo do elemento (`ifc:guid`); o que fica inteiro abaixo do corte (móvel baixo, laje, viga, louça)
+   sai na projeção (grupo `class="projection"`, caminhos sem guid); o que fica inteiro acima não sai. Montagem provada com o motor 0.9.0 (ver `test_s06_t07b_completa_oraculo.py`):
+   sem anotação, SEM criar entidade no arquivo (nem durante a geração): `settings(ELEMENT_HIERARCHY=True)` com `section-height-from-storeys`, `svg-project` e `section-height` =
+   (altura do corte no mundo) - (`Elevation` do pavimento x escala), porque o motor soma o `Elevation` (que pode ser local ao edifício). O motor emite um grupo
+   `IfcBuildingStorey` por pavimento do arquivo e os de cima repetem a projeção: o texto final só traz o grupo do pavimento da vista (`ifc:guid` = o dele); `n_paths` conta o texto final.
+   Nenhum filtro apaga desenho: sólido a 600 m da própria origem sem vizinho aparece; elemento a 150 m aparece. O arquivo de entrada NÃO muda (`to_string` igual antes e depois,
+   inclusive se o serializador ou outra chamada levantar exceção no meio).
 5. Parede cortada = polilinha fechada com o contorno da parede; porta e janela cortadas abrem vão (a parede fica em 2, 3 pedaços); abertura que não cruza o corte não fura.
 6. Pavimento sem desenho (selecao vazia) -> `Planta` com `n_paths` 0 e `svg` válido, sem exceção. Determinístico. `threads` só muda o paralelismo, nunca o conjunto desenhado.
 GUARDA: sem ifcopenshell, pula (falha com OBIM_S05_OBRIGATORIO=1)."""
@@ -25,7 +31,6 @@ import s06_t07_aux as X
 import s06_t07b_aux as B
 from s05_conteudo_aux import _limpa, exigir  # noqa: F401  (fixture autouse)
 
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="T07b: desenho/planta.py ainda não existe")
 MOD = pytest.mark.parametrize("esq,off,base,k,rel", B.MODELOS)
 PORTA = ("porta", "IfcDoor", 1.0, 0.0, 1.0, 2.0)
 JAN_BAIXA = ("jan", "IfcWindow", 3.0, 0.9, 1.0, 1.0)  # 0,9 a 1,9: cruza o corte
@@ -47,7 +52,6 @@ def y_ok(caixa, oy, esp, tol=0.01):  # o eixo Y vem como o motor devolve: positi
     return (abs(lo - oy) < tol and abs(hi - oy - esp) < tol) or (abs(lo + oy + esp) < tol and abs(hi + oy) < tol)
 
 
-@AINDA_NAO
 @MOD
 def test_planta_do_pavimento_em_qualquer_cota_e_unidade(esq, off, base, k, rel):
     P_ = P()
@@ -67,7 +71,6 @@ def test_planta_do_pavimento_em_qualquer_cota_e_unidade(esq, off, base, k, rel):
             p.svg = ""
 
 
-@AINDA_NAO
 @MOD
 def test_parede_cortada_e_polilinha_fechada_com_a_espessura(esq, off, base, k, rel):
     P_ = P()
@@ -79,7 +82,6 @@ def test_parede_cortada_e_polilinha_fechada_com_a_espessura(esq, off, base, k, r
         assert abs(x0 - off[0]) < 0.01 and abs(x1 - off[0] - 5.0) < 0.01 and y_ok((x0, y0, x1, y1), off[1], 0.2)
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("m", [B.MODELOS[0], B.MODELOS[3]])
 def test_porta_e_janela_abrem_vao_so_se_cruzam_o_corte(m):
     P_ = P()
@@ -102,7 +104,6 @@ def test_porta_e_janela_abrem_vao_so_se_cruzam_o_corte(m):
     assert n_paths["porta"] > n_paths["sem"] and n_paths["porta_e_janela"] > n_paths["porta"] and n_paths["janela_alta"] == n_paths["porta"]
 
 
-@AINDA_NAO
 def test_movel_oculto_some_e_ligado_aparece():
     P_ = P()
     for esq in X.ESQUEMAS:
@@ -116,7 +117,6 @@ def test_movel_oculto_some_e_ligado_aparece():
         assert oculto.svg == P_.gerar_planta(f, g0, categorias_ocultas=("IfcFurnishingElement",)).svg
 
 
-@AINDA_NAO
 def test_entrada_intacta_deterministica_e_independente_de_threads():
     P_ = P()
     f, pavs, g = B.modelo("IFC4", X.GEO, 12.5, 1.0, True, n_moveis=4)

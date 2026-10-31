@@ -10,12 +10,12 @@ import s06_t07_aux as X
 NUM = re.compile(r"(-?\d+\.?\d*(?:[eE][-+]?\d+)?),(-?\d+\.?\d*(?:[eE][-+]?\d+)?)")
 # (esquema, deslocamento XY em metros, cota do térreo em metros, k, pavimentos com colocação relativa ao edifício)
 MODELOS = [("IFC2X3", (0.0, 0.0), 0.0, 1.0, False), ("IFC4", X.GEO, 0.0, 1.0, False), ("IFC4", (0.0, 0.0), 12.5, 1.0, True),
-           ("IFC2X3", X.GEO, -1.5, 1000.0, True), ("IFC4", (0.0, 0.0), 0.0, 1000.0, False)]
+           ("IFC2X3", X.GEO, -1.5, 1000.0, True), ("IFC4", (0.0, 0.0), 0.0, 1000.0, False), ("IFC4X3", X.GEO, 0.0, 1.0, True)]
 
 
-def modelo(esq, off=(0.0, 0.0), base=0.0, k=1.0, relativo=False, n_pav=2, esp=0.25, vaos=(("porta", "IfcDoor", 1.0, 0.0, 1.0, 2.0),), n_moveis=1):
+def modelo(esq, off=(0.0, 0.0), base=0.0, k=1.0, relativo=False, n_pav=2, esp=0.25, vaos=(("porta", "IfcDoor", 1.0, 0.0, 1.0, 2.0),), n_moveis=1, abertura_contida=False):
     """`n_pav` pavimentos (3 m de pé direito). Pavimento s, z0 = base + 3 s: parede `P{s}` 5 x esp x 3 em (off, z0); laje `L{s}` 0,2 m ABAIXO de z0 (nunca desenhada: o motor só desenha o que cruza o plano de corte);
-    `n_moveis` móveis `M{s}_{j}` (0,5 x 0,5 x 1,5, cruzam o corte de z0 + 1,2); caixas 0,3 x 0,3 no pavimento: `Xc` z 1,0 a 1,4 (cruza o corte), `Xa` z 1,45 a 1,9 (inteira
+    `abertura_contida`: as aberturas também ficam contidas no pavimento (como no IFC real); `n_moveis` móveis `M{s}_{j}` (0,5 x 0,5 x 1,5, cruzam o corte de z0 + 1,2); caixas 0,3 x 0,3 no pavimento: `Xc` z 1,0 a 1,4 (cruza o corte), `Xa` z 1,45 a 1,9 (inteira
     ACIMA), `Xb` z 0,5 a 0,95 (inteira ABAIXO) e `Longe` (cruza, 150 m ao lado da parede); para cada vão (nome, classe, x, z, largura, altura) a abertura `O{nome}{s}` que fura a parede e o
     preenchimento `{nome}{s}` (NÃO contido no pavimento; a parede, a laje e os móveis são). Com `relativo`: o edifício fica em (off, base) e cada pavimento
     é relativo a ele (local z = 3 s, Elevation local); senão, absoluto (Elevation = base + 3 s). Devolve (arquivo, pavimentos, {nome: GlobalId})."""
@@ -52,6 +52,8 @@ def modelo(esq, off=(0.0, 0.0), base=0.0, k=1.0, relativo=False, n_pav=2, esp=0.
         X.conter(f, p, par, laje, *movs, *caixas)
         for nome, cls, x, z, w, h in vaos:
             o, d = cx("IfcOpeningElement", "O" + nome, x, 0, z, w, esp, h), cx(cls, nome, x, 0, z, w, esp, h)
+            if abertura_contida:
+                X.conter(f, p, o)
             f.create_entity("IfcRelVoidsElement", GlobalId=A.ifcopenshell.guid.new(), RelatingBuildingElement=par, RelatedOpeningElement=o, **X.kw(f))
             f.create_entity("IfcRelFillsElement", GlobalId=A.ifcopenshell.guid.new(), RelatingOpeningElement=o, RelatedBuildingElement=d, **X.kw(f))
     return f, pavs, g
@@ -82,3 +84,12 @@ def caixa_de(pts):
 
 def svg_valido(svg):
     return ET.fromstring(svg).tag.endswith("svg")
+
+
+def pontos(svg, off):
+    """Conjunto de vértices (x, |y|) do SVG, relativos a `off`, arredondados em 0,01 m (o sinal do Y é do motor)."""
+    return {(round(x - off[0], 2), round(abs(y) - off[1], 2)) for sg in subcaminhos(svg) for x, y in sg}
+
+
+def planta_svg(f, P_, pav, nome="Vz"):
+    return P_.gerar_planta(f, planta(f, pav, nome)).svg

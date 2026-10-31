@@ -9,8 +9,9 @@ CONTRATO `app/openbim_app/desenho/__init__.py` (vazio de lógica) e `desenho/sel
    `pavimento` step id do IfcBuildingStorey usado (None no corte sem pavimento); `faixa` None na planta, no corte ((xmin,ymin,zmin),(xmax,ymax,zmax))
    do volume de recorte NO MUNDO, EM METROS = (origem da vista + [0, tamanho]) x escala da unidade de comprimento do arquivo (`ifcopenshell.util.unit`;
    arquivo em milímetro: x 0,001; volume alinhado aos eixos; o IfcBlock nasce em 0,0,0 do posicionamento);
-   `falhas_geometria` tuple de step ids em ordem crescente (CORTE: elemento com Representation cuja geometria do corpo é impossível; nunca engolido em
-   silêncio, não entra em `ids`; sempre () na planta, que não calcula geometria); `ocultos_por_classe` dict {classe concreta: quantos elementos candidatos saíram por categoria oculta}; `sem_geometria` int (candidatos sem Representation; no corte o candidato é todo IfcElement do modelo).
+   `falhas_geometria` tuple de step ids em ordem crescente (CORTE: elemento com Representation cuja geometria do corpo é impossível, ou que só tem Axis (sem Body); nunca engolido em
+   silêncio, não entra em `ids`; elemento de categoria oculta nunca é calculado, logo nunca é falha; sempre () na planta, que não calcula geometria); `ocultos_por_classe` dict {classe concreta: quantos elementos saíram por categoria oculta}. PLANTA: entre os candidatos do pavimento. CORTE: TODO IfcElement com
+   Representation do modelo inteiro cuja classe é de categoria oculta, dentro ou fora da faixa, sem calcular geometria dele; `sem_geometria` int (candidatos sem Representation; no corte o candidato é todo IfcElement do modelo).
 3. Elemento desenhável = IfcElement (inclui IfcOpeningElement) com `Representation`. Fora: IfcAnnotation, IfcSpace, sem geometria (contados).
 4. PLANTA: candidatos = contidos (IfcRelContainedInSpatialStructure) no pavimento da vista, mais descendentes por IfcRelAggregates (em qualquer nível)
    dos contidos, mais o contido em qualquer IfcSpace/espaço agregado (IfcRelAggregates, qualquer nível) ao pavimento (o IfcSpace em si nunca entra; NÃO
@@ -191,11 +192,13 @@ def test_corte_cruza_faixa_de_qualquer_pavimento(esq, off, base):
     s = S().selecionar(f, g)
     assert X.nomes(f, s) == dentro and not (X.nomes(f, s) & fora)  # inclui os do pavimento 1 (vista está no 0), encostar conta, 1/64 m fora não
     assert s.tipo == "CORTE" and s.pavimento == pavs[0].id()
-    assert s.falhas_geometria == (X.id_de(f, "falha"), X.id_de(f, "falha2")) and "eixo" in X.nomes(f, s)  # Axis antes de Body não é falha; geometria impossível é registrada
+    assert s.falhas_geometria == (X.id_de(f, "falha"), X.id_de(f, "falha2"), X.id_de(f, "so_eixo")) and "eixo" in X.nomes(f, s)  # Axis antes de Body não é falha; geometria impossível é registrada
     import pytest as P
     assert s.faixa == (P.approx((off[0], off[1] + 2.0, base), abs=1e-9), P.approx((off[0] + 10.0, off[1] + 3.0, base + 6.0), abs=1e-9))
     s = S().selecionar(f, g, categorias_ocultas=("IfcFurnishingElement",))
-    assert X.nomes(f, s) == dentro - {"movel_in"} and s.ocultos_por_classe == {X.MOVEL[esq]: 1}
+    assert X.nomes(f, s) == dentro - {"movel_in"} and s.ocultos_por_classe == {X.MOVEL[esq]: 2}  # conta também o móvel FORA da faixa
+    s = S().selecionar(f, g, categorias_ocultas=("IfcWall",))  # oculto não passa pela geometria: paredes de falha não viram falha, mas são contadas
+    assert s.ocultos_por_classe == {"IfcWall": 4} and s.falhas_geometria == () and not ({"eixo", "falha", "falha2", "so_eixo"} & X.nomes(f, s))
 
 
 @AINDA_NAO

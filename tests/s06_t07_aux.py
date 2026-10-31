@@ -96,17 +96,17 @@ def casa(esq, off=(0.0, 0.0), base=0.0):
     return f, pavs, [conteudo(f, p, i, off, base + 3.0 * i) for i, p in enumerate(pavs)]
 
 
-def eixo_primeiro(f, e):
+def eixo_primeiro(f, e, so_eixo=False):
     """Como o Revit: a representação `Axis` vem ANTES da `Body` (o create_shape direto no produto falha; o iterator pega só o corpo)."""
     corpo = e.Representation.Representations[0]
     linha = f.create_entity("IfcPolyline", Points=[_pt(f, 0, 0, 0), _pt(f, 1, 0, 0)])
     e.Representation.Representations = [f.create_entity("IfcShapeRepresentation", ContextOfItems=corpo.ContextOfItems,
-                                                       RepresentationIdentifier="Axis", RepresentationType="Curve3D", Items=[linha]), corpo]
+                                                       RepresentationIdentifier="Axis", RepresentationType="Curve3D", Items=[linha]), corpo][:1 if so_eixo else 2]
 
 
 def faixa(esq, off=(0.0, 0.0), base=0.0):
     """Corte: volume X [ox, ox+10], Y [oy+2, oy+3], Z [base, base+6]. Elementos 1 m em X, cantos exatos (múltiplos de 1/64).
-    Devolve (f, pavs, dentro, fora). `falha` e `falha2` (direção de extrusão nula: geometria impossível) não está em nenhum dos dois conjuntos."""
+    Devolve (f, pavs, dentro, fora). `falha`, `falha2` (direção de extrusão nula: geometria impossível) e `so_eixo` (só Axis, sem Body) não está em nenhum dos dois conjuntos."""
     f, pavs = estrutura(esq, off, base)
     ox, oy = off
     z = (base + 0.5, base + 3.5)
@@ -128,8 +128,12 @@ def faixa(esq, off=(0.0, 0.0), base=0.0):
         ruim = caixa(f, "IfcWall", nome, ox + 1.0, oy + 2.25, z[0], 1.0, 0.25, 0.5)
         ruim.Representation.Representations[0].Items[0].ExtrudedDirection.DirectionRatios = (0.0, 0.0, 0.0)
         conter(f, pavs[0], ruim)
+    e = caixa(f, "IfcWall", "so_eixo", ox + 1.0, oy + 2.25, z[0], 1.0, 0.25, 0.5)
+    eixo_primeiro(f, e, so_eixo=True)  # só Axis, sem Body: o iterator não devolve; vai para `falhas_geometria`
+    conter(f, pavs[0], e)
+    conter(f, pavs[0], caixa(f, MOVEL[esq], "movel_fora", ox + 20.0, oy + 2.25, z[0], 1.0, 0.25, 0.5))  # móvel FORA da faixa
     nomes_ = [c[0] for c in casos]
-    return f, pavs, {n for n in nomes_ if not n.startswith("fora")} | {"movel_in", "eixo"}, {n for n in nomes_ if n.startswith("fora")}
+    return f, pavs, {n for n in nomes_ if not n.startswith("fora")} | {"movel_in", "eixo"}, {n for n in nomes_ if n.startswith("fora")} | {"movel_fora"}
 
 
 def espacos(f, pavs, off, base):

@@ -30,7 +30,6 @@ import pytest
 import s06_t07_aux as X
 from s05_conteudo_aux import _limpa, exigir  # noqa: F401  (fixture autouse)
 
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="F0-S06-T07a rev. Opus: falhas_geometria, espaços, volume completo, iterator (contrato de 30/10)")
 MOD = pytest.mark.parametrize("esq,off,base", X.MODELOS)
 
 
@@ -41,7 +40,6 @@ def S():
 
 
 # ---------- planta ----------
-@AINDA_NAO
 @MOD
 def test_planta_so_do_pavimento_da_vista(esq, off, base):
     exigir()
@@ -56,7 +54,6 @@ def test_planta_so_do_pavimento_da_vista(esq, off, base):
         assert not any(f.by_id(j).is_a("IfcAnnotation") for j in s.ids)
 
 
-@AINDA_NAO
 @MOD
 def test_planta_inclui_contido_em_espaco_e_nao_desce_em_mezanino(esq, off, base):
     exigir()
@@ -183,13 +180,13 @@ def test_corte_conta_candidatos_sem_geometria(esq, off, base):
     assert s.sem_geometria == 6 and len(s.ids) == 16
 
 
-@AINDA_NAO
 @MOD
 def test_corte_cruza_faixa_de_qualquer_pavimento(esq, off, base):
     exigir()
     f, pavs, dentro, fora = X.faixa(esq, off, base)
     g = X.vista(f, "CORTE", pavs[0], origem=(off[0], off[1] + 2.0, base), tamanho=(10.0, 1.0, 6.0))
     s = S().selecionar(f, g)
+    assert s.ids == tuple(sorted(set(s.ids))) and s == S().selecionar(f, g)  # corte também ordenado e determinístico
     assert X.nomes(f, s) == dentro and not (X.nomes(f, s) & fora)  # inclui os do pavimento 1 (vista está no 0), encostar conta, 1/64 m fora não
     assert s.tipo == "CORTE" and s.pavimento == pavs[0].id()
     assert s.falhas_geometria == (X.id_de(f, "falha"), X.id_de(f, "falha2"), X.id_de(f, "so_eixo")) and "eixo" in X.nomes(f, s)  # Axis antes de Body não é falha; geometria impossível é registrada
@@ -201,7 +198,6 @@ def test_corte_cruza_faixa_de_qualquer_pavimento(esq, off, base):
     assert s.ocultos_por_classe == {"IfcWall": 4} and s.falhas_geometria == () and not ({"eixo", "falha", "falha2", "so_eixo"} & X.nomes(f, s))
 
 
-@AINDA_NAO
 def test_corte_sem_pavimento_nao_da_erro_e_faixa_mais_funda():
     exigir()
     f, pavs, dentro, fora = X.faixa("IFC4", X.GEO, 0.0)
@@ -212,7 +208,6 @@ def test_corte_sem_pavimento_nao_da_erro_e_faixa_mais_funda():
     assert X.nomes(f, S().selecionar(f, g2)) == dentro | {"fora_lo", "fora_hi"}
 
 
-@AINDA_NAO
 def test_corte_com_arquivo_em_milimetros():
     exigir()
     f, pavs, dentro, fora = X.faixa("IFC4", X.GEO, 12.5)
@@ -225,7 +220,6 @@ def test_corte_com_arquivo_em_milimetros():
     assert s.faixa[1] == pytest.approx(((X.GEO[0] + 10.0) * 0.001, (X.GEO[1] + 3.0) * 0.001, 0.0185), abs=1e-9)  # a escala vale também em Z
 
 
-@AINDA_NAO
 @MOD
 def test_corte_volume_girado_90_graus(esq, off, base):
     exigir()
@@ -239,7 +233,6 @@ def test_corte_volume_girado_90_graus(esq, off, base):
     assert s.faixa[0] == pytest.approx((off[0], off[1] + 2.0, base), abs=1e-6) and s.faixa[1] == pytest.approx((off[0] + 10.0, off[1] + 3.0, base + 6.0), abs=1e-6)
 
 
-@AINDA_NAO
 @MOD
 def test_corte_bloco_com_position_diferente_de_zero(esq, off, base):
     exigir()

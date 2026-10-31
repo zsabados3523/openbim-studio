@@ -25,7 +25,6 @@ import s06_t07_aux as X
 import s06_t07b_aux as B
 from s05_conteudo_aux import _limpa, exigir  # noqa: F401  (fixture autouse)
 
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="T07b: desenho/planta.py ainda não existe")
 MOD = pytest.mark.parametrize("esq,off,base,k,rel", B.MODELOS)
 PORTA = ("porta", "IfcDoor", 1.0, 0.0, 1.0, 2.0)
 JAN_BAIXA = ("jan", "IfcWindow", 3.0, 0.9, 1.0, 1.0)  # 0,9 a 1,9: cruza o corte
@@ -47,7 +46,6 @@ def y_ok(caixa, oy, esp, tol=0.01):  # o eixo Y vem como o motor devolve: positi
     return (abs(lo - oy) < tol and abs(hi - oy - esp) < tol) or (abs(lo + oy + esp) < tol and abs(hi + oy) < tol)
 
 
-@AINDA_NAO
 @MOD
 def test_planta_do_pavimento_em_qualquer_cota_e_unidade(esq, off, base, k, rel):
     P_ = P()
@@ -67,7 +65,6 @@ def test_planta_do_pavimento_em_qualquer_cota_e_unidade(esq, off, base, k, rel):
             p.svg = ""
 
 
-@AINDA_NAO
 @MOD
 def test_parede_cortada_e_polilinha_fechada_com_a_espessura(esq, off, base, k, rel):
     P_ = P()
@@ -79,7 +76,6 @@ def test_parede_cortada_e_polilinha_fechada_com_a_espessura(esq, off, base, k, r
         assert abs(x0 - off[0]) < 0.01 and abs(x1 - off[0] - 5.0) < 0.01 and y_ok((x0, y0, x1, y1), off[1], 0.2)
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("m", [B.MODELOS[0], B.MODELOS[3]])
 def test_porta_e_janela_abrem_vao_so_se_cruzam_o_corte(m):
     P_ = P()
@@ -102,7 +98,6 @@ def test_porta_e_janela_abrem_vao_so_se_cruzam_o_corte(m):
     assert n_paths["porta"] > n_paths["sem"] and n_paths["porta_e_janela"] > n_paths["porta"] and n_paths["janela_alta"] == n_paths["porta"]
 
 
-@AINDA_NAO
 def test_movel_oculto_some_e_ligado_aparece():
     P_ = P()
     for esq in X.ESQUEMAS:
@@ -116,7 +111,6 @@ def test_movel_oculto_some_e_ligado_aparece():
         assert oculto.svg == P_.gerar_planta(f, g0, categorias_ocultas=("IfcFurnishingElement",)).svg
 
 
-@AINDA_NAO
 def test_entrada_intacta_deterministica_e_independente_de_threads():
     P_ = P()
     f, pavs, g = B.modelo("IFC4", X.GEO, 12.5, 1.0, True, n_moveis=4)

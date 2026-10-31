@@ -128,7 +128,6 @@ def test_svg_igual_com_1_3_e_8_threads():
     assert svgs[1] == svgs[3] == svgs[8]
 
 
-@pytest.mark.xfail(strict=True, reason="BUG T07b: anotação do motor fixa em 400 m x 400 m; elemento a 350 m do pavimento some em silêncio")
 def test_elemento_longe_de_350_m_continua_na_planta():
     P_ = P()
     import openbim_app.desenho.selecao  # noqa: F401
@@ -137,3 +136,54 @@ def test_elemento_longe_de_350_m_continua_na_planta():
     X.conter(f, pavs[0], longe)
     p = P_.gerar_planta(f, B.planta(f, pavs[0]))
     assert B.grupo(p.svg, longe.GlobalId) is not None
+
+
+def _solto(f, pav, cls, nome, x, y, z, dx, dy, dz, k=1.0):
+    e = X.caixa(f, cls, nome, x * k, y * k, z * k, dx * k, dy * k, dz * k)
+    X.conter(f, pav, e)
+    return e
+
+
+@pytest.mark.parametrize("esq,off,base,k,rel", B.MODELOS)
+def test_elemento_comprido_nao_e_cortado_pelo_recorte_do_motor(esq, off, base, k, rel):
+    P_ = P()  # o recorte do motor tem de cobrir a GEOMETRIA (parede de 300 m que nasce na origem), não só a origem dos elementos
+    f, pavs, g = B.modelo(esq, off, base, k, rel, vaos=())
+    z0 = base
+    longa = _solto(f, pavs[0], "IfcWall", "Longa", off[0] - 120.0, off[1] + 5.0, z0, 300.0, 0.25, 3.0, k)
+    p = P_.gerar_planta(f, B.planta(f, pavs[0]))
+    sub = B.subcaminhos(B.grupo(p.svg, longa.GlobalId))
+    assert sub and abs(B.caixa_de(sub[0])[0] - (off[0] - 120.0)) < 0.01 and abs(B.caixa_de(sub[0])[2] - (off[0] + 180.0)) < 0.01
+
+
+def test_elemento_com_colocacao_relativa_ao_pavimento_longe():
+    P_ = P()
+    f, pavs, g = B.modelo("IFC4", X.GEO, 12.5, 1.0, True, vaos=())
+    pav = pavs[0]
+    e = X.caixa(f, "IfcBuildingElementProxy", "Rel", 0.0, 0.0, 0.0, 0.3, 0.3, 0.4)
+    e.ObjectPlacement = f.create_entity("IfcLocalPlacement", PlacementRelTo=pav.ObjectPlacement, RelativePlacement=f.create_entity(
+        "IfcAxis2Placement3D", Location=X._pt(f, 260.0, -170.0, 1.0)))  # 260 m a leste, 170 m ao sul do pavimento
+    X.conter(f, pav, e)
+    p = P_.gerar_planta(f, B.planta(f, pav))
+    sub = B.subcaminhos(B.grupo(p.svg, e.GlobalId))
+    assert sub and abs(B.caixa_de(sub[0])[0] - (X.GEO[0] + 260.0)) < 0.01
+
+
+@pytest.mark.parametrize("esq", X.ESQUEMAS)
+def test_um_unico_elemento_na_origem_nao_explode(esq):
+    P_ = P()  # recorte degenerado (todos os pontos iguais) e elemento plano (espessura 0 em Z)
+    for dx, dy in ((0.3, 0.3), (0.002, 5.0)):  # ponto e quase linha
+        f, pavs = X.estrutura(esq)
+        e = _solto(f, pavs[0], "IfcBuildingElementProxy", "Unico", 0.0, 0.0, 1.0, dx, dy, 0.4)
+        p = P_.gerar_planta(f, B.planta(f, pavs[0]))
+        assert B.svg_valido(p.svg) and B.grupo(p.svg, e.GlobalId) is not None
+
+
+def test_elemento_sem_colocacao_nao_explode():
+    P_ = P()  # IFC legal: sem ObjectPlacement, geometria já em coordenadas do mundo; só ele no pavimento
+    f, pavs = X.estrutura("IFC4")
+    e = X.caixa(f, "IfcBuildingElementProxy", "SemPl", 0.0, 0.0, 0.0, 0.3, 0.3, 0.4)
+    e.Representation.Representations[0].Items[0].Position.Location.Coordinates = (0.0, 0.0, 1.0)
+    e.ObjectPlacement = None
+    X.conter(f, pavs[0], e)
+    p = P_.gerar_planta(f, B.planta(f, pavs[0]))
+    assert B.svg_valido(p.svg) and B.grupo(p.svg, e.GlobalId) is not None

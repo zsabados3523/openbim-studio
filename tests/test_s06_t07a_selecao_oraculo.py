@@ -9,14 +9,16 @@ CONTRATO `app/openbim_app/desenho/__init__.py` (vazio de lógica) e `desenho/sel
    `pavimento` step id do IfcBuildingStorey usado (None no corte sem pavimento); `faixa` None na planta, no corte ((xmin,ymin,zmin),(xmax,ymax,zmax))
    do volume de recorte NO MUNDO, EM METROS = (origem da vista + [0, tamanho]) x escala da unidade de comprimento do arquivo (`ifcopenshell.util.unit`;
    arquivo em milímetro: x 0,001; volume alinhado aos eixos; o IfcBlock nasce em 0,0,0 do posicionamento);
-   `ocultos_por_classe` dict {classe concreta: quantos elementos candidatos saíram por categoria oculta}; `sem_geometria` int (candidatos sem Representation; no corte o candidato é todo IfcElement do modelo).
+   `falhas_geometria` tuple de step ids em ordem crescente (CORTE: elemento com Representation cuja geometria do corpo é impossível; nunca engolido em
+   silêncio, não entra em `ids`; sempre () na planta, que não calcula geometria); `ocultos_por_classe` dict {classe concreta: quantos elementos candidatos saíram por categoria oculta}; `sem_geometria` int (candidatos sem Representation; no corte o candidato é todo IfcElement do modelo).
 3. Elemento desenhável = IfcElement (inclui IfcOpeningElement) com `Representation`. Fora: IfcAnnotation, IfcSpace, sem geometria (contados).
 4. PLANTA: candidatos = contidos (IfcRelContainedInSpatialStructure) no pavimento da vista, mais descendentes por IfcRelAggregates (em qualquer nível)
-   dos contidos, mais as aberturas (IfcRelVoidsElement) dos candidatos e os preenchimentos dessas aberturas (IfcRelFillsElement; a porta pode nem estar
+   dos contidos, mais o contido em qualquer IfcSpace/espaço agregado (IfcRelAggregates, qualquer nível) ao pavimento (o IfcSpace em si nunca entra; NÃO
+   desce em outro IfcBuildingStorey agregado: mezanino é outro pavimento), mais as aberturas (IfcRelVoidsElement) dos candidatos e os preenchimentos dessas aberturas (IfcRelFillsElement; a porta pode nem estar
    contida em pavimento). O pavimento da vista = o IfcBuildingStorey que contém a anotação (ou `pavimento=`). Volume da vista ignorado.
    Sem pavimento resolvido, ou resolvido para algo que não é IfcBuildingStorey, ou `pavimento=` que não existe/não é pavimento: `SelecaoInvalida`.
-5. CORTE: todo IfcElement com geometria, de QUALQUER pavimento, cujo bounding box NO MUNDO (ifcopenshell.geom, coordenadas de mundo em metros, precisão de
-   double) cruza o volume; intervalos FECHADOS (encostar conta). Pavimento da vista é opcional (sem ele: `pavimento` None, sem erro).
+5. CORTE: todo IfcElement com geometria, de QUALQUER pavimento, cujo bounding box NO MUNDO (representação Body, como o ifcopenshell.geom.iterator: Axis antes de
+   Body NÃO é falha; coordenadas de mundo em metros, precisão de double) cruza o volume; intervalos FECHADOS (encostar conta). Pavimento da vista é opcional (sem ele: `pavimento` None, sem erro).
 6. Móveis (IfcFurnishingElement e filhos) LIGADOS por padrão. Vista de outro programa sem TargetView (tipo None), ou VistaInexistente: erro
    (`SelecaoInvalida` para tipo None; `vistas_ifc.VistaInexistente` propaga). `SelecaoInvalida` herda de ValueError.
 7. Determinístico; nenhuma tolerância absoluta pequena (modelo a 324 mil / 7,4 milhões do zero); não depende de cota 0.
@@ -27,6 +29,7 @@ import pytest
 import s06_t07_aux as X
 from s05_conteudo_aux import _limpa, exigir  # noqa: F401  (fixture autouse)
 
+AINDA_NAO = pytest.mark.xfail(strict=True, reason="F0-S06-T07a rev. Opus: falhas_geometria, espaços, volume completo, iterator (contrato de 30/10)")
 MOD = pytest.mark.parametrize("esq,off,base", X.MODELOS)
 
 
@@ -37,6 +40,7 @@ def S():
 
 
 # ---------- planta ----------
+@AINDA_NAO
 @MOD
 def test_planta_so_do_pavimento_da_vista(esq, off, base):
     exigir()
@@ -47,8 +51,22 @@ def test_planta_so_do_pavimento_da_vista(esq, off, base):
         s = S_.selecionar(f, g)
         assert X.nomes(f, s) == esperado[i]
         assert s.tipo == "PLANTA" and s.pavimento == pavs[i].id() and s.faixa is None
-        assert s.sem_geometria == 3 and s.ocultos_por_classe == {}
+        assert s.sem_geometria == 3 and s.ocultos_por_classe == {} and s.falhas_geometria == ()
         assert not any(f.by_id(j).is_a("IfcAnnotation") for j in s.ids)
+
+
+@AINDA_NAO
+@MOD
+def test_planta_inclui_contido_em_espaco_e_nao_desce_em_mezanino(esq, off, base):
+    exigir()
+    f, pavs, esperado = X.casa(esq, off, base)
+    extra = X.espacos(f, pavs, off, base)
+    s = S().selecionar(f, X.vista(f, "PLANTA", pavs[0]))
+    assert X.nomes(f, s) == esperado[0] | extra  # sem SP/SS (o espaço em si) e sem Q (mezanino)
+    assert S().selecionar(f, X.vista(f, "PLANTA", pavs[1], nome="V1")).ids == S().selecionar(f, X.vista(f, "PLANTA", pavs[1], nome="V2")).ids
+    assert X.nomes(f, S().selecionar(f, X.vista(f, "PLANTA", pavs[1], nome="V3"))) == esperado[1]
+    s = S().selecionar(f, X.vista(f, "PLANTA", pavs[0], nome="V4"), categorias_ocultas=("IfcFurnishingElement",))
+    assert s.ocultos_por_classe == {X.MOVEL[esq]: 2} and "MS" not in X.nomes(f, s)
 
 
 def test_planta_nunca_calcula_geometria(monkeypatch):
@@ -164,6 +182,7 @@ def test_corte_conta_candidatos_sem_geometria(esq, off, base):
     assert s.sem_geometria == 6 and len(s.ids) == 16
 
 
+@AINDA_NAO
 @MOD
 def test_corte_cruza_faixa_de_qualquer_pavimento(esq, off, base):
     exigir()
@@ -172,12 +191,14 @@ def test_corte_cruza_faixa_de_qualquer_pavimento(esq, off, base):
     s = S().selecionar(f, g)
     assert X.nomes(f, s) == dentro and not (X.nomes(f, s) & fora)  # inclui os do pavimento 1 (vista está no 0), encostar conta, 1/64 m fora não
     assert s.tipo == "CORTE" and s.pavimento == pavs[0].id()
+    assert s.falhas_geometria == (X.id_de(f, "falha"), X.id_de(f, "falha2")) and "eixo" in X.nomes(f, s)  # Axis antes de Body não é falha; geometria impossível é registrada
     import pytest as P
     assert s.faixa == (P.approx((off[0], off[1] + 2.0, base), abs=1e-9), P.approx((off[0] + 10.0, off[1] + 3.0, base + 6.0), abs=1e-9))
     s = S().selecionar(f, g, categorias_ocultas=("IfcFurnishingElement",))
     assert X.nomes(f, s) == dentro - {"movel_in"} and s.ocultos_por_classe == {X.MOVEL[esq]: 1}
 
 
+@AINDA_NAO
 def test_corte_sem_pavimento_nao_da_erro_e_faixa_mais_funda():
     exigir()
     f, pavs, dentro, fora = X.faixa("IFC4", X.GEO, 0.0)
@@ -188,16 +209,43 @@ def test_corte_sem_pavimento_nao_da_erro_e_faixa_mais_funda():
     assert X.nomes(f, S().selecionar(f, g2)) == dentro | {"fora_lo", "fora_hi"}
 
 
+@AINDA_NAO
 def test_corte_com_arquivo_em_milimetros():
     exigir()
-    f, pavs, dentro, fora = X.faixa("IFC4", X.GEO, 0.0)
-    g = X.vista(f, "CORTE", pavs[0], origem=(X.GEO[0], X.GEO[1] + 2.0, 0.0), tamanho=(10.0, 1.0, 6.0))
+    f, pavs, dentro, fora = X.faixa("IFC4", X.GEO, 12.5)
+    g = X.vista(f, "CORTE", pavs[0], origem=(X.GEO[0], X.GEO[1] + 2.0, 12.5), tamanho=(10.0, 1.0, 6.0))
     X.em_milimetros(f)
     s = S().selecionar(f, g)
-    toques = {"toque_hi", "toque_lo"}  # encostar não é testado aqui: 0,001 x número não é exato em ponto flutuante
+    toques = {n for n in dentro if n.startswith("toque")}  # encostar não é testado aqui: 0,001 x número não é exato em ponto flutuante
     assert X.nomes(f, s) - toques == dentro - toques and not (X.nomes(f, s) & fora)
-    assert s.faixa[0] == pytest.approx((X.GEO[0] * 0.001, (X.GEO[1] + 2.0) * 0.001, 0.0), abs=1e-9)
-    assert s.faixa[1] == pytest.approx(((X.GEO[0] + 10.0) * 0.001, (X.GEO[1] + 3.0) * 0.001, 0.006), abs=1e-9)
+    assert s.faixa[0] == pytest.approx((X.GEO[0] * 0.001, (X.GEO[1] + 2.0) * 0.001, 0.0125), abs=1e-9)
+    assert s.faixa[1] == pytest.approx(((X.GEO[0] + 10.0) * 0.001, (X.GEO[1] + 3.0) * 0.001, 0.0185), abs=1e-9)  # a escala vale também em Z
+
+
+@AINDA_NAO
+@MOD
+def test_corte_volume_girado_90_graus(esq, off, base):
+    exigir()
+    f, pavs, dentro, fora = X.faixa(esq, off, base)
+    # bloco 1 x 10 x 6 no posicionamento (ox+10, oy+2, base) girado: no mundo x em [ox, ox+10], y em [oy+2, oy+3], z em [base, base+6]
+    g = X.vista(f, "CORTE", pavs[0], origem=(off[0] + 10.0, off[1] + 2.0, base), tamanho=(1.0, 10.0, 6.0))
+    X.girar_90(f, g)
+    s = S().selecionar(f, g)
+    toques = {n for n in dentro if n.startswith("toque")}  # seno/cosseno em ponto flutuante: encostar fica de fora deste caso
+    assert X.nomes(f, s) - toques == dentro - toques and not (X.nomes(f, s) & fora)
+    assert s.faixa[0] == pytest.approx((off[0], off[1] + 2.0, base), abs=1e-6) and s.faixa[1] == pytest.approx((off[0] + 10.0, off[1] + 3.0, base + 6.0), abs=1e-6)
+
+
+@AINDA_NAO
+@MOD
+def test_corte_bloco_com_position_diferente_de_zero(esq, off, base):
+    exigir()
+    f, pavs, dentro, fora = X.faixa(esq, off, base)
+    g = X.vista(f, "CORTE", pavs[0], origem=(off[0] - 2.0, off[1] + 1.5, base - 1.0), tamanho=(10.0, 1.0, 6.0))
+    X.deslocar_bloco(f, g, (2.0, 0.5, 1.0))  # volume no mundo igual ao dos outros casos
+    s = S().selecionar(f, g)
+    assert X.nomes(f, s) == dentro and not (X.nomes(f, s) & fora)
+    assert s.faixa[0] == pytest.approx((off[0], off[1] + 2.0, base), abs=1e-9) and s.faixa[1] == pytest.approx((off[0] + 10.0, off[1] + 3.0, base + 6.0), abs=1e-9)
 
 
 # ---------- medida ----------

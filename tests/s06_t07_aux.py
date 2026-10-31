@@ -6,10 +6,10 @@ import ifcopenshell.guid
 import s06_t04_aux as A
 
 ESQUEMAS = ("IFC2X3", "IFC4")
-MOVEL = {"IFC2X3": "IfcFurnishingElement", "IFC4": "IfcFurniture"}  # classe concreta do móvel por esquema
+MOVEL = {"IFC2X3": "IfcFurnishingElement", "IFC4": "IfcFurniture", "IFC4X3": "IfcFurniture"}  # classe concreta do móvel por esquema
 GEO = (324550.0, 7405473.0)  # X/Y do modelo de 303 MB da T01h
 # (esquema, deslocamento XY, cota do térreo): cobre 2X3 e 4, perto e longe da origem, pavimento em cota 0, positiva e negativa
-MODELOS = [("IFC2X3", (0.0, 0.0), 0.0), ("IFC4", GEO, 0.0), ("IFC4", (0.0, 0.0), 12.5), ("IFC2X3", GEO, -1.5)]
+MODELOS = [("IFC2X3", (0.0, 0.0), 0.0), ("IFC4", GEO, 0.0), ("IFC4", (0.0, 0.0), 12.5), ("IFC2X3", GEO, -1.5), ("IFC4X3", (0.0, 0.0), 0.0)]
 
 
 def kw(f):
@@ -96,21 +96,59 @@ def casa(esq, off=(0.0, 0.0), base=0.0):
     return f, pavs, [conteudo(f, p, i, off, base + 3.0 * i) for i, p in enumerate(pavs)]
 
 
+def eixo_primeiro(f, e, so_eixo=False):
+    """Como o Revit: a representação `Axis` vem ANTES da `Body` (o create_shape direto no produto falha; o iterator pega só o corpo)."""
+    corpo = e.Representation.Representations[0]
+    linha = f.create_entity("IfcPolyline", Points=[_pt(f, 0, 0, 0), _pt(f, 1, 0, 0)])
+    e.Representation.Representations = [f.create_entity("IfcShapeRepresentation", ContextOfItems=corpo.ContextOfItems,
+                                                       RepresentationIdentifier="Axis", RepresentationType="Curve3D", Items=[linha]), corpo][:1 if so_eixo else 2]
+
+
 def faixa(esq, off=(0.0, 0.0), base=0.0):
-    """Corte: volume X [ox, ox+10], Y [oy+2, oy+3], Z [base, base+6]. Elementos 1 m em X, cantos exatos. Devolve (f, pavs, dentro, fora)."""
+    """Corte: volume X [ox, ox+10], Y [oy+2, oy+3], Z [base, base+6]. Elementos 1 m em X, cantos exatos (múltiplos de 1/64).
+    Devolve (f, pavs, dentro, fora). `falha`, `falha2` (direção de extrusão nula: geometria impossível) e `so_eixo` (só Axis, sem Body) não está em nenhum dos dois conjuntos."""
     f, pavs = estrutura(esq, off, base)
     ox, oy = off
     z = (base + 0.5, base + 3.5)
     casos = [  # nome, pavimento, y, dy, x, z
         ("in", 0, 2.25, 0.25, 1.0, z[0]), ("lo", 1, 1.5, 1.0, 1.0, z[1]), ("hi", 0, 2.5, 1.0, 1.0, z[0]), ("amplo", 1, 1.0, 3.0, 1.0, z[1]),
         ("toque_hi", 0, 3.0, 0.5, 1.0, z[0]), ("toque_lo", 1, 1.5, 0.5, 1.0, z[1]),
+        ("toque_x_hi", 0, 2.25, 0.25, 10.0, z[0]), ("toque_x_lo", 1, 2.25, 0.25, -1.0, z[1]),
+        ("toque_z_hi", 1, 2.25, 0.25, 1.0, base + 6.0), ("toque_z_lo", 0, 2.25, 0.25, 1.0, base - 0.5),
         ("fora_lo", 0, 1.0, 0.984375, 1.0, z[0]), ("fora_hi", 1, 3.015625, 0.5, 1.0, z[1]), ("fora_x", 0, 2.25, 0.25, 20.0, z[0]),
-        ("fora_z", 1, 2.25, 0.25, 1.0, base + 7.0)]
+        ("fora_z", 1, 2.25, 0.25, 1.0, base + 7.0), ("fora_x_perto", 0, 2.25, 0.25, 10.015625, z[0]),
+        ("fora_z_perto", 1, 2.25, 0.25, 1.0, base + 6.015625), ("fora_x_lo_perto", 0, 2.25, 0.25, -1.015625, z[0])]
     for nome, i, y, dy, x, zz in casos:
         conter(f, pavs[i], caixa(f, "IfcBuildingElementProxy", nome, ox + x, oy + y, zz, 1.0, dy, 0.5))
     conter(f, pavs[0], caixa(f, MOVEL[esq], "movel_in", ox + 1.0, oy + 2.25, z[0], 1.0, 0.25, 0.5))
-    nomes = [c[0] for c in casos]
-    return f, pavs, {n for n in nomes if not n.startswith("fora")} | {"movel_in"}, {n for n in nomes if n.startswith("fora")}
+    e = caixa(f, "IfcWall", "eixo", ox + 1.0, oy + 2.25, z[0], 1.0, 0.25, 0.5)
+    eixo_primeiro(f, e)
+    conter(f, pavs[1], e)
+    for nome in ("falha", "falha2"):
+        ruim = caixa(f, "IfcWall", nome, ox + 1.0, oy + 2.25, z[0], 1.0, 0.25, 0.5)
+        ruim.Representation.Representations[0].Items[0].ExtrudedDirection.DirectionRatios = (0.0, 0.0, 0.0)
+        conter(f, pavs[0], ruim)
+    e = caixa(f, "IfcWall", "so_eixo", ox + 1.0, oy + 2.25, z[0], 1.0, 0.25, 0.5)
+    eixo_primeiro(f, e, so_eixo=True)  # só Axis, sem Body: o iterator não devolve; vai para `falhas_geometria`
+    conter(f, pavs[0], e)
+    conter(f, pavs[0], caixa(f, MOVEL[esq], "movel_fora", ox + 20.0, oy + 2.25, z[0], 1.0, 0.25, 0.5))  # móvel FORA da faixa
+    nomes_ = [c[0] for c in casos]
+    return f, pavs, {n for n in nomes_ if not n.startswith("fora")} | {"movel_in", "eixo"}, {n for n in nomes_ if n.startswith("fora")} | {"movel_fora"}
+
+
+def espacos(f, pavs, off, base):
+    """Estilo Revit: no pavimento 0, IfcSpace SP (com geometria) AGREGADO ao pavimento, contendo móvel MS e proxy PS; subespaço SS agregado a SP, contendo
+    proxy MSS; mezanino `Mez` (outro IfcBuildingStorey) agregado ao pavimento 0, contendo Q. Devolve os nomes que a planta do pavimento 0 ganha."""
+    ox, oy = off
+    sp = caixa(f, "IfcSpace", "SP", ox, oy, base, 5.0, 5.0, 3.0)
+    ss = caixa(f, "IfcSpace", "SS", ox, oy, base, 2.0, 2.0, 3.0)
+    mez = elemento(f, "IfcBuildingStorey", "Mez", Elevation=base + 1.5)
+    agregar(f, pavs[0], sp, mez)
+    agregar(f, sp, ss)
+    conter(f, sp, caixa(f, MOVEL[f.schema], "MS", ox + 3.0, oy + 3.0, base, 0.5, 0.5, 0.5), caixa(f, "IfcBuildingElementProxy", "PS", ox + 4.0, oy + 3.0, base, 0.5, 0.5, 0.5))
+    conter(f, ss, caixa(f, "IfcBuildingElementProxy", "MSS", ox + 0.5, oy + 0.5, base, 0.5, 0.5, 0.5))
+    conter(f, mez, caixa(f, "IfcBuildingElementProxy", "Q", ox + 4.0, oy + 4.0, base + 1.5, 0.5, 0.5, 0.5))
+    return {"MS", "PS", "MSS"}
 
 
 def vista(f, tipo, pav=None, origem=(0.0, 0.0, 0.0), tamanho=(10.0, 10.0, 3.0), nome="V"):
@@ -131,3 +169,21 @@ def em_milimetros(f):
     for u in f.by_type("IfcSIUnit"):
         if u.UnitType == "LENGTHUNIT":
             u.Prefix = "MILLI"
+
+
+def id_de(f, nome):
+    return next(e.id() for e in f.by_type("IfcProduct") if e.Name == nome)
+
+
+def girar_90(f, gid):
+    """Gira o posicionamento da vista 90 graus em Z (eixo X local aponta para o Y do mundo): o bloco local [0,sx]x[0,sy] cobre no mundo
+    x em [ox - sy, ox], y em [oy, oy + sx]."""
+    eixo = f.by_guid(gid).ObjectPlacement.RelativePlacement
+    eixo.Axis = f.create_entity("IfcDirection", DirectionRatios=(0.0, 0.0, 1.0))
+    eixo.RefDirection = f.create_entity("IfcDirection", DirectionRatios=(0.0, 1.0, 0.0))
+
+
+def deslocar_bloco(f, gid, pos):
+    """Bloco com Position != 0 (como o Bonsai grava): o volume local passa a ser pos + [0, tamanho]."""
+    bloco = f.by_guid(gid).Representation.Representations[0].Items[0].TreeRootExpression
+    bloco.Position.Location.Coordinates = tuple(float(c) for c in pos)

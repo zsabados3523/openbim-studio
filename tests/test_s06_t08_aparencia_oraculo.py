@@ -12,7 +12,7 @@
 - ACHADO 4: `exportar_pdf` cujo SVG montado o Qt nao le = `SvgInvalido`, arquivo nao criado nem alterado (confere `QSvgRenderer.isValid()` antes de abrir o `QPdfWriter`).
 - ITEM 5: `montar_svg` nao muda estado global do ElementTree (nenhum `register_namespace`; serializa com `default_namespace` local, por exemplo).
 - ITEM 6: data com digitos que nao sao ASCII (fullwidth, arabe-indico) = `PranchaInvalida`.
-Marcador: @AINDA_NAO_APAR (xfail estrito); so o autor do oraculo o retira."""
+Marcadores @AINDA_NAO_APAR retirados pelo autor apos a correcao."""
 import os
 import shutil
 import subprocess
@@ -26,7 +26,6 @@ import s06_t08_aux as A
 from obrigatorio import pular
 from s06_t08_aux import DADOS, GUID, IDENT, NS, Lado, folha_mm, montar, saida
 
-AINDA = pytest.mark.xfail(strict=True, reason="@AINDA_NAO_APAR: correcoes da revisao da T08 ainda nao feitas")  # casos 09, 12, 14, 15 e 16 sao guarda de regressao: ja passam e ficam sem marcador
 
 
 def P():
@@ -74,7 +73,6 @@ def bordas(mask, px, W, H, tol):
 
 # ---------- achado 1: bordas visiveis ----------
 @pytest.mark.parametrize("formato", ["A3", "A4"])
-@AINDA
 def test_01_moldura_e_caixa_tem_stroke(formato):
     P()
     raiz = ET.fromstring(saida(formato=formato, x=10, y=10, escala=100))
@@ -86,7 +84,6 @@ def test_01_moldura_e_caixa_tem_stroke(formato):
 
 
 @pytest.mark.parametrize("formato", ["A3", "A4"])
-@AINDA
 def test_02_bordas_desenhadas_pelo_qt(qt, formato):
     P()
     svg = saida(formato=formato, x=20, y=20, escala=100)
@@ -98,7 +95,6 @@ def test_02_bordas_desenhadas_pelo_qt(qt, formato):
 
 
 @pytest.mark.parametrize("formato,W,H", [("A3", 420, 297), ("A4", 297, 210)])
-@AINDA
 def test_03_bordas_desenhadas_no_pdf(qt, tmp_path, formato, W, H):
     m = P()
     exe = shutil.which("pdftoppm")
@@ -148,13 +144,11 @@ def conferir_texto(svg, W, H):
 
 @pytest.mark.parametrize("formato,W,H", [("A3", 420, 297), ("A4", 297, 210)])
 @pytest.mark.parametrize("escala", [50, 100, 62.5])
-@AINDA
 def test_04_texto_do_carimbo_cabe_e_nao_se_sobrepoe(formato, W, H, escala):
     P()
     conferir_texto(saida(formato=formato, escala=escala, x=10, y=10), W, H)
 
 
-@AINDA
 def test_05_nomes_de_tamanho_medio_em_a4():
     P()
     svg = saida(formato="A4", escala=100, x=10, y=10, projeto="Residencia Unifamiliar Praia X", titulo="Planta baixa do pavimento terreo - Bloco A")
@@ -162,7 +156,6 @@ def test_05_nomes_de_tamanho_medio_em_a4():
     assert any(c[0] == "Residencia Unifamiliar Praia X" for c in caixas_texto(svg))
 
 
-@AINDA
 def test_06_texto_do_carimbo_aparece_desenhado(qt):
     P()
     svg = saida(formato="A3", escala=100, x=20, y=20)
@@ -182,7 +175,6 @@ def _proibidos():
 
 @pytest.mark.parametrize("campo", ["projeto", "titulo", "folha"])
 @pytest.mark.parametrize("c", _proibidos(), ids=lambda c: f"U+{ord(c):04X}")
-@AINDA
 def test_07_controle_no_carimbo_recusado(campo, c):
     m = P()
     lado = Lado()
@@ -192,7 +184,6 @@ def test_07_controle_no_carimbo_recusado(campo, c):
 
 
 @pytest.mark.parametrize("c", ["\x00", "\x01", "\x1f", "\t", "\n", "\x7f", "￾", "\ud800"])
-@AINDA
 def test_08_controle_no_vista_guid_recusado(c):
     m = P()
     lado = Lado()
@@ -214,7 +205,6 @@ def test_09_texto_estranho_mas_valido_sai_bem_formado_e_igual(texto):
 
 
 @pytest.mark.parametrize("c", ["\x00", "\x01", "\x0b", "\x1f", "￾", "￿"])
-@AINDA
 def test_10_montar_svg_com_lateral_hostil_nunca_sai_mal_formado(c):
     m = P()
     for campo in ("projeto", "vista"):
@@ -232,7 +222,6 @@ def test_10_montar_svg_com_lateral_hostil_nunca_sai_mal_formado(c):
 
 # ---------- achado 4: Qt nao le o SVG ----------
 @pytest.mark.parametrize("lixo", ["<svg", "", "nada de xml", "<svg xmlns='http://www.w3.org/2000/svg'><"])
-@AINDA
 def test_11_pdf_com_svg_que_o_qt_nao_le(qt, tmp_path, monkeypatch, lixo):
     m = P()
     lado, svg = montar()
@@ -256,7 +245,6 @@ def test_12_pdf_normal_continua_valido(qt, tmp_path):
 
 
 # ---------- item 5: estado global do ElementTree ----------
-@AINDA
 def test_13_montar_svg_nao_registra_namespace_global():
     P()
     app = Path(__file__).resolve().parent.parent / "app"

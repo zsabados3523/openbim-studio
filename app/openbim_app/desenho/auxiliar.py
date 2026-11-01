@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Cliente do processo auxiliar de geometria e desenho."""
 import json
+import logging
 import multiprocessing
 import os
 import shutil
@@ -13,6 +14,7 @@ from obim_geometria.processo import PROTOCOLO, entrada
 
 LIMITE_PADRAO_S = 180
 _TRAVA_FILHO = threading.Lock()
+_logger = logging.getLogger(__name__)
 
 
 class ErroAuxiliar(RuntimeError): pass
@@ -49,10 +51,12 @@ class Preparado:
         for tentativa in range(3):
             try:
                 shutil.rmtree(self.pasta)
-                break
-            except OSError:
+                return
+            except OSError as e:
                 if tentativa < 2:
                     time.sleep(0.2)
+                else:
+                    _logger.warning("Falha ao apagar pasta temporária %s: %s", self.pasta, e)
 
     def __enter__(self):
         return self
@@ -61,18 +65,39 @@ class Preparado:
         self.fechar()
 
 
+def _limpar_pastas_antigas():
+    try:
+        limite = time.time() - 86400
+        temp_dir = Path(tempfile.gettempdir())
+        for p in temp_dir.glob("obim-desenho-*"):
+            try:
+                if p.is_dir() and p.stat().st_mtime < limite:
+                    shutil.rmtree(p, ignore_errors=True)
+            except OSError:
+                pass
+    except Exception:
+        pass
+
+
 def preparar(ifc, pedido: dict) -> Preparado:
+    _limpar_pastas_antigas()
     p = dict(pedido)
     p.setdefault("protocolo", PROTOCOLO)
     p.setdefault("threads", min(8, os.cpu_count() or 1))
     pasta = Path(tempfile.mkdtemp(prefix="obim-desenho-", dir=tempfile.gettempdir()))
     arquivo = (pasta / "modelo.ifc").resolve()
-    ifc.write(str(arquivo))
+    try:
+        ifc.write(str(arquivo))
+    except BaseException:
+        shutil.rmtree(pasta, ignore_errors=True)
+        raise
     p["arquivo"] = str(arquivo)
     return Preparado(p, pasta)
 
 
 def _tratar_resposta(raw: dict) -> dict:
+    if not isinstance(raw, dict):
+        raise ProtocoloInvalido(f"Resposta inválida do processo auxiliar: esperava dict, obteve {type(raw).__name__}")
     if raw.get("ok"):
         return raw
     erro = raw.get("erro", {})
@@ -90,9 +115,11 @@ def _matar_filho(proc):
             proc.kill()
         except OSError:
             pass
-        proc.join(timeout=2.0)
+        proc.join(timeout=5.0)
+        if proc.is_alive():
+            _logger.warning("Processo auxiliar (PID %s) não encerrou após kill e join(5)", getattr(proc, "pid", None))
     else:
-        proc.join(timeout=0.5)
+        proc.join(timeout=5.0)
 
 
 def executar(preparado: Preparado, *, limite_s: float = LIMITE_PADRAO_S, cancelar: threading.Event | None = None, executor=None) -> dict:
@@ -117,30 +144,34 @@ def executar(preparado: Preparado, *, limite_s: float = LIMITE_PADRAO_S, cancela
 def _executar_filho(preparado: Preparado, limite_s: float, cancelar: threading.Event | None) -> dict:
     ctx = multiprocessing.get_context("spawn")
     rx, tx = ctx.Pipe(duplex=False)
-    proc = ctx.Process(target=entrada, args=(tx, json.dumps(preparado.pedido)))
+    proc = None
     t_inicio, fase_atual, resposta_raw = time.monotonic(), "", None
-    proc.start()
-    tx.close()
+    saiu_sem_resposta = False
 
     try:
+        proc = ctx.Process(target=entrada, args=(tx, json.dumps(preparado.pedido)), daemon=True)
+        proc.start()
+        tx.close()
+
         while True:
             if cancelar is not None and cancelar.is_set():
-                _matar_filho(proc)
                 raise DesenhoCancelado("Operação cancelada")
             decorrido = time.monotonic() - t_inicio
             if decorrido > limite_s:
-                _matar_filho(proc)
                 raise AuxiliarEstourouTempo(limite_s, fase_atual)
             espera = min(0.05, max(0.001, limite_s - decorrido))
             if rx.poll(espera):
                 try:
                     raw_bytes = rx.recv_bytes()
                 except (EOFError, OSError):
+                    saiu_sem_resposta = True
                     break
                 try:
                     msg = json.loads(raw_bytes.decode("utf-8"))
-                except Exception:
-                    continue
+                except Exception as e:
+                    raise ProtocoloInvalido(f"Mensagem do processo auxiliar não é JSON: {e}")
+                if not isinstance(msg, dict):
+                    raise ProtocoloInvalido(f"Mensagem do processo auxiliar não é um dicionário: {type(msg).__name__}")
                 tipo = msg.get("tipo")
                 if tipo == "fase":
                     fase_atual = msg.get("fase", fase_atual)
@@ -148,26 +179,38 @@ def _executar_filho(preparado: Preparado, limite_s: float, cancelar: threading.E
                     resposta_raw = msg.get("dados")
                     break
             elif not proc.is_alive():
+                saiu_sem_resposta = True
                 while rx.poll(0.01):
                     try:
                         raw_bytes = rx.recv_bytes()
-                        msg = json.loads(raw_bytes.decode("utf-8"))
-                        if msg.get("tipo") == "resposta":
-                            resposta_raw = msg.get("dados")
-                            break
-                        elif msg.get("tipo") == "fase":
-                            fase_atual = msg.get("fase", fase_atual)
-                    except Exception:
+                    except (EOFError, OSError):
                         break
+                    try:
+                        msg = json.loads(raw_bytes.decode("utf-8"))
+                    except Exception as e:
+                        raise ProtocoloInvalido(f"Mensagem do processo auxiliar não é JSON: {e}")
+                    if not isinstance(msg, dict):
+                        raise ProtocoloInvalido(f"Mensagem do processo auxiliar não é um dicionário: {type(msg).__name__}")
+                    if msg.get("tipo") == "resposta":
+                        resposta_raw = msg.get("dados")
+                        saiu_sem_resposta = False
+                        break
+                    elif msg.get("tipo") == "fase":
+                        fase_atual = msg.get("fase", fase_atual)
                 break
+
+        if saiu_sem_resposta:
+            proc.join(timeout=5.0)
     finally:
-        try:
-            rx.close()
-        except Exception:
-            pass
-        _matar_filho(proc)
+        for c in (rx, tx):
+            try:
+                c.close()
+            except Exception:
+                pass
+        if proc is not None:
+            _matar_filho(proc)
 
     if resposta_raw is not None:
         return _tratar_resposta(resposta_raw)
     codigo = proc.exitcode
-    raise AuxiliarCaiu(1 if codigo is None or codigo == 0 else codigo, fase_atual)
+    raise AuxiliarCaiu(0 if codigo == 0 else (codigo or 1), fase_atual)

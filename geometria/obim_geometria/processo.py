@@ -2,7 +2,6 @@
 """Ponto de entrada do processo auxiliar de geometria."""
 import json
 import os
-import sys
 import time
 import traceback
 
@@ -11,19 +10,19 @@ PROTOCOLO = 1
 
 def entrada(tx, pedido_json):
     """Executado no processo filho (spawn)."""
+    tx.send_bytes(json.dumps({"tipo": "pronto", "pid": os.getpid(), "protocolo": PROTOCOLO}).encode("utf-8"))
+    if os.environ.get("OBIM_TESTE_AUX_SEGV") == "1":
+        import faulthandler
+        faulthandler._sigsegv()
+
     try:
         pedido = json.loads(pedido_json) if isinstance(pedido_json, str) else pedido_json
-        tx.send_bytes(json.dumps({"tipo": "pronto", "pid": os.getpid(), "protocolo": PROTOCOLO}).encode("utf-8"))
-
         dormir = os.environ.get("OBIM_TESTE_AUX_DORMIR_S")
         if dormir:
             time.sleep(float(dormir))
         sair = os.environ.get("OBIM_TESTE_AUX_SAIR")
         if sair:
             os._exit(int(sair))
-        if os.environ.get("OBIM_TESTE_AUX_SEGV") == "1":
-            import ctypes
-            ctypes.string_at(0)
         levantar = os.environ.get("OBIM_TESTE_AUX_LEVANTAR")
         if levantar:
             raise RuntimeError(levantar)

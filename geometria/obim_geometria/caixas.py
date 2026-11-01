@@ -19,23 +19,30 @@ def processar(pedido: dict) -> dict:
 
         s = ifcopenshell.geom.settings()
         s.set(s.USE_WORLD_COORDS, True)
-        caixas, falhas = {}, []
-        for id_step, _ in elementos:
-            el = f.by_id(id_step)
-            try:
-                if not hasattr(el, "Representation") or not el.Representation:
-                    falhas.append(id_step)
-                    continue
-                shape = ifcopenshell.geom.create_shape(s, el)
-                verts = shape.geometry.verts
-                if not verts:
-                    falhas.append(id_step)
-                    continue
-                xs, ys, zs = verts[0::3], verts[1::3], verts[2::3]
-                caixas[str(id_step)] = [float(min(xs)), float(min(ys)), float(min(zs)), float(max(xs)), float(max(ys)), float(max(zs))]
-            except Exception:
-                falhas.append(id_step)
-
+        caixas = {}
+        include_elems = [f.by_id(id_step) for id_step, _ in elementos]
+        threads = pedido.get("threads", 1)
+        it = ifcopenshell.geom.iterator(s, f, threads, include=include_elems)
+        if it.initialize():
+            while True:
+                try:
+                    shape = it.get()
+                    if shape:
+                        verts = shape.geometry.verts
+                        if verts:
+                            xs, ys, zs = verts[0::3], verts[1::3], verts[2::3]
+                            caixas[str(shape.id)] = [
+                                float(min(xs)), float(min(ys)), float(min(zs)),
+                                float(max(xs)), float(max(ys)), float(max(zs)),
+                            ]
+                except Exception:
+                    pass
+                try:
+                    if not it.next():
+                        break
+                except Exception:
+                    break
+        falhas = [id_step for id_step, _ in elementos if str(id_step) not in caixas]
         return {"ok": True, "caixas_envolventes": caixas, "falhas_geometria": falhas}
     except Exception as e:
         return {"ok": False, "erro": {"tipo": type(e).__name__, "mensagem": str(e), "rastro": traceback.format_exc()}}

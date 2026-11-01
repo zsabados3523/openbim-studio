@@ -24,11 +24,9 @@ import pytest
 import s06_t07e_aux as T
 from test_s06_t07e_auxiliar_oraculo import _loc, _pedido, _sobras, _x, tmp_aux  # noqa: F401
 
-AINDA_NAO_CORR = pytest.mark.xfail(strict=True, reason="T07e1: correções do LOTE_OPUS_86 ainda não feitas")
 RAIZ = Path(__file__).resolve().parent.parent
 
 
-@AINDA_NAO_CORR
 def test_bug1_gancho_segv_fora_do_try_e_sem_ctypes():
     texto = (RAIZ / "geometria" / "obim_geometria" / "processo.py").read_text(encoding="utf-8")
     arvore = ast.parse(texto)
@@ -39,7 +37,6 @@ def test_bug1_gancho_segv_fora_do_try_e_sem_ctypes():
     assert "OBIM_TESTE_AUX_SEGV" in texto and "string_at" not in texto, "queda de verdade, não ctypes.string_at (OSError no Windows)"
 
 
-@AINDA_NAO_CORR
 def test_bug2_filho_e_daemon(tmp_aux, monkeypatch):
     X = _x()
     f, _ = T.modelo()
@@ -57,7 +54,6 @@ def test_bug2_filho_e_daemon(tmp_aux, monkeypatch):
     assert vistos == [True]
 
 
-@AINDA_NAO_CORR
 def test_bug3_preparar_nao_deixa_pasta_se_a_gravacao_falha(tmp_aux):
     X = _x()
 
@@ -69,7 +65,6 @@ def test_bug3_preparar_nao_deixa_pasta_se_a_gravacao_falha(tmp_aux):
     assert _sobras(tmp_aux) == []
 
 
-@AINDA_NAO_CORR
 def test_bug4_caixas_usa_iterator_com_as_threads_do_pedido(tmp_aux, monkeypatch):
     import ifcopenshell.geom as G
     X, L = _x(), _loc()
@@ -82,7 +77,6 @@ def test_bug4_caixas_usa_iterator_com_as_threads_do_pedido(tmp_aux, monkeypatch)
     assert set(r["caixas_envolventes"]) == {str(d["P"].id()), str(d["M"].id())}
 
 
-@AINDA_NAO_CORR
 def test_bug5_preparar_apaga_so_as_pastas_velhas(tmp_aux):
     X = _x()
     f, _ = T.modelo()
@@ -96,7 +90,6 @@ def test_bug5_preparar_apaga_so_as_pastas_velhas(tmp_aux):
         assert not velha.exists() and nova.exists() and outra.exists()
 
 
-@AINDA_NAO_CORR
 def test_bug6_fechar_que_desiste_avisa_no_log(tmp_aux, monkeypatch, caplog):
     X = _x()
     f, _ = T.modelo()
@@ -112,7 +105,6 @@ def test_bug6_fechar_que_desiste_avisa_no_log(tmp_aux, monkeypatch, caplog):
     shutil.rmtree(p.pasta, ignore_errors=True)
 
 
-@AINDA_NAO_CORR
 @pytest.mark.parametrize("alvo", ["entrada_lixo", "entrada_dados_lista"])
 def test_bug7_resposta_que_nao_e_protocolo_vira_protocolo_invalido(tmp_aux, monkeypatch, alvo):
     X = _x()
@@ -125,7 +117,6 @@ def test_bug7_resposta_que_nao_e_protocolo_vira_protocolo_invalido(tmp_aux, monk
     assert multiprocessing.active_children() == [] and _sobras(tmp_aux) == []
 
 
-@AINDA_NAO_CORR
 def test_bug8_saida_zero_sem_resposta_nao_inventa_codigo(tmp_aux, monkeypatch):
     X = _x()
     import s06_t07e_corr_aux as C
@@ -138,7 +129,6 @@ def test_bug8_saida_zero_sem_resposta_nao_inventa_codigo(tmp_aux, monkeypatch):
         assert e.value.codigo_saida == 0
 
 
-@AINDA_NAO_CORR
 def test_bug10_start_que_falha_fecha_as_pontas(tmp_aux, monkeypatch):
     X = _x()
     f, _ = T.modelo()

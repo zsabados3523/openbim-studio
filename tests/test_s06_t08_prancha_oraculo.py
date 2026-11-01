@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Oraculo do F0-S06-T08, prancha minima (1 viewport + carimbo fixo, SVG). Fontes: cartao T08; ADR-003 §3.2, §4 e §5 (viewport no `.obim` guarda
 `prancha`, `vista_guid`, `x`, `y`, `escala`); P5 do README da S06 (carimbo simples: nome do projeto, titulo, escala, data, folha; sem NBR 13142).
-So o autor do oraculo tira os `@AINDA_NAO` (xfail estrito). O PDF, o reabrir e o IFC ficam em `test_s06_t08_pdf_persist_oraculo.py`.
+Marcadores @AINDA_NAO retirados pelo autor apos a implementacao. O PDF, o reabrir e o IFC ficam em `test_s06_t08_pdf_persist_oraculo.py`.
 CONTRATO (nomes PROPOSTOS NESTE TESTE; o ADR e o cartao nao nomeiam a API). `openbim_app/prancha.py`, so stdlib no import (sem Qt, sem ifcopenshell;
 o Qt entra DENTRO de `exportar_pdf`, depois que a funcao cria `QGuiApplication` se nao houver uma):
 - `FORMATOS = {"A4": (297.0, 210.0), "A3": (420.0, 297.0)}` (largura, altura em mm, paisagem); `MARGEM_MM = 10.0`; `CARIMBO_ALTURA_MM = 25.0`.
@@ -36,9 +36,6 @@ import pytest
 import s06_t08_aux as A
 from s06_t08_aux import DADOS, GUID, IDENT, NS, Lado, folha_mm, medir, montar, planta, saida, textos
 
-AINDA_NAO = pytest.mark.xfail(strict=True, raises=(ImportError, AttributeError, AssertionError, TypeError, NameError),
-                              reason="@AINDA_NAO: openbim_app/prancha.py ainda nao existe (F0-S06-T08)")
-pytestmark = AINDA_NAO
 
 
 def P():

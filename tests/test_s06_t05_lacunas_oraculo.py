@@ -26,9 +26,8 @@ def _man_texto(valor):
     return json.dumps(MAN)[:-1] + ', "x_outro": ' + valor + "}"
 
 
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="T05c-2: 1e999 e -1e400 viram inf em json.loads sem passar por parse_constant")
 VALORES = ["NaN", "Infinity", "-Infinity"]
-ESTOURO = [pytest.param(v, marks=AINDA_NAO) for v in ("1e999", "-1e400")]  # número que estoura o double: vira inf na leitura
+ESTOURO = ["1e999", "-1e400"]  # número que estoura o double: vira inf na leitura
 
 
 # ---------- bug 1 ----------

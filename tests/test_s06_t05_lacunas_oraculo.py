@@ -26,11 +26,13 @@ def _man_texto(valor):
     return json.dumps(MAN)[:-1] + ', "x_outro": ' + valor + "}"
 
 
+AINDA_NAO = pytest.mark.xfail(strict=True, reason="T05c-2: 1e999 e -1e400 viram inf em json.loads sem passar por parse_constant")
 VALORES = ["NaN", "Infinity", "-Infinity"]
+ESTOURO = [pytest.param(v, marks=AINDA_NAO) for v in ("1e999", "-1e400")]  # número que estoura o double: vira inf na leitura
 
 
 # ---------- bug 1 ----------
-@pytest.mark.parametrize("valor", VALORES)
+@pytest.mark.parametrize("valor", VALORES + ESTOURO)
 def test_01_ler_recusa_nao_finito_no_manifesto(tmp_path, valor):
     m, p = ob(), tmp_path / "f.obim"
     _cru(p, _man_texto(valor))
@@ -38,7 +40,7 @@ def test_01_ler_recusa_nao_finito_no_manifesto(tmp_path, valor):
         m.ler(p)
 
 
-@pytest.mark.parametrize("valor", VALORES)
+@pytest.mark.parametrize("valor", VALORES + ["1e999", "-1e400"])
 def test_02_ler_recusa_nao_finito_em_entrada(tmp_path, valor):
     m, p = ob(), tmp_path / "f.obim"
     _cru(p, json.dumps(MAN), {"notas/n1.json": '{"v": ' + valor + "}"})
@@ -46,7 +48,7 @@ def test_02_ler_recusa_nao_finito_em_entrada(tmp_path, valor):
         m.ler(p)
 
 
-@pytest.mark.parametrize("valor", VALORES)
+@pytest.mark.parametrize("valor", VALORES + ESTOURO)
 def test_03_gravar_par_sobrescreve_obim_com_nao_finito_e_guarda_o_antigo(proj, base_ifc, valor):  # noqa: F811
     m = ob()
     _fabrica(proj)

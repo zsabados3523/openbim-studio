@@ -3,6 +3,7 @@
 Sem Qt, sem ifcopenshell: só stdlib e `lateral`. A chave mora no campo do JSON; o nome do arquivo é o id do `Lateral`. Caminho perigoso no ZIP
 é recusado (zip-slip). Versão 0.1.0 (provisório da S05) migra em memória; versão fora de 0.1/0.2 abre só para leitura."""
 import json
+import math
 import re
 import zipfile
 from pathlib import Path
@@ -46,6 +47,13 @@ def _bytes(obj):
 
 def _constante_invalida(constante):
     raise ObimInvalido(f"constante numérica não permitida no JSON: {constante}")
+
+
+def _float_valido(s):
+    v = float(s)
+    if not math.isfinite(v):
+        raise ObimInvalido(f"constante numérica não permitida no JSON: {s}")
+    return v
 
 
 def _numero(v):
@@ -122,7 +130,11 @@ def ler(caminho):
             if "manifest.json" not in nomes:
                 raise ObimInvalido("ZIP do lateral sem manifest.json")
             try:
-                manifesto = json.loads(z.read("manifest.json").decode("utf-8"), parse_constant=_constante_invalida)
+                manifesto = json.loads(
+                    z.read("manifest.json").decode("utf-8"),
+                    parse_constant=_constante_invalida,
+                    parse_float=_float_valido,
+                )
             except (UnicodeDecodeError, json.JSONDecodeError) as e:
                 raise ObimInvalido(f"manifest.json ilegível: {e}") from e
             if not isinstance(manifesto, dict) or manifesto.get("formato") != FORMATO:
@@ -141,7 +153,11 @@ def ler(caminho):
                 achado = _ENTRADA.fullmatch(nome)
                 if achado is not None:
                     try:
-                        objeto = json.loads(z.read(nome).decode("utf-8"), parse_constant=_constante_invalida)
+                        objeto = json.loads(
+                            z.read(nome).decode("utf-8"),
+                            parse_constant=_constante_invalida,
+                            parse_float=_float_valido,
+                        )
                     except (UnicodeDecodeError, json.JSONDecodeError) as e:
                         raise ObimInvalido(f"entrada {nome!r} ilegível: {e}") from e
                     objetos.setdefault(achado.group(1), {})[achado.group(2)] = objeto

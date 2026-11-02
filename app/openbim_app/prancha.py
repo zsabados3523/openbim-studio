@@ -15,7 +15,9 @@ FORMATOS = {
     "A1": (841.0, 594.0), "A0": (1189.0, 841.0),
 }
 MARGEM_MM, CARIMBO_ALTURA_MM = 10.0, 25.0
+LINHA_CORTE_MM, LINHA_PROJECAO_MM = 0.35, 0.18
 _QT_APP = None
+_FORMAS = {"path", "line", "polyline", "polygon", "circle", "ellipse", "rect"}
 _IGNORADOS = {"defs", "marker", "clipPath", "mask", "pattern", "symbol", "style", "title", "desc", "metadata", "text"}
 _CMD_ARITY = {"Z": 0, "H": 1, "V": 1, "M": 2, "L": 2, "T": 2, "S": 4, "Q": 4, "C": 6, "A": 7}
 _CMD_CHARS = set("MmLlHhVvCcSsQqTtAaZz")
@@ -646,6 +648,81 @@ def normalizar_planta(svg_texto, margem_m=0.5):
     return svg_str[:idx] + f' viewBox="{minx:.10g} {miny:.10g} {w:.10g} {h:.10g}"' + svg_str[idx:]
 
 
+def _calcular_corte_node(elem, estado_pai):
+    cls_str = elem.get("class", "")
+    if not cls_str:
+        return estado_pai
+    classes = cls_str.split()
+    if "projection" in classes:
+        return False
+    if "cut" in classes or any(c.startswith("Ifc") and c not in ("IfcBuildingStorey", "IfcBuilding", "IfcSite", "IfcProject") for c in classes):
+        return True
+    return estado_pai
+
+
+def _ajustar_style_text(text, largura_corte, largura_proj):
+    if not text or "{" not in text:
+        return text
+    if len(text) > 2_000_000:
+        raise SvgInvalido("elemento style excede tamanho maximo")
+    out = []
+    idx = 0
+    n = len(text)
+    while idx < n:
+        open_brace = text.find("{", idx)
+        if open_brace == -1:
+            out.append(text[idx:])
+            break
+        close_brace = text.find("}", open_brace + 1)
+        if close_brace == -1:
+            out.append(text[idx:])
+            break
+        sel = text[idx:open_brace]
+        corpo = text[open_brace + 1:close_brace]
+        last_open = sel.rfind("{")
+        if last_open != -1:
+            out.append(sel[:last_open])
+            sel = sel[last_open:]
+        toks = re.findall(r"[a-zA-Z0-9_-]+", sel)
+        is_corte = False if "projection" in toks else ("cut" in toks or any(t.startswith("Ifc") and t not in ("IfcBuildingStorey", "IfcBuilding", "IfcSite", "IfcProject") for t in toks))
+        larg = largura_corte if is_corte else largura_proj
+        novo_corpo = re.sub(r'stroke-width\s*:\s*[^;]+', f'stroke-width:{larg:.6g}', corpo)
+        out.append(f"{sel}{{{novo_corpo}}}")
+        idx = close_brace + 1
+    return "".join(out)
+
+
+def _ajustar_espessuras(planta_root, escala):
+    largura_corte = LINHA_CORTE_MM * escala / 1000.0
+    largura_proj = LINHA_PROJECAO_MM * escala / 1000.0
+    pat = r"stroke-width\s*:[^;]+"
+
+    stack = [(iter([planta_root]), False)]
+    while stack:
+        it, estado_pai = stack[-1]
+        try:
+            no = next(it)
+        except StopIteration:
+            stack.pop()
+            continue
+        tag = no.tag.split("}")[-1] if "}" in no.tag else no.tag
+        estado_atual = _calcular_corte_node(no, estado_pai)
+        if tag == "style" and no.text:
+            no.text = _ajustar_style_text(no.text, largura_corte, largura_proj)
+        if tag in _IGNORADOS:
+            continue
+        if tag in _FORMAS:
+            largura = largura_corte if estado_atual else largura_proj
+            if "stroke-width" in no.attrib:
+                no.set("stroke-width", f"{largura:.6g}")
+            st = no.get("style", "")
+            if st:
+                no.set("style", re.sub(pat, f"stroke-width:{largura:.6g}", st) if re.search(pat, st) else st.rstrip(";") + f";stroke-width:{largura:.6g}")
+            else:
+                no.set("style", f"stroke-width:{largura:.6g}")
+        stack.append((iter(no), estado_atual))
+
+
 def _validar_prancha_e_viewport(prancha, viewport, vista_guid):
     if not isinstance(prancha, dict) or not isinstance(viewport, dict):
         raise PranchaInvalida("prancha ou viewport invalido")
@@ -777,6 +854,8 @@ def montar_svg(lateral, identification, vista_guid, planta_svg):
     tol = 1e-9
     if x < 10.0 - tol or y < 10.0 - tol or (x + vw) > (W - 10.0) + tol or (y + vh) > (H - 35.0) + tol:
         raise ViewportForaDaFolha("viewport fora da area util da prancha")
+
+    _ajustar_espessuras(planta_root, escala)
 
     root = ET.Element("{http://www.w3.org/2000/svg}svg", {
         "width": f"{W:g}mm", "height": f"{H:g}mm", "viewBox": f"0 0 {W:g} {H:g}"

@@ -6,6 +6,8 @@ Vista = `IfcAnnotation` (ObjectType "DRAWING") com volume CSG, pset `EPset_Drawi
 DRAWING. Escrita só dentro de `Historico.transacao` (o `transacao` recusa fora); leitura aceita o arquivo cru.
 IFC2X3 reaproveita o primeiro `IfcOwnerHistory` e usa `DocumentId`/`ItemReference`; IFC4/4X3 usam
 `Identification`/`Description`. Funções não decidem esquema por conta própria: leem o do arquivo."""
+import math
+
 import ifcopenshell
 import ifcopenshell.api
 import ifcopenshell.guid
@@ -102,6 +104,15 @@ def _caminho(nome):
     return "/".join(partes or ["vista"]) + ".svg"
 
 
+def _caminho_prancha(numero):
+    partes = []
+    for p in str(numero).replace("\\", "/").replace(":", "").split("/"):
+        p = p.strip()
+        if p and p not in (".", ".."):
+            partes.append(p)
+    return "/".join(partes or ["prancha"])
+
+
 def _location_livre(ifc, nome):
     usados = {r.Location for r in ifc.by_type("IfcDocumentReference") if r.Location}
     base = _caminho(nome)
@@ -144,13 +155,21 @@ def _anotacao(ifc, gid):
 
 
 def criar_vista(ifc, nome, tipo, escala="1:100", origem=(0, 0, 0), tamanho=(10.0, 10.0, 3.0)):
+    if not isinstance(nome, str) or not nome.strip():
+        raise ValueError(f"nome de vista inválido: {nome!r}")
     if tipo not in _TIPO:
         raise ValueError(f"tipo de vista inválido: {tipo!r}")
+    try:
+        coords = tuple(float(x) for x in origem)
+    except (TypeError, ValueError):
+        raise ValueError(f"origem inválida: {origem!r}") from None
+    if len(coords) != 3 or not all(math.isfinite(x) for x in coords):
+        raise ValueError(f"origem inválida: {origem!r}")
     try:
         medidas = tuple(float(x) for x in tamanho)
     except (TypeError, ValueError):
         raise ValueError(f"tamanho inválido: {tamanho!r}") from None
-    if len(medidas) != 3 or any(x <= 0 for x in medidas):
+    if len(medidas) != 3 or any(x <= 0 for x in medidas) or not all(math.isfinite(x) for x in medidas):
         raise ValueError(f"tamanho inválido: {tamanho!r}")
     escala = str(escala).replace("/", ":")
     location, kw = _location_livre(ifc, nome), _kw(ifc)
@@ -159,7 +178,7 @@ def criar_vista(ifc, nome, tipo, escala="1:100", origem=(0, 0, 0), tamanho=(10.0
     if ifc.schema.startswith("IFC4X3"):
         a.PredefinedType = "USERDEFINED"
     eixo = ifc.create_entity("IfcAxis2Placement3D", Location=ifc.create_entity(
-        "IfcCartesianPoint", Coordinates=tuple(float(x) for x in origem)))
+        "IfcCartesianPoint", Coordinates=coords))
     a.ObjectPlacement = ifc.create_entity("IfcLocalPlacement", RelativePlacement=eixo)
     bloco = ifc.create_entity("IfcBlock", Position=ifc.create_entity(
         "IfcAxis2Placement3D", Location=ifc.create_entity("IfcCartesianPoint", Coordinates=(0.0, 0.0, 0.0))),
@@ -256,13 +275,16 @@ def _nova_ref(ifc, d, etiqueta, location, ordem=None):
 def criar_prancha(ifc, numero, titulo):
     if not isinstance(numero, str) or not numero or numero != numero.strip():
         raise IdentificacaoInvalida(numero)
+    if not isinstance(titulo, str) or not titulo.strip():
+        raise ValueError(f"título de prancha inválido: {titulo!r}")
     if any(_numero(ifc, d) == numero for d in _pranchas(ifc)):
         raise IdentificacaoRepetida(numero)
     kw = _kw(ifc)
     doc = ifc.create_entity("IfcDocumentInformation", Name=titulo, Scope="SHEET",
                             **({"DocumentId": numero} if _e2x3(ifc) else {"Identification": numero}))
-    refs = [_nova_ref(ifc, doc, "LAYOUT", f"pranchas/{numero}/layout.svg"),
-            _nova_ref(ifc, doc, "TITLEBLOCK", f"pranchas/{numero}/titleblock.svg")]
+    cam = _caminho_prancha(numero)
+    refs = [_nova_ref(ifc, doc, "LAYOUT", f"pranchas/{cam}/layout.svg"),
+            _nova_ref(ifc, doc, "TITLEBLOCK", f"pranchas/{cam}/titleblock.svg")]
     if _e2x3(ifc):
         doc.DocumentReferences = refs
     return numero
@@ -286,10 +308,27 @@ def ler_prancha(ifc, numero):
     return _prancha_dict(ifc, _uma_prancha(ifc, numero), False, _mapa_locais(ifc))
 
 
+def _desassociar_doc(ifc, item):
+    for inv in list(ifc.get_inverse(item)):
+        if inv.is_a("IfcDocumentInformationRelationship"):
+            if getattr(inv, "RelatingDocument", None) == item:
+                ifc.remove(inv)
+            else:
+                resto = tuple(x for x in inv.RelatedDocuments if x != item)
+                if resto:
+                    inv.RelatedDocuments = resto
+                else:
+                    ifc.remove(inv)
+        elif inv.is_a("IfcRelAssociatesDocument"):
+            ifc.remove(inv)
+
+
 def apagar_prancha(ifc, numero):
     d = _uma_prancha(ifc, numero)
-    for r in _refs(ifc, d):
+    for r in list(_refs(ifc, d)):
+        _desassociar_doc(ifc, r)
         ifc.remove(r)
+    _desassociar_doc(ifc, d)
     ifc.remove(d)
 
 
@@ -301,17 +340,17 @@ def _tirar(ifc, rel, obj):  # relação compartilhada perde só o objeto; vazia,
         ifc.remove(rel)
 
 
-def _purgar_grupo(ifc, rel):  # grupo da vista + relação com o pai; pai vazio sai junto
-    grupo = rel.RelatingGroup
-    ifc.remove(rel)
-    for pr in [r for r in ifc.get_inverse(grupo) if r.is_a("IfcRelAssignsToGroup")]:
+def _purgar_grupo(ifc, grupo):  # grupo da vista + relação com o pai; pai vazio sai junto
+    for r in [r for r in ifc.get_inverse(grupo) if r.is_a("IfcRelAssignsToGroup") and getattr(r, "RelatingGroup", None) == grupo]:
+        ifc.remove(r)
+    for pr in [r for r in ifc.get_inverse(grupo) if r.is_a("IfcRelAssignsToGroup") and getattr(r, "RelatingGroup", None) != grupo]:
         resto = tuple(o for o in pr.RelatedObjects if o != grupo)
         if resto:
             pr.RelatedObjects = resto
             continue
         pai = pr.RelatingGroup
         ifc.remove(pr)
-        if pai is not None and not any(r.is_a("IfcRelAssignsToGroup") for r in ifc.get_inverse(pai)):
+        if pai is not None and not any(r.is_a("IfcRelAssignsToGroup") and getattr(r, "RelatingGroup", None) == pai for r in ifc.get_inverse(pai)):
             ifc.remove(pai)
     ifc.remove(grupo)
 
@@ -321,14 +360,26 @@ def apagar_vista(ifc, gid):
     location = _vista_dict(ifc, a)["location"]
     if location:
         for d in _pranchas(ifc):
-            for r in _refs(ifc, d):
+            for r in list(_refs(ifc, d)):
                 if _etiqueta(r) == "DRAWING" and r.Location == location:
+                    if _e2x3(ifc) and d.DocumentReferences:
+                        resto = tuple(x for x in d.DocumentReferences if x != r)
+                        d.DocumentReferences = resto if resto else None
+                    _desassociar_doc(ifc, r)
                     ifc.remove(r)
     for rel in list(ifc.get_inverse(a)):
+        if rel not in ifc:
+            continue
         if rel.is_a("IfcRelAssignsToGroup"):
-            grupo = rel.RelatingGroup
-            nossa = grupo.ObjectType == "DRAWING" and grupo.Name == a.Name and len(rel.RelatedObjects) == 1
-            _purgar_grupo(ifc, rel) if nossa else _tirar(ifc, rel, a)
+            grupo = getattr(rel, "RelatingGroup", None)
+            if grupo is None or grupo not in ifc:
+                continue
+            rels_membros = [r for r in ifc.get_inverse(grupo) if r.is_a("IfcRelAssignsToGroup") and getattr(r, "RelatingGroup", None) == grupo]
+            membros = [o for r in rels_membros for o in (r.RelatedObjects or ())]
+            if getattr(grupo, "ObjectType", None) == "DRAWING" and membros == [a]:
+                _purgar_grupo(ifc, grupo)
+            else:
+                _tirar(ifc, rel, a)
         elif rel.is_a("IfcRelDefinesByProperties"):
             if len(rel.RelatedObjects) > 1:
                 _tirar(ifc, rel, a)
@@ -345,7 +396,12 @@ def apagar_vista(ifc, gid):
                 ifc.remove(rel)
                 if ref.is_a("IfcDocumentReference"):
                     doc = _doc_da_ref(ifc, ref)
+                    if doc is not None and _e2x3(ifc) and doc.DocumentReferences:
+                        resto = tuple(r for r in doc.DocumentReferences if r != ref)
+                        doc.DocumentReferences = resto if resto else None
+                    _desassociar_doc(ifc, ref)
                     ifc.remove(ref)
-                    if doc is not None:
+                    if doc is not None and not _refs(ifc, doc):
+                        _desassociar_doc(ifc, doc)
                         ifc.remove(doc)
     UE.remove_deep2(ifc, a)

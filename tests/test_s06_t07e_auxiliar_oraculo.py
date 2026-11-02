@@ -34,7 +34,6 @@ import pytest
 import s06_t07e_aux as T
 
 APP = Path(__file__).resolve().parent.parent / "app"
-AINDA_NAO_E1 = pytest.mark.xfail(strict=True, raises=ImportError, reason="T07e1: auxiliar e obim_geometria ainda não existem")
 
 
 def _x():
@@ -69,7 +68,6 @@ def _limpo(pasta, f, antes):  # processo do teste vivo e intacto, nenhum filho v
     assert _sobras(pasta) == []
 
 
-@AINDA_NAO_E1
 @pytest.mark.parametrize("esq,off,base,k", T.MODELOS)
 def test_caso1_filho_real_igual_ao_local_e_numeros_certos(tmp_aux, esq, off, base, k):
     X, L = _x(), _loc()
@@ -84,7 +82,6 @@ def test_caso1_filho_real_igual_ao_local_e_numeros_certos(tmp_aux, esq, off, bas
     assert cx[str(d["M"].id())] == pytest.approx([off[0] + 1.0, off[1] + 2.0, base, off[0] + 1.5, off[1] + 2.5, base + 1.5], abs=1e-6)
 
 
-@AINDA_NAO_E1
 @pytest.mark.parametrize("real", [True, False])
 def test_caso2_fotografia_do_momento_do_preparar(tmp_aux, real):
     X, L = _x(), _loc()
@@ -96,7 +93,6 @@ def test_caso2_fotografia_do_momento_do_preparar(tmp_aux, real):
     assert str(idp) in r["caixas_envolventes"]
 
 
-@AINDA_NAO_E1
 @pytest.mark.parametrize("gancho,valor", [("OBIM_TESTE_AUX_SAIR", "3"), ("OBIM_TESTE_AUX_SEGV", "1")])
 def test_caso3_queda_do_filho_nao_derruba_a_janela(tmp_aux, monkeypatch, gancho, valor):
     X = _x()
@@ -118,13 +114,11 @@ def test_caso3_queda_do_filho_nao_derruba_a_janela(tmp_aux, monkeypatch, gancho,
     _limpo(tmp_aux, f, antes)
 
 
-@AINDA_NAO_E1
 def test_limite_padrao_e_180_s():
     X = _x()
     assert X.LIMITE_PADRAO_S == 180 and inspect.signature(X.executar).parameters["limite_s"].default == 180
 
 
-@AINDA_NAO_E1
 def test_caso4_limite_de_tempo_total_mata_o_filho(tmp_aux, monkeypatch):
     X = _x()
     f, _ = T.modelo()
@@ -138,7 +132,6 @@ def test_caso4_limite_de_tempo_total_mata_o_filho(tmp_aux, monkeypatch):
     _limpo(tmp_aux, f, antes)
 
 
-@AINDA_NAO_E1
 def test_caso5_cancelar_no_meio(tmp_aux, monkeypatch):
     X = _x()
     f, _ = T.modelo()
@@ -154,7 +147,6 @@ def test_caso5_cancelar_no_meio(tmp_aux, monkeypatch):
     _limpo(tmp_aux, f, antes)
 
 
-@AINDA_NAO_E1
 def test_caso6_erro_no_filho_chega_tipado(tmp_aux, monkeypatch):
     X = _x()
     f, _ = T.modelo()
@@ -167,7 +159,6 @@ def test_caso6_erro_no_filho_chega_tipado(tmp_aux, monkeypatch):
     assert str(err) == f"RuntimeError: {err.mensagem}"
 
 
-@AINDA_NAO_E1
 def test_caso8_divergencia_de_id_e_protocolo(tmp_aux):
     X, L = _x(), _loc()
     f, d = T.modelo()
@@ -183,12 +174,12 @@ def test_caso8_divergencia_de_id_e_protocolo(tmp_aux):
                 X.executar(p, executor=ex)
 
 
-@AINDA_NAO_E1
 def test_caso11_json_puro_threads_e_um_filho_por_vez(tmp_aux, monkeypatch):
     X, L = _x(), _loc()
     f, _ = T.modelo()
     with X.preparar(f, _pedido(f)) as p:
         assert json.loads(json.dumps(p.pedido)) == p.pedido and p.pedido["protocolo"] == 1
+        assert p.pasta.parent == tmp_aux and p.pasta.name.startswith("obim-desenho-")  # [P] sob tempfile.gettempdir()
         assert p.pedido["threads"] == min(8, os.cpu_count() or 1) and Path(p.pedido["arquivo"]).is_absolute()
         r = X.executar(p, executor=L.executar)
         assert json.loads(json.dumps(r)) == r
@@ -205,7 +196,6 @@ def test_caso11_json_puro_threads_e_um_filho_por_vez(tmp_aux, monkeypatch):
     assert ok == [True, True] and max(picos) <= 1 and time.monotonic() - t0 >= 3.5
 
 
-@AINDA_NAO_E1
 def test_caso11_fila_atende_cancelar_e_a_espera_nao_conta_no_limite(tmp_aux, monkeypatch):
     X = _x()
     f, _ = T.modelo()
@@ -235,7 +225,6 @@ def test_caso11_fila_atende_cancelar_e_a_espera_nao_conta_no_limite(tmp_aux, mon
     assert saida["esperou"] == "ok" and saida["um"] == "ok"  # ~4 s na fila com limite_s=3: a espera não conta no limite
 
 
-@AINDA_NAO_E1
 def test_caso9_janela_nao_carrega_geometria_com_filho_real(tmp_path):
     _x()
     f, _ = T.modelo()

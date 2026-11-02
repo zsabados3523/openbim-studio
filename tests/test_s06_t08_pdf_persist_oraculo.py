@@ -19,11 +19,10 @@ from obrigatorio import pular
 from s05_conteudo_aux import _limpa, base_ifc, exigir  # noqa: F401  (fixtures)
 from s06_t08_aux import DADOS, GUID, IDENT, Lado, medir, montar
 
-pytestmark = pytest.mark.xfail(strict=True, raises=(ImportError, AttributeError, AssertionError, TypeError, NameError, KeyError),
-                               reason="@AINDA_NAO: openbim_app/prancha.py ainda nao existe (F0-S06-T08)")
 MAN = {"formato": "obim-lateral", "versao_formato": "0.2.0", "LadoId": "l", "Revisao": 1, "ifc_nome": "Casa.ifc", "ifc_sha256": "0" * 64, "ifc_tamanho": 1,
        "ifc_projeto_globalid": "p", "programa_versao": "0.1.0", "data": "2026-11-01T00:00:00Z"}
 UUID4 = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")
+
 
 
 def P():

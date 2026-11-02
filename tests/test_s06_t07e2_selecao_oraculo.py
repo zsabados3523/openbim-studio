@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Oráculo F0-S06-T07e2: `selecionar` em CORTE pelo auxiliar (op `caixas`). Especificação: `cards/F0-S06/F0-S06-T07e-especificacao.md` (§2, §4, §5 casos 7 e 10).
-Não editar este arquivo na implementação; quem tira os `@AINDA_NAO_E2` (xfail estrito) é o autor do oráculo, em commit próprio, depois da e2.
+Não editar este arquivo na implementação; marcadores `@AINDA_NAO_E2` ja removidos.
 CONTRATO: `selecionar(ifc, gid, *, categorias_ocultas=(), pavimento=None, executor=None, limite_s=LIMITE_PADRAO_S, cancelar=None)`. CORTE: o pai monta os candidatos (todo IfcElement
 com Representation e de classe não oculta) e a faixa, faz `auxiliar.preparar(ifc, {"op": "caixas", "elementos": [[id, GlobalId], ...]})` + `auxiliar.executar(p, limite_s=, cancelar=,
 executor=)` (1 pedido, `fechar()` no fim) e filtra `caixas_envolventes` pela faixa em intervalo FECHADO; `falhas_geometria` = as do auxiliar (ordenadas). PLANTA nunca chama o executor.
@@ -13,8 +13,6 @@ import pytest
 import s06_t07e_aux as T
 from test_s06_t07e_auxiliar_oraculo import _loc, _x, tmp_aux  # noqa: F401
 
-AINDA_NAO_E2 = pytest.mark.xfail(strict=True, raises=TypeError, reason="T07e2: selecionar ainda não aceita `executor` (CORTE ainda usa ifcopenshell.geom no pai)")
-AINDA_NAO_E2_TEXTO = pytest.mark.xfail(strict=True, raises=AssertionError, reason="T07e2: selecao.py ainda tem geometria no pai")
 SELECAO = Path(__file__).resolve().parent.parent / "app" / "openbim_app" / "desenho" / "selecao.py"
 # (esq, off, base, k) -> (ids, falhas, faixa) do caminho antigo
 ANTIGO = {0: ((32, 45, 71), (58,), ((324550.0, 7405472.0, -0.5), (324560.0, 7405476.0, 3.5))),
@@ -37,7 +35,6 @@ def _fake(caixas, falhas=(), visto=None):
     return executor
 
 
-@AINDA_NAO_E2
 @pytest.mark.parametrize("i", [0, 1, 2])
 def test_a_corte_pede_caixas_e_da_o_mesmo_resultado_do_caminho_antigo(tmp_aux, i):
     S, L = _s(), _loc()
@@ -56,7 +53,6 @@ def test_a_corte_pede_caixas_e_da_o_mesmo_resultado_do_caminho_antigo(tmp_aux, i
     assert all(g == f.by_id(i_).GlobalId for i_, g in pedidos[0]["elementos"]) and not list(tmp_aux.glob("obim-desenho-*"))
 
 
-@AINDA_NAO_E2
 def test_a_categoria_oculta_nao_vai_ao_auxiliar_e_conta(tmp_aux):
     S, L = _s(), _loc()
     f, d = T.modelo()
@@ -65,7 +61,6 @@ def test_a_categoria_oculta_nao_vai_ao_auxiliar_e_conta(tmp_aux):
     assert [i for i, _ in pedidos[0]["elementos"]] == [d["M"].id()] and s.ids == (d["M"].id(),) and s.ocultos_por_classe == {"IfcWall": 3} and s.falhas_geometria == ()
 
 
-@AINDA_NAO_E2
 def test_b_planta_nunca_pede_geometria(tmp_aux):
     S = _s()
     f, d = T.modelo()
@@ -76,14 +71,12 @@ def test_b_planta_nunca_pede_geometria(tmp_aux):
     assert s.tipo == "PLANTA" and s.ids == tuple(sorted(d[n].id() for n in ("P", "M", "falha"))) and s.falhas_geometria == () and s.faixa is None
 
 
-@AINDA_NAO_E2_TEXTO
 def test_c_selecao_sem_geometria_no_pai():
     txt = SELECAO.read_text(encoding="utf-8")
     proibidos = [t for t in ("ifcopenshell.geom", ".iterator(", "os.cpu_count", "ifcopenshell_wrapper", "serializers") if t in txt]
     assert not proibidos and not re.search(r"^\s*(import os|from os\b)", txt, re.M), proibidos
 
 
-@AINDA_NAO_E2
 def test_d_faixa_fechada_nos_limites_exatos(tmp_aux):
     S = _s()
     f, d = T.modelo()
@@ -101,7 +94,6 @@ def test_d_faixa_fechada_nos_limites_exatos(tmp_aux):
             assert S.selecionar(f, d["vc"], executor=_fake({d["P"].id(): c})).ids == (), (eixo, lado)
 
 
-@AINDA_NAO_E2
 def test_e_falhas_do_auxiliar_entram_no_resultado(tmp_aux):
     S = _s()
     f, d = T.modelo()
@@ -110,7 +102,6 @@ def test_e_falhas_do_auxiliar_entram_no_resultado(tmp_aux):
     assert s.falhas_geometria == tuple(sorted(ordem)) and s.ids == (d["P"].id(),)  # falha não entra em ids; ordenada
 
 
-@AINDA_NAO_E2
 def test_f_erro_do_auxiliar_sobe_sem_mascara(tmp_aux):
     S, X = _s(), _x()
     f, d = T.modelo()
@@ -131,3 +122,20 @@ def test_f_erro_do_auxiliar_sobe_sem_mascara(tmp_aux):
     with pytest.raises(X.DesenhoCancelado):
         S.selecionar(f, d["vc"], executor=_fake({}), cancelar=ev)
     assert not list(tmp_aux.glob("obim-desenho-*"))  # a cópia some mesmo no erro
+
+
+def test_g_limite_s_cancelar_e_executor_seguem_ao_auxiliar(tmp_aux, monkeypatch):
+    S = _s()
+    from openbim_app.desenho import auxiliar
+    f, d = T.modelo()
+    vistos = {}
+    real = auxiliar.executar
+
+    def espiao(p, **k):
+        vistos.update(k)
+        return real(p, **k)
+    monkeypatch.setattr(auxiliar, "executar", espiao)
+    import threading
+    ev, ex = threading.Event(), _fake({})
+    S.selecionar(f, d["vc"], executor=ex, limite_s=7.5, cancelar=ev)
+    assert vistos == {"limite_s": 7.5, "cancelar": ev, "executor": ex}

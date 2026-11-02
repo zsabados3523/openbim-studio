@@ -16,7 +16,6 @@ import pytest
 import s06_t07e_aux as T
 from test_s06_t07e_auxiliar_oraculo import _loc, _x, tmp_aux  # noqa: F401  (a fixture `tmp_aux` vem junto)
 
-AINDA_NAO_E2 = pytest.mark.xfail(strict=True, raises=(ImportError, TypeError), reason="T07e2: selecao pelo auxiliar ainda não existe")
 AINDA_NAO_E3 = pytest.mark.xfail(strict=True, raises=ImportError, reason="T07e3: obim_geometria.desenho e planta pelo auxiliar ainda não existem")
 
 
@@ -32,7 +31,6 @@ def _s():
     return selecao
 
 
-@AINDA_NAO_E2
 @pytest.mark.parametrize("esq,off,base,k", T.MODELOS)
 def test_caso1_corte_pelo_filho_igual_ao_local(tmp_aux, esq, off, base, k):
     S, L = _s(), _loc()

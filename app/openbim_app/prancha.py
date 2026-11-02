@@ -16,9 +16,13 @@ FORMATOS = {
 }
 MARGEM_MM, CARIMBO_ALTURA_MM = 10.0, 25.0
 _QT_APP = None
+_CMD_ARITY = {"Z": 0, "H": 1, "V": 1, "M": 2, "L": 2, "T": 2, "S": 4, "Q": 4, "C": 6, "A": 7}
+_CMD_CHARS = set("MmLlHhVvCcSsQqTtAaZz")
+_PATH_TOKEN_RE = re.compile(r"([MmLlHhVvCcSsQqTtAaZz]|[-+]?(?:[0-9]*\.[0-9]+|[0-9]+\.?[0-9]*)(?:[eE][-+]?[0-9]+)?)")
 _NUM_ASCII_RE = re.compile(r"^[-+]?(?:[0-9]*\.[0-9]+|[0-9]+\.?[0-9]*)(?:[eE][-+]?[0-9]+)?$")
 _TETO_ELEMENTOS = 1_000_000
 _TETO_PROFUNDIDADE = 200
+_LIMITE_COMANDOS = 5_000_000
 
 
 def _resumo(valor, limite=80):
@@ -27,6 +31,13 @@ def _resumo(valor, limite=80):
         return repr(texto)
     texto = repr(valor)
     return texto if len(texto) <= limite else texto[:limite] + "..."
+
+
+def _resumo_trecho(texto, ini, fim=None):
+    fim_real = len(texto) if fim is None else fim
+    tamanho = min(fim_real - ini, 80)
+    trecho = texto[ini:ini + tamanho] + ("..." if fim_real - ini > tamanho else "")
+    return repr(trecho)
 
 
 class PranchaInvalida(ValueError): """Erro de validacao de prancha ou viewport."""
@@ -192,6 +203,263 @@ def _validar_xml(texto):
         raise
     except (xml.parsers.expat.ExpatError, UnicodeError) as e:
         raise SvgInvalido(f"xml da planta malformado: {e}") from e
+
+
+class _BBox:
+    __slots__ = ("min_x", "min_y", "max_x", "max_y", "has_pts")
+
+    def __init__(self):
+        self.min_x = float("inf")
+        self.min_y = float("inf")
+        self.max_x = float("-inf")
+        self.max_y = float("-inf")
+        self.has_pts = False
+
+    def add(self, x, y):
+        if not (math.isfinite(x) and math.isfinite(y)):
+            raise SvgInvalido("coordenada calculada nao finita")
+        if abs(x) > 1e12 or abs(y) > 1e12:
+            raise SvgInvalido("coordenada calculada excessiva")
+        if x < self.min_x: self.min_x = x
+        if x > self.max_x: self.max_x = x
+        if y < self.min_y: self.min_y = y
+        if y > self.max_y: self.max_y = y
+        self.has_pts = True
+
+
+def _eval_cubic(p0, p1, p2, p3, t):
+    omt = 1.0 - t
+    omt2 = omt * omt
+    t2 = t * t
+    return (omt2 * omt * p0[0] + 3.0 * omt2 * t * p1[0] + 3.0 * omt * t2 * p2[0] + t2 * t * p3[0],
+            omt2 * omt * p0[1] + 3.0 * omt2 * t * p1[1] + 3.0 * omt * t2 * p2[1] + t2 * t * p3[1])
+
+
+def _process_cubic(add_pt, p0, p1, p2, p3):
+    add_pt(p0[0], p0[1])
+    add_pt(p3[0], p3[1])
+    for c in (0, 1):
+        v0, v1, v2, v3 = p0[c], p1[c], p2[c], p3[c]
+        a = 3.0 * (-v0 + 3.0 * v1 - 3.0 * v2 + v3)
+        b = 6.0 * (v0 - 2.0 * v1 + v2)
+        k = 3.0 * (v1 - v0)
+        if abs(a) > 1e-12:
+            disc = b * b - 4.0 * a * k
+            if disc >= 0.0:
+                sq = math.sqrt(disc)
+                t1 = (-b - sq) / (2.0 * a)
+                t2 = (-b + sq) / (2.0 * a)
+                if 0.0 < t1 < 1.0:
+                    add_pt(*_eval_cubic(p0, p1, p2, p3, t1))
+                if 0.0 < t2 < 1.0:
+                    add_pt(*_eval_cubic(p0, p1, p2, p3, t2))
+        elif abs(b) > 1e-12:
+            t = -k / b
+            if 0.0 < t < 1.0:
+                add_pt(*_eval_cubic(p0, p1, p2, p3, t))
+
+
+def _eval_quad(p0, p1, p2, t):
+    omt = 1.0 - t
+    return (omt * omt * p0[0] + 2.0 * omt * t * p1[0] + t * t * p2[0],
+            omt * omt * p0[1] + 2.0 * omt * t * p1[1] + t * t * p2[1])
+
+
+def _process_quad(add_pt, p0, p1, p2):
+    add_pt(p0[0], p0[1])
+    add_pt(p2[0], p2[1])
+    for c in (0, 1):
+        v0, v1, v2 = p0[c], p1[c], p2[c]
+        denom = v0 - 2.0 * v1 + v2
+        if abs(denom) > 1e-12:
+            t = (v0 - v1) / denom
+            if 0.0 < t < 1.0:
+                add_pt(*_eval_quad(p0, p1, p2, t))
+
+
+def _process_arc(add_pt, x0, y0, rx, ry, x_rot, laf, sf, x1, y1):
+    add_pt(x0, y0)
+    add_pt(x1, y1)
+    rx, ry = abs(float(rx)), abs(float(ry))
+    if rx > 1e12 or ry > 1e12 or not (math.isfinite(rx) and math.isfinite(ry)):
+        raise SvgInvalido("raio enorme ou invalido no arco")
+    if rx < 1e-12 or ry < 1e-12 or (x0 == x1 and y0 == y1):
+        return
+    phi = math.radians(float(x_rot))
+    cos_phi, sin_phi = math.cos(phi), math.sin(phi)
+    dx, dy = (x0 - x1) / 2.0, (y0 - y1) / 2.0
+    x1_p = cos_phi * dx + sin_phi * dy
+    y1_p = -sin_phi * dx + cos_phi * dy
+    lambda_r = (x1_p * x1_p) / (rx * rx) + (y1_p * y1_p) / (ry * ry)
+    if lambda_r > 1.0:
+        s_r = math.sqrt(lambda_r)
+        rx *= s_r
+        ry *= s_r
+        if rx > 1e12 or ry > 1e12 or not (math.isfinite(rx) and math.isfinite(ry)):
+            raise SvgInvalido("raio ajustado enorme no arco")
+    large_arc, sweep = bool(int(laf)), bool(int(sf))
+    sign = -1.0 if large_arc == sweep else 1.0
+    numer = max(0.0, rx * rx * ry * ry - rx * rx * y1_p * y1_p - ry * ry * x1_p * x1_p)
+    denom = rx * rx * y1_p * y1_p + ry * ry * x1_p * x1_p
+    factor = sign * math.sqrt(numer / denom) if denom != 0.0 else 0.0
+    cx_p = factor * (rx * y1_p / ry)
+    cy_p = factor * (-ry * x1_p / rx)
+    cx = cos_phi * cx_p - sin_phi * cy_p + (x0 + x1) / 2.0
+    cy = sin_phi * cx_p + cos_phi * cy_p + (y0 + y1) / 2.0
+
+    def vec_angle(ux, uy, vx, vy):
+        dot = ux * vx + uy * vy
+        lu, lv = math.hypot(ux, uy), math.hypot(vx, vy)
+        if lu == 0.0 or lv == 0.0:
+            return 0.0
+        val = max(-1.0, min(1.0, dot / (lu * lv)))
+        a = math.acos(val)
+        return -a if ux * vy - uy * vx < 0.0 else a
+
+    theta1 = vec_angle(1.0, 0.0, (x1_p - cx_p) / rx, (y1_p - cy_p) / ry)
+    dtheta = vec_angle((x1_p - cx_p) / rx, (y1_p - cy_p) / ry, (-x1_p - cx_p) / rx, (-y1_p - cy_p) / ry) % (2.0 * math.pi)
+    if not sweep and dtheta > 0.0:
+        dtheta -= 2.0 * math.pi
+    elif sweep and dtheta < 0.0:
+        dtheta += 2.0 * math.pi
+
+    def pt_at(t):
+        return (cx + rx * cos_phi * math.cos(t) - ry * sin_phi * math.sin(t),
+                cy + rx * sin_phi * math.cos(t) + ry * cos_phi * math.sin(t))
+
+    a1 = math.atan2(-ry * sin_phi, rx * cos_phi)
+    a2 = math.atan2(ry * cos_phi, rx * sin_phi)
+    candidates = (a1, a1 + math.pi, a2, a2 + math.pi, 0.0, 0.5 * math.pi, math.pi, 1.5 * math.pi)
+
+    for t_cand in candidates:
+        if sweep:
+            diff = (t_cand - theta1) % (2.0 * math.pi)
+            if diff <= dtheta + 1e-9:
+                add_pt(*pt_at(theta1 + diff))
+        else:
+            diff = (theta1 - t_cand) % (2.0 * math.pi)
+            if diff <= abs(dtheta) + 1e-9:
+                add_pt(*pt_at(theta1 - diff))
+
+
+def _parse_path(d, add_pt, cmd_counter):
+    if not d or not d.strip():
+        raise SvgInvalido("path vazio")
+    last_end = 0
+
+    def gen():
+        nonlocal last_end
+        for m in _PATH_TOKEN_RE.finditer(d):
+            st = m.start()
+            if st > last_end and d[last_end:st].strip(" \t\r\n,"):
+                raise SvgInvalido(f"caractere invalido no path: {_resumo_trecho(d, last_end, st)}")
+            last_end = m.end()
+            yield m.group(1)
+        if d[last_end:].strip(" \t\r\n,"):
+            raise SvgInvalido(f"caractere invalido no fim do path: {_resumo_trecho(d, last_end)}")
+
+    it = gen()
+    first = next(it, None)
+    if first is None or first not in ("M", "m"):
+        raise SvgInvalido("path deve comecar com M/m")
+
+    next_tok = first
+    last_cmd = None
+    curr_x = curr_y = start_x = start_y = 0.0
+    last_ctrl = None
+
+    while next_tok is not None:
+        if next_tok in _CMD_CHARS:
+            cmd = next_tok
+            next_tok = next(it, None)
+        else:
+            if last_cmd is None or last_cmd in "Zz":
+                raise SvgInvalido("numero solto apos Z/z ou sem comando")
+            cmd = "l" if last_cmd == "m" else ("L" if last_cmd == "M" else last_cmd)
+
+        u = cmd.upper()
+        need = _CMD_ARITY[u]
+        cmd_counter[0] += 1
+        if cmd_counter[0] > _LIMITE_COMANDOS:
+            raise SvgInvalido("limite de comandos excedido (> 5 milhoes)")
+
+        is_rel = cmd.islower()
+        if u == "Z":
+            curr_x, curr_y = start_x, start_y
+            add_pt(curr_x, curr_y)
+            last_ctrl = None
+            last_cmd = cmd
+            continue
+
+        raw = [0.0] * need
+        for k in range(need):
+            if next_tok is None:
+                raise SvgInvalido("faltam argumentos para comando no path")
+            if next_tok in _CMD_CHARS:
+                raise SvgInvalido("comando no lugar de numero")
+            if u == "A" and k in (3, 4) and next_tok not in ("0", "1"):
+                raise SvgInvalido("flags de arco devem ser 0 ou 1")
+            try:
+                val = float(next_tok)
+            except (ValueError, OverflowError) as e:
+                raise SvgInvalido(f"numero invalido no path: {_resumo(next_tok)}") from e
+            if not math.isfinite(val) or abs(val) > 1e12:
+                raise SvgInvalido("numero nao finito ou excessivo no path")
+            if u == "A" and k in (0, 1) and val < 0:
+                raise SvgInvalido("raio negativo no arco")
+            raw[k] = val
+            next_tok = next(it, None)
+
+        if u == "H":
+            curr_x = curr_x + raw[0] if is_rel else raw[0]
+            add_pt(curr_x, curr_y)
+            last_ctrl = None
+        elif u == "V":
+            curr_y = curr_y + raw[0] if is_rel else raw[0]
+            add_pt(curr_x, curr_y)
+            last_ctrl = None
+        elif u in ("M", "L"):
+            curr_x = curr_x + raw[0] if is_rel else raw[0]
+            curr_y = curr_y + raw[1] if is_rel else raw[1]
+            if u == "M":
+                start_x, start_y = curr_x, curr_y
+            add_pt(curr_x, curr_y)
+            last_ctrl = None
+        elif u == "A":
+            rx, ry, rot, laf, sf, x1, y1 = raw
+            if is_rel:
+                x1 += curr_x
+                y1 += curr_y
+            _process_arc(add_pt, curr_x, curr_y, rx, ry, rot, laf, sf, x1, y1)
+            curr_x, curr_y = x1, y1
+            last_ctrl = None
+        elif u in ("C", "S"):
+            if u == "C":
+                args = [v + (curr_x if i % 2 == 0 else curr_y) for i, v in enumerate(raw)] if is_rel else raw
+                p1 = (args[0], args[1])
+                p2 = (args[2], args[3])
+                p3 = (args[4], args[5])
+            else:
+                args = [v + (curr_x if i % 2 == 0 else curr_y) for i, v in enumerate(raw)] if is_rel else raw
+                p1 = (2.0 * curr_x - last_ctrl[0], 2.0 * curr_y - last_ctrl[1]) if (last_cmd in "CcSs" and last_ctrl is not None) else (curr_x, curr_y)
+                p2 = (args[0], args[1])
+                p3 = (args[2], args[3])
+            _process_cubic(add_pt, (curr_x, curr_y), p1, p2, p3)
+            curr_x, curr_y = p3
+            last_ctrl = p2
+        elif u in ("Q", "T"):
+            if u == "Q":
+                args = [v + (curr_x if i % 2 == 0 else curr_y) for i, v in enumerate(raw)] if is_rel else raw
+                p1 = (args[0], args[1])
+                p2 = (args[2], args[3])
+            else:
+                args = [v + (curr_x if i % 2 == 0 else curr_y) for i, v in enumerate(raw)] if is_rel else raw
+                p1 = (2.0 * curr_x - last_ctrl[0], 2.0 * curr_y - last_ctrl[1]) if (last_cmd in "QqTt" and last_ctrl is not None) else (curr_x, curr_y)
+                p2 = (args[0], args[1])
+            _process_quad(add_pt, (curr_x, curr_y), p1, p2)
+            curr_x, curr_y = p2
+            last_ctrl = p1
+        last_cmd = cmd
 
 
 def normalizar_planta(svg_texto, margem_m=0.5):

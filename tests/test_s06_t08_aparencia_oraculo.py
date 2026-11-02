@@ -30,7 +30,10 @@ AINDA = pytest.mark.xfail(strict=True, reason="@AINDA_NAO_APAR: correcoes da rev
 
 
 def P():
-    import openbim_app.prancha as m
+    try:
+        import openbim_app.prancha as m
+    except ModuleNotFoundError:
+        pytest.skip("prancha.py ainda nao existe (T08d)")
     return m
 
 

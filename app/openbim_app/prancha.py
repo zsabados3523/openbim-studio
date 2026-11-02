@@ -17,6 +17,14 @@ MARGEM_MM, CARIMBO_ALTURA_MM = 10.0, 25.0
 _QT_APP = None
 
 
+def _resumo(valor, limite=80):
+    if isinstance(valor, str):
+        texto = valor[:limite] + ("..." if len(valor) > limite else "")
+        return repr(texto)
+    texto = repr(valor)
+    return texto if len(texto) <= limite else texto[:limite] + "..."
+
+
 class PranchaInvalida(ValueError): """Erro de validacao de prancha ou viewport."""
 class FormatoInvalido(PranchaInvalida): """Formato de folha nao suportado."""
 class EscalaInvalida(PranchaInvalida): """Escala invalida para o viewport."""
@@ -35,17 +43,21 @@ def _contem_controle(texto):
 def _obter_prancha(lateral, identification):
     for uid in lateral.ids("pranchas"):
         p = lateral.obter("pranchas", uid)
+        if not isinstance(p, dict):
+            raise PranchaInvalida(f"prancha deve ser dict, recebido {type(p).__name__}")
         if p.get("identification") == identification:
             return p
-    raise PranchaNaoEncontrada(f"prancha {identification!r} nao encontrada")
+    raise PranchaNaoEncontrada(f"prancha {_resumo(identification)} nao encontrada")
 
 
 def _obter_viewport(lateral, identification, vista_guid):
     for uid in lateral.ids("viewports"):
         v = lateral.obter("viewports", uid)
+        if not isinstance(v, dict):
+            raise PranchaInvalida(f"viewport deve ser dict, recebido {type(v).__name__}")
         if v.get("prancha") == identification and v.get("vista_guid") == vista_guid:
             return v
-    raise PranchaNaoEncontrada(f"viewport nao encontrado para {identification!r} / {vista_guid!r}")
+    raise PranchaNaoEncontrada(f"viewport nao encontrado para {_resumo(identification)} / {_resumo(vista_guid)}")
 
 
 def criar_prancha(lado, identification, formato, projeto, titulo, data, folha):
@@ -53,28 +65,20 @@ def criar_prancha(lado, identification, formato, projeto, titulo, data, folha):
     if not isinstance(identification, str) or not identification or identification != identification.strip() or _contem_controle(identification):
         raise PranchaInvalida("identification vazia ou com espaco nas pontas")
     if not isinstance(formato, str) or formato not in FORMATOS:
-        raise FormatoInvalido(f"formato desconhecido: {formato!r}")
+        raise FormatoInvalido(f"formato desconhecido: {_resumo(formato)}")
     for campo, val in (("projeto", projeto), ("titulo", titulo), ("folha", folha)):
         if not isinstance(val, str) or not val.strip() or _contem_controle(val):
             raise PranchaInvalida(f"{campo} vazio ou invalido")
     if not isinstance(data, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", data):
-        raise PranchaInvalida(f"formato de data invalido: {data!r}")
+        raise PranchaInvalida(f"formato de data invalido: {_resumo(data)}")
     try:
         datetime.strptime(data, "%Y-%m-%d")
     except ValueError:
-        raise PranchaInvalida(f"data fora do calendario real: {data!r}")
+        raise PranchaInvalida(f"data fora do calendario real: {_resumo(data)}")
 
     uid = str(uuid.uuid4())
-    obj = {
-        "identification": identification,
-        "formato": formato,
-        "carimbo": {
-            "projeto": projeto,
-            "titulo": titulo,
-            "data": data,
-            "folha": folha,
-        },
-    }
+    obj = {"identification": identification, "formato": formato,
+           "carimbo": {"projeto": projeto, "titulo": titulo, "data": data, "folha": folha}}
     lado.criar("pranchas", uid, obj)
     return uid
 
@@ -82,25 +86,31 @@ def criar_prancha(lado, identification, formato, projeto, titulo, data, folha):
 def colocar_viewport(lado, identification, vista_guid, x_mm, y_mm, escala, rotacao=0):
     """Cria viewport na colecao 'viewports' do lateral."""
     if isinstance(rotacao, bool) or not isinstance(rotacao, int) or rotacao not in (0, 90):
-        raise RotacaoInvalida(f"rotacao invalida: {rotacao!r}")
+        raise RotacaoInvalida(f"rotacao invalida: {_resumo(rotacao)}")
     if not isinstance(identification, str) or not identification or identification != identification.strip() or _contem_controle(identification):
         raise PranchaInvalida("identification vazia ou com espaco nas pontas")
     if not isinstance(vista_guid, str) or not vista_guid or _contem_controle(vista_guid):
         raise PranchaInvalida("vista_guid vazio ou invalido")
     for v in (x_mm, y_mm):
-        if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
             raise PranchaInvalida("coordenada x ou y invalida")
-    if isinstance(escala, bool) or not isinstance(escala, (int, float)) or not math.isfinite(escala) or escala <= 0:
+        try:
+            vf = float(v)
+        except OverflowError as e:
+            raise PranchaInvalida("coordenada x ou y invalida") from e
+        if not math.isfinite(vf) or abs(vf) > 1e12:
+            raise PranchaInvalida("coordenada x ou y invalida")
+    if isinstance(escala, bool) or not isinstance(escala, (int, float)):
+        raise EscalaInvalida("escala invalida: deve ser numero finito > 0")
+    try:
+        ef = float(escala)
+    except OverflowError as e:
+        raise EscalaInvalida("escala invalida") from e
+    if not math.isfinite(ef) or ef <= 0 or ef > 1e12:
         raise EscalaInvalida("escala invalida: deve ser numero finito > 0")
 
     uid = str(uuid.uuid4())
-    obj = {
-        "prancha": identification,
-        "vista_guid": vista_guid,
-        "x": x_mm,
-        "y": y_mm,
-        "escala": escala,
-    }
+    obj = {"prancha": identification, "vista_guid": vista_guid, "x": x_mm, "y": y_mm, "escala": escala}
     if rotacao == 90:
         obj["rotacao"] = 90
     lado.criar("viewports", uid, obj)

@@ -16,8 +16,6 @@ import pytest
 import s06_t07e_aux as T
 from test_s06_t07e_auxiliar_oraculo import _loc, _x, tmp_aux  # noqa: F401  (a fixture `tmp_aux` vem junto)
 
-AINDA_NAO_E3 = pytest.mark.xfail(strict=True, raises=ImportError, reason="T07e3: obim_geometria.desenho e planta pelo auxiliar ainda não existem")
-
 
 def _p():
     import obim_geometria.desenho  # noqa: F401  (primeira linha de cada caso @AINDA_NAO_E3)
@@ -42,7 +40,6 @@ def test_caso1_corte_pelo_filho_igual_ao_local(tmp_aux, esq, off, base, k):
     assert inspect.signature(S.selecionar).parameters["limite_s"].default == 180
 
 
-@AINDA_NAO_E3
 @pytest.mark.parametrize("esq,off,base,k", T.MODELOS)
 def test_caso1_planta_pelo_filho_igual_ao_local(tmp_aux, esq, off, base, k):
     P_, L = _p(), _loc()
@@ -55,7 +52,6 @@ def test_caso1_planta_pelo_filho_igual_ao_local(tmp_aux, esq, off, base, k):
     assert inspect.signature(P_.gerar_planta).parameters["limite_s"].default == 180
 
 
-@AINDA_NAO_E3
 @pytest.mark.parametrize("real", [True, False])
 def test_caso2_fotografia_a_parede_apagada_depois_do_preparar_sai_no_svg(tmp_aux, real):
     X, L = _x(), _loc()
@@ -84,7 +80,6 @@ def sem_copia(tmp_aux, monkeypatch):  # a validação no pai não grava cópia n
     assert not list(tmp_aux.glob("obim-desenho-*"))
 
 
-@AINDA_NAO_E3
 def test_caso7_validacao_no_pai_sem_chamar_executor(sem_copia):
     P_ = _p()
     import ifcopenshell.guid
@@ -99,7 +94,6 @@ def test_caso7_validacao_no_pai_sem_chamar_executor(sem_copia):
         P_.gerar_planta(f, d["vp"], categorias_ocultas=["IfcNaoExiste"], executor=_espiao)
 
 
-@AINDA_NAO_E3
 @pytest.mark.parametrize("ruim", [0, -1.0, "alto", True])
 def test_caso7_altura_de_corte_invalida_no_pai(sem_copia, ruim):
     P_ = _p()
@@ -112,7 +106,6 @@ def test_caso7_altura_de_corte_invalida_no_pai(sem_copia, ruim):
         P_.gerar_planta(f, d["vp"], executor=_espiao)
 
 
-@AINDA_NAO_E3
 def test_caso9_janela_nao_carrega_geometria_na_planta(tmp_path):
     _p()
     f, d = T.modelo()

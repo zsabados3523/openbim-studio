@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Classificação dos 6 casos de divergência ao abrir (ADR-003 §6, v2/02 §6.4). Só lê; nunca cria, apaga ou regrava arquivo."""
 import hashlib
+import json
+import zipfile
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +25,10 @@ class LateralRecusado(ValueError):
     """Lateral ilegível, fora do formato ou de versão que só abre para leitura."""
 
 
+class LateralIncompativel(LateralRecusado):
+    """Lateral legível mas que este programa não deve abrir nem regravar (versão nova ou manifesto incompleto)."""
+
+
 class IfcInvalido(ValueError):
     """IFC ausente, ilegível ou sem IfcProject."""
 
@@ -43,11 +49,23 @@ class Resultado:
     obim: object = None
 
 
+def _zip_legivel(caminho):
+    try:
+        with zipfile.ZipFile(caminho) as z:
+            if "manifest.json" not in z.namelist():
+                return False
+            manifesto = json.loads(z.read("manifest.json").decode("utf-8"))
+    except Exception:
+        return False
+    return isinstance(manifesto, dict) and manifesto.get("formato") == obim_zip.FORMATO
+
+
 def _ler_obim(caminho):
     try:
         return obim_zip.ler(caminho)
     except obim_zip.ObimInvalido as e:
-        raise LateralRecusado(f"{Path(caminho).name} recusado: {e}") from e
+        classe = LateralIncompativel if _zip_legivel(caminho) else LateralRecusado
+        raise classe(f"{Path(caminho).name} recusado: {e}") from e
     except OSError as e:
         raise LateralRecusado(f"{Path(caminho).name} não pôde ser lido: {e}") from e
 
@@ -69,19 +87,19 @@ _CAMPOS = ("ifc_projeto_globalid", "ifc_nome", "ifc_sha256", "Revisao")
 def _confere_lateral(caminho, leitura):
     nome = Path(caminho).name
     if leitura.somente_leitura:
-        raise LateralRecusado(f"{nome} é de versão que este programa só abre para leitura")
+        raise LateralIncompativel(f"{nome} é de versão que este programa só abre para leitura")
     manifesto = leitura.manifesto
     for campo in _CAMPOS:
         if campo not in manifesto:
-            raise LateralRecusado(f"{nome} sem {campo}")
+            raise LateralIncompativel(f"{nome} sem {campo}")
     revisao = manifesto["Revisao"]
     if not isinstance(revisao, int) or isinstance(revisao, bool):
-        raise LateralRecusado(f"{nome} com Revisao que não é inteiro")
+        raise LateralIncompativel(f"{nome} com Revisao que não é inteiro")
 
 
 def _confere_lado(caminho, leitura, pset):
     if pset is not None and "LadoId" not in leitura.manifesto:
-        raise LateralRecusado(f"{Path(caminho).name} sem LadoId")
+        raise LateralIncompativel(f"{Path(caminho).name} sem LadoId")
 
 
 def _numero_documento(d):

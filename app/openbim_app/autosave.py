@@ -27,14 +27,11 @@ class LateralAlheio(ValueError):
     """Gravação do par com lateral de outro projeto pendente de escolha."""
 
     def __init__(self, obim=""):
-        if isinstance(obim, Path):
-            msg = f"Lateral alheio pendente de escolha ({obim.name})"
-        elif obim and ("/" in str(obim) or "\\" in str(obim)):
-            msg = f"Lateral alheio pendente de escolha ({Path(obim).name})"
-        elif obim:
-            msg = str(obim)
+        nome = Path(obim).name if obim else ""
+        if nome:
+            msg = f"O arquivo {nome} é de outro projeto. Escolha guardar o arquivo antigo ou criar um novo."
         else:
-            msg = "Lateral alheio pendente de escolha"
+            msg = "Este arquivo de documentação é de outro projeto. Escolha guardar o arquivo antigo ou criar um novo."
         super().__init__(msg)
 
 
@@ -323,6 +320,8 @@ def abrir_projeto(ifc_caminho, perguntar, divergencia=False) -> Projeto:
                             lat_sha = hashlib.sha256(Lateral().canonico()).hexdigest()
                         else:
                             lat_sha = hashlib.sha256(Lateral(_ler_obim(obim_path)).canonico()).hexdigest()
+                    except _divergencia.LateralIncompativel:
+                        raise
                     except ValueError:
                         lat_sha = hashlib.sha256(Lateral(_ler_obim(obim_path)).canonico()).hexdigest()
                 d = Diario.continuar(diario_caminho, lado_id, regs_c[0], regs_c[-1]["seq"])
@@ -347,6 +346,8 @@ def abrir_projeto(ifc_caminho, perguntar, divergencia=False) -> Projeto:
             classificacao = _divergencia.classificar(ifc_path)
             if classificacao.caso == "D5":
                 lateral_alheio = obim_path
+        except _divergencia.LateralIncompativel:
+            raise
         except ValueError as e:
             erro_div = e
 
@@ -505,6 +506,10 @@ def abrir_projeto(ifc_caminho, perguntar, divergencia=False) -> Projeto:
     resultado_div = None
     if divergencia:
         if erro_div is not None:
+            try:
+                diario_obj.fechar()
+            finally:
+                historico.encerrar()
             raise erro_div
         if classificacao is not None:
             resultado_div = classificacao

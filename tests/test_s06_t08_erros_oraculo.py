@@ -55,7 +55,7 @@ def test_04_chaves_ruins_do_viewport(ident, guid):
 
 
 # ---------- prancha ----------
-@pytest.mark.parametrize("formato", ["A0", "a3", "A3 ", "", None, 3, "A5", ("A3",)])
+@pytest.mark.parametrize("formato", ["A00", "a0", "a3", "A3 ", "", None, 3, "A5", ("A3",)])
 def test_05_formato_ruim(formato):
     m = P()
     lado = Lado()

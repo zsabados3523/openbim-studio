@@ -27,14 +27,11 @@ class LateralAlheio(ValueError):
     """Gravação do par com lateral de outro projeto pendente de escolha."""
 
     def __init__(self, obim=""):
-        if isinstance(obim, Path):
-            msg = f"Lateral alheio pendente de escolha ({obim.name})"
-        elif obim and ("/" in str(obim) or "\\" in str(obim)):
-            msg = f"Lateral alheio pendente de escolha ({Path(obim).name})"
-        elif obim:
-            msg = str(obim)
+        nome = Path(obim).name if obim else ""
+        if nome:
+            msg = f"O arquivo {nome} é de outro projeto. Escolha guardar o arquivo antigo ou criar um novo."
         else:
-            msg = "Lateral alheio pendente de escolha"
+            msg = "Este arquivo de documentação é de outro projeto. Escolha guardar o arquivo antigo ou criar um novo."
         super().__init__(msg)
 
 
@@ -347,6 +344,8 @@ def abrir_projeto(ifc_caminho, perguntar, divergencia=False) -> Projeto:
             classificacao = _divergencia.classificar(ifc_path)
             if classificacao.caso == "D5":
                 lateral_alheio = obim_path
+        except _divergencia.LateralIncompativel:
+            raise
         except ValueError as e:
             erro_div = e
 

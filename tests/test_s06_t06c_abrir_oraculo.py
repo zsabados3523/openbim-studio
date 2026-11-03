@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo do F0-S06-T06c, abrir sem a flag não engole lateral recusado (achado 1 da revisão Opus da T06b). Só o autor tira os `AINDA_NAO_T06C`.
+"""Oráculo do F0-S06-T06c, abrir sem a flag não engole lateral recusado (achado 1 da revisão Opus da T06b). Marcadores AINDA_NAO_T06C já removidos.
 CONTRATO (`openbim_app.autosave.abrir_projeto`, `divergencia.py`):
 1. Lateral recusado (versão mais nova do formato = só leitura; manifesto sem campo obrigatório) levanta `LateralRecusado` COM ou SEM `divergencia=True`.
    Nada é regravado, criado ou vinculado: a pasta do projeto (IFC, `.obim`, rastro) fica byte a byte igual; vale também numa segunda abertura.
@@ -16,7 +16,6 @@ import pytest
 import s06_t06_aux as X
 from s05_conteudo_aux import _limpa, exigir  # noqa: F401  (fixtures)
 
-AINDA_NAO_T06C = pytest.mark.xfail(strict=True, reason="T06c: abrir sem a flag ainda engole LateralRecusado")
 RECUSADOS = {
     "versao_nova": {"versao": "0.3.0"},
     "versao_futura": {"versao": "9.0.0"},
@@ -39,11 +38,7 @@ def p(tmp_path):
     return tmp_path / "proj"
 
 
-def _por_flag(div):  # sem a flag falha hoje (engole); com a flag já passa
-    return pytest.param(div, marks=AINDA_NAO_T06C if not div else ())
-
-
-FLAGS = [_por_flag(False), _por_flag(True)]
+FLAGS = [False, True]
 
 
 def _abrir(ifc, div):
@@ -104,7 +99,6 @@ def test_02_recusado_nao_vincula_sozinho_o_manifesto_fica_como_estava(p, div):
 # 2) sem vazamento
 @pytest.mark.parametrize("div", [False, True])
 @pytest.mark.parametrize("nome", ["versao_nova", "sem_revisao"])
-@AINDA_NAO_T06C
 def test_03_recusa_nao_deixa_diario_historico_nem_thread_abertos(p, nome, div, monkeypatch):
     import openbim_app.diario as D
     import openbim_app.divergencia as DV
@@ -140,7 +134,6 @@ def test_04_regua_do_vazamento_enxerga_um_projeto_aberto(p):
 JARGAO = re.compile(r"globalid|ladoid|hash|sha-?256|manifest|json|\bzip\b|ifcproject|traceback|exception|none\b|\bpath\b", re.I)
 
 
-@AINDA_NAO_T06C
 def test_05_mensagem_de_LateralAlheio_em_pt_BR_simples():
     import openbim_app.autosave as S
     for arg in (Path("/x/y/Casa.obim"), Path("Casa.obim")):
@@ -152,7 +145,6 @@ def test_05_mensagem_de_LateralAlheio_em_pt_BR_simples():
         assert "(" not in msg and msg[0].isupper() and len(msg) > 40
 
 
-@AINDA_NAO_T06C
 def test_06_mensagem_real_ao_gravar_com_alheio_e_a_mesma_simples(p):
     import openbim_app.autosave as S
     ifc, ob = X.fazer(p, o_gid="9zzzHZ1u8Ek9aBc3DeFgHi")

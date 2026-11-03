@@ -99,7 +99,6 @@ def test_solido_longe_da_propria_origem_sem_vizinho_aparece(dist):
     assert sub and abs(B.caixa_de(sub[0])[0] - (X.GEO[0] + dist)) < 0.01
 
 
-@AINDA_NAO
 def test_altura_de_corte_da_vista_e_padrao_de_1_2_m():
     P_ = P()
     f, pavs, g = B.modelo("IFC4", X.GEO, 12.5, 1.0, True)
@@ -120,7 +119,6 @@ def test_altura_de_corte_da_vista_e_padrao_de_1_2_m():
             P_.gerar_planta(f, gv)
 
 
-@AINDA_NAO
 def test_nao_cria_entidade_no_arquivo_nem_durante_a_geracao(monkeypatch):
     P_ = P()
     f, pavs, g = B.modelo("IFC4", X.GEO, 12.5, 1.0, True, n_moveis=2)
@@ -132,7 +130,6 @@ def test_nao_cria_entidade_no_arquivo_nem_durante_a_geracao(monkeypatch):
     assert vistos and set(vistos) == {n_total} and f.to_string() == antes
 
 
-@AINDA_NAO
 def test_excecao_antes_do_serializador_nao_deixa_entidade_solta(monkeypatch):
     P_ = P()
     import ifcopenshell.guid

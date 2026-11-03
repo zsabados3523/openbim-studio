@@ -28,10 +28,6 @@ GEO = Path(__file__).resolve().parent.parent / "geometria" / "obim_geometria"
 PLANTA = APP / "openbim_app" / "desenho" / "planta.py"
 
 
-def AINDA_NAO_E3B(erro):
-    return pytest.mark.xfail(strict=True, raises=erro, reason="T07e3: planta.py ainda não é cliente do auxiliar (motor ainda dentro de planta.py)")
-
-
 def _p():
     from openbim_app.desenho import planta
     return planta
@@ -51,7 +47,6 @@ def _vazio(pasta):
     assert not multiprocessing.active_children(), "filho vivo"
 
 
-@AINDA_NAO_E3B(AssertionError)
 @pytest.mark.parametrize("proibido", ["ifcopenshell.ifcopenshell_wrapper", ".iterator(", "ifcopenshell.geom", "serializers"])
 def test_planta_py_nao_tem_motor(proibido):
     assert proibido not in PLANTA.read_text(encoding="utf-8")  # texto cru, comentário incluído (mesmo critério do caso 10)
@@ -61,7 +56,6 @@ def test_planta_py_nao_tem_ifcopenshell_draw():  # guarda de regressão: passa h
     assert "ifcopenshell.draw" not in PLANTA.read_text(encoding="utf-8")
 
 
-@AINDA_NAO_E3B(AssertionError)
 def test_importar_planta_nao_carrega_geometria():  # a janela só importa planta; o motor fica para o filho
     codigo = ("import sys, json\nimport openbim_app.desenho.planta\n"
               "print(json.dumps(sorted(m for m in sys.modules if m.startswith(('ifcopenshell.geom', 'ifcopenshell.draw', 'obim_geometria.desenho', 'obim_geometria.caixas', 'obim_geometria.local')))))\n")
@@ -77,7 +71,6 @@ def test_processo_py_so_importa_biblioteca_padrao_no_topo():  # guarda de regres
     assert not [n for n in nomes if n.split(".")[0] in ("ifcopenshell", "obim_geometria", "openbim_app", "numpy")], nomes
 
 
-@AINDA_NAO_E3B(ImportError)
 def test_desenho_processar_igual_ao_local_e_confere_ids(tmp_aux):
     import obim_geometria.desenho as D
     L, X = _loc(), _x()
@@ -94,7 +87,6 @@ def test_desenho_processar_igual_ao_local_e_confere_ids(tmp_aux):
         assert r["ok"] is False and r["erro"]["tipo"] == "ArquivoDivergente"
 
 
-@AINDA_NAO_E3B(AssertionError)
 def test_processo_entrada_despacha_desenho_com_as_tres_fases(tmp_aux):
     X = _x()
     import obim_geometria.processo as PR
@@ -124,7 +116,6 @@ def test_executor_local_continua_recusando_operacao_desconhecida():  # guarda de
     assert r["ok"] is False and r["erro"]["tipo"] == "OperacaoDesconhecida"
 
 
-@AINDA_NAO_E3B(AssertionError)
 def test_assinatura_de_gerar_planta():
     import inspect
     ps = inspect.signature(_p().gerar_planta).parameters
@@ -133,7 +124,6 @@ def test_assinatura_de_gerar_planta():
     assert list(ps)[:2] == ["ifc", "gid_vista"]
 
 
-@AINDA_NAO_E3B(TypeError)
 def test_filho_real_igual_ao_local_byte_a_byte(tmp_aux):
     P_, L = _p(), _loc()
     f, d = T.modelo()
@@ -143,10 +133,31 @@ def test_filho_real_igual_ao_local_byte_a_byte(tmp_aux):
     assert real.svg == loc.svg and real.n_paths == loc.n_paths > 0 and real.caixas == loc.caixas and real.selecao == loc.selecao
     assert real.altura_corte == loc.altura_corte and real.unidade_escala == loc.unidade_escala
     assert f.to_string() == antes
+    assert real.tempos["copia_s"] > 0 and real.tempos["auxiliar_s"] > 0 and real.tempos["abrir_s"] > 0
     _vazio(tmp_aux)
 
 
-@AINDA_NAO_E3B(TypeError)
+def test_threads_padrao_e_caixas_e_threads_chegam_ao_motor(tmp_aux, monkeypatch):
+    import ifcopenshell.geom as G
+    P_, L = _p(), _loc()
+    f, d = T.modelo()
+    peds, nthr, orig = [], [], G.iterator
+
+    def it(st, arq, n, **k):
+        nthr.append(n)
+        return orig(st, arq, n, **k)
+    monkeypatch.setattr(G, "iterator", it)
+
+    def espia(pedido):  # devolve `caixas` inventado para provar que o cliente repassa
+        peds.append(pedido)
+        return {**L.executar(pedido), "caixas": [7, 9]}
+    p = P_.gerar_planta(f, d["vp"], executor=espia)
+    assert p.caixas == (7, 9) and isinstance(peds[0]["threads"], int) and peds[0]["threads"] >= 1 and nthr == [peds[0]["threads"]]
+    P_.gerar_planta(f, d["vp"], threads=3, executor=espia)
+    assert peds[1]["threads"] == 3 and nthr[-1] == 3
+    _vazio(tmp_aux)
+
+
 @pytest.mark.parametrize("esq,off,base,k", T.MODELOS)
 def test_pedido_e_json_puro_e_leva_os_numeros_do_pavimento(tmp_aux, esq, off, base, k):
     P_, L = _p(), _loc()
@@ -177,7 +188,6 @@ def sem_copia(tmp_aux, monkeypatch):
     return tmp_aux
 
 
-@AINDA_NAO_E3B(TypeError)
 def test_selecao_vazia_nao_chama_executor_nem_faz_copia(sem_copia):
     P_ = _p()
     f, d = T.modelo()
@@ -191,7 +201,6 @@ def test_selecao_vazia_nao_chama_executor_nem_faz_copia(sem_copia):
     _vazio(sem_copia)
 
 
-@AINDA_NAO_E3B(TypeError)
 @pytest.mark.parametrize("tipo,classe", [("ArquivoDivergente", "ArquivoDivergente"), ("ProtocoloInvalido", "ProtocoloInvalido"), ("ZeroDivisionError", "FalhaNoAuxiliar")])
 def test_erros_tipados_do_auxiliar_sobem_por_gerar_planta(tmp_aux, tipo, classe):
     P_, X = _p(), _x()
@@ -203,7 +212,6 @@ def test_erros_tipados_do_auxiliar_sobem_por_gerar_planta(tmp_aux, tipo, classe)
     _vazio(tmp_aux)
 
 
-@AINDA_NAO_E3B(TypeError)
 def test_cancelar_armado_antes_levanta_cancelado_sem_chamar_executor(tmp_aux):
     import threading
     P_, X = _p(), _x()
@@ -217,7 +225,6 @@ def test_cancelar_armado_antes_levanta_cancelado_sem_chamar_executor(tmp_aux):
     _vazio(tmp_aux)
 
 
-@AINDA_NAO_E3B(AssertionError)
 def test_filho_real_erro_e_tempo_sobem_por_gerar_planta(tmp_aux, monkeypatch):  # hoje a planta roda no próprio processo: os ganchos do filho não valem
     P_, X = _p(), _x()
     f, d = T.modelo()

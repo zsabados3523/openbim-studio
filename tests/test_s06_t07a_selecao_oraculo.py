@@ -33,10 +33,30 @@ from s05_conteudo_aux import _limpa, exigir  # noqa: F401  (fixture autouse)
 MOD = pytest.mark.parametrize("esq,off,base", X.MODELOS)
 
 
+class _ComExecutor:
+    """T07e2 (ajuste só do ALVO, autor do oráculo): o CORTE pede as caixas ao auxiliar; os testes usam o executor no MESMO processo
+    (`obim_geometria.local.executar`), como manda a especificação T07e §4. Nenhum caso nem número muda. Enquanto `selecionar` não aceita
+    `executor` (antes da e2), passa sem ele; depois da e2 o parâmetro existe e vai sempre."""
+
+    def __init__(self, mod):
+        self._mod = mod
+
+    def __getattr__(self, nome):
+        return getattr(self._mod, nome)
+
+    def selecionar(self, *a, **k):
+        import inspect
+        if "executor" in inspect.signature(self._mod.selecionar).parameters:
+            import s06_t07e_aux  # noqa: F401  (põe `geometria/` no sys.path)
+            from obim_geometria import local
+            k.setdefault("executor", local.executar)
+        return self._mod.selecionar(*a, **k)
+
+
 def S():
     exigir()
     import openbim_app.desenho.selecao as S_
-    return S_
+    return _ComExecutor(S_)
 
 
 # ---------- planta ----------

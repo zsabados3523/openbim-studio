@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 import dataclasses
-import os
 from typing import Any, Iterable
 
 import ifcopenshell
-import ifcopenshell.geom
 import ifcopenshell.util.placement
 import ifcopenshell.util.unit
 import numpy as np
 from openbim_app import vistas_ifc
+from openbim_app.desenho import auxiliar
 
 
 class SelecaoInvalida(ValueError):
@@ -114,6 +113,9 @@ def selecionar(
     *,
     categorias_ocultas: Iterable[str] = (),
     pavimento: str | None = None,
+    executor=None,
+    limite_s: float = auxiliar.LIMITE_PADRAO_S,
+    cancelar=None,
 ) -> Selecao:
     cats = tuple(categorias_ocultas)
     _validar_categorias(ifc, cats)
@@ -220,51 +222,38 @@ def selecionar(
         else:
             visiveis_com_rep.append(elem)
 
-    ids = []
-    processados: set[int] = set()
+    ids: list[int] = []
+    falhas_geometria: tuple[int, ...] = ()
 
     if visiveis_com_rep:
-        settings = ifcopenshell.geom.settings()
-        settings.set(settings.USE_WORLD_COORDS, True)
-        num_threads = max(1, os.cpu_count() or 1)
-        it = ifcopenshell.geom.iterator(
-            settings,
-            ifc,
-            num_threads,
-            include=visiveis_com_rep,
-        )
-        if it.initialize():
-            while True:
-                try:
-                    shape = it.get()
-                except Exception:
-                    shape = None
-                if shape is not None:
-                    step_id = shape.id
-                    v = shape.geometry.verts
-                    if v:
-                        processados.add(step_id)
-                        exmin, exmax = min(v[0::3]), max(v[0::3])
-                        eymin, eymax = min(v[1::3]), max(v[1::3])
-                        ezmin, ezmax = min(v[2::3]), max(v[2::3])
-                        if (
-                            exmin <= xmax
-                            and exmax >= xmin
-                            and eymin <= ymax
-                            and eymax >= ymin
-                            and ezmin <= zmax
-                            and ezmax >= zmin
-                        ):
-                            ids.append(step_id)
-                try:
-                    tem_mais = it.next()
-                except Exception:
-                    tem_mais = False
-                if not tem_mais:
-                    break
+        pedido = {
+            "op": "caixas",
+            "elementos": [[e.id(), e.GlobalId] for e in visiveis_com_rep],
+        }
+        preparado = auxiliar.preparar(ifc, pedido)
+        try:
+            resposta = auxiliar.executar(
+                preparado,
+                limite_s=limite_s,
+                cancelar=cancelar,
+                executor=executor,
+            )
+        finally:
+            preparado.fechar()
 
-    candidatos_ids = {e.id() for e in visiveis_com_rep}
-    falhas_geometria = tuple(sorted(candidatos_ids - processados))
+        for chave, caixa in resposta["caixas_envolventes"].items():
+            exmin, eymin, ezmin, exmax, eymax, ezmax = caixa
+            if (
+                exmin <= xmax
+                and exmax >= xmin
+                and eymin <= ymax
+                and eymax >= ymin
+                and ezmin <= zmax
+                and ezmax >= zmin
+            ):
+                ids.append(int(chave))
+
+        falhas_geometria = tuple(sorted(resposta["falhas_geometria"]))
 
     return Selecao(
         ids=tuple(sorted(set(ids))),

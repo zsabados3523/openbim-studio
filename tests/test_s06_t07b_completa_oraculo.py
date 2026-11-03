@@ -19,7 +19,7 @@ MOD = pytest.mark.parametrize("esq,off,base,k,rel", B.MODELOS)
 def P():
     exigir()
     import openbim_app.desenho.planta as P_
-    return P_
+    return B.com_local(P_)
 
 
 def espiao_de(monkeypatch, antes_do_write=None):

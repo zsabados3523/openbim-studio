@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Auxiliar do oráculo F0-S06-T07b (planta SVG bruta). Não é de `app/`; implementador não edita. Modelos sintéticos pequenos (comprimentos em `k` vezes a unidade:
 k=1 metro, k=1000 milímetro; o mundo é o mesmo), pavimentos em cota arbitrária, colocação absoluta ou relativa ao edifício, e leitores crus do SVG."""
+import inspect
 import re
 import xml.etree.ElementTree as ET
 
@@ -93,3 +94,24 @@ def pontos(svg, off):
 
 def planta_svg(f, P_, pav, nome="Vz"):
     return P_.gerar_planta(f, planta(f, pav, nome)).svg
+
+
+class _ComLocal:
+    """Módulo `planta` visto pelos oráculos T07b (T07e3): `gerar_planta` ganha `executor=obim_geometria.local.executar` (os espiões de `ifcopenshell.geom.serializers.svg` continuam
+    no mesmo processo). Só muda o ALVO da chamada, nenhum caso nem número. Se `gerar_planta` ainda não aceita `executor` (antes da T07e3), repassa a chamada como está."""
+
+    def __init__(self, mod):
+        self._mod = mod
+
+    def gerar_planta(self, *a, **k):
+        if "executor" in inspect.signature(self._mod.gerar_planta).parameters:
+            import obim_geometria.local as L
+            k.setdefault("executor", L.executar)
+        return self._mod.gerar_planta(*a, **k)
+
+    def __getattr__(self, nome):
+        return getattr(self._mod, nome)
+
+
+def com_local(mod):
+    return _ComLocal(mod)

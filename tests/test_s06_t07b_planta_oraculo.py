@@ -40,7 +40,7 @@ JAN_ALTA = ("jan", "IfcWindow", 3.0, 1.5, 1.0, 1.0)  # 1,5 a 2,5: acima do corte
 def P():
     exigir()
     import openbim_app.desenho.planta as P_
-    return P_
+    return B.com_local(P_)
 
 
 def pecas(p, g, s, nome):

@@ -16,7 +16,7 @@ from s05_conteudo_aux import _limpa, exigir  # noqa: F401  (fixture autouse)
 def P():
     exigir()
     import openbim_app.desenho.planta as P_
-    return P_
+    return B.com_local(P_)
 
 
 @pytest.fixture

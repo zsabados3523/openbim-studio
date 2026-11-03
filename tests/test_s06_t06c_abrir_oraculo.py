@@ -44,7 +44,6 @@ def p(tmp_path):
     return tmp_path / "proj"
 
 
-AINDA_NAO_T06C = pytest.mark.xfail(strict=True, reason="T06c: ainda não implementado")
 FLAGS = [False, True]
 
 
@@ -199,7 +198,6 @@ def _prancha_repetida(p):
 COLECAO_RUIM = {"vista_sem_guid": _vista_sem_guid, "prancha_repetida": _prancha_repetida}
 
 
-@AINDA_NAO_T06C
 def test_07_flag_com_obim_ilegivel_sobe_sem_vazar_diario_nem_thread(p, monkeypatch):
     import openbim_app.diario as D
     import openbim_app.divergencia as DV
@@ -217,7 +215,7 @@ def test_07_flag_com_obim_ilegivel_sobe_sem_vazar_diario_nem_thread(p, monkeypat
     assert ifc.with_suffix(".obim").read_bytes() == b"lixo"
 
 
-@pytest.mark.parametrize("div", [pytest.param(False, marks=AINDA_NAO_T06C), True])
+@pytest.mark.parametrize("div", [False, True])
 @pytest.mark.parametrize("nome", list(COLECAO_RUIM))
 def test_08_colecao_reservada_invalida_recusa_com_e_sem_a_flag_sem_carregar_nem_gravar(p, nome, div):
     import openbim_app.divergencia as DV

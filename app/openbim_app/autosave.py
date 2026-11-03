@@ -320,6 +320,8 @@ def abrir_projeto(ifc_caminho, perguntar, divergencia=False) -> Projeto:
                             lat_sha = hashlib.sha256(Lateral().canonico()).hexdigest()
                         else:
                             lat_sha = hashlib.sha256(Lateral(_ler_obim(obim_path)).canonico()).hexdigest()
+                    except _divergencia.LateralIncompativel:
+                        raise
                     except ValueError:
                         lat_sha = hashlib.sha256(Lateral(_ler_obim(obim_path)).canonico()).hexdigest()
                 d = Diario.continuar(diario_caminho, lado_id, regs_c[0], regs_c[-1]["seq"])
@@ -504,6 +506,10 @@ def abrir_projeto(ifc_caminho, perguntar, divergencia=False) -> Projeto:
     resultado_div = None
     if divergencia:
         if erro_div is not None:
+            try:
+                diario_obj.fechar()
+            finally:
+                historico.encerrar()
             raise erro_div
         if classificacao is not None:
             resultado_div = classificacao

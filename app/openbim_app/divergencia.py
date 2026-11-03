@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Classificação dos 6 casos de divergência ao abrir (ADR-003 §6, v2/02 §6.4). Só lê; nunca cria, apaga ou regrava arquivo."""
 import hashlib
+import json
+import zipfile
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -47,11 +49,23 @@ class Resultado:
     obim: object = None
 
 
+def _zip_legivel(caminho):
+    try:
+        with zipfile.ZipFile(caminho) as z:
+            if "manifest.json" not in z.namelist():
+                return False
+            manifesto = json.loads(z.read("manifest.json").decode("utf-8"))
+    except Exception:
+        return False
+    return isinstance(manifesto, dict) and manifesto.get("formato") == obim_zip.FORMATO
+
+
 def _ler_obim(caminho):
     try:
         return obim_zip.ler(caminho)
     except obim_zip.ObimInvalido as e:
-        raise LateralRecusado(f"{Path(caminho).name} recusado: {e}") from e
+        classe = LateralIncompativel if _zip_legivel(caminho) else LateralRecusado
+        raise classe(f"{Path(caminho).name} recusado: {e}") from e
     except OSError as e:
         raise LateralRecusado(f"{Path(caminho).name} não pôde ser lido: {e}") from e
 

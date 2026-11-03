@@ -9,6 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # números com vírgula nos modelos gerados nos testes. Localidade "C" mantém a saída igual em todas as máquinas.
 os.environ["LC_ALL"] = "C"
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "geometria"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from obrigatorio import ligar_ci  # noqa: E402

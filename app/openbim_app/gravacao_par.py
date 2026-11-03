@@ -233,7 +233,10 @@ def _resolver_antes_de_gravar(destino, pasta, ao_concluir):
 def gravar_par(sessao, historico, lateral, destino, pasta_projeto, lado_id, seq, carimbo=True, ao_concluir=None,
                autosave=False, origem_ifc_sha256=None):
     """Grava o par; carimba `Revisao` + 1 e `LadoId` (o definitivo = o provisório). Devolve os dois `Gravado`."""
-    destino, obim, pasta = Path(destino), _obim(destino), Path(pasta_projeto)
+    destino = Path(destino)
+    if destino.name.lower().endswith(".obim"):
+        raise ValueError(f"Não foi possível gravar {destino.name}: o destino deve ser o arquivo IFC (.ifc), não .obim.")
+    obim, pasta = _obim(destino), Path(pasta_projeto)
     _resolver_antes_de_gravar(destino, pasta, None if autosave else ao_concluir)
     obim_zip.validar(lateral)
     base_man, extras = _ler_existente(obim)

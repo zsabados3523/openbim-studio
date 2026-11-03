@@ -9,7 +9,9 @@ Não coberto aqui: `.obim` ilegível (lixo) sem a flag segue como no oráculo da
 GUARDA: sem ifcopenshell, pula (falha com OBIM_S05_OBRIGATORIO=1)."""
 import gc
 import re
+import shutil
 import threading
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -24,6 +26,10 @@ RECUSADOS = {
     "sem_globalid": {"man": {"ifc_projeto_globalid": X.APAGAR}},
     "sem_ifc_nome": {"man": {"ifc_nome": X.APAGAR}},
     "revisao_texto": {"man": {"Revisao": "2"}},
+    "sem_ladoid_com_pset": {"man": {"LadoId": X.APAGAR}},
+    "revisao_bool": {"man": {"Revisao": True}},
+    "revisao_decimal": {"man": {"Revisao": 3.5}},
+    "revisao_nula": {"man": {"Revisao": None}},
 }
 
 
@@ -38,6 +44,7 @@ def p(tmp_path):
     return tmp_path / "proj"
 
 
+AINDA_NAO_T06C = pytest.mark.xfail(strict=True, reason="T06c: ainda não implementado")
 FLAGS = [False, True]
 
 
@@ -74,7 +81,7 @@ def test_01_lateral_recusado_levanta_e_nao_toca_em_nada(p, nome, div):
     for _ in range(2):  # a recusa é estável: repetir não "cura" nem grava
         try:
             pr = _abrir(ifc, div)
-        except DV.LateralRecusado:
+        except DV.LateralIncompativel:
             pr = None
         else:
             _fecha(pr)
@@ -156,3 +163,74 @@ def test_06_mensagem_real_ao_gravar_com_alheio_e_a_mesma_simples(p):
         _fecha(pr)
     msg = str(e.value)
     assert "Casa.obim" in msg and not JARGAO.search(msg) and re.search(r"outro projeto", msg, re.I) and re.search(r"escolh|criar|cancel|guard", msg, re.I), msg
+
+
+# 4) casos novos (rodada 1 do Argon)
+def _zip_trocando(ob, troca=None, extra=None):
+    """Regrava o ZIP do `.obim` trocando o conteúdo de entradas (ZIP e manifesto continuam válidos)."""
+    tmp = ob.with_name("tmp.zip")
+    with zipfile.ZipFile(ob) as z, zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as o:
+        for i in z.infolist():
+            o.writestr(i.filename, (troca or {}).get(i.filename, z.read(i.filename)))
+        for n, b in (extra or {}).items():
+            o.writestr(n, b)
+    shutil.move(str(tmp), str(ob))
+
+
+def _lixo(p):
+    ifc, ob = X.fazer(p)
+    ob.write_bytes(b"lixo")
+    return ifc
+
+
+def _vista_sem_guid(p):
+    ifc, ob = X.fazer(p)
+    _zip_trocando(ob, {"vistas/v1.json": b'{"estilo": "padrao"}'})
+    return ifc
+
+
+def _prancha_repetida(p):
+    ifc, ob = X.fazer(p)
+    with zipfile.ZipFile(ob) as z:
+        _zip_trocando(ob, extra={"pranchas/p9.json": z.read("pranchas/p0.json")})
+    return ifc
+
+
+COLECAO_RUIM = {"vista_sem_guid": _vista_sem_guid, "prancha_repetida": _prancha_repetida}
+
+
+@AINDA_NAO_T06C
+def test_07_flag_com_obim_ilegivel_sobe_sem_vazar_diario_nem_thread(p, monkeypatch):
+    import openbim_app.diario as D
+    import openbim_app.divergencia as DV
+    ifc = _lixo(p)
+    criados = []
+    for nm in ("abrir", "continuar"):
+        monkeypatch.setattr(D.Diario, nm, classmethod(lambda cls, *a, _o=getattr(D.Diario, nm), **k: criados.append(_o(*a, **k)) or criados[-1]))
+    gc.collect()
+    antes = _recursos()
+    with pytest.raises(DV.LateralRecusado):
+        _abrir(ifc, True)
+    gc.collect()
+    d, _reg, th = _recursos()  # registro do ifcopenshell não entra: by_type() o enche e só Historico.encerrar o esvazia
+    assert d <= antes[0] and all(x._f.closed for x in criados) and th <= antes[2]
+    assert ifc.with_suffix(".obim").read_bytes() == b"lixo"
+
+
+@pytest.mark.parametrize("div", [pytest.param(False, marks=AINDA_NAO_T06C), True])
+@pytest.mark.parametrize("nome", list(COLECAO_RUIM))
+def test_08_colecao_reservada_invalida_recusa_com_e_sem_a_flag_sem_carregar_nem_gravar(p, nome, div):
+    import openbim_app.divergencia as DV
+    ifc = COLECAO_RUIM[nome](p)
+    ob = ifc.with_suffix(".obim")
+    antes = X.foto(p)
+    with pytest.raises(DV.LateralRecusado):
+        _abrir(ifc, div)
+    assert X.foto(p) == antes and ob.exists()
+
+
+def test_09_LateralAlheio_sem_argumento_tem_mensagem_simples():
+    import openbim_app.autosave as S
+    msg = str(S.LateralAlheio())
+    assert not JARGAO.search(msg) and re.search(r"outro projeto", msg, re.I) and re.search(r"escolh|criar|cancel|guard", msg, re.I), msg
+    assert msg[0].isupper() and len(msg) > 40 and "(" not in msg

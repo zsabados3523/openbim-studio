@@ -8,8 +8,6 @@ import pytest
 import s06_t08_aux as A
 from s06_t08_aux import DADOS, GUID, IDENT, Lado, montar, planta
 
-pytestmark = pytest.mark.xfail(strict=True, raises=(ImportError, AttributeError, AssertionError, TypeError, NameError),
-                               reason="@AINDA_NAO: openbim_app/prancha.py ainda nao existe (F0-S06-T08)")
 
 
 def P():

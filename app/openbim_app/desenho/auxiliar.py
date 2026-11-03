@@ -42,8 +42,9 @@ class FalhaNoAuxiliar(ErroAuxiliar):
 
 
 class Preparado:
-    def __init__(self, pedido: dict, pasta: Path):
+    def __init__(self, pedido: dict, pasta: Path, copia_s: float = 0.0):
         self.pedido, self.pasta = pedido, Path(pasta)
+        self.copia_s = float(copia_s)
 
     def fechar(self):
         if not self.pasta.exists():
@@ -86,13 +87,15 @@ def preparar(ifc, pedido: dict) -> Preparado:
     p.setdefault("threads", min(8, os.cpu_count() or 1))
     pasta = Path(tempfile.mkdtemp(prefix="obim-desenho-", dir=tempfile.gettempdir()))
     arquivo = (pasta / "modelo.ifc").resolve()
+    t0 = time.perf_counter()
     try:
         ifc.write(str(arquivo))
     except BaseException:
         shutil.rmtree(pasta, ignore_errors=True)
         raise
+    copia_s = time.perf_counter() - t0
     p["arquivo"] = str(arquivo)
-    return Preparado(p, pasta)
+    return Preparado(p, pasta, copia_s)
 
 
 def _tratar_resposta(raw: dict) -> dict:
@@ -122,13 +125,23 @@ def _matar_filho(proc):
         proc.join(timeout=5.0)
 
 
+def _acrescentar_tempos(resposta: dict, preparado: Preparado, auxiliar_s: float) -> dict:
+    tempos = resposta.get("tempos")
+    if isinstance(tempos, dict):
+        tempos["copia_s"] = preparado.copia_s
+        tempos["auxiliar_s"] = float(auxiliar_s)
+    return resposta
+
+
 def executar(preparado: Preparado, *, limite_s: float = LIMITE_PADRAO_S, cancelar: threading.Event | None = None, executor=None) -> dict:
     if preparado.pedido.get("protocolo") != PROTOCOLO:
         raise ProtocoloInvalido(f"Protocolo inválido: {preparado.pedido.get('protocolo')}")
     if executor is not None:
         if cancelar is not None and cancelar.is_set():
             raise DesenhoCancelado("Operação cancelada antes de iniciar")
-        return _tratar_resposta(executor(preparado.pedido))
+        t0 = time.perf_counter()
+        resposta = _tratar_resposta(executor(preparado.pedido))
+        return _acrescentar_tempos(resposta, preparado, time.perf_counter() - t0)
 
     while not _TRAVA_FILHO.acquire(timeout=0.05):
         if cancelar is not None and cancelar.is_set():
@@ -136,7 +149,9 @@ def executar(preparado: Preparado, *, limite_s: float = LIMITE_PADRAO_S, cancela
     try:
         if cancelar is not None and cancelar.is_set():
             raise DesenhoCancelado("Operação cancelada antes de iniciar")
-        return _executar_filho(preparado, limite_s, cancelar)
+        t0 = time.perf_counter()
+        resposta = _executar_filho(preparado, limite_s, cancelar)
+        return _acrescentar_tempos(resposta, preparado, time.perf_counter() - t0)
     finally:
         _TRAVA_FILHO.release()
 

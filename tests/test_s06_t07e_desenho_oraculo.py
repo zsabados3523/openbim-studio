@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Oráculo F0-S06-T07e0, parte 2 (T07e2 e T07e3): `selecionar` (CORTE) e `gerar_planta` pelo auxiliar. Especificação: `cards/F0-S06/F0-S06-T07e-especificacao.md` (§2, §4, §5 casos 1, 2, 7, 9).
-Não editar este arquivo nem `s06_t07e_aux.py` na implementação; quem tira os `@AINDA_NAO_E2`/`@AINDA_NAO_E3` (xfail estrito, só por ImportError) é o autor do oráculo, em commit próprio, depois da e2/e3.
+Não editar este arquivo nem `s06_t07e_aux.py` na implementação; quem tira os `@AINDA_NAO_E2`/`@AINDA_NAO_E3` (xfail estrito, por ImportError; o E2 também por TypeError: `executor` ainda não existe em `selecionar`) é o autor do oráculo, em commit próprio, depois da e2/e3.
 Parte 1 (contrato do cliente `auxiliar`, ganchos, erros) em `test_s06_t07e_auxiliar_oraculo.py`. Aqui, além dele:
 - `selecao.selecionar(ifc, gid, *, categorias_ocultas=(), pavimento=None, executor=None, limite_s=LIMITE_PADRAO_S, cancelar=None)` e `planta.gerar_planta(ifc, gid, *, categorias_ocultas=(), threads=None,
   limite_triangulos=None, limite_s=LIMITE_PADRAO_S, cancelar=None, executor=None)`: os parâmetros novos são só os do fim; o resto é o contrato da T07a/T07b (não muda). `executor=None` = filho real;
@@ -16,7 +16,6 @@ import pytest
 import s06_t07e_aux as T
 from test_s06_t07e_auxiliar_oraculo import _loc, _x, tmp_aux  # noqa: F401  (a fixture `tmp_aux` vem junto)
 
-AINDA_NAO_E2 = pytest.mark.xfail(strict=True, raises=ImportError, reason="T07e2: selecao pelo auxiliar ainda não existe")
 AINDA_NAO_E3 = pytest.mark.xfail(strict=True, raises=ImportError, reason="T07e3: obim_geometria.desenho e planta pelo auxiliar ainda não existem")
 
 
@@ -32,7 +31,6 @@ def _s():
     return selecao
 
 
-@AINDA_NAO_E2
 @pytest.mark.parametrize("esq,off,base,k", T.MODELOS)
 def test_caso1_corte_pelo_filho_igual_ao_local(tmp_aux, esq, off, base, k):
     S, L = _s(), _loc()

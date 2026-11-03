@@ -156,8 +156,17 @@ def test_05_nomes_de_tamanho_medio_em_a4():
     assert any(c[0] == "Residencia Unifamiliar Praia X" for c in caixas_texto(svg))
 
 
+def _qt_desenha_texto():
+    """Guarda de ambiente: o Qt sem fontes (runner Windows offscreen) nao desenha nenhum texto; ai o teste de pixel de texto nao vale."""
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 40" width="100" height="40">'
+           '<text x="5" y="30" font-size="25" fill="black">MMMM</text></svg>')
+    return bool(escuros(A.imagem(svg.encode(), 100, 40)).mean() > 0.02)
+
+
 def test_06_texto_do_carimbo_aparece_desenhado(qt):
     P()
+    if not _qt_desenha_texto():
+        pytest.skip("Qt sem fonte neste ambiente: texto nao e desenhado nem no SVG de referencia")
     svg = saida(formato="A3", escala=100, x=20, y=20)
     mask = escuros(A.imagem(svg.encode(), 420, 297))
     px = A.PX_MM

@@ -157,10 +157,10 @@ def test_05_nomes_de_tamanho_medio_em_a4():
 
 
 def _qt_desenha_texto():
-    """Guarda de ambiente: o Qt sem fontes (runner Windows offscreen) nao desenha nenhum texto; ai o teste de pixel de texto nao vale."""
-    svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 40" width="100" height="40">'
-           '<text x="5" y="30" font-size="25" fill="black">MMMM</text></svg>')
-    return bool(escuros(A.imagem(svg.encode(), 100, 40)).mean() > 0.02)
+    """Guarda de ambiente: o Qt sem fontes (ou que so desenha texto pequeno claro demais, runner Windows offscreen) nao desenha texto escuro no tamanho do carimbo; ai o teste de pixel de texto nao vale."""
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 40" width="100mm" height="40mm">'
+           '<text x="2" y="20" font-size="2.5" fill="black">MMMM MMMM</text></svg>')
+    return bool(escuros(A.imagem(svg.encode(), 400, 160)).mean() > 0.0005)
 
 
 def test_06_texto_do_carimbo_aparece_desenhado(qt):

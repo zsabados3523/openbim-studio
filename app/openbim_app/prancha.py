@@ -9,45 +9,27 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
 
-FORMATOS = {"A4": (297.0, 210.0), "A3": (420.0, 297.0)}
-MARGEM_MM = 10.0
-CARIMBO_ALTURA_MM = 25.0
-
+FORMATOS = {
+    "A4": (297.0, 210.0), "A3": (420.0, 297.0), "A2": (594.0, 420.0),
+    "A1": (841.0, 594.0), "A0": (1189.0, 841.0),
+}
+MARGEM_MM, CARIMBO_ALTURA_MM = 10.0, 25.0
 _QT_APP = None
 
 
-class PranchaInvalida(ValueError):
-    """Erro de validacao de prancha ou viewport."""
-
-
-class FormatoInvalido(PranchaInvalida):
-    """Formato de folha nao suportado."""
-
-
-class EscalaInvalida(PranchaInvalida):
-    """Escala invalida para o viewport."""
-
-
-class SvgInvalido(PranchaInvalida):
-    """SVG da planta invalido ou malformado."""
-
-
-class ViewportForaDaFolha(PranchaInvalida):
-    """Viewport fora da area util da prancha ou sobre o carimbo."""
-
-
-class PranchaNaoEncontrada(PranchaInvalida):
-    """Prancha ou viewport nao encontrado."""
+class PranchaInvalida(ValueError): """Erro de validacao de prancha ou viewport."""
+class FormatoInvalido(PranchaInvalida): """Formato de folha nao suportado."""
+class EscalaInvalida(PranchaInvalida): """Escala invalida para o viewport."""
+class SvgInvalido(PranchaInvalida): """SVG da planta invalido ou malformado."""
+class ViewportForaDaFolha(PranchaInvalida): """Viewport fora da area util da prancha ou sobre o carimbo."""
+class PranchaNaoEncontrada(PranchaInvalida): """Prancha ou viewport nao encontrado."""
+class RotacaoInvalida(PranchaInvalida): """Rotacao invalida para o viewport."""
 
 
 def _contem_controle(texto):
     if not isinstance(texto, str):
         return True
-    for ch in texto:
-        code = ord(ch)
-        if unicodedata.category(ch) in ("Cc", "Cs") or code in (0xFFFE, 0xFFFF):
-            return True
-    return False
+    return any(unicodedata.category(c) in ("Cc", "Cs") or ord(c) in (0xFFFE, 0xFFFF) for c in texto)
 
 
 def _obter_prancha(lateral, identification):
@@ -97,8 +79,10 @@ def criar_prancha(lado, identification, formato, projeto, titulo, data, folha):
     return uid
 
 
-def colocar_viewport(lado, identification, vista_guid, x_mm, y_mm, escala):
+def colocar_viewport(lado, identification, vista_guid, x_mm, y_mm, escala, rotacao=0):
     """Cria viewport na colecao 'viewports' do lateral."""
+    if isinstance(rotacao, bool) or not isinstance(rotacao, int) or rotacao not in (0, 90):
+        raise RotacaoInvalida(f"rotacao invalida: {rotacao!r}")
     if not isinstance(identification, str) or not identification or identification != identification.strip() or _contem_controle(identification):
         raise PranchaInvalida("identification vazia ou com espaco nas pontas")
     if not isinstance(vista_guid, str) or not vista_guid or _contem_controle(vista_guid):
@@ -117,14 +101,19 @@ def colocar_viewport(lado, identification, vista_guid, x_mm, y_mm, escala):
         "y": y_mm,
         "escala": escala,
     }
+    if rotacao == 90:
+        obj["rotacao"] = 90
     lado.criar("viewports", uid, obj)
     return uid
 
 
 def ler_viewport(lateral, identification, vista_guid):
-    """Le viewport do lateral e devolve {'x', 'y', 'escala'}."""
+    """Le viewport do lateral e devolve {'x', 'y', 'escala'} (e 'rotacao' se 90)."""
     v = _obter_viewport(lateral, identification, vista_guid)
-    return {"x": v["x"], "y": v["y"], "escala": v["escala"]}
+    res = {"x": v["x"], "y": v["y"], "escala": v["escala"]}
+    if v.get("rotacao") == 90:
+        res["rotacao"] = 90
+    return res
 
 
 def montar_svg(lateral, identification, vista_guid, planta_svg):
@@ -195,9 +184,18 @@ def montar_svg(lateral, identification, vista_guid, planta_svg):
     x = viewport["x"]
     y = viewport["y"]
     escala = viewport["escala"]
+    rotacao = viewport.get("rotacao", 0)
+    if isinstance(rotacao, bool) or not isinstance(rotacao, int) or rotacao not in (0, 90):
+        raise RotacaoInvalida(f"rotacao hostil no lateral: {rotacao!r}")
     s = 1000.0 / escala
-    vw = w * s
-    vh = h * s
+    if rotacao == 0:
+        vw, vh = w * s, h * s
+        tx_vp, ty_vp = x - minx * s, y - miny * s
+        transform_vp = f"translate({tx_vp:.10g}, {ty_vp:.10g}) scale({s:.10g})"
+    else:
+        vw, vh = h * s, w * s
+        tx_vp, ty_vp = x + (h + miny) * s, y - minx * s
+        transform_vp = f"matrix(0 {s:.10g} {-s:.10g} 0 {tx_vp:.10g} {ty_vp:.10g})"
 
     tol = 1e-9
     if x < 10.0 - tol or y < 10.0 - tol or (x + vw) > (W - 10.0) + tol or (y + vh) > (H - 35.0) + tol:
@@ -240,15 +238,13 @@ def montar_svg(lateral, identification, vista_guid, planta_svg):
         },
     )
 
-    tx = x - minx * s
-    ty = y - miny * s
     vp_elem = ET.SubElement(
         root,
         "{http://www.w3.org/2000/svg}g",
         {
             "id": "viewport",
             "data-vista": vista_guid,
-            "transform": f"translate({tx:.10g}, {ty:.10g}) scale({s:.10g})",
+            "transform": transform_vp,
         },
     )
     for child in planta_root:

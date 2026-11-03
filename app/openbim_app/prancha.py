@@ -6,6 +6,7 @@ import re
 import unicodedata
 import uuid
 import xml.etree.ElementTree as ET
+import xml.parsers.expat
 from datetime import datetime
 from pathlib import Path
 
@@ -16,6 +17,8 @@ FORMATOS = {
 MARGEM_MM, CARIMBO_ALTURA_MM = 10.0, 25.0
 _QT_APP = None
 _NUM_ASCII_RE = re.compile(r"^[-+]?(?:[0-9]*\.[0-9]+|[0-9]+\.?[0-9]*)(?:[eE][-+]?[0-9]+)?$")
+_TETO_ELEMENTOS = 1_000_000
+_TETO_PROFUNDIDADE = 200
 
 
 def _resumo(valor, limite=80):
@@ -157,6 +160,40 @@ def ler_viewport(lateral, identification, vista_guid):
     return res
 
 
+def _validar_xml(texto):
+    """Le o XML em uma passada linear (expat) antes de montar a arvore."""
+    parser = xml.parsers.expat.ParserCreate()
+    estado = {"elementos": 0, "profundidade": 0}
+
+    def inicio(name, attrs):
+        estado["elementos"] += 1
+        if estado["elementos"] > _TETO_ELEMENTOS:
+            raise SvgInvalido(f"teto de elementos excedido (>{_TETO_ELEMENTOS})")
+        estado["profundidade"] += 1
+        if estado["profundidade"] - 1 > _TETO_PROFUNDIDADE:
+            raise SvgInvalido(f"profundidade maxima excedida (>{_TETO_PROFUNDIDADE})")
+
+    def fim(name):
+        estado["profundidade"] -= 1
+
+    def doctype(name, sysid, pubid, has_internal_subset):
+        raise SvgInvalido("doctype ou entity proibido no svg da planta")
+
+    def entidade(*args):
+        raise SvgInvalido("doctype ou entity proibido no svg da planta")
+
+    parser.StartElementHandler = inicio
+    parser.EndElementHandler = fim
+    parser.StartDoctypeDeclHandler = doctype
+    parser.EntityDeclHandler = entidade
+    try:
+        parser.Parse(texto, True)
+    except SvgInvalido:
+        raise
+    except (xml.parsers.expat.ExpatError, UnicodeError) as e:
+        raise SvgInvalido(f"xml da planta malformado: {e}") from e
+
+
 def normalizar_planta(svg_texto, margem_m=0.5):
     """Injeta viewBox na raiz se faltar, calculando a caixa delimitadora dos desenhaveis."""
     if isinstance(margem_m, bool) or not isinstance(margem_m, (int, float)) or not math.isfinite(margem_m) or margem_m < 0 or margem_m > 1e12:
@@ -176,8 +213,7 @@ def normalizar_planta(svg_texto, margem_m=0.5):
         raise SvgInvalido("svg_texto deve ser str ou bytes")
     if not svg_str.strip():
         raise SvgInvalido("svg vazio")
-    if "<!doctype" in svg_str.lower() or "<!entity" in svg_str.lower():
-        raise SvgInvalido("doctype ou entity proibido no svg da planta")
+    _validar_xml(svg_str)
     try:
         root = ET.fromstring(svg_str)
     except (ET.ParseError, UnicodeError) as e:

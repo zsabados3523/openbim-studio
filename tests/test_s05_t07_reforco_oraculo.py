@@ -235,7 +235,8 @@ def test_r10_pendencia_que_nao_se_resolve_recusa(proj, monkeypatch, variante):
 
 @pytest.mark.parametrize("falha", ["unlink_final", "troca_obim"])
 def test_r11_unlink_final_recusado_uma_vez_conclui_e_o_carimbo_fica(proj, monkeypatch, falha):
-    """Caso 3: resolvedor conclui na hora e o carimbo fica (mutante N3)."""
+    """Caso 3: resolvedor conclui na hora e o carimbo fica (mutante N3). Atualizado pela T05d: quando o resolvedor conclui, `gravar_par` NÃO levanta
+    (devolve os dois `Gravado`) e `ao_concluir` roda EXATAMENTE 1 vez (antes: levantava e, no unlink final, rodava 2 vezes)."""
     gp()
     proj.gravar()
     um = proj.antigo()
@@ -259,12 +260,12 @@ def test_r11_unlink_final_recusado_uma_vez_conclui_e_o_carimbo_fica(proj, monkey
         monkeypatch.setattr(os, "replace", recusa)
 
     proj.chamadas.clear()
-    with pytest.raises(Exception):
-        proj.gravar()
+    gravados = proj.gravar()  # T05d: não levanta
+    assert len(gravados) == 2
 
     if falha == "unlink_final":
         assert falhou == [True]
-        assert [c[0] for c in proj.chamadas] == [SEQ, SEQ]
+        assert [c[0] for c in proj.chamadas] == [SEQ]  # T05d: uma vez (antes [SEQ, SEQ])
     else:
         assert recusa.tentativas >= 6
         assert [c[0] for c in proj.chamadas] == [SEQ]

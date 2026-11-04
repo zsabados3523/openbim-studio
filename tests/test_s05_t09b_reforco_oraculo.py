@@ -84,6 +84,7 @@ def test_r1_parar_espera_salvar_lento_e_iniciar_de_novo_cria_uma_thread(fabrica,
 
 def test_r2_sha_do_lateral_do_retrato_quando_o_resolvedor_conclui_fora_do_ler(fabrica, monkeypatch):
     # M: sha do lateral calculado no ao_concluir (depois de uma transação pós-retrato, a base aponta para outro lateral e recuperar recusa)
+    # Atualizado pela T05d: a troca que falha e o resolvedor conclui é SUCESSO; `salvar()` devolve True em vez de levantar.
     c = fabrica()
     c.tx(1)
     replace_real, trocas, erros, no_resolvedor = os.replace, [], [], {}
@@ -109,8 +110,7 @@ def test_r2_sha_do_lateral_do_retrato_quando_o_resolvedor_conclui_fora_do_ler(fa
         return replace_real(src, dst, *a, **k)
 
     monkeypatch.setattr(os, "replace", replace_falha_uma)
-    with pytest.raises(Exception):
-        c.auto.salvar()
+    assert c.auto.salvar() is True  # T05d: antes pytest.raises(Exception)
     monkeypatch.setattr(os, "replace", replace_real)
     assert not erros and trocas[0] == 1 and len(trocas) == 2 and no_resolvedor["seq"] == 1, (erros, trocas, no_resolvedor)
     _, objs_auto = X7.ler_obim(c.auto_obim)

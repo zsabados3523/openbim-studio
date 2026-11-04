@@ -43,6 +43,12 @@ def _resumo_ou_nada(caminho):
     return _resumo(caminho) if Path(caminho).exists() else (None, None)
 
 
+def _gravado(caminho):
+    sha, tamanho = _resumo(caminho)
+    bak = _bak(caminho)
+    return GA.Gravado(Path(caminho), sha, tamanho, bak if bak.exists() else None)
+
+
 def _mesmo(a, b):
     return os.path.normcase(os.path.abspath(os.fspath(a))) == os.path.normcase(os.path.abspath(os.fspath(b)))
 
@@ -270,7 +276,8 @@ def gravar_par(sessao, historico, lateral, destino, pasta_projeto, lado_id, seq,
                 ao_concluir(seq_val)
             etapa = "trocado"
             os.unlink(str(pasta / "gravacao.json"))
-    except BaseException:
+    except BaseException as erro:
+        interrupcao = not isinstance(erro, Exception)
         if not com_gravacao:
             _limpar_antes(pasta, destino, obim)
             if carimbo:
@@ -278,10 +285,24 @@ def gravar_par(sessao, historico, lateral, destino, pasta_projeto, lado_id, seq,
             raise
         if etapa == "ao_concluir":
             raise
+        if etapa == "trocado":
+            if interrupcao:
+                raise
+            try:
+                os.unlink(str(pasta / "gravacao.json"))
+            except OSError:
+                raise
+            return gravado_ifc, gravado_obim
         try:
             resultado = resolver_gravacao_pendente(pasta, destino, ao_concluir)
-        except Exception:  # noqa: BLE001  (o diário fica para a próxima abertura)
-            resultado = None
+        except BaseException as erro_resolvedor:
+            if interrupcao:
+                raise erro from erro_resolvedor
+            raise erro_resolvedor from erro
+        if interrupcao:
+            raise erro
+        if resultado == "concluido":
+            return _gravado(destino), _gravado(obim)
         if resultado == "desfeito" and carimbo:
             _reverter_carimbo(sessao, historico, existia, lado_antes, revisao_antes)
         raise

@@ -48,6 +48,8 @@ def _limpeza_pycache(script, destino):
 
 def _pacote_falso(tmp_path, com_geometria=True):
     """Árvore mínima como o build monta: AppRun, env/bin (o Python deste ambiente), app/obim_geometria, LGPL-COMO-TROCAR.md."""
+    if sys.platform == "win32":
+        pytest.skip("pacote falso com wrapper bash so existe no Linux; a prova real do Windows e o test_instalador_auxiliar.sh no job instalador-windows do CI")
     r = tmp_path / "pacote"
     (r / "app").mkdir(parents=True)
     (r / "env").mkdir()

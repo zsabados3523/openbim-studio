@@ -114,7 +114,8 @@ def test_02_z_numero_solto_nao_estoura_memoria():
 @pytest.mark.parametrize("nome", [caso("curvas_e_arcos")])
 def test_03_vinte_mil_paths_memoria_e_tempo(nome):
     corpo = ("paths = ''.join(f'<path d=\"M{i} 0 C{i+1} 5 {i+2} 5 {i+3} 0 A2 2 0 0 1 {i+7} 0\"/>' for i in range(20000))\n"
-             "tracemalloc.start()\nt1 = time.time()\nm.normalizar_planta(env(paths))\nseg = time.time() - t1\n"
+             "t1 = time.time()\nm.normalizar_planta(env(paths))\nseg = time.time() - t1\n"  # tempo SEM tracemalloc (ele multiplica o tempo por 3 a 5; o limite de 5 s e o mesmo)
+             "tracemalloc.start()\nm.normalizar_planta(env(paths))\n"
              "pico = tracemalloc.get_traced_memory()[1] / 2**20\nr = 'OK' if (pico < 60 and seg < 5) else f'LENTO_OU_PESADO pico={pico:.0f}MB tempo={seg:.1f}s'")
     r, _, _ = rodar(corpo, tempo=60, mem_mb=1500)
     assert r == "OK", r

@@ -3,7 +3,6 @@
 import json
 import logging
 import multiprocessing
-import os
 import shutil
 import tempfile
 import threading
@@ -15,6 +14,13 @@ from obim_geometria.processo import PROTOCOLO, entrada
 LIMITE_PADRAO_S = 180
 _TRAVA_FILHO = threading.Lock()
 _logger = logging.getLogger(__name__)
+
+
+def threads_padrao() -> int:
+    """Padrão de threads da geometria (núcleos físicos, teto 8), sem carregar geometria no app."""
+    from importlib import import_module
+    pacote = import_module("obim_geometria.processo").__package__
+    return import_module(".nucleos", pacote).limitar_threads(None)
 
 
 class ErroAuxiliar(RuntimeError): pass
@@ -84,7 +90,7 @@ def preparar(ifc, pedido: dict) -> Preparado:
     _limpar_pastas_antigas()
     p = dict(pedido)
     p.setdefault("protocolo", PROTOCOLO)
-    p.setdefault("threads", min(8, os.cpu_count() or 1))
+    p.setdefault("threads", threads_padrao())
     pasta = Path(tempfile.mkdtemp(prefix="obim-desenho-", dir=tempfile.gettempdir()))
     arquivo = (pasta / "modelo.ifc").resolve()
     t0 = time.perf_counter()

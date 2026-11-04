@@ -83,6 +83,8 @@ done
 
 # 2. Codigo do app, lancador, desktop e icone
 cp -a "$REPO/app/openbim_app" "$APPDIR/app/"
+# Processo auxiliar de geometria (T07e4): o filho sob -I acha app/obim_geometria ao lado de app/openbim_app (o find abaixo limpa o __pycache__).
+cp -a "$REPO/geometria/obim_geometria" "$APPDIR/app/"
 # Modulo C++: so o __init__.py e o .so, nada do diretorio de compilacao. O RPATH dele ($ORIGIN/../../env/lib) acha o env/ do pacote.
 mkdir -p "$APPDIR/app/obimcore"
 cp "$OBIMCORE_DIR/__init__.py" "$OBIMCORE_DIR"/_obimcore*.so "$APPDIR/app/obimcore/"

@@ -81,6 +81,8 @@ echo "Runtime do Visual C++ no pacote:"; ls -l "$PKG"/env/vcruntime140*.dll "$PK
 
 # 2. Código do app, módulo C++ e lançador
 cp -a "$REPO/app/openbim_app" "$PKG/app/"
+# Processo auxiliar de geometria (T07e4): o filho sob -I acha app\obim_geometria ao lado de app\openbim_app (o find abaixo limpa o __pycache__).
+cp -a "$REPO/geometria/obim_geometria" "$PKG/app/"
 find "$PKG/app" -name __pycache__ -type d -prune -exec rm -rf {} +
 mkdir -p "$PKG/app/obimcore"  # só o __init__.py e o .pyd, nada do diretório de compilação
 cp "$OBIMCORE_DIR/__init__.py" "${PYDS[0]}" "$PKG/app/obimcore/"

@@ -116,3 +116,8 @@ def janela_limpa(f, modo, gid, pasta):
                        env={**os.environ, "PYTHONPATH": os.pathsep.join(sys.path), "LC_ALL": "C"})
     assert r.returncode == 0, r.stderr[-1500:]
     return json.loads(r.stdout.strip().splitlines()[-1])
+
+
+def pav0(f):
+    """GlobalId do Pav0 do `modelo` (o pedido `desenho` leva `vista["pavimento"]`, T07e3b)."""
+    return next(p.GlobalId for p in f.by_type("IfcBuildingStorey") if p.Name == "Pav0")

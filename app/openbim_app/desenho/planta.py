@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import math
 from typing import Iterable
 
 import ifcopenshell
@@ -34,7 +35,7 @@ def _altura_corte(ifc: ifcopenshell.file, anotacao) -> float:
     if isinstance(valor, bool) or not isinstance(valor, (int, float)):
         raise SelecaoInvalida(f"AlturaCorte inválida: {valor!r}")
     valor = float(valor)
-    if valor <= 0:
+    if not math.isfinite(valor) or valor <= 0:
         raise SelecaoInvalida(f"AlturaCorte inválida: {valor!r}")
     return valor
 
@@ -69,6 +70,8 @@ def gerar_planta(
     scale = float(ifcopenshell.util.unit.calculate_unit_scale(ifc))
     sel = selecao.selecionar(ifc, gid_vista, categorias_ocultas=cats)
     pav = ifc.by_id(sel.pavimento)
+    if getattr(pav, "Elevation", None) is None:
+        raise SelecaoInvalida(f"Pavimento {pav.Name or pav.GlobalId} sem cota (Elevation); não é possível gerar a planta")
     ox, oy, oz = _origem_pavimento(ifc, pav)
     altura_corte = float(oz * scale + h)
 
@@ -92,6 +95,7 @@ def gerar_planta(
             "altura_corte_m": altura_corte,
             "origem_pav": [ox, oy, oz],
             "escala": scale,
+            "pavimento": pav.GlobalId,
         },
         "limite_triangulos": limite_triangulos,
     }

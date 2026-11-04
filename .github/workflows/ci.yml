@@ -651,7 +651,7 @@ jobs:
           r=true; motivo="evento $EVENTO"
           if [ "$EVENTO" = "pull_request" ]; then
             if git fetch --no-tags --depth=1 origin "$BASE" 2>/dev/null && lista=$(git diff --name-only FETCH_HEAD HEAD); then
-              if grep -qE '^(packaging/|app/|native/obimcore/|tests/|environment[^/]*\.yml$|environment\.[^/]*\.lock$|pyproject[^/]*$|\.github/(workflows/ci\.yml|actions/)|scripts/(prune_packages|license_inventory|collect_package_licenses)\.py$|LICENSES/)' <<<"$lista"; then motivo="o PR mexe no empacotamento"; else r=false; motivo="o PR não mexe no empacotamento"; fi
+              if grep -qE '^(packaging/|geometria/|app/|native/obimcore/|tests/|environment[^/]*\.yml$|environment\.[^/]*\.lock$|pyproject[^/]*$|\.github/(workflows/ci\.yml|actions/)|scripts/(prune_packages|license_inventory|collect_package_licenses)\.py$|LICENSES/)' <<<"$lista"; then motivo="o PR mexe no empacotamento"; else r=false; motivo="o PR não mexe no empacotamento"; fi
             else motivo="não consegui comparar com a base"; fi
           fi
           echo "instalador=$r" >> "$GITHUB_OUTPUT"
@@ -722,24 +722,28 @@ jobs:
           t0=$(date +%s)
           DEST="$(cygpath -w "$RUNNER_TEMP")\\OpenBIM-ponte"  # sem espaços (o /D= do NSIS não aceita)
           D="$(cygpath -u "$DEST")"
-          fim() {  # fim "mensagem": erro com o fim do log do passo
-            msg=$(tail -n 45 "$RUNNER_TEMP/ponte-inst.log" 2>/dev/null | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+          fim() {  # fim "mensagem" log: erro com o fim do log do passo
+            msg=$(tail -n 45 "$2" 2>/dev/null | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
             echo "::error title=R1-j no instalador falhou::$1 $msg"; exit 1
           }
           "$PWD/out/OpenBIM-Studio-Setup.exe" /S "/D=$DEST" & pid=$!; wait "$pid"; rc=$?  # como o test_installer.sh; o limite é o do passo (30 min)
-          [ "$rc" = 0 ] || fim "instalação em silêncio saiu com código $rc"
+          [ "$rc" = 0 ] || fim "instalação em silêncio saiu com código $rc" "$RUNNER_TEMP/ponte-inst.log"
           t1=$(date +%s)
           OBIM_PYTEST_SITE="$RUNNER_TEMP/pytest_site" timeout 1500 bash packaging/windows/test_instalador_ponte.sh "$DEST" > "$RUNNER_TEMP/ponte-inst.log" 2>&1; rc=$?
           cat "$RUNNER_TEMP/ponte-inst.log"
-          [ "$rc" = 0 ] || fim "oráculo reprovou (código $rc)"
+          [ "$rc" = 0 ] || fim "oráculo reprovou (código $rc)" "$RUNNER_TEMP/ponte-inst.log"
           t2=$(date +%s)
+          timeout 1500 bash packaging/windows/test_instalador_auxiliar.sh "$DEST" > "$RUNNER_TEMP/auxiliar-inst.log" 2>&1; rc=$?
+          cat "$RUNNER_TEMP/auxiliar-inst.log"
+          [ "$rc" = 0 ] || fim "prova do auxiliar de geometria reprovou (código $rc)" "$RUNNER_TEMP/auxiliar-inst.log"
+          t3=$(date +%s)
           # desinstala para o test_installer.sh começar de uma pasta limpa; _?= faz o desinstalador esperar (sem isso ele devolve o controle logo)
           timeout 300 "$D/Uninstall.exe" /S "_?=$DEST"; rc=$?
           sleep 3; rm -f "$D/Uninstall.exe"
-          [ "$rc" = 0 ] || fim "desinstalador saiu com código $rc"
-          for x in env app licenses; do [ ! -e "$D/$x" ] || fim "sobrou $x depois de desinstalar"; done
+          [ "$rc" = 0 ] || fim "desinstalador saiu com código $rc" "$RUNNER_TEMP/ponte-inst.log"
+          for x in env app licenses; do [ ! -e "$D/$x" ] || fim "sobrou $x depois de desinstalar" "$RUNNER_TEMP/ponte-inst.log"; done
           rmdir "$D" 2>/dev/null
-          echo "R1-j no instalador: instalação $((t1-t0)) s, oráculo $((t2-t1)) s, desinstalação $(( $(date +%s)-t2 )) s" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "R1-j no instalador: instalação $((t1-t0)) s, oráculo $((t2-t1)) s, auxiliar $((t3-t2)) s, desinstalação $(( $(date +%s)-t3 )) s" | tee -a "$GITHUB_STEP_SUMMARY"
           echo "::notice title=R1-j::obimcore dentro do instalador, R1-a, R1-d, R1-e e R1-i verdes; runtime do Visual C++ compatível (prova 7)"
       - name: Teste do instalador (instala, abre, desinstala)
         if: steps.detecta.outputs.instalador == 'true'
@@ -924,6 +928,19 @@ jobs:
             exit $rc
           fi
           echo "::notice title=R1-j::obimcore dentro do AppImage, R1-a, R1-d, R1-e e R1-i verdes"
+      - name: R3, o auxiliar de geometria dentro do AppImage (T07e4; bloqueia o merge porque o job appimage é obrigatório)
+        run: |
+          set +e
+          IMG="$RUNNER_TEMP/ai/OpenBIM-Studio-x86_64.AppImage"
+          QT_QPA_PLATFORM=offscreen timeout 1500 bash packaging/linux/test_appimage_auxiliar.sh "$IMG" > auxiliar-ai.log 2>&1
+          rc=$?
+          cat auxiliar-ai.log
+          if [ $rc -ne 0 ]; then
+            msg=$(tail -n 45 auxiliar-ai.log | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=R3 no AppImage falhou::$msg"
+            exit $rc
+          fi
+          echo "::notice title=R3::obim_geometria dentro do AppImage, filho sob -I fez caixas"
       - name: Empacotar (tar.gz mantém a permissão de executar)
         run: |
           mkdir -p out

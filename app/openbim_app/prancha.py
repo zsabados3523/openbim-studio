@@ -16,10 +16,13 @@ FORMATOS = {
 }
 MARGEM_MM, CARIMBO_ALTURA_MM = 10.0, 25.0
 _QT_APP = None
+_IGNORADOS = {"defs", "marker", "clipPath", "mask", "pattern", "symbol", "style", "title", "desc", "metadata", "text"}
 _CMD_ARITY = {"Z": 0, "H": 1, "V": 1, "M": 2, "L": 2, "T": 2, "S": 4, "Q": 4, "C": 6, "A": 7}
 _CMD_CHARS = set("MmLlHhVvCcSsQqTtAaZz")
 _PATH_TOKEN_RE = re.compile(r"([MmLlHhVvCcSsQqTtAaZz]|[-+]?(?:[0-9]*\.[0-9]+|[0-9]+\.?[0-9]*)(?:[eE][-+]?[0-9]+)?)")
 _NUM_ASCII_RE = re.compile(r"^[-+]?(?:[0-9]*\.[0-9]+|[0-9]+\.?[0-9]*)(?:[eE][-+]?[0-9]+)?$")
+_NUM_TOKEN_RE = re.compile(r"[-+]?(?:[0-9]*\.[0-9]+|[0-9]+\.?[0-9]*)(?:[eE][-+]?[0-9]+)?")
+_SEP_RE = re.compile(r"[\s,]*")
 _TETO_ELEMENTOS = 1_000_000
 _TETO_PROFUNDIDADE = 200
 _LIMITE_COMANDOS = 5_000_000
@@ -203,6 +206,64 @@ def _validar_xml(texto):
         raise
     except (xml.parsers.expat.ExpatError, UnicodeError) as e:
         raise SvgInvalido(f"xml da planta malformado: {e}") from e
+
+
+def _parse_transform(t_str):
+    if not t_str or not t_str.strip():
+        return (1.0, 1.0, 0.0, 0.0)
+    t_str = t_str.strip()
+    if len(t_str) > 1000:
+        raise SvgInvalido("transform excede limite de tamanho (1000 caracteres)")
+    try:
+        calls = list(re.finditer(r"([a-zA-Z_][a-zA-Z0-9_-]*)\s*\(([^()]*)\)", t_str))
+        if not calls:
+            raise SvgInvalido("transform invalido")
+        last_end, ops = 0, []
+        for m in calls:
+            if re.search(r"[^\s,]", t_str[last_end : m.start()]):
+                raise SvgInvalido("caracteres invalidos no transform")
+            last_end = m.end()
+            fn, args_str = m.group(1), m.group(2)
+            if fn not in ("translate", "scale"):
+                raise SvgInvalido(f"transform {fn} nao suportado")
+            num_pat = r"[-+]?(?:[0-9]*\.[0-9]+|[0-9]+\.?[0-9]*)(?:[eE][-+]?[0-9]+)?"
+            if re.search(r"[^\s,]", re.sub(num_pat, "", args_str)):
+                raise SvgInvalido("argumentos invalidos no transform")
+            args = re.findall(num_pat, args_str)
+            if fn == "translate" and len(args) in (1, 2):
+                ops.append((1.0, 1.0, _num(args[0]), _num(args[1]) if len(args) == 2 else 0.0))
+            elif fn == "scale" and len(args) in (1, 2):
+                ops.append((_num(args[0]), _num(args[1]) if len(args) == 2 else _num(args[0]), 0.0, 0.0))
+            else:
+                raise SvgInvalido(f"numero invalido de argumentos em {fn}")
+        if re.search(r"[^\s,]", t_str[last_end:]):
+            raise SvgInvalido("caracteres invalidos no transform")
+        sx, sy, tx, ty = 1.0, 1.0, 0.0, 0.0
+        for op_sx, op_sy, op_tx, op_ty in reversed(ops):
+            sx, tx = op_sx * sx, op_sx * tx + op_tx
+            sy, ty = op_sy * sy, op_sy * ty + op_ty
+            if not (math.isfinite(sx) and math.isfinite(sy) and math.isfinite(tx) and math.isfinite(ty)):
+                raise SvgInvalido("transform resultou em valor nao finito")
+            if abs(sx) > 1e12 or abs(sy) > 1e12 or abs(tx) > 1e12 or abs(ty) > 1e12:
+                raise SvgInvalido("transform resultou em valor excessivo")
+        return (sx, sy, tx, ty)
+    except (ValueError, OverflowError, TypeError, ZeroDivisionError) as e:
+        raise SvgInvalido(f"transform invalido: {e}") from e
+
+
+def _compose_transforms(parent_tr, child_tr):
+    try:
+        p_sx, p_sy, p_tx, p_ty = parent_tr
+        c_sx, c_sy, c_tx, c_ty = child_tr
+        sx, sy = p_sx * c_sx, p_sy * c_sy
+        tx, ty = p_sx * c_tx + p_tx, p_sy * c_ty + p_ty
+        if not (math.isfinite(sx) and math.isfinite(sy) and math.isfinite(tx) and math.isfinite(ty)):
+            raise SvgInvalido("transform composto nao finito")
+        if abs(sx) > 1e12 or abs(sy) > 1e12 or abs(tx) > 1e12 or abs(ty) > 1e12:
+            raise SvgInvalido("transform composto excessivo")
+        return (sx, sy, tx, ty)
+    except (ValueError, OverflowError, TypeError, ZeroDivisionError) as e:
+        raise SvgInvalido(f"erro ao compor transform: {e}") from e
 
 
 class _BBox:
@@ -462,6 +523,65 @@ def _parse_path(d, add_pt, cmd_counter):
         last_cmd = cmd
 
 
+def _process_elem_bbox(elem, tag, tr, bbox, cmd_counter):
+    sx, sy, tx, ty = tr
+    def add_pt(px, py):
+        bbox.add(sx * px + tx, sy * py + ty)
+
+    if tag == "rect":
+        x, y = _num(elem.get("x", "0")), _num(elem.get("y", "0"))
+        w, h = _num(elem.get("width", "0")), _num(elem.get("height", "0"))
+        if w < 0 or h < 0:
+            raise SvgInvalido("rect negativo")
+        add_pt(x, y)
+        add_pt(x + w, y)
+        add_pt(x + w, y + h)
+        add_pt(x, y + h)
+    elif tag in ("circle", "ellipse"):
+        cx, cy = _num(elem.get("cx", "0")), _num(elem.get("cy", "0"))
+        rx = _raio(elem.get("r" if tag == "circle" else "rx", "0"))
+        ry = rx if tag == "circle" else _raio(elem.get("ry", "0"))
+        add_pt(cx - rx, cy)
+        add_pt(cx + rx, cy)
+        add_pt(cx, cy - ry)
+        add_pt(cx, cy + ry)
+    elif tag == "line":
+        add_pt(_num(elem.get("x1", "0")), _num(elem.get("y1", "0")))
+        add_pt(_num(elem.get("x2", "0")), _num(elem.get("y2", "0")))
+    elif tag in ("polyline", "polygon"):
+        pts_str = elem.get("points", "").strip()
+        if not pts_str:
+            raise SvgInvalido("points vazio")
+        last_end = 0
+        pendente = None
+        pontos = 0
+        for m in _NUM_TOKEN_RE.finditer(pts_str):
+            if not _SEP_RE.fullmatch(pts_str, last_end, m.start()):
+                raise SvgInvalido("caracteres invalidos em points")
+            last_end = m.end()
+            cmd_counter[0] += 1
+            if cmd_counter[0] > _LIMITE_COMANDOS:
+                raise SvgInvalido("limite de comandos excedido (> 5 milhoes)")
+            try:
+                valor = float(m.group(0))
+            except (ValueError, OverflowError) as e:
+                raise SvgInvalido("numero invalido em points") from e
+            if not math.isfinite(valor) or abs(valor) > 1e12:
+                raise SvgInvalido("numero nao finito ou excessivo em points")
+            if pendente is None:
+                pendente = valor
+            else:
+                add_pt(pendente, valor)
+                pendente = None
+                pontos += 1
+        if not _SEP_RE.fullmatch(pts_str, last_end):
+            raise SvgInvalido("caracteres invalidos em points")
+        if not pontos or pendente is not None:
+            raise SvgInvalido("quantidade impar de pontos em polyline/polygon")
+    elif tag == "path":
+        _parse_path(elem.get("d", ""), add_pt, cmd_counter)
+
+
 def normalizar_planta(svg_texto, margem_m=0.5):
     """Injeta viewBox na raiz se faltar, calculando a caixa delimitadora dos desenhaveis."""
     if isinstance(margem_m, bool) or not isinstance(margem_m, (int, float)) or not math.isfinite(margem_m) or margem_m < 0 or margem_m > 1e12:
@@ -488,7 +608,42 @@ def normalizar_planta(svg_texto, margem_m=0.5):
         raise SvgInvalido(f"xml da planta malformado: {e}") from e
     if root.tag != "{http://www.w3.org/2000/svg}svg":
         raise SvgInvalido("raiz do svg da planta nao e <svg> com namespace")
-    return svg_str
+
+    if root.get("viewBox") is not None:
+        return svg_str
+
+    bbox = _BBox()
+    cmd_counter = [0]
+    stack = [(iter([root]), (1.0, 1.0, 0.0, 0.0))]
+    while stack:
+        it, tr = stack[-1]
+        try:
+            elem = next(it)
+        except StopIteration:
+            stack.pop()
+            continue
+        tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
+        if tag in _IGNORADOS:
+            continue
+        total_tr = _compose_transforms(tr, _parse_transform(elem.get("transform", "")))
+        _process_elem_bbox(elem, tag, total_tr, bbox, cmd_counter)
+        stack.append((iter(elem), total_tr))
+
+    if not bbox.has_pts:
+        raise SvgInvalido("sem nenhum elemento desenhavel")
+
+    minx = bbox.min_x - margem_m
+    miny = bbox.min_y - margem_m
+    w = (bbox.max_x - bbox.min_x) + 2.0 * margem_m
+    h = (bbox.max_y - bbox.min_y) + 2.0 * margem_m
+    if w <= 0 or h <= 0 or not (math.isfinite(minx) and math.isfinite(miny) and math.isfinite(w) and math.isfinite(h)):
+        raise SvgInvalido("largura ou altura final <= 0")
+
+    m_svg = re.search(r"<svg\b", svg_str)
+    if not m_svg:
+        raise SvgInvalido("tag raiz <svg> nao encontrada")
+    idx = m_svg.end()
+    return svg_str[:idx] + f' viewBox="{minx:.10g} {miny:.10g} {w:.10g} {h:.10g}"' + svg_str[idx:]
 
 
 def _validar_prancha_e_viewport(prancha, viewport, vista_guid):

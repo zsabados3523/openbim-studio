@@ -7,6 +7,8 @@ DRAWING. Escrita só dentro de `Historico.transacao` (o `transacao` recusa fora)
 IFC2X3 reaproveita o primeiro `IfcOwnerHistory` e usa `DocumentId`/`ItemReference`; IFC4/4X3 usam
 `Identification`/`Description`. Funções não decidem esquema por conta própria: leem o do arquivo."""
 import math
+import re
+import unicodedata
 
 import ifcopenshell
 import ifcopenshell.api
@@ -113,16 +115,52 @@ def _caminho_prancha(numero):
     return "/".join(partes or ["prancha"])
 
 
+_RESERVADOS = {"CON", "PRN", "AUX", "NUL"} | {f"COM{i}" for i in range(1, 10)} | {f"LPT{i}" for i in range(1, 10)}
+
+
+def _componente_seguro(c):
+    return (c not in ("", ".", "..")
+            and not c.endswith((".", " ")) and not c.startswith(" ")
+            and c.split(".")[0].upper() not in _RESERVADOS
+            and re.search(r'[<>"|?*\x00-\x1f]', c) is None)
+
+
+def _caminho_prancha_seguro(numero):
+    cam = _caminho_prancha(numero)
+    if not all(_componente_seguro(c) for c in cam.split("/")):
+        raise IdentificacaoInvalida(numero)
+    return cam
+
+
+def _chave_fs(loc):  # o que um sistema insensível a caixa e à normalização unicode enxerga
+    return unicodedata.normalize("NFC", unicodedata.normalize("NFC", loc).casefold())
+
+
+def _usados_fs(ifc):
+    return {_chave_fs(r.Location) for r in ifc.by_type("IfcDocumentReference") if r.Location}
+
+
 def _location_livre(ifc, nome):
-    usados = {r.Location for r in ifc.by_type("IfcDocumentReference") if r.Location}
+    usados = _usados_fs(ifc)
     base = _caminho(nome)
-    if base not in usados:
+    if _chave_fs(base) not in usados:
         return base
     raiz = base[:-4]
     n = 2
-    while f"{raiz}-{n}.svg" in usados:
+    while _chave_fs(f"{raiz}-{n}.svg") in usados:
         n += 1
     return f"{raiz}-{n}.svg"
+
+
+def _pasta_livre(ifc, cam):
+    usados = _usados_fs(ifc)
+    n = 1
+    while True:
+        pasta = cam if n == 1 else f"{cam}-{n}"
+        if (_chave_fs(f"pranchas/{pasta}/layout.svg") not in usados
+                and _chave_fs(f"pranchas/{pasta}/titleblock.svg") not in usados):
+            return pasta
+        n += 1
 
 
 def _vista_dict(ifc, a):
@@ -279,10 +317,10 @@ def criar_prancha(ifc, numero, titulo):
         raise ValueError(f"título de prancha inválido: {titulo!r}")
     if any(_numero(ifc, d) == numero for d in _pranchas(ifc)):
         raise IdentificacaoRepetida(numero)
+    cam = _pasta_livre(ifc, _caminho_prancha_seguro(numero))
     kw = _kw(ifc)
     doc = ifc.create_entity("IfcDocumentInformation", Name=titulo, Scope="SHEET",
                             **({"DocumentId": numero} if _e2x3(ifc) else {"Identification": numero}))
-    cam = _caminho_prancha(numero)
     refs = [_nova_ref(ifc, doc, "LAYOUT", f"pranchas/{cam}/layout.svg"),
             _nova_ref(ifc, doc, "TITLEBLOCK", f"pranchas/{cam}/titleblock.svg")]
     if _e2x3(ifc):

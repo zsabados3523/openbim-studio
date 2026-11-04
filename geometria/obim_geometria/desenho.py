@@ -1,14 +1,65 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Motor de desenho de planta (anotação temporária, ajustes e serializador SVG)."""
+"""Motor de desenho de planta (modo pavimento do motor SVG, sem criar entidade no arquivo)."""
 import re
 import time
 import traceback
 
 import ifcopenshell
 import ifcopenshell.geom
-import ifcopenshell.guid
 import ifcopenshell.ifcopenshell_wrapper as W
-import ifcopenshell.util.placement
+import ifcopenshell.util.element
+
+
+_GRUPO = re.compile(r"<g\b[^>]*?(/?)>|</g>")
+
+
+def _somente_pavimento(svg: str, guid: str) -> str:
+    """Remove do texto os grupos `IfcBuildingStorey` que nao sao o pavimento `guid` (os de cima repetem a projecao)."""
+    pilha, remover = [], []
+    for m in _GRUPO.finditer(svg):
+        tag = m.group(0)
+        if tag.startswith("</"):
+            if pilha:
+                inicio, storey, gid = pilha.pop()
+                if storey and gid != guid:
+                    remover.append((inicio, m.end()))
+            continue
+        storey = 'class="IfcBuildingStorey"' in tag
+        gid = None
+        if storey:
+            achado = re.search(r'ifc:guid="([^"]+)"', tag)
+            gid = achado.group(1) if achado else None
+        if m.group(1) == "/":
+            if storey and gid != guid:
+                remover.append((m.start(), m.end()))
+            continue
+        pilha.append((m.start(), storey, gid))
+    fundidos = []
+    for inicio, fim in sorted(remover):
+        if fundidos and inicio <= fundidos[-1][1]:
+            fundidos[-1][1] = max(fundidos[-1][1], fim)
+        else:
+            fundidos.append([inicio, fim])
+    for inicio, fim in reversed(fundidos):
+        svg = svg[:inicio] + svg[fim:]
+    return svg
+
+
+class ProtocoloInvalido(Exception):
+    pass
+
+
+def _pavimento(ifc: ifcopenshell.file, vista: dict) -> object:
+    gid = vista.get("pavimento")
+    if not gid:
+        raise ProtocoloInvalido("Pedido de desenho sem pavimento na vista")
+    try:
+        pav = ifc.by_guid(gid)
+    except RuntimeError:
+        pav = None
+    if pav is None or not pav.is_a("IfcBuildingStorey"):
+        raise ProtocoloInvalido(f"Pavimento invalido no pedido: {gid}")
+    return pav
 
 
 def processar(pedido: dict, fase=None) -> dict:
@@ -28,169 +79,71 @@ def processar(pedido: dict, fase=None) -> dict:
 
         vista = pedido["vista"]
         scale = float(vista["escala"])
-        u = 1.0 / scale
-        ox, oy, oz = (float(c) for c in vista["origem_pav"])
         altura_corte_m = float(vista["altura_corte_m"])
-        z_cut_project = oz + (altura_corte_m - oz * scale) * u
+        pav = _pavimento(f, vista)
+        elevacao = float(getattr(pav, "Elevation", 0.0) or 0.0)
+        section_height = altura_corte_m - elevacao * scale
 
         if fase is not None:
             fase("geometria")
 
-        created = []
-        try:
-            corpos = [
-                c
-                for c in f.by_type("IfcGeometricRepresentationSubContext")
-                if c.ContextIdentifier == "Body"
-            ]
-            if corpos:
-                corpo = corpos[0]
-            else:
-                ctx = f.by_type("IfcGeometricRepresentationContext")[0]
-                corpo = f.create_entity(
-                    "IfcGeometricRepresentationSubContext",
-                    ContextIdentifier="Body",
-                    ContextType="Model",
-                    ParentContext=ctx,
-                    TargetView="MODEL_VIEW",
-                )
-                created.append(corpo)
-
-            xs = [ox]
-            ys = [oy]
-            for id_step, _ in elementos:
-                elem = f.by_id(id_step)
-                plc = getattr(elem, "ObjectPlacement", None)
-                if plc is not None:
-                    try:
-                        m = ifcopenshell.util.placement.get_local_placement(plc)
-                        xs.append(float(m[0, 3]))
-                        ys.append(float(m[1, 3]))
-                    except Exception:
-                        pass
-
-            folga = 50.0 * u
-            xmin = min(xs) - folga
-            xmax = max(xs) + folga
-            ymin = min(ys) - folga
-            ymax = max(ys) + folga
-
-            x_loc = xmin - ox
-            y_loc = oy - ymax
-            lx = xmax - xmin
-            ly = ymax - ymin
-            depth = 50.0 * u
-
-            pt_block = f.create_entity(
-                "IfcCartesianPoint", Coordinates=(float(x_loc), float(y_loc), 0.0)
-            )
-            pos_block = f.create_entity("IfcAxis2Placement3D", Location=pt_block)
-            bloco = f.create_entity(
-                "IfcBlock",
-                Position=pos_block,
-                XLength=float(lx),
-                YLength=float(ly),
-                ZLength=depth,
-            )
-            csg = f.create_entity("IfcCsgSolid", TreeRootExpression=bloco)
-            rep = f.create_entity(
-                "IfcShapeRepresentation",
-                ContextOfItems=corpo,
-                RepresentationIdentifier="Body",
-                RepresentationType="CSG",
-                Items=[csg],
-            )
-            d_axis = f.create_entity("IfcDirection", DirectionRatios=(0.0, 0.0, -1.0))
-            d_ref = f.create_entity("IfcDirection", DirectionRatios=(1.0, 0.0, 0.0))
-            loc_ann = f.create_entity(
-                "IfcCartesianPoint", Coordinates=(float(ox), float(oy), float(z_cut_project))
-            )
-            pl_ann = f.create_entity(
-                "IfcAxis2Placement3D",
-                Location=loc_ann,
-                Axis=d_axis,
-                RefDirection=d_ref,
-            )
-            lpl_ann = f.create_entity("IfcLocalPlacement", RelativePlacement=pl_ann)
-            pshape = f.create_entity("IfcProductDefinitionShape", Representations=[rep])
-            ann = f.create_entity(
-                "IfcAnnotation",
-                GlobalId=ifcopenshell.guid.new(),
-                Name="Planta",
-                ObjectType="DRAWING",
-                ObjectPlacement=lpl_ann,
-                Representation=pshape,
-            )
-            created.extend(
-                [
-                    pt_block,
-                    pos_block,
-                    bloco,
-                    csg,
-                    rep,
-                    d_axis,
-                    d_ref,
-                    loc_ann,
-                    pl_ann,
-                    lpl_ann,
-                    pshape,
-                    ann,
-                ]
-            )
-
-            st = ifcopenshell.geom.settings(ELEMENT_HIERARCHY=True)
-            st.set("dimensionality", W.SURFACES_AND_SOLIDS)
-            st.set("iterator-output", W.NATIVE)
-            st.set("apply-default-materials", True)
-            st.set("svg-write-poly", True)
-            st.set("svg-xmlns", True)
-            st.set("svg-poly", True)
-            st.set("door-arcs", True)
-            st.set("elevation-ref-guid", ann.GlobalId)
-            st.set("svg-without-storeys", True)
-
-            buf = ifcopenshell.geom.serializers.buffer()
-            sr = ifcopenshell.geom.serializers.svg(buf, st)
-            sr.setFile(f)
-
-            num_threads = max(1, int(pedido.get("threads") or 1))
-            include_elems = [f.by_id(i) for i, _ in elementos] + [ann]
-
-            if fase is not None:
-                fase("motor")
-
-            t_g0 = time.perf_counter()
-            it = ifcopenshell.geom.iterator(st, f, num_threads, include=include_elems)
-            shapes = []
-            if it.initialize():
-                while True:
-                    shapes.append(it.get())
-                    if not it.next():
-                        break
-            shapes.sort(key=lambda s: s.id)
-            geo_s = time.perf_counter() - t_g0
-
-            t_w0 = time.perf_counter()
-            for sh in shapes:
-                sr.write(sh)
-            write_s = time.perf_counter() - t_w0
-
-            t_f0 = time.perf_counter()
-            sr.finalize()
-            finalize_s = time.perf_counter() - t_f0
-
-            svg = buf.get_value()
-        finally:
-            for e in reversed(created):
-                try:
-                    f.remove(e)
-                except Exception:
-                    pass
-
         selecionados = {id_step for id_step, _ in elementos}
+        include_elems = []
+        aberturas = set()
+        for id_step, _ in elementos:
+            el = f.by_id(id_step)
+            if el is not None and el.is_a("IfcOpeningElement"):
+                aberturas.add(id_step)
+            else:
+                include_elems.append(el)
+
+        st = ifcopenshell.geom.settings(ELEMENT_HIERARCHY=True)
+        st.set("dimensionality", W.SURFACES_AND_SOLIDS)
+        st.set("iterator-output", W.NATIVE)
+        st.set("apply-default-materials", True)
+        st.set("svg-write-poly", True)
+        st.set("svg-xmlns", True)
+        st.set("svg-poly", True)
+        st.set("door-arcs", True)
+        st.set("section-height-from-storeys", True)
+        st.set("svg-project", True)
+        st.set("section-height", float(section_height))
+
+        buf = ifcopenshell.geom.serializers.buffer()
+        sr = ifcopenshell.geom.serializers.svg(buf, st)
+        sr.setFile(f)
+
+        num_threads = max(1, int(pedido.get("threads") or 1))
+
+        if fase is not None:
+            fase("motor")
+
+        t_g0 = time.perf_counter()
+        it = ifcopenshell.geom.iterator(st, f, num_threads, include=include_elems)
+        shapes = []
+        if it.initialize():
+            while True:
+                shapes.append(it.get())
+                if not it.next():
+                    break
+        shapes.sort(key=lambda s: s.id)
+        geo_s = time.perf_counter() - t_g0
+
+        t_w0 = time.perf_counter()
+        for sh in shapes:
+            sr.write(sh)
+        write_s = time.perf_counter() - t_w0
+
+        t_f0 = time.perf_counter()
+        sr.finalize()
+        finalize_s = time.perf_counter() - t_f0
+
+        svg = buf.get_value()
+        svg = _somente_pavimento(svg, pav.GlobalId)
+
         enviados = [sh.id for sh in shapes if sh.id in selecionados]
         enviados_set = set(enviados)
-        falhas = [id_step for id_step, _ in elementos if id_step not in enviados_set]
+        falhas = [id_step for id_step, _ in elementos if id_step not in enviados_set and id_step not in aberturas]
         n_paths = len(re.findall(r"<path\b", svg))
         tempos = {
             "abrir_s": float(abrir_s),

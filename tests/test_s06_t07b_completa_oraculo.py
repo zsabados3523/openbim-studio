@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Oráculo do F0-S06-T07b, rodada 3 (parecer Opus `reports/F0-S06-T07b-revisao.md`): planta COMPLETA, aberturas, altura da vista, recorte e arquivo intocado. O contrato
-inteiro está na docstring de `test_s06_t07b_planta_oraculo.py` (itens 1 a 9). Os casos com `@AINDA_NAO` (xfail estrito) falham com a montagem da rodada 2 (anotação
-`DRAWING` temporária) e passam com a montagem "pavimento" do motor; quem os libera é o autor do oráculo, em commit próprio, depois da implementação.
+inteiro está na docstring de `test_s06_t07b_planta_oraculo.py` (itens 1 a 9). Marcadores `@AINDA_NAO` já retirados (T07e3b): a montagem "pavimento" do motor vive em `obim_geometria/desenho.py`.
 MONTAGEM PROVADA (referência descartável): sem anotação e sem criar entidade no arquivo. `ifcopenshell.geom.settings(ELEMENT_HIERARCHY=True)` com `section-height-from-storeys`
 = True, `svg-project` = True e `section-height` = (altura do corte no mundo) - (`IfcBuildingStorey.Elevation` x escala da unidade), pois o motor soma o `Elevation` do
 pavimento a `section-height` (o `Elevation` pode ser local ao edifício: usar a diferença). O motor emite um grupo `IfcBuildingStorey` por pavimento do ARQUIVO, e os
@@ -12,7 +11,6 @@ import s06_t07_aux as X
 import s06_t07b_aux as B
 from s05_conteudo_aux import _limpa, exigir  # noqa: F401  (fixture autouse)
 
-AINDA_NAO = pytest.mark.xfail(strict=True, reason="T07b rodada 3: planta ainda não é completa (montagem por anotação)")
 MOD = pytest.mark.parametrize("esq,off,base,k,rel", B.MODELOS)
 
 
@@ -42,7 +40,6 @@ def espiao_de(monkeypatch, antes_do_write=None):
     return escritos
 
 
-@AINDA_NAO
 @MOD
 def test_planta_completa_o_que_esta_abaixo_do_corte_aparece(esq, off, base, k, rel):
     P_ = P()
@@ -58,7 +55,6 @@ def test_planta_completa_o_que_esta_abaixo_do_corte_aparece(esq, off, base, k, r
         assert p.svg.count('class="projection"') == 1 and not any(g[n] in p.svg for n in g if not n.endswith(str(s)))
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("esq", X.ESQUEMAS)
 def test_movel_baixo_viga_e_louca_abaixo_do_corte_aparecem(esq):
     P_ = P()
@@ -72,7 +68,6 @@ def test_movel_baixo_viga_e_louca_abaixo_do_corte_aparecem(esq):
     assert (20.0, 1.0) not in oculto and (10.0, 1.0) in oculto
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("esq,off,base,k,rel", [B.MODELOS[0], B.MODELOS[3]])
 def test_aberturas_nao_vao_ao_serializador_nem_viram_retangulo_fantasma(monkeypatch, esq, off, base, k, rel):
     P_ = P()
@@ -86,7 +81,6 @@ def test_aberturas_nao_vao_ao_serializador_nem_viram_retangulo_fantasma(monkeypa
     assert len(B.subcaminhos(B.grupo(p.svg, g["P1"]))) == 3 and B.grupo(p.svg, g["porta1"]) is not None  # a parede continua furada: 3 pedaços
 
 
-@AINDA_NAO
 @pytest.mark.parametrize("dist", [51.0, 200.0, 600.0])
 def test_solido_longe_da_propria_origem_sem_vizinho_aparece(dist):
     P_ = P()
@@ -145,3 +139,16 @@ def test_excecao_antes_do_serializador_nao_deixa_entidade_solta(monkeypatch):
     except RuntimeError:
         pass
     assert f.to_string() == antes
+
+
+@pytest.mark.parametrize("ruim", [float("nan"), float("inf"), float("-inf")])
+def test_altura_de_corte_nao_finita_e_recusada(monkeypatch, ruim):
+    P_ = P()  # o ifcopenshell nem deixa gravar não finito no arquivo; o valor chega pelo leitor de pset (arquivo lido de fora, versão futura)
+    import ifcopenshell.util.element as UE
+    import openbim_app.desenho.selecao as S
+    f, pavs, g = B.modelo("IFC4")
+    gv = B.planta(f, pavs[0], "Vnf")
+    real = UE.get_pset
+    monkeypatch.setattr(UE, "get_pset", lambda e, nome=None, *a, **k: {"AlturaCorte": ruim} if nome == "OBIM_Vista" and e.GlobalId == gv else real(e, nome, *a, **k))
+    with pytest.raises(S.SelecaoInvalida):
+        P_.gerar_planta(f, gv)

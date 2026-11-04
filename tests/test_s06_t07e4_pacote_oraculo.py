@@ -119,7 +119,8 @@ def test_scripts_de_prova_aprovam_pacote_certo_e_reprovam_sem_geometria(script, 
                                              (PROVA_WIN, ("geometria_no_pacote.py", " -I ", "PYTHONPATH", "pythonw", "--pythonw", "--saida"))])
 def test_scripts_de_prova_existem_validos_e_chamam_o_auxiliar(script, palavras):
     assert script.is_file() and os.access(script, os.X_OK)
-    assert subprocess.run(["bash", "-n", str(script)], capture_output=True).returncode == 0
+    if sys.platform != "win32":  # no Windows `bash` pode ser o do WSL (sem distribuicao): a sintaxe e conferida no Linux
+        assert subprocess.run(["bash", "-n", str(script)], capture_output=True).returncode == 0
     txt = script.read_text(encoding="utf-8")
     assert all(p in txt for p in palavras), [p for p in palavras if p not in txt]
     assert "LGPL-COMO-TROCAR.md" in txt and "obim_geometria" in txt

@@ -277,6 +277,7 @@ def gravar_par(sessao, historico, lateral, destino, pasta_projeto, lado_id, seq,
             etapa = "trocado"
             os.unlink(str(pasta / "gravacao.json"))
     except BaseException as erro:
+        interrupcao = not isinstance(erro, Exception)
         if not com_gravacao:
             _limpar_antes(pasta, destino, obim)
             if carimbo:
@@ -284,10 +285,22 @@ def gravar_par(sessao, historico, lateral, destino, pasta_projeto, lado_id, seq,
             raise
         if etapa == "ao_concluir":
             raise
+        if etapa == "trocado":
+            if interrupcao:
+                raise
+            try:
+                os.unlink(str(pasta / "gravacao.json"))
+            except OSError:
+                raise
+            return gravado_ifc, gravado_obim
         try:
             resultado = resolver_gravacao_pendente(pasta, destino, ao_concluir)
         except BaseException as erro_resolvedor:
+            if interrupcao:
+                raise erro from erro_resolvedor
             raise erro_resolvedor from erro
+        if interrupcao:
+            raise erro
         if resultado == "concluido":
             return _gravado(destino), _gravado(obim)
         if resultado == "desfeito" and carimbo:

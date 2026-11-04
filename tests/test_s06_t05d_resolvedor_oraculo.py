@@ -74,6 +74,8 @@ def test_01_troca_que_falha_e_o_resolvedor_conclui_e_sucesso(proj, monkeypatch, 
     assert (gi.caminho, go.caminho) == (proj.destino, proj.destino.with_suffix(".obim"))
     assert (gi.sha256, gi.tamanho) == (sha(proj.destino), proj.destino.stat().st_size)
     assert (go.sha256, go.tamanho) == (sha(go.caminho), go.caminho.stat().st_size)
+    assert (gi.bak, go.bak) == (proj.destino.with_name("Casa.ifc.bak"), proj.destino.with_name("Casa.obim.bak")), (gi.bak, go.bak)
+    assert gi.bak.read_bytes() == um.ifc and go.bak.read_bytes() == um.obim, "o .bak não é o par de antes"
     assert X.estado_par(proj.destino, um, novo, proj.pasta) == ("novo", []), "par não ficou novo e limpo"
     assert [c[:2] for c in proj.chamadas] == [(SEQ, True)], f"ao_concluir tem de rodar uma vez, com o gravacao.json: {[c[:2] for c in proj.chamadas]}"
     assert not list(proj.pasta.glob("gravacao*")) and proj.pset() == (LADO, 2), "gravacao.json sobrou ou o carimbo voltou"
@@ -86,6 +88,8 @@ def test_02_sucesso_pela_via_do_resolvedor_na_primeira_gravacao_do_par(proj, mon
         mp.setattr(__import__("os"), "replace", TrocaRecusada(alvo, tentativas()))
         gravados = proj.gravar()
     assert len(gravados) == 2 and X.estado_par(proj.destino, None, proj.novo(1), proj.pasta) == ("novo", [])
+    assert gravados[0].bak is None and gravados[1].bak is None, "primeira gravação não tem .bak"
+    assert (gravados[0].caminho, gravados[1].caminho) == (proj.destino, alvo)
     assert [c[0] for c in proj.chamadas] == [SEQ] and proj.pset() == (LADO, 1)
 
 
@@ -113,6 +117,9 @@ def test_04_callback_que_levanta_no_resolvedor_do_except_nao_some(proj, monkeypa
         mp.setattr(__import__("os"), "replace", TrocaRecusada(proj.destino.with_suffix(".obim"), tentativas()))
         proj.gravar(ao_concluir=boom)
     assert na_cadeia(ei.value, eh_boom), f"o erro do callback sumiu; levantou {ei.value!r}"
+    assert eh_boom(ei.value), f"sobe o erro do callback (do resolvedor), não o da troca: {ei.value!r}"
+    import openbim_app.gravacao_atomica as GA
+    assert isinstance(ei.value.__cause__, GA.FalhaGravacao) and "Casa.obim" in str(ei.value.__cause__), "falta `from erro` (a falha original é a causa)"
     assert (proj.pasta / "gravacao.json").exists(), "o gravacao.json sumiu sem o callback ter terminado"
     assert X.estado_par(proj.destino, um, novo)[0:2] == ("novo", []) and proj.pset() == (LADO, 2), "o par tem de ficar novo e o carimbo também"
     gp = __import__("openbim_app.gravacao_par", fromlist=["x"])
@@ -192,7 +199,7 @@ def test_09_autosave_zerar_que_levanta_deixa_o_gravacao_json_e_o_proximo_salvar_
         with pytest.raises(Exception):
             c.auto.salvar()
     assert (c.pasta_auto / "gravacao.json").exists(), "o gravacao.json sumiu e o diário não foi zerado"
-    assert c.auto.salvar() in (True, False)  # o seguinte (zerar de volta ao normal) conclui a pendência
+    assert c.auto.salvar() is True  # o seguinte (zerar de volta ao normal) conclui a pendência e grava
     base, resto = _base(c)
     assert base["seq"] == 1 and resto == [], "o diário não foi zerado depois da recuperação"
     assert not (c.pasta_auto / "gravacao.json").exists() and c.auto.salvar() is False
@@ -208,5 +215,128 @@ def test_10_autosave_zerar_que_levanta_no_caminho_normal_propaga_e_mantem_sujo(f
             c.auto.salvar()
     assert eh_boom(ei.value)
     assert (c.pasta_auto / "gravacao.json").exists()
-    assert c.auto.salvar() in (True, False)
+    assert c.auto.salvar() is True
     assert not (c.pasta_auto / "gravacao.json").exists()
+
+
+# ---------- achados do Argon (T05e) ----------
+INTERRUPCOES = [KeyboardInterrupt, SystemExit]
+
+
+def _interrompe_na_2a_confirmacao(mp, exc):  # a troca do .obim é interrompida; o temporário fica, o resolvedor consegue concluir
+    import openbim_app.gravacao_atomica as GA
+    real, n = GA.confirmar, [0]
+
+    def confirmar(prep):
+        n[0] += 1
+        if n[0] == 2:
+            raise exc()
+        return real(prep)
+    mp.setattr(GA, "confirmar", confirmar)
+
+
+def _prepara(proj, monkeypatch):
+    proj.gravar()
+    um = proj.antigo()
+    proj.tx(2)
+    novo = proj.novo(2)
+    proj.chamadas.clear()
+    monkeypatch.setattr(time, "sleep", lambda s: None)
+    return um, novo
+
+
+@pytest.mark.parametrize("exc", INTERRUPCOES, ids=lambda e: e.__name__)
+def test_11_interrupcao_com_o_resolvedor_concluindo_e_relancada(proj, monkeypatch, exc):  # noqa: F811
+    """Achado 1: Ctrl+C (KeyboardInterrupt/SystemExit) depois do gravacao.json nunca vira sucesso: relança. O par pode terminar novo."""
+    um, novo = _prepara(proj, monkeypatch)
+    with pytest.MonkeyPatch.context() as mp, pytest.raises(exc):
+        _interrompe_na_2a_confirmacao(mp, exc)
+        proj.gravar()
+    import openbim_app.gravacao_par as gp
+    gp.resolver_gravacao_pendente(pasta_projeto=proj.pasta, destino=proj.destino, ao_concluir=proj.ao)  # a próxima abertura (idempotente)
+    assert X.estado_par(proj.destino, um, novo, proj.pasta) == ("novo", [])
+    assert [c[0] for c in proj.chamadas] == [SEQ], "ao_concluir tem de rodar exatamente uma vez no total"
+
+
+@pytest.mark.parametrize("exc", INTERRUPCOES, ids=lambda e: e.__name__)
+def test_12_interrupcao_original_prevalece_sobre_erro_do_resolvedor(proj, monkeypatch, exc):  # noqa: F811
+    """Achado 2: erro original BaseException + resolvedor que levanta Exception (callback): sobe a interrupção, não a Exception."""
+    um, novo = _prepara(proj, monkeypatch)
+    with pytest.MonkeyPatch.context() as mp:
+        _interrompe_na_2a_confirmacao(mp, exc)
+        with pytest.raises(BaseException) as ei:
+            proj.gravar(ao_concluir=boom)
+    assert type(ei.value) is exc, f"a interrupção foi trocada por {ei.value!r}"
+    assert (proj.pasta / "gravacao.json").exists(), "o callback não terminou: o gravacao.json fica"
+    assert X.estado_par(proj.destino, um, novo)[0:2] == ("novo", [])
+
+
+def test_13_unlink_do_gravacao_json_falha_depois_do_ao_concluir_nao_repete_o_callback(proj, monkeypatch):  # noqa: F811
+    """Achado 3. Contrato [P: recomendação]: par novo no disco e ao_concluir já rodou; só a limpeza do gravacao.json falhou (ex.: PermissionError no
+    Windows). `gravar_par` NÃO chama o callback de novo (nem pelo resolvedor do except). Pode concluir ou levantar; o par fica novo e o carimbo fica.
+    Recomendado: tentar só apagar o gravacao.json (sem callback) e concluir; se ainda falhar, levantar com o gravacao.json no lugar."""
+    import os
+    um, novo = _prepara(proj, monkeypatch)
+    real, falhou = os.unlink, [0]
+
+    def unlink(p, *a, **k):
+        if str(p).endswith("gravacao.json") and not falhou[0]:
+            falhou[0] = 1
+            raise PermissionError(errno.EACCES, "arquivo em uso (teste)", str(p))
+        return real(p, *a, **k)
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(os, "unlink", unlink)
+        try:
+            proj.gravar()
+        except Exception:  # noqa: BLE001  (levantar também vale)
+            pass
+    assert falhou[0] == 1, "o teste não exercitou a falha do unlink"
+    assert [c[0] for c in proj.chamadas] == [SEQ], f"ao_concluir rodou {len(proj.chamadas)} vezes"
+    assert X.estado_par(proj.destino, um, novo)[0:2] == ("novo", []) and proj.pset() == (LADO, 2)
+
+
+# ---------- limpeza do gravacao.json (etapa "trocado") ----------
+def _unlink_falho(os_, falhas, exc_fabrica):  # falha as `falhas` primeiras vezes em que apaga o gravacao.json
+    real, n = os_.unlink, [0]
+
+    def unlink(p, *a, **k):
+        if str(p).endswith("gravacao.json") and n[0] < falhas:
+            n[0] += 1
+            raise exc_fabrica(str(p))
+        return real(p, *a, **k)
+    return unlink, n
+
+
+def test_14_unlink_do_gravacao_json_falha_sempre_levanta_com_o_callback_uma_vez(proj, monkeypatch):  # noqa: F811
+    import os
+    um, novo = _prepara(proj, monkeypatch)
+    unlink, n = _unlink_falho(os, 10**6, lambda p: PermissionError(errno.EACCES, "em uso (teste)", p))
+    with pytest.MonkeyPatch.context() as mp, pytest.raises(PermissionError):
+        mp.setattr(os, "unlink", unlink)
+        proj.gravar()
+    assert [c[0] for c in proj.chamadas] == [SEQ], f"ao_concluir rodou {len(proj.chamadas)} vezes"
+    assert (proj.pasta / "gravacao.json").exists(), "a pendência tem de ficar para a próxima abertura"
+    assert X.estado_par(proj.destino, um, novo)[0:2] == ("novo", []) and proj.pset() == (LADO, 2), "par ou carimbo mudou"
+
+
+@pytest.mark.parametrize("exc", INTERRUPCOES, ids=lambda e: e.__name__)
+def test_15_interrupcao_no_unlink_do_gravacao_json_nao_vira_sucesso(proj, monkeypatch, exc):  # noqa: F811
+    import os
+    um, novo = _prepara(proj, monkeypatch)
+    unlink, n = _unlink_falho(os, 1, lambda p: exc())
+    with pytest.MonkeyPatch.context() as mp, pytest.raises(exc):
+        mp.setattr(os, "unlink", unlink)
+        proj.gravar()
+    assert n[0] == 1 and [c[0] for c in proj.chamadas] == [SEQ]
+    assert X.estado_par(proj.destino, um, novo)[0:2] == ("novo", [])
+
+
+def test_16_unlink_falha_uma_vez_conclui_e_nao_deixa_gravacao(proj, monkeypatch):  # noqa: F811  (contrato recomendado do achado 3)
+    import os
+    um, novo = _prepara(proj, monkeypatch)
+    unlink, n = _unlink_falho(os, 1, lambda p: PermissionError(errno.EACCES, "em uso (teste)", p))
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(os, "unlink", unlink)
+        gravados = proj.gravar()
+    assert n[0] == 1 and len(gravados) == 2 and [c[0] for c in proj.chamadas] == [SEQ]
+    assert X.estado_par(proj.destino, um, novo, proj.pasta) == ("novo", []) and proj.pset() == (LADO, 2)

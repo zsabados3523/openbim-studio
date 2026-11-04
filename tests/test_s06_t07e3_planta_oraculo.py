@@ -75,7 +75,7 @@ def test_desenho_processar_igual_ao_local_e_confere_ids(tmp_aux):
     import obim_geometria.desenho as D
     L, X = _loc(), _x()
     f, d = T.modelo()
-    vista = {"tipo": "PLANTA", "altura_corte_m": 1.2, "origem_pav": [0.0, 0.0, 0.0], "escala": 1.0}
+    vista = {"tipo": "PLANTA", "altura_corte_m": 1.2, "origem_pav": [0.0, 0.0, 0.0], "escala": 1.0, "pavimento": T.pav0(f)}
     ped = {"op": "desenho", "elementos": T.elementos(f, "P", "M"), "vista": vista}
     with X.preparar(f, ped) as p:
         a, b = D.processar(dict(p.pedido)), L.executar(dict(p.pedido))
@@ -101,7 +101,7 @@ def test_processo_entrada_despacha_desenho_com_as_tres_fases(tmp_aux):
         def close(self):
             pass
     f, d = T.modelo()
-    vista = {"tipo": "PLANTA", "altura_corte_m": 1.2, "origem_pav": [0.0, 0.0, 0.0], "escala": 1.0}
+    vista = {"tipo": "PLANTA", "altura_corte_m": 1.2, "origem_pav": [0.0, 0.0, 0.0], "escala": 1.0, "pavimento": T.pav0(f)}
     with X.preparar(f, {"op": "desenho", "elementos": T.elementos(f, "P", "M"), "vista": vista}) as p:
         tx = Tx()
         PR.entrada(tx, json.dumps(p.pedido))
@@ -236,3 +236,18 @@ def test_filho_real_erro_e_tempo_sobem_por_gerar_planta(tmp_aux, monkeypatch):  
     e = _levanta(X.AuxiliarEstourouTempo, P_.gerar_planta, f, d["vp"], limite_s=1)
     assert e.limite_s == 1
     _vazio(tmp_aux)
+
+
+def test_falhas_geometria_do_desenho_nao_e_fixa_e_ignora_aberturas(tmp_aux):
+    X, L = _x(), _loc()
+    f, d = T.modelo()
+    vista = {"tipo": "PLANTA", "altura_corte_m": 1.2, "origem_pav": [0.0, 0.0, 0.0], "escala": 1.0, "pavimento": T.pav0(f)}
+    por = {e.Name: e.id() for e in f.by_type("IfcProduct")}
+    with X.preparar(f, {"op": "desenho", "elementos": T.elementos(f, "P", "falha", "M"), "vista": vista}) as p:
+        r = L.executar(p.pedido)
+    assert r["ok"] and r["falhas_geometria"] == [por["falha"]] and por["falha"] not in r["enviados"] and {por["P"], por["M"]} <= set(r["enviados"])
+    # abertura (IfcOpeningElement) nunca vai ao motor e nunca conta como falha
+    ab = T._el(f, "IfcOpeningElement", "vao")
+    with X.preparar(f, {"op": "desenho", "elementos": T.elementos(f, "P") + [[ab.id(), ab.GlobalId]], "vista": vista}) as p:
+        r = L.executar(p.pedido)
+    assert r["ok"] and r["falhas_geometria"] == [] and ab.id() not in r["enviados"]

@@ -58,7 +58,7 @@ def test_caso2_fotografia_a_parede_apagada_depois_do_preparar_sai_no_svg(tmp_aux
     _p()
     f, d = T.modelo()
     gid_p = d["P"].GlobalId
-    vista = {"tipo": "PLANTA", "altura_corte_m": 1.2, "origem_pav": [0.0, 0.0, 0.0], "escala": 1.0}
+    vista = {"tipo": "PLANTA", "altura_corte_m": 1.2, "origem_pav": [0.0, 0.0, 0.0], "escala": 1.0, "pavimento": T.pav0(f)}
     with X.preparar(f, {"op": "desenho", "elementos": T.elementos(f, "P"), "vista": vista}) as p:
         f.remove(d["P"])
         r = X.executar(p) if real else X.executar(p, executor=L.executar)

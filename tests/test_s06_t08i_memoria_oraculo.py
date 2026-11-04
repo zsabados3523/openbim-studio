@@ -8,11 +8,12 @@ maquina); o pico medido e o RSS maximo (`VmHWM` de `/proc/self/status`, que e do
 - `d` ou atributo numerico com 20 MB de lixo: `SvgInvalido` com `len(str(erro)) < 500`.
 Regressao da T08i (marcadores retirados)."""
 import json
-import resource
 import subprocess
 import sys
 
 import pytest
+
+resource = pytest.importorskip("resource", reason="RLIMIT_AS e /proc so existem no Linux; a conferencia de memoria vale so la")
 
 import test_s06_t08g_robustez_oraculo as G
 

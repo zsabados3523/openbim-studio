@@ -69,6 +69,8 @@ def test_bug4_caixas_usa_iterator_com_as_threads_do_pedido(tmp_aux, monkeypatch)
     import ifcopenshell.geom as G
     X, L = _x(), _loc()
     f, d = T.modelo()
+    from obim_geometria import nucleos as N
+    monkeypatch.setattr(N, "nucleos_fisicos", lambda: 8)  # atualizado pela T07a2: threads do iterator = min(pedido, núcleos FÍSICOS, 8); fixa a máquina
     chamadas, original = [], G.iterator
     monkeypatch.setattr(G, "iterator", lambda *a, **k: chamadas.append((a, k)) or original(*a, **k))
     with X.preparar(f, _pedido(f, "caixas", "P", "M", threads=3)) as p:

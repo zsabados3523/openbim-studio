@@ -6,7 +6,7 @@ CONTRATO (sem Qt, sem rede). [P] = escolha do oráculo que a especificação nã
 `geometria/obim_geometria/processo.py` (só biblioteca padrão no topo): `PROTOCOLO = 1`, `entrada(tx, pedido_json)` (alvo do `spawn`). `local.py`: `executar(pedido: dict) -> dict` (mesmo processo, só testes).
 Um executor é `executor(pedido: dict) -> dict` e devolve a resposta CRUA (`{"ok": true, ...}` ou `{"ok": false, "erro": {"tipo", "mensagem", "rastro"}}`); o pai trata os dois executores igual.
 `openbim_app/desenho/auxiliar.py`: `LIMITE_PADRAO_S == 180`; `preparar(ifc, pedido) -> Preparado`: `pedido` = o JSON da especificação §2 SEM `arquivo`/`protocolo` ([P] `protocolo` fornecido é
-mantido, o ausente vira 1; `threads` ausente vira `min(8, os.cpu_count() or 1)`); grava a CÓPIA INTEIRA (`ifc.write`) em `tempfile.gettempdir()/obim-desenho-XXXX/` na hora de preparar e devolve
+mantido, o ausente vira 1; `threads` ausente vira `nucleos.limitar_threads(None)` = min(núcleos FÍSICOS, 8) (atualizado pela T07a2; era `min(8, os.cpu_count() or 1)`)); grava a CÓPIA INTEIRA (`ifc.write`) em `tempfile.gettempdir()/obim-desenho-XXXX/` na hora de preparar e devolve
 `Preparado` com `.pedido` (dict JSON puro, com `arquivo` absoluto), `.pasta` (Path), `.fechar()` (apaga a pasta; repetido não falha) e uso em `with`. Erro de protocolo (versão != 1) sobe de `preparar` ou
 de `executar` (`ProtocoloInvalido`). `executar(preparado, *, limite_s=LIMITE_PADRAO_S, cancelar=None, executor=None) -> dict`: a resposta do executor se `ok`, senão levanta o erro tipado; vale
 mais de um `executar` por `Preparado`. `executor=None` = filho `spawn` real (1 por pedido, no máximo 1 vivo por vez; o 2º pedido espera, a espera não conta no limite). Fim de qualquer caminho: filho
@@ -15,7 +15,7 @@ morto (`kill` + `join`), canal fechado; a pasta só sai no `fechar()`. Erros (to
 "caixas_envolventes": {"<id>": [xmin, ymin, zmin, xmax, ymax, zmax]} (metros, mundo), "falhas_geometria": [ids]}`; o filho confere cada `[id, GlobalId]` (senão `ArquivoDivergente`).
 Ganchos do filho (variáveis de ambiente lidas no filho, depois de `pronto`): `OBIM_TESTE_AUX_DORMIR_S`, `OBIM_TESTE_AUX_SAIR` (`os._exit`), `OBIM_TESTE_AUX_SEGV=1` (queda de verdade), `OBIM_TESTE_AUX_LEVANTAR=<texto>`.
 Caso 10 (trava ampliada) não tem marcador: passa hoje e tem de continuar passando.
-[P] (escolhas do oráculo que a especificação não fixa; o Opus aprovou na revisão): `protocolo` fornecido é mantido e a versão != 1 pode sair de `preparar` ou de `executar`; `threads` padrão `min(8, os.cpu_count() or 1)`;
+[P] (escolhas do oráculo que a especificação não fixa; o Opus aprovou na revisão): `protocolo` fornecido é mantido e a versão != 1 pode sair de `preparar` ou de `executar`; `threads` padrão `nucleos.limitar_threads(None)` (atualizado pela T07a2; era `min(8, os.cpu_count() or 1)`);
 a pasta só sai no `fechar()` (não no fim de cada `executar`); pasta em `tempfile.gettempdir()`; unidades da op `desenho` (parte 2); `SelecaoInvalida` para CORTE e `AlturaCorte` ruim (parte 2); ganchos lidos no filho depois do `pronto`;
 executor devolve a resposta crua. A trava do caso 10 também barra `from obim_geometria import processo` (mais estrita que a especificação, inofensiva)."""
 import inspect
@@ -176,11 +176,13 @@ def test_caso8_divergencia_de_id_e_protocolo(tmp_aux):
 
 def test_caso11_json_puro_threads_e_um_filho_por_vez(tmp_aux, monkeypatch):
     X, L = _x(), _loc()
+    from obim_geometria import nucleos as N
+    monkeypatch.setattr(N, "nucleos_fisicos", lambda: 3)
     f, _ = T.modelo()
     with X.preparar(f, _pedido(f)) as p:
         assert json.loads(json.dumps(p.pedido)) == p.pedido and p.pedido["protocolo"] == 1
         assert p.pasta.parent == tmp_aux and p.pasta.name.startswith("obim-desenho-")  # [P] sob tempfile.gettempdir()
-        assert p.pedido["threads"] == min(8, os.cpu_count() or 1) and Path(p.pedido["arquivo"]).is_absolute()
+        assert p.pedido["threads"] == 3 and Path(p.pedido["arquivo"]).is_absolute()  # atualizado pela T07a2: era min(8, os.cpu_count()); agora núcleos físicos (fixados em 3 no monkeypatch acima)
         r = X.executar(p, executor=L.executar)
         assert json.loads(json.dumps(r)) == r
         monkeypatch.setenv("OBIM_TESTE_AUX_DORMIR_S", "2")

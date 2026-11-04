@@ -11,12 +11,13 @@
 Cada caso roda num subprocesso (`python -I`) com limite de tempo e de memoria (RLIMIT_AS 1,5 GB), entao um travamento vira falha do teste, nao do pytest.
 Os casos de entrada ruim valem como regressao: sem marcadores (a T08g foi corrigida)."""
 import json
-import resource
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+
+resource = pytest.importorskip("resource", reason="RLIMIT_AS so existe em sistemas Unix; no Windows a conferencia de memoria vale so no Linux")
 
 
 APP = Path(__file__).resolve().parent.parent / "app"

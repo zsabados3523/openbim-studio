@@ -8,10 +8,14 @@ CONTRATO (comportamento atual, sem API nova):
 3. Abrir não cria `Casa.obim` (nem `.tmp`) e não altera o `.ifc` (bytes iguais), também depois de parar o autosave e o diário.
 GUARDA (pula, nunca afrouxa): sem ifcopenshell, pula; com OBIM_S05_OBRIGATORIO=1 vira falha."""
 import hashlib
+import os
 
-import ifcopenshell
 import pytest
-import s05_conteudo_aux as R
+
+if not os.environ.get("OBIM_S05_OBRIGATORIO"):
+    pytest.importorskip("ifcopenshell")
+import ifcopenshell  # noqa: E402
+import s05_conteudo_aux as R  # noqa: E402
 import s06_t04_aux as A
 from s05_conteudo_aux import _limpa  # noqa: F401  (fixture autouse)
 from s06_t04_sessao_aux import Sessao
@@ -69,7 +73,9 @@ def test_vistas_e_pranchas_aparecem_so_com_o_ifc(par_sem_obim, abre):
     vistas = {v["nome"]: v for v in V.listar_vistas(g)}
     assert sorted(vistas) == ["Corte AA", "Planta Térreo"]
     assert vistas["Planta Térreo"]["tipo"] == "PLANTA" and vistas["Planta Térreo"]["escala"] == "1:50"
-    assert vistas["Corte AA"]["tipo"] == "CORTE"
+    assert vistas["Corte AA"]["tipo"] == "CORTE" and vistas["Corte AA"]["escala"] == "1:100"
+    pl = vistas["Planta Térreo"]
+    assert pl["origem"] == pytest.approx((1.0, 2.0, 1.2)) and pl["tamanho"] == pytest.approx((12.0, 8.0, 3.0))
     p = V.ler_prancha(g, "A-01")
     assert p["titulo"] == "Plantas e cortes"
     assert [V.ler_vista(g, x)["nome"] for x in p["vistas"]] == ["Corte AA", "Planta Térreo"]
@@ -83,6 +89,7 @@ def test_abrir_sem_obim_e_caso_d4_com_estilo_padrao_e_sem_lateral(par_sem_obim, 
     pr = abre(ifc)
     d = pr.divergencia
     assert d.caso == "D4" and d.estilo_padrao is True and d.vistas_preservadas == 2 and d.obim is None
+    assert d.vinculado is False and d.opcoes == ("localizar arquivo", "abrir só o modelo")
     assert d.aviso and "estilo e posição padrão" in d.aviso
     assert pr.avisos == [d.aviso], "nenhum outro aviso nem erro"
     assert pr.lateral.canonico() == Lateral().canonico(), "sem .obim o lateral é vazio (estilo padrão)"

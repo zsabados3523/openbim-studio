@@ -71,5 +71,16 @@ def main(pasta):
     print(destino)
 
 
+def _erro_uso(motivo):
+    print(f"uso: {Path(sys.argv[0]).name} PASTA_DE_SAIDA", file=sys.stderr)
+    print(f"erro: {motivo}", file=sys.stderr)
+    raise SystemExit(2)
+
+
 if __name__ == "__main__":
-    main(sys.argv[1])
+    if len(sys.argv) != 2:
+        _erro_uso("informe a pasta de saída")
+    try:
+        main(sys.argv[1])
+    except (IndexError, ValueError, OSError) as e:
+        _erro_uso(f"destino inválido: {e}")

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Oráculo do script gerar_casa_t09b.py: gera SÓ o IFC4 (pasta de saída com exatamente Casa-T09b.ifc), com paredes, 2 vistas e 1 prancha,
-abre como D4 e recusa sobrescrever. O teste de CLI (sem argumento / destino que é arquivo) é do implementador: AINDA_NAO_T09B (xfail estrito).
+abre como D4 e recusa sobrescrever.  Inclui a CLI: sem argumento e destino que é arquivo dão erro limpo.
 GUARDA (pula, nunca afrouxa): sem ifcopenshell, pula; com OBIM_S05_OBRIGATORIO=1 vira falha."""
 import os
 import subprocess
@@ -58,12 +58,10 @@ def _uso_limpo(r):
     return r.returncode != 0 and "Traceback" not in r.stderr and "uso" in (r.stderr + r.stdout).lower()
 
 
-@pytest.mark.xfail(strict=True, reason="AINDA_NAO_T09B: CLI sem argumento levanta IndexError cru")
 def test_cli_sem_argumento_mostra_uso_em_portugues_sem_traceback():
     assert _uso_limpo(_roda())
 
 
-@pytest.mark.xfail(strict=True, reason="AINDA_NAO_T09B: destino que é arquivo regular levanta FileExistsError cru")
 def test_cli_destino_que_e_arquivo_mostra_erro_limpo_sem_traceback(tmp_path):
     arq = tmp_path / "arquivo.txt"
     arq.write_text("x")

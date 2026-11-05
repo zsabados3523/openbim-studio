@@ -29,6 +29,7 @@ import ifcopenshell.util.placement  # noqa: E402
 import ifcopenshell.util.unit  # noqa: E402
 
 from openbim_app import vistas_ifc  # noqa: E402
+from openbim_app.desenho import auxiliar  # noqa: E402
 from openbim_app.desenho import corte as C  # noqa: E402
 from openbim_app.desenho import estilo, planta as P  # noqa: E402
 
@@ -107,14 +108,31 @@ def sintetico():
     return f, pav
 
 
-def _pavimento_baixo(f):
-    pavs = f.by_type("IfcBuildingStorey")
+def _contagem(pav):
+    els = [e for r in pav.ContainsElements for e in r.RelatedElements]
+    return sum(e.is_a("IfcWall") for e in els), sum(e.is_a("IfcFurnishingElement") for e in els)
+
+
+def _escolher_pavimento(f, escolha):
+    """Lista os pavimentos (paredes, moveis) e escolhe: --pavimento NOME/indice, senao o com MAIS paredes."""
+    pavs = sorted(f.by_type("IfcBuildingStorey"), key=lambda p: (p.Elevation if p.Elevation is not None else 0.0))
     if not pavs:
         raise SystemExit("IFC sem IfcBuildingStorey")
     for p in pavs:  # so na copia: o desenho exige cota; sem Elevation usa a cota da colocacao
         if p.Elevation is None:
             p.Elevation = float(ifcopenshell.util.placement.get_local_placement(p.ObjectPlacement)[2, 3]) if p.ObjectPlacement else 0.0
-    return min(pavs, key=lambda p: p.Elevation)
+    cont = [_contagem(p) for p in pavs]
+    for k, (p, (w, m)) in enumerate(zip(pavs, cont)):
+        print(f"pavimento {k}: {p.Name!r} Elevation={p.Elevation} paredes={w} moveis={m}")
+    if escolha is None:
+        k = max(range(len(pavs)), key=lambda i: cont[i][0])
+    elif escolha.isdigit() and int(escolha) < len(pavs):
+        k = int(escolha)
+    else:
+        k = next((i for i, p in enumerate(pavs) if p.Name == escolha), None)
+        if k is None:
+            raise SystemExit(f"pavimento {escolha!r} nao encontrado")
+    return pavs[k], [(p.Name, p.Elevation, *c) for p, c in zip(pavs, cont)]
 
 
 def _envoltorio(f, pav):
@@ -158,15 +176,23 @@ def _mem_mb():
         return None
 
 
-def _medir(f, caso, gid, escala, n):
+def _medir(f, caso, gid, escala, n, limite_s, cats):
+    """Devolve (linhas, svg). Estouro ou falha viram linha com `erro` (nao interrompe as demais medicoes)."""
     gerar = P.gerar_planta if caso == "planta" else C.gerar_corte
     linhas, ultimo = [], None
     for i in range(n):
         t0 = time.perf_counter()
-        r = gerar(f, gid)  # executor padrao: processo auxiliar real
-        svg = estilo.aplicar_estilo(r.svg, escala)
-        t = time.perf_counter() - t0
-        linhas.append(dict(i=i + 1, t=t, paths=r.n_paths, sel=len(r.selecao.ids), geo=r.tempos.get("geo_s", 0.0), mem=_mem_mb()))
+        try:
+            r = gerar(f, gid, limite_s=limite_s, categorias_ocultas=cats)  # executor padrao: processo auxiliar real
+            svg = estilo.aplicar_estilo(r.svg, escala)
+        except auxiliar.AuxiliarEstourouTempo as e:
+            linhas.append(dict(i=i + 1, t=time.perf_counter() - t0, mem=_mem_mb(), erro=f"ESTOUROU (limite {e.limite_s:g} s, fase {e.fase or '?'})"))
+            break
+        except Exception as e:  # noqa: BLE001
+            linhas.append(dict(i=i + 1, t=time.perf_counter() - t0, mem=_mem_mb(), erro=f"FALHOU ({type(e).__name__}: {str(e)[:150]})"))
+            break
+        linhas.append(dict(i=i + 1, t=time.perf_counter() - t0, paths=r.n_paths, sel=len(r.selecao.ids), geo=r.tempos.get("geo_s", 0.0), mem=_mem_mb(),
+                           tri=getattr(r.selecao, "triangulos", None)))
         ultimo = svg
     return linhas, ultimo
 
@@ -196,25 +222,31 @@ def _png(svg_path, png_path):
     return img.save(str(png_path))
 
 
-def _tabela(resultados, n, origem):
-    L = [f"# Medicao F0-S06-T10", "", f"- Modelo: {origem}", f"- Repeticoes por caso: {n}", f"- Sistema: {platform.system()} {platform.release()}, Python {platform.python_version()}",
+def _tabela(resultados, n, origem, extra):
+    L = ["# Medicao F0-S06-T10", "", f"- Modelo: {origem}", f"- Repeticoes por caso: {n}", f"- Sistema: {platform.system()} {platform.release()}, Python {platform.python_version()}",
          "- Tempo total = gerar_* pelo processo auxiliar real (executor padrao) + aplicar_estilo. Memoria = pico maximo acumulado dos processos filhos (getrusage).",
-         "- Windows: nao medido", ""]
-    L += ["| caso | execucao | tempo total (s) | geo_s | n_paths | elementos selecionados | memoria pico filhos (MB) |", "|---|---|---|---|---|---|---|"]
+         "- Windows: nao medido"] + [f"- {k}: {v}" for k, v in extra.items()] + ["", "| caso | execucao | tempo total (s) | geo_s | n_paths | elementos selecionados | triangulos | memoria pico filhos (MB) |", "|---|---|---|---|---|---|---|---|"]
     for caso, linhas in resultados.items():
         for r in linhas:
             m = "n/d" if r["mem"] is None else f"{r['mem']:.0f}"
-            L.append(f"| {caso} | {r['i']} | {r['t']:.2f} | {r['geo']:.2f} | {r['paths']} | {r['sel']} | {m} |")
+            if "erro" in r:
+                L.append(f"| {caso} | {r['i']} | {r['t']:.1f} | - | - | - | - | {m} | {r['erro']}")
+            else:
+                L.append(f"| {caso} | {r['i']} | {r['t']:.2f} | {r['geo']:.2f} | {r['paths']} | {r['sel']} | {r['tri'] if r['tri'] is not None else 'n/d'} | {m} |")
     L += ["", "| caso | mediana (s) | maximo (s) | meta 10 s |", "|---|---|---|---|"]
     for caso, linhas in resultados.items():
-        ts = [r["t"] for r in linhas]
+        ok = [r for r in linhas if "erro" not in r]
+        if len(ok) < len(linhas):
+            L.append(f"| {caso} | - | - | {linhas[-1]['erro']} |")
+            continue
+        ts = [r["t"] for r in ok]
         L.append(f"| {caso} | {statistics.median(ts):.2f} | {max(ts):.2f} | {'meta 10 s: ATINGIDA' if max(ts) <= META_S else 'meta 10 s: NAO ATINGIDA'} |")
     return "\n".join(L) + "\n"
 
 
 def _html(saida, origem):
     cel = lambda cam, rot: f'<figure><figcaption>{rot}</figcaption><img src="{cam}.svg" alt="{rot}"></figure>'  # noqa: E731
-    corpo = "".join(cel(f"{c}_{e.replace(':', 'x')}", f"{c.capitalize()} {e}") for c in ("planta", "corte") for e in ESCALAS)
+    corpo = "".join(cel(f"{c}_{e.replace(':', 'x')}", f"{c.capitalize()} {e}") for c in ("planta", "corte") for e in ESCALAS if (saida / f"{c}_{e.replace(':', 'x')}.svg").exists())
     (saida / "lado_a_lado.html").write_text(
         '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Planta e corte lado a lado</title><style>'
         "body{font-family:sans-serif;margin:16px}.g{display:grid;grid-template-columns:1fr 1fr;gap:16px}"
@@ -227,32 +259,48 @@ def main(argv=None):
     ap.add_argument("saida")
     ap.add_argument("--ifc")
     ap.add_argument("--repeticoes", type=int, default=3)
+    ap.add_argument("--pavimento", help="nome ou indice (ordem de cota); padrao: o com mais paredes")
+    ap.add_argument("--limite-s", type=float, default=float(auxiliar.LIMITE_PADRAO_S), help="limite do processo auxiliar por desenho (padrao 180)")
+    ap.add_argument("--sem-moveis", action="store_true", help="oculta IfcFurnishingElement (moveis) do desenho")
     a = ap.parse_args(argv)
     saida = Path(a.saida)
     saida.mkdir(parents=True, exist_ok=True)
     tmp = Path(tempfile.mkdtemp(prefix="medir_s06_"))
+    cats = ("IfcFurnishingElement",) if a.sem_moveis else ()
+    extra = {"limite do auxiliar": f"{a.limite_s:g} s", "moveis ocultos": "sim" if a.sem_moveis else "nao"}
     try:
         if a.ifc:
             cop = tmp / "copia.ifc"
             shutil.copyfile(a.ifc, cop)  # nunca altera o original
+            extra["tamanho do arquivo"] = f"{os.path.getsize(a.ifc) / 1e6:.1f} MB"
+            t0 = time.perf_counter()
             f = ifcopenshell.open(str(cop))
-            pav = _pavimento_baixo(f)
+            extra["abrir o IFC no processo pai"] = f"{time.perf_counter() - t0:.1f} s"
+            pav, lista = _escolher_pavimento(f, a.pavimento)
             origem = f"{Path(a.ifc).name} (pavimento {pav.Name})"
+            extra["pavimentos (nome, cota, paredes, moveis)"] = "; ".join(str(x) for x in lista)
         else:
             f, pav = sintetico()
             origem = "sintetico 25 x 20 m (500 m2), 6 portas, 6 janelas, 20 moveis, pe-direito 2,8 m"
         resultados = {}
         for esc in ESCALAS:
-            gp, gc = _vistas(f, pav, esc)
             sufixo = esc.replace(":", "x")
+            try:
+                gp, gc = _vistas(f, pav, esc)
+            except (SystemExit, Exception) as e:  # noqa: BLE001
+                for caso in ("planta", "corte"):
+                    resultados[f"{caso} {esc}"] = [dict(i=1, t=0.0, mem=None, erro=f"FALHOU (vistas: {e})")]
+                continue
             for caso, gid in (("planta", gp), ("corte", gc)):
-                linhas, svg = _medir(f, caso, gid, esc, a.repeticoes)
+                linhas, svg = _medir(f, caso, gid, esc, a.repeticoes, a.limite_s, cats)
                 resultados[f"{caso} {esc}"] = linhas
-                caminho = saida / f"{caso}_{sufixo}.svg"
-                caminho.write_text(svg, encoding="utf-8")
-                if not _png(caminho, saida / f"{caso}_{sufixo}.png"):
-                    print(f"aviso: PNG de {caminho.name} nao gerado (so SVG)")
-        md = _tabela(resultados, a.repeticoes, origem)
+                if svg is not None:
+                    caminho = saida / f"{caso}_{sufixo}.svg"
+                    caminho.write_text(svg, encoding="utf-8")
+                    if not _png(caminho, saida / f"{caso}_{sufixo}.png"):
+                        print(f"aviso: PNG de {caminho.name} nao gerado (so SVG)")
+                (saida / "medicao.md").write_text(_tabela(resultados, a.repeticoes, origem, extra), encoding="utf-8")  # parcial a cada caso
+        md = _tabela(resultados, a.repeticoes, origem, extra)
         (saida / "medicao.md").write_text(md, encoding="utf-8")
         _html(saida, origem)
         print(md)

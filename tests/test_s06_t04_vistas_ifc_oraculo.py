@@ -173,7 +173,7 @@ def test_ifc_de_outro_programa_sem_pset_nem_formato_nosso(f):
     ext = A.annotation(f, "Externa")
     A.annotation(f, "Legenda", tipo="TEXT")
     A.folha(f, "X-1", "Folha externa")
-    assert not [p for p in f.by_type("IfcPropertySet") if p.Name == "OBIM_Projeto"]
+    assert not [p for p in f.by_type("IfcPropertySet") if p.Name == "OBIM_Project"]
     vs = V.listar_vistas(f)
     assert [x["gid"] for x in vs] == [ext.GlobalId] and vs[0]["nome"] == "Externa"
     assert vs[0]["tipo"] is None and vs[0]["escala"] is None and vs[0]["location"] is None

@@ -16,7 +16,7 @@ morto (`kill` + `join`), canal fechado; a pasta só sai no `fechar()`. Erros (to
 Ganchos do filho (variáveis de ambiente lidas no filho, depois de `pronto`): `OBIM_TESTE_AUX_DORMIR_S`, `OBIM_TESTE_AUX_SAIR` (`os._exit`), `OBIM_TESTE_AUX_SEGV=1` (queda de verdade), `OBIM_TESTE_AUX_LEVANTAR=<texto>`.
 Caso 10 (trava ampliada) não tem marcador: passa hoje e tem de continuar passando.
 [P] (escolhas do oráculo que a especificação não fixa; o Opus aprovou na revisão): `protocolo` fornecido é mantido e a versão != 1 pode sair de `preparar` ou de `executar`; `threads` padrão `nucleos.limitar_threads(None)` (atualizado pela T07a2; era `min(8, os.cpu_count() or 1)`);
-a pasta só sai no `fechar()` (não no fim de cada `executar`); pasta em `tempfile.gettempdir()`; unidades da op `desenho` (parte 2); `SelecaoInvalida` para CORTE e `AlturaCorte` ruim (parte 2); ganchos lidos no filho depois do `pronto`;
+a pasta só sai no `fechar()` (não no fim de cada `executar`); pasta em `tempfile.gettempdir()`; unidades da op `desenho` (parte 2); `SelecaoInvalida` para CORTE e `CutHeight` ruim (parte 2); ganchos lidos no filho depois do `pronto`;
 executor devolve a resposta crua. A trava do caso 10 também barra `from obim_geometria import processo` (mais estrita que a especificação, inofensiva)."""
 import inspect
 import json

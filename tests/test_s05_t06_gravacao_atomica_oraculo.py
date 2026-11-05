@@ -21,7 +21,7 @@ CONTRATO (`app/openbim_app/gravacao_atomica.py`, sem Qt, sem obimcore; nomes do 
 4. `conferir_ifc(caminho)`: recusa o IFC que não começa com `ISO-10303-21;` ou não termina com `END-ISO-10303-21;` (G5).
    `limpar_temporarios(destino)`: apaga `Casa.ifc.tmp` e `Casa.ifc.bak.tmp` que existirem e devolve os caminhos apagados (iterável); erro ao apagar não
    sobe, e o caminho que não saiu não entra na lista.
-Fora deste módulo (ADR-002 §4.5): o modo "sem carimbo" e o carimbo do pset `OBIM_Projeto` são do par; nenhum caso aqui.
+Fora deste módulo (ADR-002 §4.5): o modo "sem carimbo" e o carimbo do pset `OBIM_Project` são do par; nenhum caso aqui.
 DESVIOS DA ESPECIFICAÇÃO (não afrouxam nada): nome do arquivo escolhido na revisão; caso 6(c) e 11 sem `skipif`, cada sistema com a
 própria conferência (critério "0 pulos"); caso 9 compara as linhas de entidade depois de reabrir (a régua `s05_conteudo_aux.py` é do
 o módulo de transações ainda não existe) e tem uma parte (a) só em Python. GUARDA: sem ifcopenshell (caso 9b) ou como root no Linux (caso 8), pula; com

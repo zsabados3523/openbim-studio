@@ -12,7 +12,7 @@ commit próprio, depois da implementação (só as linhas `AINDA_NAO = ...` e `@
    lado_criados, lado_alterados, lado_apagados)`: coleções comparadas como conjunto (GlobalId; no lateral, `(coleção, id)` comparado como tupla).
 4. `h.pode_desfazer`, `h.pode_refazer`, `h.quebrado` (bool) e `h.descartados` (int) são PROPRIEDADES (lidas sem chamar). Uma transação nossa = um
    `Transaction`: `len(arquivo.history)` e `len(arquivo.future)` andam junto com o nosso histórico. `h.encerrar()` esvazia `history`/`future` e tira
-   `int(arquivo.this)` de `ifcopenshell.file.registry`. `with h.fora_do_historico(esc):` edição livre (carimbo do pset `OBIM_Projeto`), fora do histórico.
+   `int(arquivo.this)` de `ifcopenshell.file.registry`. `with h.fora_do_historico(esc):` edição livre (carimbo do pset `OBIM_Project`), fora do histórico.
 5. Erros: edição dentro de `escrever()` e fora da transação (atributo, `remove`, `create_entity`) -> `EdicaoForaDeTransacao` ANTES de aplicar (o objeto
    criado sai), sem quebrar o histórico. Transação, desfazer ou refazer dentro de transação -> `TransacaoAberta`. `esc` vencido -> `TravaNaoSegura`
    (`sessao_modelo`). Exceção dentro: tudo volta nos dois lados, histórico e refazer intactos, a exceção original sobe. Falha no `anotar` (depois do

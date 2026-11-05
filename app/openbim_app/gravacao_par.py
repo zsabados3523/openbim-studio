@@ -19,7 +19,7 @@ from . import obim_zip
 VERSAO_FORMATO = obim_zip.VERSAO_FORMATO
 VERSAO_PROGRAMA = "0.1.0"
 FORMATO = "obim-lateral"
-_PSET = "OBIM_Projeto"
+_PSET = "OBIM_Project"
 
 
 def _sha(caminho):

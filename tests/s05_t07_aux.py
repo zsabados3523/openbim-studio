@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Utilitários do teste de gravação do par com diário. Código de teste; não editar.
-O contrato está em `tests/test_s05_t07_par_oraculo.py`. Aqui: leitura do par (manifesto e objetos do ZIP, pset `OBIM_Projeto`), régua do par
+O contrato está em `tests/test_s05_t07_par_oraculo.py`. Aqui: leitura do par (manifesto e objetos do ZIP, pset `OBIM_Project`), régua do par
 (`estado_par`: "antigo" por bytes exatos, "novo" por conteúdo, "nada"; qualquer outra coisa é problema), escritor de par falso (só para a régua),
 a mudança fixa que o caso faz no modelo (`mudar`) e o processo filho que grava (ou resolve) e morre no ponto pedido (`rodar`)."""
 import hashlib
@@ -24,7 +24,7 @@ TEMPS = ("Casa.ifc.tmp", "Casa.obim.tmp", "Casa.ifc.bak.tmp", "Casa.obim.bak.tmp
 CAMPOS = {"formato", "versao_formato", "LadoId", "Revisao", "ifc_nome", "ifc_sha256", "ifc_tamanho", "ifc_projeto_globalid",
           "programa_versao", "data"}  # formato do par (ADR-002 §4.3)
 Antigo = namedtuple("Antigo", "ifc obim")  # bytes exatos do par de antes
-Novo = namedtuple("Novo", "revisao lado_id foto lado")  # o que o par novo tem de conter (foto sem o pset OBIM_Projeto; lado = json canônico)
+Novo = namedtuple("Novo", "revisao lado_id foto lado")  # o que o par novo tem de conter (foto sem o pset OBIM_Project; lado = json canônico)
 sha = lambda b: hashlib.sha256(b).hexdigest()  # noqa: E731
 
 
@@ -58,9 +58,9 @@ def pset_obim(arquivo):
     import ifcopenshell.util.element as U
     projs = arquivo.by_type("IfcProject")
     assert len(projs) == 1, f"{len(projs)} IfcProject"
-    n = sum(1 for r in projs[0].IsDefinedBy or () if r.is_a("IfcRelDefinesByProperties") and r.RelatingPropertyDefinition.Name == "OBIM_Projeto")
-    assert n <= 1, f"{n} psets OBIM_Projeto no IfcProject (G4: um só)"
-    p = U.get_pset(projs[0], "OBIM_Projeto")
+    n = sum(1 for r in projs[0].IsDefinedBy or () if r.is_a("IfcRelDefinesByProperties") and r.RelatingPropertyDefinition.Name == "OBIM_Project")
+    assert n <= 1, f"{n} psets OBIM_Project no IfcProject (G4: um só)"
+    p = U.get_pset(projs[0], "OBIM_Project")
     return None if p is None else (p.get("LadoId"), p.get("Revisao"))
 
 
@@ -119,9 +119,9 @@ def estado_par(destino, antigo=None, novo=None, pasta_projeto=None):
     try:
         ps = pset_obim(f)
     except Exception as e:  # noqa: BLE001
-        return "?", prob + [f"pset OBIM_Projeto ilegível: {e!r}"]
+        return "?", prob + [f"pset OBIM_Project ilegível: {e!r}"]
     if ps != (man.get("LadoId"), man.get("Revisao")):
-        prob.append(f"pset OBIM_Projeto {ps} difere do manifesto ({man.get('LadoId')}, {man.get('Revisao')})")
+        prob.append(f"pset OBIM_Project {ps} difere do manifesto ({man.get('LadoId')}, {man.get('Revisao')})")
     if novo is None:
         return "?", prob + ["par que não é o antigo e nenhum novo esperado"]
     if ps != (novo.lado_id, novo.revisao) or not isinstance(ps[1], int):
@@ -138,7 +138,7 @@ def escrever_par_falso(destino, ifc_origem, objetos, revisao, lado_id=LADO, mani
     import ifcopenshell.api
     f = ifcopenshell.open(str(ifc_origem))
     proj = f.by_type("IfcProject")[0]
-    ps = ifcopenshell.api.run("pset.add_pset", f, product=proj, name="OBIM_Projeto")
+    ps = ifcopenshell.api.run("pset.add_pset", f, product=proj, name="OBIM_Project")
     ifcopenshell.api.run("pset.edit_pset", f, pset=ps, properties={"LadoId": lado_id, "Revisao": revisao})
     d = Path(destino)
     f.write(str(d))

@@ -348,7 +348,7 @@ class Historico:
         return self._mover(esc, False)
 
     @contextmanager
-    def fora_do_historico(self, esc):  # só para o carimbo do pset OBIM_Projeto: edição livre, sem desfazer nem diário
+    def fora_do_historico(self, esc):  # só para o carimbo do pset OBIM_Project: edição livre, sem desfazer nem diário
         with self._aberto(esc) as a, self._livre(a):
             yield
 

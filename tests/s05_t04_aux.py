@@ -168,7 +168,7 @@ class LadoEnsaio:  # lateral de ensaio, SÓ para a régua e a rodada crua de hoj
         para.append(ops)
 
 
-def montar(base):  # arquivo livre (antes de qualquer Historico): camadas, 3 tipos, pset OBIM_Projeto; GlobalId novos em sequência fixa
+def montar(base):  # arquivo livre (antes de qualquer Historico): camadas, 3 tipos, pset OBIM_Project; GlobalId novos em sequência fixa
     ifcopenshell, api, _, _ = _api()
     import ifcopenshell.util.representation as UR
     cont = itertools.count(1)
@@ -177,7 +177,7 @@ def montar(base):  # arquivo livre (antes de qualquer Historico): camadas, 3 tip
     ls = api("material.add_material_set", f, name="T04", set_type="IfcMaterialLayerSet")
     api("material.edit_layer", f, layer=api("material.add_layer", f, layer_set=ls, material=api("material.add_material", f, name="Concreto")),
         attributes={"LayerThickness": 0.15})
-    obim = api("pset.add_pset", f, product=f.by_type("IfcProject")[0], name="OBIM_Projeto")
+    obim = api("pset.add_pset", f, product=f.by_type("IfcProject")[0], name="OBIM_Project")
     api("pset.edit_pset", f, pset=obim, properties={"LadoId": "lado-t04", "Revisao": 1})
     c = {"P": random.Random(SEMENTE + 1), "corpo": UR.get_context(f, "Model", "Body", "MODEL_VIEW").id(), "camadas": ls.id(), "obim": obim.GlobalId,
          "andares": sorted(a.GlobalId for a in f.by_type("IfcBuildingStorey")), "g": {}}

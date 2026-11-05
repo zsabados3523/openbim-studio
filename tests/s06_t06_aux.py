@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Auxiliar do oráculo F0-S06-T06 (6 casos de divergência). Código de teste; o implementador não edita.
 `fazer(pasta, ...)` grava `Casa.ifc` (IFC4 mínimo, vistas = IfcAnnotation DRAWING com GlobalId dado, pranchas = IfcDocumentInformation SHEET,
-pset OBIM_Projeto com LadoId e Revisao) e, se pedido, `Casa.obim` real 0.2.0 via `obim_zip` (manifesto com o sha256 do IFC gravado).
+pset OBIM_Project com LadoId e Revisao) e, se pedido, `Casa.obim` real 0.2.0 via `obim_zip` (manifesto com o sha256 do IFC gravado).
 `foto(pasta)` = {caminho relativo: sha256} + pastas, para provar que nada foi apagado, criado ou regravado."""
 import hashlib
 from pathlib import Path
@@ -35,7 +35,7 @@ def fazer(pasta, *, vistas=("1", "2"), pranchas=("A-01",), pset=True, lado=LADO,
     for numero, escopo in docs_extra:
         A.folha(f, numero, f"Doc {numero}").Scope = escopo
     if pset:
-        ps = ifcopenshell.api.run("pset.add_pset", f, product=proj, name="OBIM_Projeto")
+        ps = ifcopenshell.api.run("pset.add_pset", f, product=proj, name="OBIM_Project")
         ifcopenshell.api.run("pset.edit_pset", f, pset=ps, properties={k: v for k, v in (("LadoId", lado), ("Revisao", rev)) if v is not None})
     ifc = pasta / f"{nome}.ifc"
     f.write(str(ifc))

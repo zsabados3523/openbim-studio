@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Oráculo do F0-S06-T09: IFC antes/depois igual por conteúdo, exceto as entidades previstas, e válido (cartão T09; régua do T04 da S05).
 Fluxo real: base gravada em disco, `Sessao` (SessaoModelo + Lateral + Historico), 2 vistas e 1 prancha numa transação, `gravar_par` (carimba o pset
-OBIM_Projeto), reabrir o IFC gravado. Régua: `s05_conteudo_aux.foto/diferencas` (sem tolerância). CONTRATO:
+OBIM_Project), reabrir o IFC gravado. Régua: `s05_conteudo_aux.foto/diferencas` (sem tolerância). CONTRATO:
 1. Nada que existia muda (todo GlobalId e toda forma sem GlobalId da base seguem iguais), em IFC2X3, IFC4 e IFC4X3.
 2. O que entra é EXATAMENTE as listas PREVISTAS abaixo (classe a classe, com contagem); qualquer classe a mais, a menos ou a mais de uma vez falha.
-   Inclui o pset OBIM_Projeto (LadoId, Revisao 1) e nada mais no projeto.
+   Inclui o pset OBIM_Project (LadoId, Revisao 1) e nada mais no projeto.
 3. O IFC gravado passa em `ifcopenshell.validate` (regras EXPRESS); regravar sem carimbo não muda nada; regravar com carimbo muda só Revisao.
 Não editar na implementação. GUARDA (pula, nunca afrouxa): sem ifcopenshell, pula; com OBIM_S05_OBRIGATORIO=1 vira falha."""
 import ifcopenshell
@@ -103,11 +103,11 @@ def test_carimbo_obim_projeto_e_so_ele(caso):
     _, _, _, destino, _ = caso
     g = ifcopenshell.open(str(destino))
     projeto = g.by_type("IfcProject")[0]
-    ps = [p for p in g.by_type("IfcPropertySet") if p.Name == "OBIM_Projeto"]
+    ps = [p for p in g.by_type("IfcPropertySet") if p.Name == "OBIM_Project"]
     assert len(ps) == 1 and sorted(p.Name for p in ps[0].HasProperties) == ["LadoId", "Revisao"]
     rels = [r for r in g.by_type("IfcRelDefinesByProperties") if projeto in r.RelatedObjects]
     assert len(rels) == 1 and rels[0].RelatingPropertyDefinition == ps[0] and list(rels[0].RelatedObjects) == [projeto]
-    assert {k: {a: b for a, b in v.items() if a != "id"} for k, v in UE.get_psets(projeto).items()} == {"OBIM_Projeto": {"LadoId": "lado-t09", "Revisao": 1}}
+    assert {k: {a: b for a, b in v.items() if a != "id"} for k, v in UE.get_psets(projeto).items()} == {"OBIM_Project": {"LadoId": "lado-t09", "Revisao": 1}}
 
 
 def test_vistas_e_prancha_continuam_la_depois_de_reabrir(caso):
@@ -139,10 +139,10 @@ def test_gravar_reabrir_e_regravar_nao_muda_mais_nada(caso, tmp_path):
     gravar(s3, destino, pasta)  # com carimbo: Revisao 1 -> 2 e só isso
     g3 = ifcopenshell.open(str(destino))
     import ifcopenshell.util.element as UE
-    assert UE.get_psets(g3.by_type("IfcProject")[0])["OBIM_Projeto"]["Revisao"] == 2
+    assert UE.get_psets(g3.by_type("IfcProject")[0])["OBIM_Project"]["Revisao"] == 2
     com, sem, sumiu, mudou = novas(f2, R.foto(g3))
     assert dict(com) == {} and dict(sem) == {"IfcPropertySingleValue": 1} and len(sumiu) == 1 and sumiu[0][0] == "IfcPropertySingleValue"
-    assert mudou == [next(p.GlobalId for p in g3.by_type("IfcPropertySet") if p.Name == "OBIM_Projeto")], "só o pset do carimbo muda (Revisao)"
+    assert mudou == [next(p.GlobalId for p in g3.by_type("IfcPropertySet") if p.Name == "OBIM_Project")], "só o pset do carimbo muda (Revisao)"
 
 
 def test_desfazer_a_criacao_volta_ao_antes(tmp_path):

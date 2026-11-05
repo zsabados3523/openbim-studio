@@ -98,16 +98,16 @@ def test_altura_de_corte_da_vista_e_padrao_de_1_2_m():
     f, pavs, g = B.modelo("IFC4", X.GEO, 12.5, 1.0, True)
     for h, aparece, some in ((None, "Xc0", "Xb0"), (0.6, "Xb0", "Xc0"), (1.9, "Xa0", "Xb0")):
         gv = B.planta(f, pavs[0], f"V{h}")
-        if h is not None:  # `OBIM_Vista.AlturaCorte` (nome provisório do ADR-003 §3.1): metros acima do pavimento
-            ps = A.api("pset.add_pset", f, product=f.by_guid(gv), name="OBIM_Vista")
-            A.api("pset.edit_pset", f, pset=ps, properties={"AlturaCorte": h})
+        if h is not None:  # `OBIM_View.CutHeight` (nome provisório do ADR-003 §3.1): metros acima do pavimento
+            ps = A.api("pset.add_pset", f, product=f.by_guid(gv), name="OBIM_View")
+            A.api("pset.edit_pset", f, pset=ps, properties={"CutHeight": h})
         p = P_.gerar_planta(f, gv)
         assert p.altura_corte == pytest.approx(12.5 + (1.2 if h is None else h), abs=1e-6)
         assert B.grupo(p.svg, g[aparece]) is not None and B.grupo(p.svg, g[some]) is None  # Xb z 0,5-0,95; Xc z 1,0-1,4; Xa z 1,45-1,9
     for ruim in (0.0, -1.0):
         gv = B.planta(f, pavs[1], f"R{ruim}")
-        ps = A.api("pset.add_pset", f, product=f.by_guid(gv), name="OBIM_Vista")
-        A.api("pset.edit_pset", f, pset=ps, properties={"AlturaCorte": ruim})
+        ps = A.api("pset.add_pset", f, product=f.by_guid(gv), name="OBIM_View")
+        A.api("pset.edit_pset", f, pset=ps, properties={"CutHeight": ruim})
         import openbim_app.desenho.selecao as S
         with pytest.raises(S.SelecaoInvalida):
             P_.gerar_planta(f, gv)
@@ -149,6 +149,6 @@ def test_altura_de_corte_nao_finita_e_recusada(monkeypatch, ruim):
     f, pavs, g = B.modelo("IFC4")
     gv = B.planta(f, pavs[0], "Vnf")
     real = UE.get_pset
-    monkeypatch.setattr(UE, "get_pset", lambda e, nome=None, *a, **k: {"AlturaCorte": ruim} if nome == "OBIM_Vista" and e.GlobalId == gv else real(e, nome, *a, **k))
+    monkeypatch.setattr(UE, "get_pset", lambda e, nome=None, *a, **k: {"CutHeight": ruim} if nome == "OBIM_View" and e.GlobalId == gv else real(e, nome, *a, **k))
     with pytest.raises(S.SelecaoInvalida):
         P_.gerar_planta(f, gv)

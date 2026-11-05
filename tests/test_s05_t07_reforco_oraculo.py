@@ -89,7 +89,7 @@ def test_r4_lado_id_do_pset_vence_o_dado(tmp_path, base_ifc):  # noqa: F811
     import ifcopenshell
     import ifcopenshell.api
     f = ifcopenshell.open(base_ifc)
-    ps = ifcopenshell.api.run("pset.add_pset", f, product=f.by_type("IfcProject")[0], name="OBIM_Projeto")
+    ps = ifcopenshell.api.run("pset.add_pset", f, product=f.by_type("IfcProject")[0], name="OBIM_Project")
     ifcopenshell.api.run("pset.edit_pset", f, pset=ps, properties={"LadoId": "lado-que-ja-estava", "Revisao": 5})
     f.write(str(tmp_path / "com_pset.ifc"))
     p = Proj(tmp_path, str(tmp_path / "com_pset.ifc"))

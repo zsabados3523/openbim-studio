@@ -7,7 +7,7 @@ o Qt entra DENTRO de `exportar_pdf`, depois que a funcao cria `QGuiApplication` 
 - `FORMATOS = {"A4": (297.0, 210.0), "A3": (420.0, 297.0)}` (largura, altura em mm, paisagem); `MARGEM_MM = 10.0`; `CARIMBO_ALTURA_MM = 25.0`.
 - Erros, todos `ValueError` e subclasses de `PranchaInvalida`: `FormatoInvalido`, `EscalaInvalida`, `SvgInvalido`, `ViewportForaDaFolha`, `PranchaNaoEncontrada`.
 - `criar_prancha(lado, identification, formato, projeto, titulo, data, folha) -> id`: `lado` = o que `t.lado` da transacao oferece (`criar(colecao, id, obj)`).
-  Cria `pranchas/<uuid4>`: `{"identification", "formato", "carimbo": {"projeto", "titulo", "data", "folha"}}`. `identification` texto nao vazio sem espaco
+  Cria `sheets/<uuid4>`: `{"identification", "formato", "carimbo": {"projeto", "titulo", "data", "folha"}}`. `identification` texto nao vazio sem espaco
   nas pontas (`PranchaInvalida`); `formato` em FORMATOS (`FormatoInvalido`); `projeto`, `titulo`, `folha` texto nao vazio; `data` "AAAA-MM-DD" de calendario
   real (`PranchaInvalida`). Valida ANTES de chamar `lado.criar`.
 - `colocar_viewport(lado, identification, view_guid, x_mm, y_mm, escala) -> id`: cria `viewports/<uuid4>`: `{"prancha", "view_guid", "x", "y", "escala"}`.

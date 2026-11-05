@@ -8,7 +8,7 @@ relações que o têm como `RelatingGroup` (o `Name` do grupo não conta: anota�
 programa no mesmo grupo o mantém vivo; (4) `criar_prancha`/`criar_vista` recusam título/nome que não seja texto não vazio (ValueError; arquivo intacto);
 (5) `criar_vista` valida `origem` (3 números finitos) antes de escrever (ValueError; arquivo intacto); (6) o número da prancha nunca produz `Location`
 com "..", "\\", ":" ou barra inicial: [P: a escolha é do implementador] recusa (IdentificacaoInvalida, arquivo intacto) OU grava `Location` limpo
-sob "pranchas/" mantendo a chave exata; (7) o documento da vista tem Identification/DocumentId = Location; ordem da nova referência na prancha = maior
+sob "sheets/" mantendo a chave exata; (7) o documento da vista tem Identification/DocumentId = Location; ordem da nova referência na prancha = maior
 ordem + 1; entidades novas em IFC2X3 usam o PRIMEIRO IfcOwnerHistory; `ambigua` só é True com número repetido. Cada bug é validado com o
 validador do ifcopenshell (`express_rules=True`) nos 3 esquemas, com "base 0 erros" antes. Os casos que ainda falham levam `@AINDA_NAO` (xfail estrito);
 casos que o código atual já cumpre (só matam mutantes) NÃO levam a marca. Não editar; só o autor retira os `@AINDA_NAO`."""
@@ -236,7 +236,7 @@ def test_numero_de_prancha_perigoso_nao_gera_location_perigoso(f):
         _, por = A.prancha_ifc(f, numero)  # aceito: a chave é a exata e os Locations são limpos
         for r in por["LAYOUT"] + por["TITLEBLOCK"]:
             p = r.Location
-            assert p.startswith("pranchas/") and ".." not in p.split("/") and "\\" not in p and ":" not in p and not p.startswith("/"), (numero, p)
+            assert p.startswith("sheets/") and ".." not in p.split("/") and "\\" not in p and ":" not in p and not p.startswith("/"), (numero, p)
         assert V.ler_prancha(f, numero)["numero"] == numero
     assert erros(f) == []
 

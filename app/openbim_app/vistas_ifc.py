@@ -157,8 +157,8 @@ def _pasta_livre(ifc, cam):
     n = 1
     while True:
         pasta = cam if n == 1 else f"{cam}-{n}"
-        if (_chave_fs(f"pranchas/{pasta}/layout.svg") not in usados
-                and _chave_fs(f"pranchas/{pasta}/titleblock.svg") not in usados):
+        if (_chave_fs(f"sheets/{pasta}/layout.svg") not in usados
+                and _chave_fs(f"sheets/{pasta}/titleblock.svg") not in usados):
             return pasta
         n += 1
 
@@ -321,8 +321,8 @@ def criar_prancha(ifc, numero, titulo):
     kw = _kw(ifc)
     doc = ifc.create_entity("IfcDocumentInformation", Name=titulo, Scope="SHEET",
                             **({"DocumentId": numero} if _e2x3(ifc) else {"Identification": numero}))
-    refs = [_nova_ref(ifc, doc, "LAYOUT", f"pranchas/{cam}/layout.svg"),
-            _nova_ref(ifc, doc, "TITLEBLOCK", f"pranchas/{cam}/titleblock.svg")]
+    refs = [_nova_ref(ifc, doc, "LAYOUT", f"sheets/{cam}/layout.svg"),
+            _nova_ref(ifc, doc, "TITLEBLOCK", f"sheets/{cam}/titleblock.svg")]
     if _e2x3(ifc):
         doc.DocumentReferences = refs
     return numero

@@ -8,6 +8,7 @@ import ifcopenshell
 import ifcopenshell.geom
 import ifcopenshell.ifcopenshell_wrapper as W
 import ifcopenshell.util.element
+import ifcopenshell.util.placement
 from obim_geometria import nucleos
 
 
@@ -63,6 +64,86 @@ def _pavimento(ifc: ifcopenshell.file, vista: dict) -> object:
     return pav
 
 
+def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
+    vista = pedido["vista"]
+    ann = f.by_guid(vista["guid"])
+    for rel in getattr(ann, "IsDefinedBy", ()) or ():
+        ps = getattr(rel, "RelatingPropertyDefinition", None)
+        if ps is not None and ps.is_a("IfcPropertySet") and ps.Name == "EPset_Drawing":
+            for pr in getattr(ps, "HasProperties", ()) or ():
+                if pr.Name in ("Scale", "HumanScale"):
+                    pr.NominalValue = f.create_entity(
+                        "IfcLabel", "1/1000" if pr.Name == "Scale" else "1:1000"
+                    )
+
+    elementos = pedido.get("elementos", [])
+    incl = [f.by_id(i) for i, _ in elementos if not f.by_id(i).is_a("IfcOpeningElement")] + [ann]
+    selecionados = {i for i, _ in elementos}
+
+    if fase is not None:
+        fase("geometria")
+
+    st = ifcopenshell.geom.settings(ELEMENT_HIERARCHY=True)
+    st.set("dimensionality", W.SURFACES_AND_SOLIDS)
+    st.set("iterator-output", W.NATIVE)
+    st.set("apply-default-materials", True)
+    for k in ("svg-write-poly", "svg-xmlns", "svg-poly", "svg-project", "svg-without-storeys"):
+        st.set(k, True)
+    st.set("elevation-ref-guid", vista["guid"])
+
+    m = ifcopenshell.util.placement.get_local_placement(ann.ObjectPlacement)
+    esc = float(vista["escala"])
+    st.set("model-offset", [-float(m[0, 3]) * esc, -float(m[1, 3]) * esc, -float(m[2, 3]) * esc])
+
+    buf = ifcopenshell.geom.serializers.buffer()
+    sr = ifcopenshell.geom.serializers.svg(buf, st)
+    sr.setFile(f)
+
+    if fase is not None:
+        fase("motor")
+
+    t0 = time.perf_counter()
+    num_threads = nucleos.limitar_threads(pedido.get("threads"))
+    it = ifcopenshell.geom.iterator(st, f, num_threads, include=incl)
+    shapes = []
+    if it.initialize():
+        while True:
+            shapes.append(it.get())
+            if not it.next():
+                break
+    shapes.sort(key=lambda s: s.id)
+    geo_s = time.perf_counter() - t0
+
+    t1 = time.perf_counter()
+    for sh in shapes:
+        sr.write(sh)
+    write_s = time.perf_counter() - t1
+
+    t2 = time.perf_counter()
+    sr.finalize()
+    finalize_s = time.perf_counter() - t2
+
+    svg = buf.get_value()
+    enviados = [sh.id for sh in shapes if sh.id in selecionados]
+    enviados_set = set(enviados)
+    falhas = [i for i, _ in elementos if i not in enviados_set and not f.by_id(i).is_a("IfcOpeningElement")]
+
+    return {
+        "ok": True,
+        "svg": svg,
+        "n_paths": len(re.findall(r"<path\b", svg)),
+        "enviados": enviados,
+        "caixas": [],
+        "falhas_geometria": falhas,
+        "tempos": {
+            "abrir_s": float(abrir_s),
+            "geo_s": float(geo_s),
+            "write_s": float(write_s),
+            "finalize_s": float(finalize_s),
+        },
+    }
+
+
 def processar(pedido: dict, fase=None) -> dict:
     try:
         t_a0 = time.perf_counter()
@@ -79,6 +160,8 @@ def processar(pedido: dict, fase=None) -> dict:
                 return {"ok": False, "erro": {"tipo": "ArquivoDivergente", "mensagem": f"ID {id_step} diverge do arquivo", "rastro": ""}}
 
         vista = pedido["vista"]
+        if vista.get("tipo") == "CORTE":
+            return _corte(f, pedido, fase, abrir_s)
         scale = float(vista["escala"])
         altura_corte_m = float(vista["altura_corte_m"])
         pav = _pavimento(f, vista)

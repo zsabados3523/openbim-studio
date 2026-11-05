@@ -91,8 +91,8 @@ def _contem_controle(texto):
 
 
 def _obter_prancha(lateral, identification):
-    for uid in lateral.ids("pranchas"):
-        p = lateral.obter("pranchas", uid)
+    for uid in lateral.ids("sheets"):
+        p = lateral.obter("sheets", uid)
         if not isinstance(p, dict):
             raise PranchaInvalida(f"prancha deve ser dict, recebido {type(p).__name__}")
         if p.get("identification") == identification:
@@ -111,7 +111,7 @@ def _obter_viewport(lateral, identification, view_guid):
 
 
 def criar_prancha(lado, identification, formato, projeto, titulo, data, folha):
-    """Cria prancha na colecao 'pranchas' do lateral."""
+    """Cria prancha na colecao 'sheets' do lateral."""
     if not isinstance(identification, str) or not identification or identification != identification.strip() or _contem_controle(identification):
         raise PranchaInvalida("identification vazia ou com espaco nas pontas")
     if not isinstance(formato, str) or formato not in FORMATOS:
@@ -129,7 +129,7 @@ def criar_prancha(lado, identification, formato, projeto, titulo, data, folha):
     uid = str(uuid.uuid4())
     obj = {"identification": identification, "formato": formato,
            "carimbo": {"projeto": projeto, "titulo": titulo, "data": data, "folha": folha}}
-    lado.criar("pranchas", uid, obj)
+    lado.criar("sheets", uid, obj)
     return uid
 
 

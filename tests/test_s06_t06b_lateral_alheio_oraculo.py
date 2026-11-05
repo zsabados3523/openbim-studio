@@ -92,7 +92,7 @@ def obter_vazio(lat):
     return lat.canonico() == b"{}"
 
 
-def obter(pr, c="vistas"):
+def obter(pr, c="views"):
     return list(pr.lateral.ids(c))
 
 
@@ -104,7 +104,7 @@ def test_01_abrir_nao_carrega_nem_toca_o_alheio(p, abre, tipo, div):
     antes = X.foto(p)
     pr = abre(ifc, div)
     assert pr.lateral_alheio is not None and os.path.samefile(pr.lateral_alheio, ob)
-    assert [obter(pr, c) for c in ("vistas", "pranchas", "viewports")] == [[], [], []] and pr.lateral.canonico() == b"{}"
+    assert [obter(pr, c) for c in ("views", "sheets", "viewports")] == [[], [], []] and pr.lateral.canonico() == b"{}"
     assert X.foto(p) == antes and ob.read_bytes() == dados and ob.stat().st_mtime_ns == mt
     if div:
         assert pr.divergencia.caso == "D5" and pr.divergencia.aviso in pr.avisos
@@ -267,7 +267,7 @@ def test_12_casos_sem_alheio_abrem_e_gravam_como_hoje(p, abre, fab, vistas, div)
     assert obter(pr) == vistas
     pr.autosave.gravar_normal()
     ob = ifc.with_suffix(".obim")
-    assert gravado(ob).manifesto["ifc_projeto_globalid"] == X.GID and sorted(gravado(ob).lateral.ids("vistas")) == vistas
+    assert gravado(ob).manifesto["ifc_projeto_globalid"] == X.GID and sorted(gravado(ob).lateral.ids("views")) == vistas
     assert not list(p.glob("Casa.obim.alheio-*"))
 
 

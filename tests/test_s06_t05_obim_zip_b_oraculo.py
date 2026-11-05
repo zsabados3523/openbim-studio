@@ -14,11 +14,11 @@ def test_21_0_1_0_com_colecoes_reservadas_le_sem_validar(tmp_path):
     ruim = {"sem_chave": 1}  # um `vistas` sem `view_guid` seria recusado no 0.2.0; no 0.1.0 não se valida
     with zipfile.ZipFile(p, "w") as z:
         z.writestr("manifest.json", json.dumps({**MAN, "versao_formato": "0.1.0", "provisorio": True}))
-        z.writestr("vistas/abc.json", json.dumps(ruim))
+        z.writestr("views/abc.json", json.dumps(ruim))
         z.writestr("styles/e1.json", json.dumps({"x": 1}))
     r = m.ler(p)
     assert r.versao_original == "0.1.0" and r.manifesto["versao_formato"] == "0.2.0" and "provisorio" not in r.manifesto
-    assert r.lateral.obter("vistas", "abc") == ruim and r.lateral.obter("styles", "e1") == {"x": 1}
+    assert r.lateral.obter("views", "abc") == ruim and r.lateral.obter("styles", "e1") == {"x": 1}
 
 
 def test_22_regravar_0_2_x_maior_sai_0_2_0_e_preserva(proj):  # noqa: F811

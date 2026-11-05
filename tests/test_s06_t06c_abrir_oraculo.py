@@ -184,14 +184,14 @@ def _lixo(p):
 
 def _vista_sem_guid(p):
     ifc, ob = X.fazer(p)
-    _zip_trocando(ob, {"vistas/v1.json": b'{"estilo": "padrao"}'})
+    _zip_trocando(ob, {"views/v1.json": b'{"estilo": "padrao"}'})
     return ifc
 
 
 def _prancha_repetida(p):
     ifc, ob = X.fazer(p)
     with zipfile.ZipFile(ob) as z:
-        _zip_trocando(ob, extra={"pranchas/p9.json": z.read("pranchas/p0.json")})
+        _zip_trocando(ob, extra={"sheets/p9.json": z.read("sheets/p0.json")})
     return ifc
 
 

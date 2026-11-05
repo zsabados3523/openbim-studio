@@ -113,8 +113,8 @@ def _vistas(arquivo):
 def _problematicas(leitura, vistas_guids):
     n = 0
     lateral = leitura.lateral
-    for ident in lateral.ids("vistas"):
-        if lateral.obter("vistas", ident).get("view_guid") not in vistas_guids:
+    for ident in lateral.ids("views"):
+        if lateral.obter("views", ident).get("view_guid") not in vistas_guids:
             n += 1
     for ident in lateral.ids("viewports"):
         if lateral.obter("viewports", ident).get("view_guid") not in vistas_guids:

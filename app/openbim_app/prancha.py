@@ -169,10 +169,16 @@ def colocar_viewport(lado, identification, vista_guid, x_mm, y_mm, escala, rotac
 
 def ler_viewport(lateral, identification, vista_guid):
     """Le viewport do lateral e devolve {'x', 'y', 'escala'} (e 'rotacao' se 90)."""
-    v = _obter_viewport(lateral, identification, vista_guid)
-    res = {"x": v["x"], "y": v["y"], "escala": v["escala"]}
-    if v.get("rotacao") == 90:
-        res["rotacao"] = 90
+    try:
+        v = _obter_viewport(lateral, identification, vista_guid)
+    except KeyError as e:
+        raise PranchaInvalida(f"falha ao acessar viewport no lateral: {e}") from e
+    try:
+        res = {"x": v["x"], "y": v["y"], "escala": v["escala"]}
+        if v.get("rotacao") == 90:
+            res["rotacao"] = 90
+    except KeyError as e:
+        raise PranchaInvalida(f"campo obrigatorio {e} ausente no viewport") from e
     return res
 
 
@@ -584,6 +590,63 @@ def _process_elem_bbox(elem, tag, tr, bbox, cmd_counter):
         _parse_path(elem.get("d", ""), add_pt, cmd_counter)
 
 
+def _localizar_tag_raiz(svg_str):
+    pos = 0
+    n = len(svg_str)
+    while pos < n:
+        while pos < n and svg_str[pos] in " \t\r\n":
+            pos += 1
+        if pos >= n:
+            break
+        if svg_str.startswith("<!--", pos):
+            fim = svg_str.find("-->", pos + 4)
+            if fim == -1:
+                raise SvgInvalido("comentario nao fechado antes da raiz")
+            pos = fim + 3
+            continue
+        if svg_str.startswith("<?", pos):
+            fim = svg_str.find("?>", pos + 2)
+            if fim == -1:
+                raise SvgInvalido("instrucao de processamento ou declaracao xml nao fechada antes da raiz")
+            pos = fim + 2
+            continue
+        if svg_str.startswith("<![CDATA[", pos):
+            fim = svg_str.find("]]>", pos + 9)
+            if fim == -1:
+                raise SvgInvalido("cdata nao fechado antes da raiz")
+            pos = fim + 3
+            continue
+        if svg_str.startswith("<!DOCTYPE", pos) or svg_str.startswith("<!doctype", pos):
+            idx = pos + 9
+            depth = 0
+            quote = None
+            while idx < n:
+                ch = svg_str[idx]
+                if quote is not None:
+                    if ch == quote:
+                        quote = None
+                elif ch in ('"', "'"):
+                    quote = ch
+                elif ch == "[":
+                    depth += 1
+                elif ch == "]":
+                    depth = max(0, depth - 1)
+                elif ch == ">" and depth == 0:
+                    pos = idx + 1
+                    break
+                idx += 1
+            else:
+                raise SvgInvalido("doctype nao fechado antes da raiz")
+            continue
+        if svg_str[pos] == "<":
+            m = re.match(r"<([a-zA-Z_][a-zA-Z0-9_.-]*:)?svg(?=[\s/>])", svg_str[pos:])
+            if m:
+                return pos + m.end()
+            raise SvgInvalido("tag raiz <svg> nao encontrada")
+        raise SvgInvalido(f"caractere inesperado antes da raiz: {_resumo(svg_str[pos])}")
+    raise SvgInvalido("tag raiz <svg> nao encontrada")
+
+
 def normalizar_planta(svg_texto, margem_m=0.5):
     """Injeta viewBox na raiz se faltar, calculando a caixa delimitadora dos desenhaveis."""
     if isinstance(margem_m, bool) or not isinstance(margem_m, (int, float)) or not math.isfinite(margem_m) or margem_m < 0 or margem_m > 1e12:
@@ -641,10 +704,7 @@ def normalizar_planta(svg_texto, margem_m=0.5):
     if w <= 0 or h <= 0 or not (math.isfinite(minx) and math.isfinite(miny) and math.isfinite(w) and math.isfinite(h)):
         raise SvgInvalido("largura ou altura final <= 0")
 
-    m_svg = re.search(r"<svg\b", svg_str)
-    if not m_svg:
-        raise SvgInvalido("tag raiz <svg> nao encontrada")
-    idx = m_svg.end()
+    idx = _localizar_tag_raiz(svg_str)
     return svg_str[:idx] + f' viewBox="{minx:.10g} {miny:.10g} {w:.10g} {h:.10g}"' + svg_str[idx:]
 
 

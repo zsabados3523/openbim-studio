@@ -153,6 +153,8 @@ def test_threads_padrao_e_caixas_e_threads_chegam_ao_motor(tmp_aux, monkeypatch)
         return {**L.executar(pedido), "caixas": [7, 9]}
     p = P_.gerar_planta(f, d["vp"], executor=espia)
     assert p.caixas == (7, 9) and isinstance(peds[0]["threads"], int) and peds[0]["threads"] >= 1 and nthr == [peds[0]["threads"]]
+    from obim_geometria import nucleos as N
+    monkeypatch.setattr(N, "nucleos_fisicos", lambda: 8)  # atualizado pela T07a2: threads do iterator = min(pedido, núcleos FÍSICOS, 8); fixa a máquina
     P_.gerar_planta(f, d["vp"], threads=3, executor=espia)
     assert peds[1]["threads"] == 3 and nthr[-1] == 3
     _vazio(tmp_aux)

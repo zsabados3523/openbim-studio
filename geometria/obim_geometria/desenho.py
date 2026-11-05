@@ -8,6 +8,7 @@ import ifcopenshell
 import ifcopenshell.geom
 import ifcopenshell.ifcopenshell_wrapper as W
 import ifcopenshell.util.element
+from obim_geometria import nucleos
 
 
 _GRUPO = re.compile(r"<g\b[^>]*?(/?)>|</g>")
@@ -113,7 +114,7 @@ def processar(pedido: dict, fase=None) -> dict:
         sr = ifcopenshell.geom.serializers.svg(buf, st)
         sr.setFile(f)
 
-        num_threads = max(1, int(pedido.get("threads") or 1))
+        num_threads = nucleos.limitar_threads(pedido.get("threads"))
 
         if fase is not None:
             fase("motor")

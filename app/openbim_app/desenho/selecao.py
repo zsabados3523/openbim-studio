@@ -26,6 +26,26 @@ class Selecao:
     ocultos_por_classe: dict[str, int]
     sem_geometria: int
     falhas_geometria: tuple[int, ...] = ()
+    erros_geometria: tuple[str, ...] = ()
+
+
+class SessaoSelecao:
+    """Caixas (ou falhas) e erros de geometria já calculados POR elemento entre cortes;
+    quem altera o modelo invalida os ids afetados."""
+
+    def __init__(self) -> None:
+        self._caixas: dict[int, list[float] | None] = {}
+        self._erros: dict[int, list[str]] = {}
+
+    def invalidar(self, ids=None) -> None:
+        if ids is None:
+            self._caixas.clear()
+            self._erros.clear()
+            return
+        for i in ids:
+            chave = int(i)
+            self._caixas.pop(chave, None)
+            self._erros.pop(chave, None)
 
 
 def _validar_categorias(ifc: ifcopenshell.file, categorias: tuple[str, ...]) -> None:
@@ -116,6 +136,7 @@ def selecionar(
     executor=None,
     limite_s: float = auxiliar.LIMITE_PADRAO_S,
     cancelar=None,
+    sessao: SessaoSelecao | None = None,
 ) -> Selecao:
     cats = tuple(categorias_ocultas)
     _validar_categorias(ifc, cats)
@@ -222,13 +243,15 @@ def selecionar(
         else:
             visiveis_com_rep.append(elem)
 
-    ids: list[int] = []
-    falhas_geometria: tuple[int, ...] = ()
+    guardadas = sessao._caixas if sessao is not None else {}
+    erros_por_id = sessao._erros if sessao is not None else {}
+    faltantes = [e for e in visiveis_com_rep if e.id() not in guardadas]
 
-    if visiveis_com_rep:
+    if faltantes:
         pedido = {
             "op": "caixas",
-            "elementos": [[e.id(), e.GlobalId] for e in visiveis_com_rep],
+            "elementos": [[e.id(), e.GlobalId] for e in faltantes],
+            "threads": auxiliar.threads_padrao(),
         }
         preparado = auxiliar.preparar(ifc, pedido)
         try:
@@ -242,18 +265,38 @@ def selecionar(
             preparado.fechar()
 
         for chave, caixa in resposta["caixas_envolventes"].items():
-            exmin, eymin, ezmin, exmax, eymax, ezmax = caixa
-            if (
-                exmin <= xmax
-                and exmax >= xmin
-                and eymin <= ymax
-                and eymax >= ymin
-                and ezmin <= zmax
-                and ezmax >= zmin
-            ):
-                ids.append(int(chave))
+            guardadas[int(chave)] = [float(v) for v in caixa]
+        for falha in resposta["falhas_geometria"]:
+            guardadas[int(falha)] = None
 
-        falhas_geometria = tuple(sorted(resposta["falhas_geometria"]))
+        pedidos = [e.id() for e in faltantes]
+        for id_step in pedidos:  # recalculado: erros velhos desses ids não valem mais
+            erros_por_id.pop(id_step, None)
+        for erro in resposta.get("erros_iterator", ()):
+            msg = f"{erro.get('tipo', 'RuntimeError')}: {erro.get('mensagem', '')}"
+            for id_step in erro.get("ids") or pedidos:
+                lista = erros_por_id.setdefault(int(id_step), [])
+                if msg not in lista:
+                    lista.append(msg)
+
+    def cruza(id_step: int) -> bool:
+        c = guardadas.get(id_step)
+        return c is not None and (
+            c[0] <= xmax and c[3] >= xmin
+            and c[1] <= ymax and c[4] >= ymin
+            and c[2] <= zmax and c[5] >= zmin
+        )
+
+    ids = [e.id() for e in visiveis_com_rep if cruza(e.id())]
+    falhas_geometria = tuple(sorted(
+        e.id() for e in visiveis_com_rep if e.id() in guardadas and guardadas[e.id()] is None
+    ))
+    mensagens: list[str] = []
+    for elem in visiveis_com_rep:  # só erro de elemento visível no corte, sem duplicar
+        for msg in erros_por_id.get(elem.id(), ()):
+            if msg not in mensagens:
+                mensagens.append(msg)
+    erros_geometria = tuple(mensagens)
 
     return Selecao(
         ids=tuple(sorted(set(ids))),
@@ -263,4 +306,5 @@ def selecionar(
         ocultos_por_classe=ocultos,
         sem_geometria=sem_geometria,
         falhas_geometria=falhas_geometria,
+        erros_geometria=erros_geometria,
     )

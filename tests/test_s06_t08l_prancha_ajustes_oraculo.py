@@ -237,8 +237,11 @@ print(json.dumps([N + 199 + 1, vis_n, vis_m, base, seg_n, seg_m]))
 
 def test_17_normalizar_e_montar_visitam_cada_elemento_uma_vez_e_ficam_perto_do_parser():
     """Contagem exata (nao depende da maquina) + razao contra o parser nativo (varia pouco entre maquinas). Medido: razao ~8 em normalizar, ~7 em montar; limite 30."""
-    import resource
-    def lim(): resource.setrlimit(resource.RLIMIT_AS, (1500 * 2**20,) * 2)
+    if sys.platform == "win32":
+        lim = None  # sem modulo resource no Windows; so o teto de memoria sai, a contagem e a razao ficam
+    else:
+        import resource
+        def lim(): resource.setrlimit(resource.RLIMIT_AS, (1500 * 2**20,) * 2)
     p = subprocess.run([sys.executable, "-I", "-c", RODA], capture_output=True, text=True, timeout=120, preexec_fn=lim)
     assert p.returncode == 0, p.stderr[-300:]
     esperado, vis_n, vis_m, base, seg_n, seg_m = json.loads(p.stdout.strip().splitlines()[-1])

@@ -15,7 +15,7 @@ CONTRATO (API PROPOSTA NESTE TESTE; o ADR fixa os textos, não os nomes). `openb
 REGRAS DE DECISÃO (decisão do autor do oráculo onde o ADR não fixa): (1) IFC sem pset `OBIM_Project` e sem `.obim` = "D0", sem aviso, vistas abertas.
 (2) Com `.obim`: projeto diferente = `ifc_projeto_globalid` OU `LadoId` do manifesto diferente do IFC -> D5 (vem antes de tudo). (3) `Revisao` do lateral >
 `Revisao` do pset -> D3 (vem antes do hash: IFC antigo restaurado também tem hash diferente). (4) hash igual (`ifc_sha256` x sha256 real do arquivo) -> D1;
-senão D2. (5) N de D2 = viewports + objetos de `vistas` do lateral cujo `vista_guid` não está no IFC + documentos SHEET de `Identification` repetida (um por
+senão D2. (5) N de D2 = viewports + objetos de `vistas` do lateral cujo `view_guid` não está no IFC + documentos SHEET de `Identification` repetida (um por
 documento). (6) D6: a entrada é `.obim`; acha o IFC só pelo nome base de `ifc_nome` na mesma pasta (`..` ou `/` em `ifc_nome` = não achou). Achou e o par casa
 = caso "D6", sem aviso, `via_obim` True; achou e diverge = o caso da divergência (D2, D3, D5) com `via_obim` True. Não achou = "D6" com o aviso e a opção abaixo.
 (7) `Revisao` é número inteiro nos dois lados. (8) D4 só quando há pset e não há `.obim`; `obim=` dado e casando vale como D1/D2/D3/D5 normal.

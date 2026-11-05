@@ -29,7 +29,7 @@ def test_desfazer_e_refazer_vista_e_prancha(sessao):
 
     def uma(t):
         caixa["v"] = V.criar_vista(t.ifc, "Planta", "PLANTA", escala="1:50")
-        t.lado.criar("viewports", "vp1", {"vista_guid": caixa["v"]})
+        t.lado.criar("viewports", "vp1", {"view_guid": caixa["v"]})
 
     r1 = s.tx(uma)
     gid = caixa["v"]
@@ -129,7 +129,7 @@ def _mistura(s, V, rnd, n):  # n operações INTEIRAS em transações de 1 a 3; 
                 else:
                     g = V.criar_vista(t.ifc, f"Vista {k % 7}", rnd.choice(("PLANTA", "CORTE")), escala=rnd.choice(("1:50", "1:100")))
                     vistas[g] = f"Vista {k % 7}"
-                    t.lado.criar("viewports", f"vp{k}", {"vista_guid": g})
+                    t.lado.criar("viewports", f"vp{k}", {"view_guid": g})
         s.tx(tx)
         feitas += ops
         if feitas % 1000 < 3:  # confere o espelho a cada ~1.000 operações

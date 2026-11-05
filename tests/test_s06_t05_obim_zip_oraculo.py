@@ -11,12 +11,12 @@ CONTRATO. Os nomes de `obim_zip` abaixo são PROPOSTOS NESTE TESTE (o ADR só fi
   `<coleção>/<id>.json`), `.versao_original` (texto), `.somente_leitura` (bool). Migra em memória: 0.1.0 devolve `.manifesto["versao_formato"] == "0.2.0"`
   sem `provisorio`; `.versao_original` guarda "0.1.0". Versão fora de 0.1 e 0.2 (ex. 0.3.0, 1.0.0) abre com `.somente_leitura` True e não perde nada.
   Entrada de caminho perigoso (`..`, absoluto, `\\`) ou sem `manifest.json` ou manifesto sem `formato == "obim-lateral"` = `ObimInvalido`.
-- Validação (em `escrever` e, por ela, em `gravar_par`): coleção `vistas`: `vista_guid` texto não vazio, único; `pranchas`: `identification` texto não vazio,
-  sem espaço nas pontas, único (comparação exata); `viewports`: `prancha` e `vista_guid` texto não vazio, `x` e `y` números, `escala` número > 0,
-  par (`prancha`, `vista_guid`) único. Chave vive no CAMPO do JSON; o nome do arquivo é o id do `Lateral` (UUID), nunca a chave.
-- `orfaos(lateral, vista_guids, identifications)` -> {"vistas": [ids], "pranchas": [ids], "viewports": [ids]} (ids do lateral, ordenados): o que o `.obim`
+- Validação (em `escrever` e, por ela, em `gravar_par`): coleção `vistas`: `view_guid` texto não vazio, único; `pranchas`: `identification` texto não vazio,
+  sem espaço nas pontas, único (comparação exata); `viewports`: `prancha` e `view_guid` texto não vazio, `x` e `y` números, `escala` número > 0,
+  par (`prancha`, `view_guid`) único. Chave vive no CAMPO do JSON; o nome do arquivo é o id do `Lateral` (UUID), nunca a chave.
+- `orfaos(lateral, view_guids, identifications)` -> {"vistas": [ids], "pranchas": [ids], "viewports": [ids]} (ids do lateral, ordenados): o que o `.obim`
   cita e o IFC (os dois conjuntos dados) não tem. Só calcula; nunca apaga.
-- `apagar_vista(lado, vista_guid)`: `lado` = `t.lado` de uma transação; apaga o objeto de `vistas` dessa chave e TODOS os `viewports` dela (ADR §6, "vista
+- `apagar_vista(lado, view_guid)`: `lado` = `t.lado` de uma transação; apaga o objeto de `vistas` dessa chave e TODOS os `viewports` dela (ADR §6, "vista
   apagada por nós"); só mexe nessa vista; tudo na mesma transação (um `desfazer` volta tudo).
 `gravar_par` (mudança mínima): manifesto sai `versao_formato` "0.2.0", SEM `provisorio`; campos desconhecidos do manifesto e entradas fora do lateral do
 `Casa.obim` que já está ao lado do destino são repassados; `Casa.obim` com versão fora de 0.1/0.2 (`.somente_leitura`) = recusa gravar. `_conferir_obim` aceita
@@ -50,11 +50,11 @@ def ob():
 
 def objetos(**sobre):
     o = {"styles": {U["est"]: {"nome": "padrao", "espessuras": {"corte": 0.5, "vista": 0.25}, "campo_futuro": {"a": [1, 2]}}},
-         "vistas": {U["v1"]: {"vista_guid": G1, "estilo": U["est"], "visibilidade": {"IfcFurniture": False}, "extra": [1]},
-                    U["v2"]: {"vista_guid": G2, "estilo": U["est"]}},
+         "vistas": {U["v1"]: {"view_guid": G1, "estilo": U["est"], "visibilidade": {"IfcFurniture": False}, "extra": [1]},
+                    U["v2"]: {"view_guid": G2, "estilo": U["est"]}},
          "pranchas": {U["p1"]: {"identification": IDENT, "formato": "A1", "carimbo": {"titulo": "Planta térreo"}, "titleblock": U["tb"]}},
-         "viewports": {U["vp1"]: {"prancha": IDENT, "vista_guid": G1, "x": 10.0, "y": 20.5, "escala": 100.0},
-                       U["vp2"]: {"prancha": IDENT, "vista_guid": G2, "x": 400, "y": 20.5, "escala": 50}},
+         "viewports": {U["vp1"]: {"prancha": IDENT, "view_guid": G1, "x": 10.0, "y": 20.5, "escala": 100.0},
+                       U["vp2"]: {"prancha": IDENT, "view_guid": G2, "x": 400, "y": 20.5, "escala": 50}},
          "notas": {"nx": {"texto": "nota"}}}
     o.update(sobre)
     return o
@@ -105,15 +105,15 @@ def test_03_chave_com_dolar_e_identification_estranha(tmp_path):
     m, p = ob(), tmp_path / "Casa.obim"
     m.escrever(p, lat(), MAN)
     r = m.ler(p).lateral
-    guids = sorted(r.obter("vistas", i)["vista_guid"] for i in r.ids("vistas"))
+    guids = sorted(r.obter("vistas", i)["view_guid"] for i in r.ids("vistas"))
     assert guids == sorted((G1, G2)) and "$" in G1
     assert r.obter("pranchas", U["p1"])["identification"] == IDENT
     vp = r.obter("viewports", U["vp1"])
-    assert (vp["prancha"], vp["vista_guid"]) == (IDENT, G1), "viewport tem de guardar a Identification da prancha e o GlobalId da vista"
+    assert (vp["prancha"], vp["view_guid"]) == (IDENT, G1), "viewport tem de guardar a Identification da prancha e o GlobalId da vista"
 
 
 def _rep_vista():
-    return {"vistas": {**objetos()["vistas"], "outra": {"vista_guid": G1}}}
+    return {"vistas": {**objetos()["vistas"], "outra": {"view_guid": G1}}}
 
 
 def _rep_prancha():
@@ -121,7 +121,7 @@ def _rep_prancha():
 
 
 def _rep_viewport():
-    return {"viewports": {**objetos()["viewports"], "outro": {"prancha": IDENT, "vista_guid": G1, "x": 0, "y": 0, "escala": 100}}}
+    return {"viewports": {**objetos()["viewports"], "outro": {"prancha": IDENT, "view_guid": G1, "x": 0, "y": 0, "escala": 100}}}
 
 
 def _com(col, i, **campos):
@@ -130,18 +130,18 @@ def _com(col, i, **campos):
     return {col: o[col]}
 
 
-RUINS = [("vista_guid repetido", _rep_vista), ("identification repetida", _rep_prancha), ("par prancha+vista repetido", _rep_viewport),
-         ("vista sem vista_guid", lambda: _com("vistas", "x", estilo="a")),
-         ("vista_guid vazio", lambda: _com("vistas", "x", vista_guid="")),
-         ("vista_guid que não é texto", lambda: _com("vistas", "x", vista_guid=7)),
+RUINS = [("view_guid repetido", _rep_vista), ("identification repetida", _rep_prancha), ("par prancha+vista repetido", _rep_viewport),
+         ("vista sem view_guid", lambda: _com("vistas", "x", estilo="a")),
+         ("view_guid vazio", lambda: _com("vistas", "x", view_guid="")),
+         ("view_guid que não é texto", lambda: _com("vistas", "x", view_guid=7)),
          ("identification vazia", lambda: _com("pranchas", "x", identification="")),
          ("identification com espaço nas pontas", lambda: _com("pranchas", "x", identification=" A-02")),
          ("identification sem campo", lambda: _com("pranchas", "x", formato="A1")),
-         ("viewport sem prancha", lambda: _com("viewports", "x", vista_guid=G1, x=0, y=0, escala=100)),
-         ("viewport sem vista_guid", lambda: _com("viewports", "x", prancha="B", x=0, y=0, escala=100)),
-         ("viewport com x texto", lambda: _com("viewports", "x", prancha="B", vista_guid=G1, x="1", y=0, escala=100)),
-         ("viewport com escala zero", lambda: _com("viewports", "x", prancha="B", vista_guid=G1, x=0, y=0, escala=0)),
-         ("viewport com escala negativa", lambda: _com("viewports", "x", prancha="B", vista_guid=G1, x=0, y=0, escala=-5))]
+         ("viewport sem prancha", lambda: _com("viewports", "x", view_guid=G1, x=0, y=0, escala=100)),
+         ("viewport sem view_guid", lambda: _com("viewports", "x", prancha="B", x=0, y=0, escala=100)),
+         ("viewport com x texto", lambda: _com("viewports", "x", prancha="B", view_guid=G1, x="1", y=0, escala=100)),
+         ("viewport com escala zero", lambda: _com("viewports", "x", prancha="B", view_guid=G1, x=0, y=0, escala=0)),
+         ("viewport com escala negativa", lambda: _com("viewports", "x", prancha="B", view_guid=G1, x=0, y=0, escala=-5))]
 
 @pytest.mark.parametrize("sobre", [f for _, f in RUINS], ids=[n for n, _ in RUINS])
 def test_04_validacao_recusa_e_nao_grava(tmp_path, sobre):
@@ -337,7 +337,7 @@ def test_17_falha_antes_do_diario_deixa_o_par_de_antes(proj, base_ifc, monkeypat
     _estado_intacto(proj, antigo)
     assert proj.chamadas == [] and proj.pset() is None, "ao_concluir chamado ou carimbo não voltou"
 
-@pytest.mark.parametrize("sobre", [_rep_vista, _rep_prancha], ids=["vista_guid repetido", "identification repetida"])
+@pytest.mark.parametrize("sobre", [_rep_vista, _rep_prancha], ids=["view_guid repetido", "identification repetida"])
 def test_18_gravar_par_com_lateral_invalido_nao_toca_no_par(proj, base_ifc, sobre):  # noqa: F811
     from openbim_app.lateral import Lateral
     proj.lat = Lateral(objetos(**sobre()))

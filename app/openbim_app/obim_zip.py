@@ -63,15 +63,15 @@ def _numero(v):
 def validar(lateral):
     """Confere as coleções reservadas; `ObimInvalido` antes de qualquer escrita. Chave no campo, unicidade exata."""
     vistas, pranchas, viewports = {}, {}, {}
-    for ident in lateral.ids("vistas"):
-        guid = lateral.obter("vistas", ident).get("view_guid")
+    for ident in lateral.ids("views"):
+        guid = lateral.obter("views", ident).get("view_guid")
         if not isinstance(guid, str) or not guid:
             raise ObimInvalido(f"vista {ident!r} sem view_guid texto não vazio")
         if guid in vistas:
             raise ObimInvalido(f"view_guid repetido: {guid!r}")
         vistas[guid] = ident
-    for ident in lateral.ids("pranchas"):
-        identificacao = lateral.obter("pranchas", ident).get("identification")
+    for ident in lateral.ids("sheets"):
+        identificacao = lateral.obter("sheets", ident).get("identification")
         if not isinstance(identificacao, str) or not identificacao or identificacao != identificacao.strip():
             raise ObimInvalido(f"prancha {ident!r} com identification vazia ou com espaço nas pontas")
         if identificacao in pranchas:
@@ -178,11 +178,11 @@ def ler(caminho):
 def orfaos(lateral, view_guids, identifications):
     """Ids do lateral que o `.obim` cita e os conjuntos dados (IFC) não têm; só calcula, nunca apaga."""
     vistas, pranchas, viewports = [], [], []
-    for ident in lateral.ids("vistas"):
-        if lateral.obter("vistas", ident).get("view_guid") not in view_guids:
+    for ident in lateral.ids("views"):
+        if lateral.obter("views", ident).get("view_guid") not in view_guids:
             vistas.append(ident)
-    for ident in lateral.ids("pranchas"):
-        if lateral.obter("pranchas", ident).get("identification") not in identifications:
+    for ident in lateral.ids("sheets"):
+        if lateral.obter("sheets", ident).get("identification") not in identifications:
             pranchas.append(ident)
     for ident in lateral.ids("viewports"):
         o = lateral.obter("viewports", ident)
@@ -194,9 +194,9 @@ def orfaos(lateral, view_guids, identifications):
 def apagar_vista(lado, view_guid):
     """Apaga a vista dessa chave e todos os viewports dela na mesma transação (`lado` = `t.lado`)."""
     lateral = getattr(lado, "_lat", lado)
-    for ident in list(lateral.ids("vistas")):
-        if lateral.obter("vistas", ident).get("view_guid") == view_guid:
-            lado.apagar("vistas", ident)
+    for ident in list(lateral.ids("views")):
+        if lateral.obter("views", ident).get("view_guid") == view_guid:
+            lado.apagar("views", ident)
     for ident in list(lateral.ids("viewports")):
         if lateral.obter("viewports", ident).get("view_guid") == view_guid:
             lado.apagar("viewports", ident)

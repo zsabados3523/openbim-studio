@@ -137,14 +137,14 @@ def test_06_o_que_vai_no_zip(tmp_path):
     p, _ = gravar_e_reabrir(tmp_path, lado)
     with zipfile.ZipFile(p) as z:
         nomes = z.namelist()
-        pr = [n for n in nomes if n.startswith("pranchas/")]
+        pr = [n for n in nomes if n.startswith("sheets/")]
         vp = [n for n in nomes if n.startswith("viewports/")]
         assert len(pr) == 1 and len(vp) == 1, nomes
         assert UUID4.fullmatch(Path(pr[0]).stem) and UUID4.fullmatch(Path(vp[0]).stem), "o nome do arquivo e um UUID4, nunca a chave"
         assert json.loads(z.read(pr[0])) == {"identification": IDENT, "formato": "A3",
                                              "carimbo": {k: DADOS[k] for k in ("projeto", "titulo", "data", "folha")}}
         assert json.loads(z.read(vp[0])) == {"prancha": IDENT, "view_guid": GUID, "x": 40, "y": 50, "escala": 100}
-    assert not [n for n in nomes if n.startswith(("vistas/", "styles/"))], "T08 nao cria vista nem estilo no .obim"
+    assert not [n for n in nomes if n.startswith(("views/", "styles/"))], "T08 nao cria vista nem estilo no .obim"
 
 
 def test_07_par_prancha_vista_repetido_e_recusado_na_gravacao(tmp_path):
@@ -203,7 +203,7 @@ def test_10_desfazer_tira_prancha_e_viewport_juntos(proj):
     with proj.s.escrever() as esc, proj.h.transacao(esc) as t:
         m.criar_prancha(t.lado, IDENT, **DADOS)
         m.colocar_viewport(t.lado, IDENT, GUID, 20, 20, 50)
-    assert proj.lat.ids("pranchas") and proj.lat.ids("viewports")
+    assert proj.lat.ids("sheets") and proj.lat.ids("viewports")
     with proj.s.escrever() as esc:
         proj.h.desfazer(esc)
-    assert not proj.lat.ids("pranchas") and not proj.lat.ids("viewports")
+    assert not proj.lat.ids("sheets") and not proj.lat.ids("viewports")

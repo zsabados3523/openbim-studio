@@ -37,7 +37,7 @@ def test_01_unidade_windows_e_perigosa(tmp_path):  # M03
 def test_02_identification_com_espaco_so_no_fim(tmp_path):  # M04
     m = ob()
     with pytest.raises(m.ObimInvalido):
-        m.escrever(tmp_path / "f.obim", lat(pranchas={"x": {"identification": "A-02 "}}), MAN)
+        m.escrever(tmp_path / "f.obim", lat(sheets={"x": {"identification": "A-02 "}}), MAN)
 
 
 @pytest.mark.parametrize("campo", ["x", "y", "escala"])
@@ -87,7 +87,7 @@ def test_08_i1_falha_nao_deixa_arquivo(tmp_path, manifesto, extras):
     assert not p.exists() and not list(tmp_path.iterdir()), "sobrou arquivo parcial no destino"
 
 
-@pytest.mark.parametrize("nome", ["manifest.json", f"vistas/{U['v1']}.json", f"notas/nx.json"])
+@pytest.mark.parametrize("nome", ["manifest.json", f"views/{U['v1']}.json", f"notas/nx.json"])
 def test_09_i2_extra_com_nome_reservado_recusado(tmp_path, nome):
     m, p = ob(), tmp_path / "f.obim"
     with pytest.raises(m.ObimInvalido):
@@ -110,8 +110,8 @@ def _velho_ilegivel(proj, base_ifc, como):  # noqa: F811
     else:  # 0.2.x inválido: view_guid repetido, como outro programa poderia gravar
         with zipfile.ZipFile(o, "w") as z:
             z.writestr("manifest.json", json.dumps(MAN))
-            z.writestr("vistas/a.json", json.dumps({"view_guid": G1}))
-            z.writestr("vistas/b.json", json.dumps({"view_guid": G1}))
+            z.writestr("views/a.json", json.dumps({"view_guid": G1}))
+            z.writestr("views/b.json", json.dumps({"view_guid": G1}))
     return o.read_bytes()
 
 
@@ -130,7 +130,7 @@ def test_12_d2_ler_continua_validando_0_2_x(tmp_path):
     m, p = ob(), tmp_path / "f.obim"
     with zipfile.ZipFile(p, "w") as z:
         z.writestr("manifest.json", json.dumps(MAN))
-        z.writestr("vistas/a.json", json.dumps({"view_guid": G1}))
-        z.writestr("vistas/b.json", json.dumps({"view_guid": G1}))
+        z.writestr("views/a.json", json.dumps({"view_guid": G1}))
+        z.writestr("views/b.json", json.dumps({"view_guid": G1}))
     with pytest.raises(m.ObimInvalido):
         m.ler(p)

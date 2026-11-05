@@ -31,7 +31,7 @@ def env(c, extra=""): return f'<svg {{S}} {{extra}}>{{c}}</svg>'
 class Falso:
     def __init__(self, prancha, viewport): self.p, self.v = prancha, viewport
     def ids(self, c): return ["1"]
-    def obter(self, c, i): return self.p if c == "pranchas" else self.v
+    def obter(self, c, i): return self.p if c == "sheets" else self.v
 def lateral(**sobre):
     p = {{"identification": "P", "formato": "A3", "carimbo": {{"projeto": "x", "titulo": "t", "data": "2026-11-01", "folha": "1"}}}}
     v = {{"prancha": "P", "view_guid": "v", "x": 20, "y": 20, "escala": 100}}

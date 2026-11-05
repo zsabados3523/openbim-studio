@@ -50,9 +50,9 @@ def ob():
 
 def objetos(**sobre):
     o = {"styles": {U["est"]: {"nome": "padrao", "espessuras": {"corte": 0.5, "vista": 0.25}, "campo_futuro": {"a": [1, 2]}}},
-         "vistas": {U["v1"]: {"view_guid": G1, "estilo": U["est"], "visibilidade": {"IfcFurniture": False}, "extra": [1]},
+         "views": {U["v1"]: {"view_guid": G1, "estilo": U["est"], "visibilidade": {"IfcFurniture": False}, "extra": [1]},
                     U["v2"]: {"view_guid": G2, "estilo": U["est"]}},
-         "pranchas": {U["p1"]: {"identification": IDENT, "formato": "A1", "carimbo": {"titulo": "Planta térreo"}, "titleblock": U["tb"]}},
+         "sheets": {U["p1"]: {"identification": IDENT, "formato": "A1", "carimbo": {"titulo": "Planta térreo"}, "titleblock": U["tb"]}},
          "viewports": {U["vp1"]: {"prancha": IDENT, "view_guid": G1, "x": 10.0, "y": 20.5, "escala": 100.0},
                        U["vp2"]: {"prancha": IDENT, "view_guid": G2, "x": 400, "y": 20.5, "escala": 50}},
          "notas": {"nx": {"texto": "nota"}}}
@@ -81,7 +81,7 @@ def test_01_zip_comum_estrutura_e_manifesto(tmp_path):
         assert all(i.compress_type == zipfile.ZIP_DEFLATED for i in z.infolist() if i.file_size > 0), "ZIP não está em deflate"
         z.extractall(tmp_path / "x")
     nomes = set(entradas(p))
-    for pasta in ("styles", "vistas", "pranchas", "viewports", "titleblocks"):
+    for pasta in ("styles", "views", "sheets", "viewports", "titleblocks"):
         assert any(n.startswith(pasta + "/") for n in nomes), f"sem a pasta {pasta}/: {sorted(nomes)}"
     assert (tmp_path / "x" / "titleblocks" / f"{U['tb']}.svg").read_bytes() == SVG
     assert not [n for n in nomes if "$" in n], "GlobalId no NOME do arquivo (a chave vive no campo, o nome é UUID)"
@@ -105,19 +105,19 @@ def test_03_chave_com_dolar_e_identification_estranha(tmp_path):
     m, p = ob(), tmp_path / "Casa.obim"
     m.escrever(p, lat(), MAN)
     r = m.ler(p).lateral
-    guids = sorted(r.obter("vistas", i)["view_guid"] for i in r.ids("vistas"))
+    guids = sorted(r.obter("views", i)["view_guid"] for i in r.ids("views"))
     assert guids == sorted((G1, G2)) and "$" in G1
-    assert r.obter("pranchas", U["p1"])["identification"] == IDENT
+    assert r.obter("sheets", U["p1"])["identification"] == IDENT
     vp = r.obter("viewports", U["vp1"])
     assert (vp["prancha"], vp["view_guid"]) == (IDENT, G1), "viewport tem de guardar a Identification da prancha e o GlobalId da vista"
 
 
 def _rep_vista():
-    return {"vistas": {**objetos()["vistas"], "outra": {"view_guid": G1}}}
+    return {"views": {**objetos()["views"], "outra": {"view_guid": G1}}}
 
 
 def _rep_prancha():
-    return {"pranchas": {**objetos()["pranchas"], "outra": {"identification": IDENT, "formato": "A3"}}}
+    return {"sheets": {**objetos()["sheets"], "outra": {"identification": IDENT, "formato": "A3"}}}
 
 
 def _rep_viewport():
@@ -131,12 +131,12 @@ def _com(col, i, **campos):
 
 
 RUINS = [("view_guid repetido", _rep_vista), ("identification repetida", _rep_prancha), ("par prancha+vista repetido", _rep_viewport),
-         ("vista sem view_guid", lambda: _com("vistas", "x", estilo="a")),
-         ("view_guid vazio", lambda: _com("vistas", "x", view_guid="")),
-         ("view_guid que não é texto", lambda: _com("vistas", "x", view_guid=7)),
-         ("identification vazia", lambda: _com("pranchas", "x", identification="")),
-         ("identification com espaço nas pontas", lambda: _com("pranchas", "x", identification=" A-02")),
-         ("identification sem campo", lambda: _com("pranchas", "x", formato="A1")),
+         ("vista sem view_guid", lambda: _com("views", "x", estilo="a")),
+         ("view_guid vazio", lambda: _com("views", "x", view_guid="")),
+         ("view_guid que não é texto", lambda: _com("views", "x", view_guid=7)),
+         ("identification vazia", lambda: _com("sheets", "x", identification="")),
+         ("identification com espaço nas pontas", lambda: _com("sheets", "x", identification=" A-02")),
+         ("identification sem campo", lambda: _com("sheets", "x", formato="A1")),
          ("viewport sem prancha", lambda: _com("viewports", "x", view_guid=G1, x=0, y=0, escala=100)),
          ("viewport sem view_guid", lambda: _com("viewports", "x", prancha="B", x=0, y=0, escala=100)),
          ("viewport com x texto", lambda: _com("viewports", "x", prancha="B", view_guid=G1, x="1", y=0, escala=100)),
@@ -161,7 +161,7 @@ def test_05_desconhecidos_sobrevivem_a_regravar(tmp_path):
     r2 = m.ler(q)
     assert r2.manifesto["x_futuro"] == {"k": [1, 2]} and r2.extras == extras
     assert r2.lateral.obter("zzz_futuro", "u1") == o["zzz_futuro"]["u1"]
-    assert r2.lateral.obter("vistas", U["v1"])["extra"] == [1], "campo desconhecido dentro de objeto conhecido perdido"
+    assert r2.lateral.obter("views", U["v1"])["extra"] == [1], "campo desconhecido dentro de objeto conhecido perdido"
     assert r2.lateral.obter("styles", U["est"])["campo_futuro"] == {"a": [1, 2]}
 
 
@@ -253,15 +253,15 @@ def test_12_apagar_vista_apaga_so_os_viewports_dela_numa_transacao(proj):
     cheio = canon(proj.lat)
     with proj.s.escrever() as esc, proj.h.transacao(esc) as t:
         m.apagar_vista(t.lado, G1)
-    assert proj.lat.obter("vistas", U["v1"]) is None and proj.lat.obter("viewports", U["vp1"]) is None
-    assert proj.lat.obter("vistas", U["v2"]) is not None and proj.lat.obter("viewports", U["vp2"]) is not None, "apagou além da vista pedida"
-    assert proj.lat.obter("pranchas", U["p1"]) is not None and proj.lat.obter("styles", U["est"]) is not None
+    assert proj.lat.obter("views", U["v1"]) is None and proj.lat.obter("viewports", U["vp1"]) is None
+    assert proj.lat.obter("views", U["v2"]) is not None and proj.lat.obter("viewports", U["vp2"]) is not None, "apagou além da vista pedida"
+    assert proj.lat.obter("sheets", U["p1"]) is not None and proj.lat.obter("styles", U["est"]) is not None
     with proj.s.escrever() as esc:
         proj.h.desfazer(esc)  # UM desfazer volta a vista e o viewport
     assert canon(proj.lat) == cheio
     with proj.s.escrever() as esc:
         proj.h.refazer(esc)
-    assert proj.lat.obter("viewports", U["vp1"]) is None and proj.lat.obter("vistas", U["v1"]) is None
+    assert proj.lat.obter("viewports", U["vp1"]) is None and proj.lat.obter("views", U["v1"]) is None
 
 @pytest.fixture
 def proj(tmp_path, base_ifc, monkeypatch):  # noqa: F811

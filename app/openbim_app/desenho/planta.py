@@ -30,13 +30,13 @@ class Planta:
 
 
 def _altura_corte(ifc: ifcopenshell.file, anotacao) -> float:
-    pset = ifcopenshell.util.element.get_pset(anotacao, "OBIM_Vista") or {}
-    valor = pset.get("AlturaCorte", 1.2)
+    pset = ifcopenshell.util.element.get_pset(anotacao, "OBIM_View") or {}
+    valor = pset.get("CutHeight", 1.2)
     if isinstance(valor, bool) or not isinstance(valor, (int, float)):
-        raise SelecaoInvalida(f"AlturaCorte inválida: {valor!r}")
+        raise SelecaoInvalida(f"CutHeight inválida: {valor!r}")
     valor = float(valor)
     if not math.isfinite(valor) or valor <= 0:
-        raise SelecaoInvalida(f"AlturaCorte inválida: {valor!r}")
+        raise SelecaoInvalida(f"CutHeight inválida: {valor!r}")
     return valor
 
 

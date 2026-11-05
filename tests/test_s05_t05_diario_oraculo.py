@@ -7,7 +7,7 @@ ADR não fixa, provisória até confirmação):
 1. `pasta_base()` (caminho; lê o ambiente na hora): `OBIM_PASTA_LOCAL` se definida; senão `%LOCALAPPDATA%\\OpenBIMStudio` no Windows e
    `$XDG_DATA_HOME/OpenBIMStudio` (ou `~/.local/share/OpenBIMStudio`) nos outros. `pasta_projeto(lado_id)` = `pasta_base()/projetos/<lado_id>`.
    O diário fica em `pasta_projeto(lado_id)/diario/diario.obimlog` (pastas criadas se faltarem).
-2. `lado_id_de(arquivo, ifc_sha256)`: o `LadoId` do pset `OBIM_Projeto`; sem ele, `str(uuid5(...))` que só depende do sha256 [P: o namespace].
+2. `lado_id_de(arquivo, ifc_sha256)`: o `LadoId` do pset `OBIM_Project`; sem ele, `str(uuid5(...))` que só depende do sha256 [P: o namespace].
 3. `codificar_ifc(ops)` -> lista que `json.dumps(..., allow_nan=False)` aceita; `decodificar_ifc(json.loads(json.dumps(x)))` -> operações que um
    `Transaction` do ifcopenshell aplica com `commit()` e desfaz com `rollback()` (`inverses` volta a dict de chave int). Valor que não vira JSON
    (bytes, NaN, infinito) -> `OperacaoNaoSerializavel`; dentro do `Historico` a transação é descartada e o erro sobe.
@@ -130,7 +130,7 @@ def test_1b_pastas_e_lado_id(tmp_path, monkeypatch, casa, base_ifc):
         assert Path(D.pasta_base()) == tmp_path / "h" / ".local" / "share" / "OpenBIMStudio"
     f, _, _ = X.preparar(casa)
     assert D.lado_id_de(f, sha(casa)) == LADO
-    g = X.R.ifcopenshell.open(base_ifc)  # sem o pset OBIM_Projeto
+    g = X.R.ifcopenshell.open(base_ifc)  # sem o pset OBIM_Project
     v = D.lado_id_de(g, "a" * 64)
     assert uuid.UUID(v).version == 5 and v == D.lado_id_de(g, "a" * 64) != D.lado_id_de(g, "b" * 64)
 

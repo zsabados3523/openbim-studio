@@ -20,7 +20,7 @@ from s05_t04_aux import SEMENTE
 R = A.R
 AQUI = Path(__file__).resolve().parent
 RAIZ = AQUI.parent
-LADO = "lado-t04"  # o LadoId que `montar` põe no pset OBIM_Projeto
+LADO = "lado-t04"  # o LadoId que `montar` põe no pset OBIM_Project
 M_ACOES, N_MORTES, PONTOS = 40, 50, ("anotar_antes", "anotar_meio", "anotar_depois")
 
 
@@ -53,7 +53,7 @@ def preparar(casa):
     ifcopenshell.guid.new = lambda: ifcopenshell.guid.compress("%032x" % next(cont))  # o caso restaura (`_limpa`)
     c = {"P": random.Random(SEMENTE + 1), "corpo": UR.get_context(f, "Model", "Body", "MODEL_VIEW").id(),
          "camadas": next(m.id() for m in f.by_type("IfcMaterialLayerSet") if m.LayerSetName == "T04"),
-         "obim": next(p.GlobalId for p in f.by_type("IfcPropertySet") if p.Name == "OBIM_Projeto"),
+         "obim": next(p.GlobalId for p in f.by_type("IfcPropertySet") if p.Name == "OBIM_Project"),
          "andares": sorted(a.GlobalId for a in f.by_type("IfcBuildingStorey")),
          "g": {t.Name[5:]: t.GlobalId for t in f.by_type("IfcWallType") if re.fullmatch(r"Tipo t\d+", t.Name or "")}}
     return f, c, A.Plano(SEMENTE, [w.GlobalId for w in f.by_type("IfcWall")])

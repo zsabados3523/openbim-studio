@@ -11,7 +11,7 @@ CONTRATO `app/openbim_app/desenho/planta.py` (sem Qt, sem rede, sem display; `de
    continua furado; a abertura não é desenhada nem calculada). Vista de tipo CORTE, vista sem pavimento, vista sem TargetView, categoria inexistente -> `selecao.SelecaoInvalida`;
    vista inexistente -> `vistas_ifc.VistaInexistente`.
 3. Altura do corte = Z NO MUNDO do pavimento (matriz de `ObjectPlacement` do `IfcBuildingStorey`, resolvida até a raiz, x escala da unidade) + H, com H = propriedade
-   `AlturaCorte` (número > 0, em metros acima do pavimento) do pset `OBIM_Vista` da vista, se existir (nome provisório, ADR-003 §3.1), senão 1,2 m; valor <= 0 ou que não é
+   `CutHeight` (número > 0, em metros acima do pavimento) do pset `OBIM_View` da vista, se existir (nome provisório, ADR-003 §3.1), senão 1,2 m; valor <= 0 ou que não é
    número -> `SelecaoInvalida`. O volume (`IfcBlock`) da vista é ignorado. Pavimento em cota 0, positiva, negativa; colocação absoluta ou relativa ao edifício; m ou mm.
 4. PLANTA COMPLETA (ADR-006 §5): o que o corte atravessa sai em linha cheia no grupo do elemento (`ifc:guid`); o que fica inteiro abaixo do corte (móvel baixo, laje, viga, louça)
    sai na projeção (grupo `class="projection"`, caminhos sem guid); o que fica inteiro acima não sai. Montagem provada com o motor 0.9.0 (ver `test_s06_t07b_completa_oraculo.py`):

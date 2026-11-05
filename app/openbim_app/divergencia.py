@@ -124,7 +124,7 @@ def _problematicas(leitura, vistas_guids):
 
 def _pset(arquivo):
     projeto = arquivo.by_type("IfcProject")[0]
-    return UE.get_psets(projeto).get("OBIM_Projeto"), projeto
+    return UE.get_psets(projeto).get("OBIM_Project"), projeto
 
 
 def _par(ifc, obim, leitura, via_obim):

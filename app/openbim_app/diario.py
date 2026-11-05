@@ -93,7 +93,7 @@ def pasta_projeto(lado_id):
 
 def lado_id_de(arquivo, ifc_sha256):
     for ps in arquivo.by_type("IfcPropertySet"):
-        if ps.Name != "OBIM_Projeto":
+        if ps.Name != "OBIM_Project":
             continue
         for prop in ps.HasProperties or ():
             if prop.Name == "LadoId":

@@ -5,7 +5,7 @@ Código auxiliar de teste (não é de `app/`). `foto(arquivo, lateral=None, sem_
 derivados). Referência a entidade com GlobalId = ("G", GlobalId); sem GlobalId = ("E", resumo) com resumo = blake2b da forma canônica (classe e
 atributos, recursivo, memória por id; inversos fora). Valor tipado (id 0) = ("T", classe, valor). SET/BAG = multiconjunto (ordenado), LIST/ARRAY em
 ordem; o tipo vem do esquema, nunca do tipo Python. Números exatos (sem tolerância). Entidades sem GlobalId: multiconjunto (classe, resumo) de TODAS.
-Fora: ids STEP, cabeçalho; com sem_pset_obim, o pset `OBIM_Projeto`, as propriedades dele e a relação que o liga. Lateral: `canonico()`.
+Fora: ids STEP, cabeçalho; com sem_pset_obim, o pset `OBIM_Project`, as propriedades dele e a relação que o liga. Lateral: `canonico()`.
 Granularidade de `diferencas`: uma linha por GlobalId cujo valor mudou (classe e primeiro atributo diferente) e uma por (classe, resumo) do
 multiconjunto cuja contagem difere; uma forma sem GlobalId que mudou dá DUAS linhas (a velha e a nova).
 Fixtures comuns da S05 (importar no módulo de teste): `base_ifc` (gerar_modelo_grande, 300 paredes, sha256 impresso) e `_limpa` (autouse: solta o
@@ -104,7 +104,7 @@ def foto(arquivo, lateral=None, sem_pset_obim=False):
     fora = set()
     if sem_pset_obim:
         for ps in arquivo.by_type("IfcPropertySet"):
-            if ps.Name == "OBIM_Projeto":
+            if ps.Name == "OBIM_Project":
                 fora |= {ps.id(), *(p.id() for p in ps.HasProperties or ()), *(r.id() for r in ps.DefinesOccurrence or ())}
     f, com, sem = _Foto(arquivo), {}, Counter()
     for e in arquivo:

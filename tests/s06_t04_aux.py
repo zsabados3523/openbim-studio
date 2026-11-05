@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Auxiliar do oráculo F0-S06-T04 (vista e prancha dentro do IFC). Não é de `app/`; implementador não edita.
-`novo_arquivo(esquema)` (IFC sem pset OBIM_Projeto), `annotation`/`folha` (entidades "de outro programa") e leitores crus das entidades IFC
+`novo_arquivo(esquema)` (IFC sem pset OBIM_Project), `annotation`/`folha` (entidades "de outro programa") e leitores crus das entidades IFC
 (`vista_ifc`, `prancha_ifc`), usados pelos casos para conferir o formato do ADR-003 §3 SEM passar pelo módulo novo."""
 import ifcopenshell
 import ifcopenshell.api

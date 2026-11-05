@@ -4,12 +4,12 @@ Não editar este arquivo nem `s06_t07e_aux.py` na implementação; quem tira os 
 Parte 1 (contrato do cliente `auxiliar`, ganchos, erros) em `test_s06_t07e_auxiliar_oraculo.py`. Aqui, além dele:
 - `selecao.selecionar(ifc, gid, *, categorias_ocultas=(), pavimento=None, executor=None, limite_s=LIMITE_PADRAO_S, cancelar=None)` e `planta.gerar_planta(ifc, gid, *, categorias_ocultas=(), threads=None,
   limite_triangulos=None, limite_s=LIMITE_PADRAO_S, cancelar=None, executor=None)`: os parâmetros novos são só os do fim; o resto é o contrato da T07a/T07b (não muda). `executor=None` = filho real;
-  `executor=obim_geometria.local.executar` = mesmo processo. Tudo o que dá para validar sem geometria (vista, tipo, pavimento, `AlturaCorte`, categorias) é validado NO PAI, com as mesmas classes de erro
+  `executor=obim_geometria.local.executar` = mesmo processo. Tudo o que dá para validar sem geometria (vista, tipo, pavimento, `CutHeight`, categorias) é validado NO PAI, com as mesmas classes de erro
   de hoje (`selecao.SelecaoInvalida`, `vistas_ifc.VistaInexistente`) e SEM chamar o executor (nem criar processo).
 - `obim_geometria/desenho.py`: op `desenho` do pedido: `{"op": "desenho", "elementos": [[id, GlobalId], ...], "vista": {"tipo": "PLANTA", "altura_corte_m": h, "origem_pav": [x, y, z], "escala": e}}` com `h` ABSOLUTA no
   mundo em metros, `origem_pav` no posicionamento do pavimento (unidade do arquivo), `e` = metros por unidade do arquivo ([P], mesmos números de `Planta.altura_corte` e `unidade_escala`). Resposta crua
   `{"ok": true, "svg": str, "n_paths": int, "enviados": [ids], "caixas": [ids], "falhas_geometria": [ids], "tempos": {"abrir_s", "geo_s", "write_s", "finalize_s"}}`; o pai acrescenta `copia_s` e `auxiliar_s` a `tempos`.
-[P] (aprovadas na revisão do Opus): unidades de `desenho` acima; vista CORTE em `gerar_planta` e `AlturaCorte` ruim (0, negativa, texto, booleano) -> `SelecaoInvalida`; ver também as [P] do docstring da parte 1."""
+[P] (aprovadas na revisão do Opus): unidades de `desenho` acima; vista CORTE em `gerar_planta` e `CutHeight` ruim (0, negativa, texto, booleano) -> `SelecaoInvalida`; ver também as [P] do docstring da parte 1."""
 import inspect
 
 import pytest
@@ -100,8 +100,8 @@ def test_caso7_altura_de_corte_invalida_no_pai(sem_copia, ruim):
     import ifcopenshell.api
     from openbim_app.desenho import selecao as S
     f, d = T.modelo()
-    ps = ifcopenshell.api.run("pset.add_pset", f, product=f.by_guid(d["vp"]), name="OBIM_Vista")
-    ifcopenshell.api.run("pset.edit_pset", f, pset=ps, properties={"AlturaCorte": ruim})
+    ps = ifcopenshell.api.run("pset.add_pset", f, product=f.by_guid(d["vp"]), name="OBIM_View")
+    ifcopenshell.api.run("pset.edit_pset", f, pset=ps, properties={"CutHeight": ruim})
     with pytest.raises(S.SelecaoInvalida):
         P_.gerar_planta(f, d["vp"], executor=_espiao)
 

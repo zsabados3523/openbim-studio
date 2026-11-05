@@ -12,7 +12,7 @@ CONTRATO (API PROPOSTA NESTE TESTE; o ADR fixa os textos, não os nomes). `openb
   abre para leitura (0.3+, 1.x). A mensagem cita o nome do arquivo. Nada em disco muda. Lateral 0.1.0 (legado da S05) NÃO é recusado: migra em memória.
 - `abrir_projeto(ifc, perguntar, divergencia=False)`: com True, `Projeto.divergencia == classificar(ifc)` e o `aviso` (se houver) entra em `Projeto.avisos`.
   Sem o parâmetro nada muda (`Projeto.divergencia is None`).
-REGRAS DE DECISÃO (decisão do autor do oráculo onde o ADR não fixa): (1) IFC sem pset `OBIM_Projeto` e sem `.obim` = "D0", sem aviso, vistas abertas.
+REGRAS DE DECISÃO (decisão do autor do oráculo onde o ADR não fixa): (1) IFC sem pset `OBIM_Project` e sem `.obim` = "D0", sem aviso, vistas abertas.
 (2) Com `.obim`: projeto diferente = `ifc_projeto_globalid` OU `LadoId` do manifesto diferente do IFC -> D5 (vem antes de tudo). (3) `Revisao` do lateral >
 `Revisao` do pset -> D3 (vem antes do hash: IFC antigo restaurado também tem hash diferente). (4) hash igual (`ifc_sha256` x sha256 real do arquivo) -> D1;
 senão D2. (5) N de D2 = viewports + objetos de `vistas` do lateral cujo `vista_guid` não está no IFC + documentos SHEET de `Identification` repetida (um por

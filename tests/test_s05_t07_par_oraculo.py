@@ -8,7 +8,7 @@ CONTRATO de `app/openbim_app/gravacao_par.py` (sem Qt, sem obimcore). O ADR-002 
    o lateral vai em `Casa.obim` (mesmo nome-base, mesma pasta); `pasta_projeto` = `projetos/<LadoId>` (já existe; dada pelo chamador, o módulo
    não importa `diario.py` nem lê `OBIM_PASTA_LOCAL`); o diário de gravação é `pasta_projeto/gravacao.json`. O valor devolvido não é conferido.
 2. Carimbo (`carimbo=True`): UMA `sessao.escrever()` curta com `historico.fora_do_historico(esc)` põe no `IfcProject` o pset único
-   `OBIM_Projeto` com `LadoId` (texto; o que já está no pset ou, sem pset, o `lado_id` dado: o definitivo = o provisório) e `Revisao` (inteiro;
+   `OBIM_Project` com `LadoId` (texto; o que já está no pset ou, sem pset, o `lado_id` dado: o definitivo = o provisório) e `Revisao` (inteiro;
    a de antes + 1; sem pset, 1). Não entra no histórico nem no `anotar`. Sem carimbo (autosave): não abre `escrever()`, `historico` pode ser
    None e o pset fica como está.
 3. O resto roda dentro de UMA `sessao.ler()`, nesta ordem: `gravacao_atomica.preparar` do `Casa.ifc` (o IFC é escrito por
@@ -208,7 +208,7 @@ def test_06_acento_e_espaco_e_conteudo(tmp_path, base_ifc, monkeypatch):  # noqa
     p.gravar()
     import ifcopenshell
     reaberto = ifcopenshell.open(str(p.destino))
-    assert R.diferencas(R.foto(reaberto, sem_pset_obim=True), antes) == [], "o carimbo mexeu em algo além do pset OBIM_Projeto"
+    assert R.diferencas(R.foto(reaberto, sem_pset_obim=True), antes) == [], "o carimbo mexeu em algo além do pset OBIM_Project"
     assert R.diferencas(R.foto(reaberto), R.foto(p.f)) == []
     assert X.estado_par(p.destino, None, p.novo(1), p.pasta) == ("novo", [])
     p.h.encerrar()

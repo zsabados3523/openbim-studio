@@ -75,7 +75,7 @@ def guardado(pasta, dados):
 
 def revisao(pr):
     import ifcopenshell.util.element as UE
-    return UE.get_psets(pr.arquivo.by_type("IfcProject")[0])["OBIM_Projeto"]["Revisao"]
+    return UE.get_psets(pr.arquivo.by_type("IfcProject")[0])["OBIM_Project"]["Revisao"]
 
 
 def sujar(pr, tag="x"):

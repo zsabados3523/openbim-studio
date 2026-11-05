@@ -1,16 +1,16 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Oráculo do F0-S06-T04d: `Location` de pranchas distintas não pode colidir depois da limpeza do número. Contrato base: cabeçalhos de
 `test_s06_t04_vistas_ifc_oraculo.py` e `test_s06_t04_lacunas_oraculo.py` (bug 7) mais:
-(1) dois números diferentes ("../x" e "x") que dão o mesmo caminho limpo recebem `Location` DIFERENTES. O primeiro fica com `pranchas/x/layout.svg`
-e `pranchas/x/titleblock.svg`; o segundo com a pasta sufixada: `pranchas/x-2/...`, o terceiro `-3` (mesma ideia do `_location_livre` das vistas: usa o
+(1) dois números diferentes ("../x" e "x") que dão o mesmo caminho limpo recebem `Location` DIFERENTES. O primeiro fica com `sheets/x/layout.svg`
+e `sheets/x/titleblock.svg`; o segundo com a pasta sufixada: `sheets/x-2/...`, o terceiro `-3` (mesma ideia do `_location_livre` das vistas: usa o
 primeiro número livre, olhando todas as `IfcDocumentReference` do arquivo). [P: sufixo na PASTA e não no arquivo, para layout e titleblock ficarem juntos]
 (2) determinismo: a mesma sequência de criações dá os mesmos `Location`; apagar uma prancha não renumera as outras; um número liberado pode ser reusado.
 (3) estabilidade ao regravar: gravar o IFC, reabrir e criar outra prancha colidente dá o próximo sufixo livre; os `Location` já gravados não mudam.
-(4) nada fora de `pranchas/`; nenhum componente vazio, ".", "..", reservado do Windows (CON, PRN, AUX, NUL, COM1-9, LPT1-9, com ou sem extensão),
+(4) nada fora de `sheets/`; nenhum componente vazio, ".", "..", reservado do Windows (CON, PRN, AUX, NUL, COM1-9, LPT1-9, com ou sem extensão),
 nem terminado em ponto ou espaço. Número que não dá caminho seguro: recusa (`IdentificacaoInvalida`, arquivo intacto) OU grava `Location` seguro
 [P: a escolha é do implementador]. A chave exata (`ler_prancha(...)["numero"]`) nunca muda.
 (5) sistema de arquivos insensível a maiúscula e a normalização unicode: dois `Location` nunca podem diferir só por caixa ou por NFC/NFD.
-(6) `Location` de prancha e de vista nunca colidem entre si (vista chamada "pranchas/x/layout" e prancha "x", em qualquer ordem).
+(6) `Location` de prancha e de vista nunca colidem entre si (vista chamada "sheets/x/layout" e prancha "x", em qualquer ordem).
 Vale nos 3 esquemas, com o validador (`express_rules=True`) sem erro. Marcadores retirados (T04d implementada); casos que o código
 atual já cumpre NÃO levam a marca. Não editar; só o autor retira os marcadores."""
 import re
@@ -57,7 +57,7 @@ def chave_fs(loc):  # o que um sistema de arquivos insensível a caixa e a norma
 
 
 def seguro(loc):
-    assert loc.startswith("pranchas/") and "\\" not in loc and ":" not in loc and not loc.startswith("/"), loc
+    assert loc.startswith("sheets/") and "\\" not in loc and ":" not in loc and not loc.startswith("/"), loc
     for c in loc.split("/"):
         assert c not in ("", ".", ".."), f"componente vazio ou relativo em {loc!r}"
         assert not c.endswith((".", " ")) and not c.startswith(" "), f"componente com ponto/espaço na ponta em {loc!r}"
@@ -71,8 +71,8 @@ def test_01_dois_numeros_que_limpam_igual_recebem_location_diferente(f):
     v.criar_prancha(f, "x", "um")
     v.criar_prancha(f, "../x", "dois")
     a, b = locs_prancha(f, "x"), locs_prancha(f, "../x")
-    assert a == {"LAYOUT": ["pranchas/x/layout.svg"], "TITLEBLOCK": ["pranchas/x/titleblock.svg"]}, "o primeiro perdeu o caminho natural"
-    assert b == {"LAYOUT": ["pranchas/x-2/layout.svg"], "TITLEBLOCK": ["pranchas/x-2/titleblock.svg"]}, b
+    assert a == {"LAYOUT": ["sheets/x/layout.svg"], "TITLEBLOCK": ["sheets/x/titleblock.svg"]}, "o primeiro perdeu o caminho natural"
+    assert b == {"LAYOUT": ["sheets/x-2/layout.svg"], "TITLEBLOCK": ["sheets/x-2/titleblock.svg"]}, b
     assert v.ler_prancha(f, "../x")["numero"] == "../x" and v.ler_prancha(f, "x")["numero"] == "x"
     assert erros(f) == []
 
@@ -81,8 +81,8 @@ def test_02_ordem_inversa_a_primeira_criada_fica_com_o_caminho_natural(f):
     v = V()
     v.criar_prancha(f, "../x", "um")
     v.criar_prancha(f, "x", "dois")
-    assert locs_prancha(f, "../x")["LAYOUT"] == ["pranchas/x/layout.svg"]
-    assert locs_prancha(f, "x")["LAYOUT"] == ["pranchas/x-2/layout.svg"]
+    assert locs_prancha(f, "../x")["LAYOUT"] == ["sheets/x/layout.svg"]
+    assert locs_prancha(f, "x")["LAYOUT"] == ["sheets/x-2/layout.svg"]
 
 
 def test_03_quatro_numeros_que_limpam_igual_vao_de_x_a_x_3_sem_repetir(f):
@@ -108,8 +108,8 @@ def test_04_numero_igual_ao_nome_limpo_de_outro_nao_colide_nem_com_prancha_sem_b
     v = V()
     v.criar_prancha(f, "A-01", "um")
     v.criar_prancha(f, "B", "dois")  # sem colisão nenhuma: caminho natural
-    assert locs_prancha(f, "A-01")["LAYOUT"] == ["pranchas/A-01/layout.svg"]
-    assert locs_prancha(f, "B")["LAYOUT"] == ["pranchas/B/layout.svg"]
+    assert locs_prancha(f, "A-01")["LAYOUT"] == ["sheets/A-01/layout.svg"]
+    assert locs_prancha(f, "B")["LAYOUT"] == ["sheets/B/layout.svg"]
     assert erros(f) == []
 
 
@@ -140,10 +140,10 @@ def test_07_apagar_nao_renumera_as_outras(f):
     for n in ("x", "../x", "./x"):
         v.criar_prancha(f, n, "t")
     v.apagar_prancha(f, "../x")  # sai o "-2"
-    assert locs_prancha(f, "x")["LAYOUT"] == ["pranchas/x/layout.svg"]
-    assert locs_prancha(f, "./x")["LAYOUT"] == ["pranchas/x-3/layout.svg"], "apagar renumerou a que ficou"
+    assert locs_prancha(f, "x")["LAYOUT"] == ["sheets/x/layout.svg"]
+    assert locs_prancha(f, "./x")["LAYOUT"] == ["sheets/x-3/layout.svg"], "apagar renumerou a que ficou"
     v.criar_prancha(f, "..\\x", "t")  # o menor sufixo livre é reaproveitado, como em `_location_livre`
-    assert locs_prancha(f, "..\\x")["LAYOUT"] == ["pranchas/x-2/layout.svg"]
+    assert locs_prancha(f, "..\\x")["LAYOUT"] == ["sheets/x-2/layout.svg"]
     locs = todas_locations(f)
     assert len(locs) == len(set(locs)) and erros(f) == []
 
@@ -154,7 +154,7 @@ def test_08_apagar_a_primeira_libera_o_caminho_natural(f):  # cumprido hoje; mat
     v.apagar_prancha(f, "x")
     assert todas_locations(f) == []
     v.criar_prancha(f, "../x", "t")
-    assert locs_prancha(f, "../x")["LAYOUT"] == ["pranchas/x/layout.svg"] and erros(f) == []
+    assert locs_prancha(f, "../x")["LAYOUT"] == ["sheets/x/layout.svg"] and erros(f) == []
 
 
 def test_09_regravar_e_reabrir_continua_do_proximo_sufixo_livre(f, tmp_path):
@@ -167,8 +167,8 @@ def test_09_regravar_e_reabrir_continua_do_proximo_sufixo_livre(f, tmp_path):
     g = ifcopenshell.open(str(caminho))
     assert sorted(todas_locations(g)) == antes, "gravar e reabrir mudou Location"
     v.criar_prancha(g, "./x", "t")
-    assert locs_prancha(g, "./x")["LAYOUT"] == ["pranchas/x-3/layout.svg"]
-    assert locs_prancha(g, "x")["LAYOUT"] == ["pranchas/x/layout.svg"] and locs_prancha(g, "../x")["LAYOUT"] == ["pranchas/x-2/layout.svg"]
+    assert locs_prancha(g, "./x")["LAYOUT"] == ["sheets/x-3/layout.svg"]
+    assert locs_prancha(g, "x")["LAYOUT"] == ["sheets/x/layout.svg"] and locs_prancha(g, "../x")["LAYOUT"] == ["sheets/x-2/layout.svg"]
     g.write(str(caminho))
     h = ifcopenshell.open(str(caminho))
     assert len(set(todas_locations(h))) == 6 and erros(h) == []
@@ -223,7 +223,7 @@ def test_13_numeros_comuns_e_unicode_continuam_com_caminho_natural(f):  # a regr
     v = V()
     for n, esperado in (("A-01", "A-01"), ("A 1.2/B", "A 1.2/B"), ("ação", "ação"), ("名前", "名前")):
         v.criar_prancha(f, n, "t")
-        assert locs_prancha(f, n)["LAYOUT"] == [f"pranchas/{esperado}/layout.svg"], n
+        assert locs_prancha(f, n)["LAYOUT"] == [f"sheets/{esperado}/layout.svg"], n
     assert erros(f) == []
 
 
@@ -234,7 +234,7 @@ def test_14_numeros_que_diferem_so_na_caixa_nao_dao_location_igual_em_sistema_in
     v.criar_prancha(f, "a-01", "dois")  # os dois são números válidos e distintos (chave exata)
     locs = todas_locations(f)
     assert len({chave_fs(l) for l in locs}) == len(locs) == 4, sorted(locs)
-    assert locs_prancha(f, "A-01")["LAYOUT"] == ["pranchas/A-01/layout.svg"], "o primeiro perdeu o caminho natural"
+    assert locs_prancha(f, "A-01")["LAYOUT"] == ["sheets/A-01/layout.svg"], "o primeiro perdeu o caminho natural"
     assert v.ler_prancha(f, "a-01")["numero"] == "a-01"
     assert erros(f) == []
 
@@ -260,20 +260,20 @@ def test_16_tres_caixas_do_mesmo_numero_viram_tres_pastas_distintas(f):
 def test_17_vista_criada_depois_nao_pega_o_location_de_uma_prancha(f):  # `_location_livre` já olha todas as referências
     v = V()
     v.criar_prancha(f, "x", "t")
-    g = v.criar_vista(f, "pranchas/x/layout", "PLANTA")
+    g = v.criar_vista(f, "sheets/x/layout", "PLANTA")
     locs = todas_locations(f)
     assert len(locs) == len(set(locs)) == 3, sorted(locs)
-    assert A.vista_ifc(f, g)["location"] == "pranchas/x/layout-2.svg"
+    assert A.vista_ifc(f, g)["location"] == "sheets/x/layout-2.svg"
 
 
 def test_18_prancha_criada_depois_nao_pega_o_location_de_uma_vista(f):
     v = V()
-    g = v.criar_vista(f, "pranchas/x/layout", "PLANTA")  # vira "pranchas/x/layout.svg"
-    assert A.vista_ifc(f, g)["location"] == "pranchas/x/layout.svg"
+    g = v.criar_vista(f, "sheets/x/layout", "PLANTA")  # vira "sheets/x/layout.svg"
+    assert A.vista_ifc(f, g)["location"] == "sheets/x/layout.svg"
     v.criar_prancha(f, "x", "t")
     locs = todas_locations(f)
     assert len(locs) == len(set(locs)) == 3, f"prancha reutilizou Location da vista: {sorted(locs)}"
-    assert A.vista_ifc(f, g)["location"] == "pranchas/x/layout.svg", "a vista mudou de Location"
+    assert A.vista_ifc(f, g)["location"] == "sheets/x/layout.svg", "a vista mudou de Location"
     assert v.ler_prancha(f, "x")["vistas"] == [], "a prancha nova herdou a vista pelo Location repetido"
     assert erros(f) == []
 
@@ -307,13 +307,13 @@ def test_21_titleblock_sozinho_de_outro_programa_ocupa_a_pasta(f):  # mutante D1
     v = V()
     d = f.create_entity("IfcDocumentInformation", Name="alheio", Scope="SHEET",
                         **({"DocumentId": "Z"} if f.schema == "IFC2X3" else {"Identification": "Z"}))
-    r = f.create_entity("IfcDocumentReference", Location="pranchas/x/titleblock.svg")
+    r = f.create_entity("IfcDocumentReference", Location="sheets/x/titleblock.svg")
     if f.schema == "IFC2X3":
         d.DocumentReferences = [r]
     else:
         r.ReferencedDocument = d
     v.criar_prancha(f, "x", "t")
-    assert locs_prancha(f, "x") == {"LAYOUT": ["pranchas/x-2/layout.svg"], "TITLEBLOCK": ["pranchas/x-2/titleblock.svg"]}
+    assert locs_prancha(f, "x") == {"LAYOUT": ["sheets/x-2/layout.svg"], "TITLEBLOCK": ["sheets/x-2/titleblock.svg"]}
 
 
 def test_22_tres_vistas_de_mesmo_nome_vao_de_x_a_x_3_e_caixa_conta_no_laco(f):  # mutantes E2 e E3 de `_location_livre`

@@ -33,7 +33,7 @@ def caixa(texto):
 class Falso:
     def __init__(self, prancha, viewport): self.p, self.v = prancha, viewport
     def ids(self, c): return ["1"]
-    def obter(self, c, i): return self.p if c == "pranchas" else self.v
+    def obter(self, c, i): return self.p if c == "sheets" else self.v
 
 
 def lateral(escala=100, **viewport):
@@ -215,7 +215,7 @@ class Falso:
     p = {{"identification": "P", "formato": "A3", "carimbo": {{"projeto": "x", "titulo": "t", "data": "2026-11-01", "folha": "1"}}}}
     v = {{"prancha": "P", "view_guid": "v", "x": 20, "y": 20, "escala": 100}}
     def ids(self, c): return ["1"]
-    def obter(self, c, i): return self.p if c == "pranchas" else self.v
+    def obter(self, c, i): return self.p if c == "sheets" else self.v
 def com(chave, fn):
     n = [0]; orig = getattr(m, chave)
     def w(*a, **k):

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Oraculo do F0-S06-T08, prancha minima (1 viewport + carimbo fixo, SVG). Fontes: cartao T08; ADR-003 §3.2, §4 e §5 (viewport no `.obim` guarda
-`prancha`, `vista_guid`, `x`, `y`, `escala`); P5 do README da S06 (carimbo simples: nome do projeto, titulo, escala, data, folha; sem NBR 13142).
+`prancha`, `view_guid`, `x`, `y`, `escala`); P5 do README da S06 (carimbo simples: nome do projeto, titulo, escala, data, folha; sem NBR 13142).
 Marcadores @AINDA_NAO retirados pelo autor apos a implementacao. O PDF, o reabrir e o IFC ficam em `test_s06_t08_pdf_persist_oraculo.py`.
 CONTRATO (nomes PROPOSTOS NESTE TESTE; o ADR e o cartao nao nomeiam a API). `openbim_app/prancha.py`, so stdlib no import (sem Qt, sem ifcopenshell;
 o Qt entra DENTRO de `exportar_pdf`, depois que a funcao cria `QGuiApplication` se nao houver uma):
@@ -10,20 +10,20 @@ o Qt entra DENTRO de `exportar_pdf`, depois que a funcao cria `QGuiApplication` 
   Cria `pranchas/<uuid4>`: `{"identification", "formato", "carimbo": {"projeto", "titulo", "data", "folha"}}`. `identification` texto nao vazio sem espaco
   nas pontas (`PranchaInvalida`); `formato` em FORMATOS (`FormatoInvalido`); `projeto`, `titulo`, `folha` texto nao vazio; `data` "AAAA-MM-DD" de calendario
   real (`PranchaInvalida`). Valida ANTES de chamar `lado.criar`.
-- `colocar_viewport(lado, identification, vista_guid, x_mm, y_mm, escala) -> id`: cria `viewports/<uuid4>`: `{"prancha", "vista_guid", "x", "y", "escala"}`.
+- `colocar_viewport(lado, identification, view_guid, x_mm, y_mm, escala) -> id`: cria `viewports/<uuid4>`: `{"prancha", "view_guid", "x", "y", "escala"}`.
   `x_mm`, `y_mm` = canto superior esquerdo, na folha, do retangulo do `viewBox` da planta. `escala` = denominador (50 = 1:50): numero finito > 0, nao `bool`
   (`EscalaInvalida`). x e y numeros finitos (`PranchaInvalida`, nao `EscalaInvalida`). Valida antes de `lado.criar`. Nao confere "fora da folha" (precisa da planta).
-- `ler_viewport(lateral, identification, vista_guid) -> {"x", "y", "escala"}`; `PranchaNaoEncontrada` se nao ha o par.
-- `montar_svg(lateral, identification, vista_guid, planta_svg) -> str`: `lateral` = `Lateral`. `planta_svg` (str ou bytes UTF-8) = `<svg>` com `viewBox`
+- `ler_viewport(lateral, identification, view_guid) -> {"x", "y", "escala"}`; `PranchaNaoEncontrada` se nao ha o par.
+- `montar_svg(lateral, identification, view_guid, planta_svg) -> str`: `lateral` = `Lateral`. `planta_svg` (str ou bytes UTF-8) = `<svg>` com `viewBox`
   "minx miny w h" em METROS (1 unidade = 1 m; `width`/`height` da planta sao ignorados). Saida (SVG 1.1, 1 unidade = 1 mm):
   `<svg width="{W}mm" height="{H}mm" viewBox="0 0 {W} {H}">` com, nesta ordem: `rect#folha` (fundo branco, 0 0 W H); `rect#moldura` (x=y=10, W-20 por H-20, sem
-  preenchimento); `g#viewport` com `data-vista`=vista_guid e `transform` feito so de `translate`/`scale`, filhos da planta copiados na ordem, sem o `<svg>` raiz da
+  preenchimento); `g#viewport` com `data-vista`=view_guid e `transform` feito so de `translate`/`scale`, filhos da planta copiados na ordem, sem o `<svg>` raiz da
   planta, mapeando (minx, miny) para (x, y) e 1 m para 1000/escala mm; `g#carimbo` com `rect#carimbo-caixa` (x=10, y=H-35, W-20 por 25) e `<text>`s, cada valor
   (projeto, titulo, escala "1:" + `%g` da escala, data, folha) como texto INTEIRO de um `<text>` proprio com x,y dentro da caixa (rotulos em outros `<text>` sao livres).
   Escapa `& < >`. `ViewportForaDaFolha` se o retangulo do viewport (x, y, w*1000/escala, h*1000/escala) sai de x>=10, y>=10, x+w<=W-10, y+h<=H-35 (encostar vale,
   folga 1e-9). `PranchaNaoEncontrada` (prancha ou par inexistente), `SvgInvalido` (XML ruim, raiz que nao e svg, sem `viewBox`, `viewBox` ilegivel/nao positivo,
   `<!DOCTYPE`/`<!ENTITY`, tipo que nao e str/bytes). Pura: nao muda o `Lateral`; mesma entrada, mesma saida.
-- `exportar_svg(lateral, identification, vista_guid, planta_svg, destino) -> Path`: grava `montar_svg(...)` em UTF-8. Erro = nada criado nem alterado em `destino`.
+- `exportar_svg(lateral, identification, view_guid, planta_svg, destino) -> Path`: grava `montar_svg(...)` em UTF-8. Erro = nada criado nem alterado em `destino`.
 - `exportar_pdf(...)`: mesma assinatura (PDF, 1 pagina do tamanho da folha); em `..._pdf_persist_oraculo.py`.
 GUARDA: sem PySide6 ou numpy, pula (falha com OBIM_S06_OBRIGATORIO=1; o lider pode incluir a chave em `obrigatorio.CHAVES_S05`)."""
 import math
@@ -200,7 +200,7 @@ def test_15_objetos_gravados_no_lateral():
     iv = m.colocar_viewport(lado, IDENT, GUID, 20, 25.5, 50)
     assert lado.lat.obter("pranchas", ip) == {"identification": IDENT, "formato": "A3",
                                               "carimbo": {k: DADOS[k] for k in ("projeto", "titulo", "data", "folha")}}
-    assert lado.lat.obter("viewports", iv) == {"prancha": IDENT, "vista_guid": GUID, "x": 20, "y": 25.5, "escala": 50}
+    assert lado.lat.obter("viewports", iv) == {"prancha": IDENT, "view_guid": GUID, "x": 20, "y": 25.5, "escala": 50}
     assert m.ler_viewport(lado.lat, IDENT, GUID) == {"x": 20, "y": 25.5, "escala": 50}
     assert ip != iv and len({ip, iv}) == 2
     with pytest.raises(m.PranchaNaoEncontrada):

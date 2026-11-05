@@ -64,11 +64,11 @@ def validar(lateral):
     """Confere as coleções reservadas; `ObimInvalido` antes de qualquer escrita. Chave no campo, unicidade exata."""
     vistas, pranchas, viewports = {}, {}, {}
     for ident in lateral.ids("vistas"):
-        guid = lateral.obter("vistas", ident).get("vista_guid")
+        guid = lateral.obter("vistas", ident).get("view_guid")
         if not isinstance(guid, str) or not guid:
-            raise ObimInvalido(f"vista {ident!r} sem vista_guid texto não vazio")
+            raise ObimInvalido(f"vista {ident!r} sem view_guid texto não vazio")
         if guid in vistas:
-            raise ObimInvalido(f"vista_guid repetido: {guid!r}")
+            raise ObimInvalido(f"view_guid repetido: {guid!r}")
         vistas[guid] = ident
     for ident in lateral.ids("pranchas"):
         identificacao = lateral.obter("pranchas", ident).get("identification")
@@ -81,13 +81,13 @@ def validar(lateral):
         o = lateral.obter("viewports", ident)
         if not isinstance(o.get("prancha"), str) or not o["prancha"]:
             raise ObimInvalido(f"viewport {ident!r} sem prancha texto não vazio")
-        if not isinstance(o.get("vista_guid"), str) or not o["vista_guid"]:
-            raise ObimInvalido(f"viewport {ident!r} sem vista_guid texto não vazio")
+        if not isinstance(o.get("view_guid"), str) or not o["view_guid"]:
+            raise ObimInvalido(f"viewport {ident!r} sem view_guid texto não vazio")
         if not _numero(o.get("x")) or not _numero(o.get("y")):
             raise ObimInvalido(f"viewport {ident!r} com x ou y que não é número")
         if not _numero(o.get("escala")) or o["escala"] <= 0:
             raise ObimInvalido(f"viewport {ident!r} com escala que não é número > 0")
-        par = (o["prancha"], o["vista_guid"])
+        par = (o["prancha"], o["view_guid"])
         if par in viewports:
             raise ObimInvalido(f"par prancha/vista repetido: {par!r}")
         viewports[par] = ident
@@ -175,28 +175,28 @@ def ler(caminho):
                            versao_original=versao, somente_leitura=somente_leitura)
 
 
-def orfaos(lateral, vista_guids, identifications):
+def orfaos(lateral, view_guids, identifications):
     """Ids do lateral que o `.obim` cita e os conjuntos dados (IFC) não têm; só calcula, nunca apaga."""
     vistas, pranchas, viewports = [], [], []
     for ident in lateral.ids("vistas"):
-        if lateral.obter("vistas", ident).get("vista_guid") not in vista_guids:
+        if lateral.obter("vistas", ident).get("view_guid") not in view_guids:
             vistas.append(ident)
     for ident in lateral.ids("pranchas"):
         if lateral.obter("pranchas", ident).get("identification") not in identifications:
             pranchas.append(ident)
     for ident in lateral.ids("viewports"):
         o = lateral.obter("viewports", ident)
-        if o.get("vista_guid") not in vista_guids or o.get("prancha") not in identifications:
+        if o.get("view_guid") not in view_guids or o.get("prancha") not in identifications:
             viewports.append(ident)
     return {"vistas": vistas, "pranchas": pranchas, "viewports": viewports}
 
 
-def apagar_vista(lado, vista_guid):
+def apagar_vista(lado, view_guid):
     """Apaga a vista dessa chave e todos os viewports dela na mesma transação (`lado` = `t.lado`)."""
     lateral = getattr(lado, "_lat", lado)
     for ident in list(lateral.ids("vistas")):
-        if lateral.obter("vistas", ident).get("vista_guid") == vista_guid:
+        if lateral.obter("vistas", ident).get("view_guid") == view_guid:
             lado.apagar("vistas", ident)
     for ident in list(lateral.ids("viewports")):
-        if lateral.obter("viewports", ident).get("vista_guid") == vista_guid:
+        if lateral.obter("viewports", ident).get("view_guid") == view_guid:
             lado.apagar("viewports", ident)

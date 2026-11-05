@@ -6,7 +6,7 @@
 - ACHADO 2: todo `<text>` do carimbo tem atributo `font-size` explicito (numero, ou numero com sufixo `px`/`mm`; 1 unidade = 1 mm) entre 2 e 5. Caixa estimada do texto = largura
   0,6*font-size*numero de caracteres, altura font-size, de x (ou x-largura/2 com `text-anchor="middle"`, x-largura com `end`) e de y-font-size ate y (linha de base). Cabe em
   `carimbo-caixa` e nao cruza a de outro texto. Vale para os dados normais e para nomes de tamanho medio em A4.
-- ACHADO 3: caractere de controle (categoria Cc, mais U+FFFE, U+FFFF e substituto solto) em `projeto`, `titulo` ou `folha` (`criar_prancha`) ou em `vista_guid`
+- ACHADO 3: caractere de controle (categoria Cc, mais U+FFFE, U+FFFF e substituto solto) em `projeto`, `titulo` ou `folha` (`criar_prancha`) ou em `view_guid`
   (`colocar_viewport`) = `PranchaInvalida` antes de `lado.criar`. `montar_svg` nunca produz XML mal formado: entrada hostil que entrou por outro caminho (lateral lido de
   `.obim` antigo) ou levanta `PranchaInvalida` ou sai bem formada.
 - ACHADO 4: `exportar_pdf` cujo SVG montado o Qt nao le = `SvgInvalido`, arquivo nao criado nem alterado (confere `QSvgRenderer.isValid()` antes de abrir o `QPdfWriter`).
@@ -193,7 +193,7 @@ def test_07_controle_no_carimbo_recusado(campo, c):
 
 
 @pytest.mark.parametrize("c", ["\x00", "\x01", "\x1f", "\t", "\n", "\x7f", "￾", "\ud800"])
-def test_08_controle_no_vista_guid_recusado(c):
+def test_08_controle_no_view_guid_recusado(c):
     m = P()
     lado = Lado()
     with pytest.raises(m.PranchaInvalida):
@@ -221,7 +221,7 @@ def test_10_montar_svg_com_lateral_hostil_nunca_sai_mal_formado(c):
         lado.lat._criar("pranchas", "p1", {"identification": IDENT, "formato": "A3", "carimbo": {
             "projeto": f"a{c}b" if campo == "projeto" else "Casa", "titulo": "T", "data": "2026-11-01", "folha": "1/1"}})
         guid = f"G{c}" if campo == "vista" else GUID
-        lado.lat._criar("viewports", "v1", {"prancha": IDENT, "vista_guid": guid, "x": 20, "y": 20, "escala": 100})
+        lado.lat._criar("viewports", "v1", {"prancha": IDENT, "view_guid": guid, "x": 20, "y": 20, "escala": 100})
         try:
             saida_ = m.montar_svg(lado.lat, IDENT, guid, A.planta())
         except m.PranchaInvalida:

@@ -3,7 +3,7 @@
 290 mm nao cabe na area util de A3, 252 mm; girada, cabe). Contrato (`openbim_app/prancha.py`):
 - `FORMATOS` ganha `"A2": (594.0, 420.0)`, `"A1": (841.0, 594.0)`, `"A0": (1189.0, 841.0)` (largura, altura em mm, paisagem; A4 e A3 iguais). Todo o resto da folha vale
   para os cinco: moldura a 10 mm, `carimbo-caixa` em (10, H-35) de (W-20) x 25, os 4 textos do carimbo inteiros dentro da caixa, PDF de 1 pagina do tamanho da folha.
-- `colocar_viewport(lado, identification, vista_guid, x_mm, y_mm, escala, rotacao=0)`: `rotacao` e 0 ou 90 (graus, sentido HORARIO na tela, inteiro, nao `bool`). Qualquer outro
+- `colocar_viewport(lado, identification, view_guid, x_mm, y_mm, escala, rotacao=0)`: `rotacao` e 0 ou 90 (graus, sentido HORARIO na tela, inteiro, nao `bool`). Qualquer outro
   valor (45, 180, 270, -90, 360, 90.5, "90", None, True, False, nan, inf) = `RotacaoInvalida` (nova, subclasse de `PranchaInvalida`, logo `ValueError`), ANTES de `lado.criar`.
 - Gravacao: com rotacao 90 o objeto em `viewports/` ganha `"rotacao": 90`; com 0 (ou omitida) o objeto fica EXATAMENTE como antes (sem a chave; `.obim` antigo continua valendo e
   ausente = 0). `ler_viewport` devolve `"rotacao": 90` so quando e 90 (com 0 o dict continua `{"x", "y", "escala"}`). Reabrir o `.obim` mantem a rotacao. Objeto de `viewports/`
@@ -132,13 +132,13 @@ def test_08_gravacao_e_leitura():
     lado = Lado()
     m.criar_prancha(lado, IDENT, **DADOS)
     iv = m.colocar_viewport(lado, IDENT, GUID, 20, 25.5, 50, rotacao=90)
-    assert lado.lat.obter("viewports", iv) == {"prancha": IDENT, "vista_guid": GUID, "x": 20, "y": 25.5, "escala": 50, "rotacao": 90}
+    assert lado.lat.obter("viewports", iv) == {"prancha": IDENT, "view_guid": GUID, "x": 20, "y": 25.5, "escala": 50, "rotacao": 90}
     assert m.ler_viewport(lado.lat, IDENT, GUID) == {"x": 20, "y": 25.5, "escala": 50, "rotacao": 90}
     for kw in ({}, {"rotacao": 0}):
         l2 = Lado()
         m.criar_prancha(l2, IDENT, **DADOS)
         i2 = m.colocar_viewport(l2, IDENT, GUID, 20, 25.5, 50, **kw)
-        assert l2.lat.obter("viewports", i2) == {"prancha": IDENT, "vista_guid": GUID, "x": 20, "y": 25.5, "escala": 50}, "rotacao 0 nao grava a chave"
+        assert l2.lat.obter("viewports", i2) == {"prancha": IDENT, "view_guid": GUID, "x": 20, "y": 25.5, "escala": 50}, "rotacao 0 nao grava a chave"
         assert m.ler_viewport(l2.lat, IDENT, GUID) == {"x": 20, "y": 25.5, "escala": 50}
     assert type(lado.lat.obter("viewports", iv)["rotacao"]) is int
 
@@ -156,7 +156,7 @@ def test_09_reabrir_mantem_rotacao(tmp_path):
     assert m.montar_svg(r.lateral, IDENT, GUID, svg) == antes
     with zipfile.ZipFile(p) as z:
         vp = [n for n in z.namelist() if n.startswith("viewports/")]
-        assert len(vp) == 1 and json.loads(z.read(vp[0])) == {"prancha": IDENT, "vista_guid": GUID, "x": 30, "y": 40, "escala": 100, "rotacao": 90}
+        assert len(vp) == 1 and json.loads(z.read(vp[0])) == {"prancha": IDENT, "view_guid": GUID, "x": 30, "y": 40, "escala": 100, "rotacao": 90}
 
 
 @pytest.mark.parametrize("hostil", [45, 180, True, "90", None])
@@ -165,7 +165,7 @@ def test_10_lateral_hostil(hostil):
     lado, svg = F.montar_com(escala=100)
     uid = next(iter(lado.lat.ids("viewports")))
     obj = dict(lado.lat.obter("viewports", uid), rotacao=hostil)
-    lado.lat._criar("viewports", "11111111-2222-4333-8444-555555555555", dict(obj, vista_guid="outra"))
+    lado.lat._criar("viewports", "11111111-2222-4333-8444-555555555555", dict(obj, view_guid="outra"))
     with pytest.raises(m.RotacaoInvalida):
         m.montar_svg(lado.lat, IDENT, "outra", svg)
 

@@ -130,7 +130,7 @@ def test_07_n8_autosave_grava_marca_e_origem_no_manifesto(proj, tmp_path):
 def _dois_viewports_da_mesma_vista():
     o = objetos()
     o["pranchas"] = {**o["pranchas"], U["p2"]: {"identification": "B-02", "formato": "A3"}}
-    o["viewports"] = {**o["viewports"], U["vp3"]: {"prancha": "B-02", "vista_guid": G1, "x": 5, "y": 5, "escala": 100}}
+    o["viewports"] = {**o["viewports"], U["vp3"]: {"prancha": "B-02", "view_guid": G1, "x": 5, "y": 5, "escala": 100}}
     return o
 
 
@@ -145,7 +145,7 @@ def test_08_n9_apagar_vista_em_duas_pranchas_apaga_todos_os_viewports(proj):
     cheio = canon(proj.lat)
     with proj.s.escrever() as esc, proj.h.transacao(esc) as t:
         m.apagar_vista(t.lado, G1)
-    sobra = [i for i in proj.lat.ids("viewports") if proj.lat.obter("viewports", i)["vista_guid"] == G1]
+    sobra = [i for i in proj.lat.ids("viewports") if proj.lat.obter("viewports", i)["view_guid"] == G1]
     assert sobra == [] and proj.lat.obter("vistas", U["v1"]) is None, f"viewports da vista apagada que sobraram: {sobra}"
     assert proj.lat.obter("viewports", U["vp2"]) is not None and proj.lat.obter("vistas", U["v2"]) is not None, "apagou além da vista pedida"
     assert {proj.lat.obter("pranchas", U[k]) is not None for k in ("p1", "p2")} == {True}
@@ -154,4 +154,4 @@ def test_08_n9_apagar_vista_em_duas_pranchas_apaga_todos_os_viewports(proj):
     assert canon(proj.lat) == cheio and isinstance(proj.lat, Lateral)
     with proj.s.escrever() as esc:
         proj.h.refazer(esc)
-    assert [i for i in proj.lat.ids("viewports") if proj.lat.obter("viewports", i)["vista_guid"] == G1] == []
+    assert [i for i in proj.lat.ids("viewports") if proj.lat.obter("viewports", i)["view_guid"] == G1] == []

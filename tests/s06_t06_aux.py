@@ -42,9 +42,9 @@ def fazer(pasta, *, vistas=("1", "2"), pranchas=("A-01",), pset=True, lado=LADO,
     ob = ifc.with_suffix(".obim")
     if obim:
         citadas = vistas if o_vistas is None else o_vistas
-        objs = {"vistas": {f"v{n}": {"vista_guid": V[n], "estilo": "padrao"} for n in citadas},
+        objs = {"vistas": {f"v{n}": {"view_guid": V[n], "estilo": "padrao"} for n in citadas},
                 "pranchas": {f"p{i}": {"identification": x, "formato": "A1"} for i, x in enumerate(dict.fromkeys(pranchas))},
-                "viewports": {f"vp{n}": {"prancha": pranchas[0], "vista_guid": V[n], "x": 10.0, "y": 20.0, "escala": 100.0} for n in citadas} if pranchas else {}}
+                "viewports": {f"vp{n}": {"prancha": pranchas[0], "view_guid": V[n], "x": 10.0, "y": 20.0, "escala": 100.0} for n in citadas} if pranchas else {}}
         manifesto = {"formato": "obim-lateral", "versao_formato": versao, "LadoId": o_lado or lado or LADO, "Revisao": o_rev or rev or 1, "ifc_nome": ifc.name,
                "ifc_sha256": sha(ifc), "ifc_tamanho": ifc.stat().st_size, "ifc_projeto_globalid": o_gid or gid, "programa_versao": "0.1.0",
                "data": "2026-10-30T00:00:00Z"}

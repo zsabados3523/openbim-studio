@@ -11,7 +11,7 @@ import s05_t07_aux as X
 from s05_conteudo_aux import _limpa, base_ifc, exigir  # noqa: F401
 from test_s06_t05_obim_zip_oraculo import G1, G2, IDENT, MAN, U, _fabrica, canon, lat, ob, objetos, proj  # noqa: F401
 
-VP = {"prancha": IDENT, "vista_guid": G1, "x": 1, "y": 2, "escala": 100}
+VP = {"prancha": IDENT, "view_guid": G1, "x": 1, "y": 2, "escala": 100}
 
 
 def _viewports(**extra):
@@ -107,11 +107,11 @@ def _velho_ilegivel(proj, base_ifc, como):  # noqa: F811
     o = proj.destino.with_suffix(".obim")
     if como == "corrompido":
         o.write_bytes(b"isto nao e zip")
-    else:  # 0.2.x inválido: vista_guid repetido, como outro programa poderia gravar
+    else:  # 0.2.x inválido: view_guid repetido, como outro programa poderia gravar
         with zipfile.ZipFile(o, "w") as z:
             z.writestr("manifest.json", json.dumps(MAN))
-            z.writestr("vistas/a.json", json.dumps({"vista_guid": G1}))
-            z.writestr("vistas/b.json", json.dumps({"vista_guid": G1}))
+            z.writestr("vistas/a.json", json.dumps({"view_guid": G1}))
+            z.writestr("vistas/b.json", json.dumps({"view_guid": G1}))
     return o.read_bytes()
 
 
@@ -130,7 +130,7 @@ def test_12_d2_ler_continua_validando_0_2_x(tmp_path):
     m, p = ob(), tmp_path / "f.obim"
     with zipfile.ZipFile(p, "w") as z:
         z.writestr("manifest.json", json.dumps(MAN))
-        z.writestr("vistas/a.json", json.dumps({"vista_guid": G1}))
-        z.writestr("vistas/b.json", json.dumps({"vista_guid": G1}))
+        z.writestr("vistas/a.json", json.dumps({"view_guid": G1}))
+        z.writestr("vistas/b.json", json.dumps({"view_guid": G1}))
     with pytest.raises(m.ObimInvalido):
         m.ler(p)

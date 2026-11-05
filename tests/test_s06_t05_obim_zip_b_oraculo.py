@@ -11,7 +11,7 @@ from test_s06_t05_obim_zip_oraculo import G1, IDENT, MAN, U, _fabrica, canon, la
 
 def test_21_0_1_0_com_colecoes_reservadas_le_sem_validar(tmp_path):
     m, p = ob(), tmp_path / "velho.obim"
-    ruim = {"sem_chave": 1}  # um `vistas` sem `vista_guid` seria recusado no 0.2.0; no 0.1.0 não se valida
+    ruim = {"sem_chave": 1}  # um `vistas` sem `view_guid` seria recusado no 0.2.0; no 0.1.0 não se valida
     with zipfile.ZipFile(p, "w") as z:
         z.writestr("manifest.json", json.dumps({**MAN, "versao_formato": "0.1.0", "provisorio": True}))
         z.writestr("vistas/abc.json", json.dumps(ruim))
@@ -36,7 +36,7 @@ def test_22_regravar_0_2_x_maior_sai_0_2_0_e_preserva(proj):  # noqa: F811
 
 def test_23_viewport_para_vista_ou_prancha_inexistente_vira_orfao(tmp_path):
     m, p = ob(), tmp_path / "f.obim"
-    novo = {"prancha": "Z-99", "vista_guid": "Nao$Existe00000000000", "x": 1, "y": 2, "escala": 100}
+    novo = {"prancha": "Z-99", "view_guid": "Nao$Existe00000000000", "x": 1, "y": 2, "escala": 100}
     vps = {**objetos()["viewports"], "vpx": novo}
     l = lat(viewports=vps)
     m.escrever(p, l, MAN)  # não é rejeitado

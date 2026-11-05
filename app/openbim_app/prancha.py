@@ -100,14 +100,14 @@ def _obter_prancha(lateral, identification):
     raise PranchaNaoEncontrada(f"prancha {_resumo(identification)} nao encontrada")
 
 
-def _obter_viewport(lateral, identification, vista_guid):
+def _obter_viewport(lateral, identification, view_guid):
     for uid in lateral.ids("viewports"):
         v = lateral.obter("viewports", uid)
         if not isinstance(v, dict):
             raise PranchaInvalida(f"viewport deve ser dict, recebido {type(v).__name__}")
-        if v.get("prancha") == identification and v.get("vista_guid") == vista_guid:
+        if v.get("prancha") == identification and v.get("view_guid") == view_guid:
             return v
-    raise PranchaNaoEncontrada(f"viewport nao encontrado para {_resumo(identification)} / {_resumo(vista_guid)}")
+    raise PranchaNaoEncontrada(f"viewport nao encontrado para {_resumo(identification)} / {_resumo(view_guid)}")
 
 
 def criar_prancha(lado, identification, formato, projeto, titulo, data, folha):
@@ -133,14 +133,14 @@ def criar_prancha(lado, identification, formato, projeto, titulo, data, folha):
     return uid
 
 
-def colocar_viewport(lado, identification, vista_guid, x_mm, y_mm, escala, rotacao=0):
+def colocar_viewport(lado, identification, view_guid, x_mm, y_mm, escala, rotacao=0):
     """Cria viewport na colecao 'viewports' do lateral."""
     if isinstance(rotacao, bool) or not isinstance(rotacao, int) or rotacao not in (0, 90):
         raise RotacaoInvalida(f"rotacao invalida: {_resumo(rotacao)}")
     if not isinstance(identification, str) or not identification or identification != identification.strip() or _contem_controle(identification):
         raise PranchaInvalida("identification vazia ou com espaco nas pontas")
-    if not isinstance(vista_guid, str) or not vista_guid or _contem_controle(vista_guid):
-        raise PranchaInvalida("vista_guid vazio ou invalido")
+    if not isinstance(view_guid, str) or not view_guid or _contem_controle(view_guid):
+        raise PranchaInvalida("view_guid vazio ou invalido")
     for v in (x_mm, y_mm):
         if isinstance(v, bool) or not isinstance(v, (int, float)):
             raise PranchaInvalida("coordenada x ou y invalida")
@@ -160,17 +160,17 @@ def colocar_viewport(lado, identification, vista_guid, x_mm, y_mm, escala, rotac
         raise EscalaInvalida("escala invalida: deve ser numero finito > 0")
 
     uid = str(uuid.uuid4())
-    obj = {"prancha": identification, "vista_guid": vista_guid, "x": x_mm, "y": y_mm, "escala": escala}
+    obj = {"prancha": identification, "view_guid": view_guid, "x": x_mm, "y": y_mm, "escala": escala}
     if rotacao == 90:
         obj["rotacao"] = 90
     lado.criar("viewports", uid, obj)
     return uid
 
 
-def ler_viewport(lateral, identification, vista_guid):
+def ler_viewport(lateral, identification, view_guid):
     """Le viewport do lateral e devolve {'x', 'y', 'escala'} (e 'rotacao' se 90)."""
     try:
-        v = _obter_viewport(lateral, identification, vista_guid)
+        v = _obter_viewport(lateral, identification, view_guid)
     except KeyError as e:
         raise PranchaInvalida(f"falha ao acessar viewport no lateral: {e}") from e
     try:
@@ -783,11 +783,11 @@ def _ajustar_espessuras(planta_root, escala):
         stack.append((iter(no), estado_atual))
 
 
-def _validar_prancha_e_viewport(prancha, viewport, vista_guid):
+def _validar_prancha_e_viewport(prancha, viewport, view_guid):
     if not isinstance(prancha, dict) or not isinstance(viewport, dict):
         raise PranchaInvalida("prancha ou viewport invalido")
-    if not isinstance(vista_guid, str) or _contem_controle(vista_guid):
-        raise PranchaInvalida(f"vista_guid contem caractere de controle ou invalido: {_resumo(vista_guid)}")
+    if not isinstance(view_guid, str) or _contem_controle(view_guid):
+        raise PranchaInvalida(f"view_guid contem caractere de controle ou invalido: {_resumo(view_guid)}")
 
     escala = viewport.get("escala")
     if isinstance(escala, bool) or not isinstance(escala, (int, float)):
@@ -874,11 +874,11 @@ def _montar_carimbo(root, carimbo, W, H, escala):
             x_curr += 0.6 * fs * len(s_val) + folga
 
 
-def montar_svg(lateral, identification, vista_guid, planta_svg):
+def montar_svg(lateral, identification, view_guid, planta_svg):
     """Monta SVG 1.1 da prancha com folha, moldura, viewport e carimbo."""
     prancha = _obter_prancha(lateral, identification)
-    viewport = _obter_viewport(lateral, identification, vista_guid)
-    formato, carimbo, rotacao = _validar_prancha_e_viewport(prancha, viewport, vista_guid)
+    viewport = _obter_viewport(lateral, identification, view_guid)
+    formato, carimbo, rotacao = _validar_prancha_e_viewport(prancha, viewport, view_guid)
     W, H = FORMATOS[formato]
 
     planta_norm = normalizar_planta(planta_svg)
@@ -929,7 +929,7 @@ def montar_svg(lateral, identification, vista_guid, planta_svg):
     })
 
     vp_elem = ET.SubElement(root, "{http://www.w3.org/2000/svg}g", {
-        "id": "viewport", "data-vista": vista_guid, "transform": transform_vp
+        "id": "viewport", "data-vista": view_guid, "transform": transform_vp
     })
     for child in planta_root:
         vp_elem.append(child)
@@ -952,19 +952,19 @@ def montar_svg(lateral, identification, vista_guid, planta_svg):
     return raw
 
 
-def exportar_svg(lateral, identification, vista_guid, planta_svg, destino):
+def exportar_svg(lateral, identification, view_guid, planta_svg, destino):
     """Exporta prancha como arquivo SVG em UTF-8."""
     destino = Path(destino)
-    conteudo = montar_svg(lateral, identification, vista_guid, planta_svg)
+    conteudo = montar_svg(lateral, identification, view_guid, planta_svg)
     destino.write_bytes(conteudo.encode("utf-8"))
     return destino
 
 
-def exportar_pdf(lateral, identification, vista_guid, planta_svg, destino):
+def exportar_pdf(lateral, identification, view_guid, planta_svg, destino):
     """Exporta prancha como PDF de 1 pagina do tamanho da folha."""
     global _QT_APP
     destino = Path(destino)
-    conteudo = montar_svg(lateral, identification, vista_guid, planta_svg)
+    conteudo = montar_svg(lateral, identification, view_guid, planta_svg)
     prancha = _obter_prancha(lateral, identification)
     formato = prancha.get("formato")
     if not isinstance(formato, str) or formato not in FORMATOS:

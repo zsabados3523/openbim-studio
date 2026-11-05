@@ -34,7 +34,7 @@ class Falso:
     def obter(self, c, i): return self.p if c == "pranchas" else self.v
 def lateral(**sobre):
     p = {{"identification": "P", "formato": "A3", "carimbo": {{"projeto": "x", "titulo": "t", "data": "2026-11-01", "folha": "1"}}}}
-    v = {{"prancha": "P", "vista_guid": "v", "x": 20, "y": 20, "escala": 100}}
+    v = {{"prancha": "P", "view_guid": "v", "x": 20, "y": 20, "escala": 100}}
     for k, val in sobre.items():
         (p if k == "carimbo" else v)[k] = val
     return Falso(p, v)

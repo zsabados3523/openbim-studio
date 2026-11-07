@@ -171,15 +171,43 @@ def processar(pedido: dict, fase=None) -> dict:
         if fase is not None:
             fase("geometria")
 
+        moveis_como_caixa = bool(pedido.get("moveis_como_caixa", True))
+
         selecionados = {id_step for id_step, _ in elementos}
         include_elems = []
         aberturas = set()
+        moveis_elems = []
         for id_step, _ in elementos:
             el = f.by_id(id_step)
-            if el is not None and el.is_a("IfcOpeningElement"):
+            if el is None:
+                continue
+            if el.is_a("IfcOpeningElement"):
                 aberturas.add(id_step)
+            elif moveis_como_caixa and (el.is_a("IfcFurnishingElement") or el.is_a("IfcSystemFurnitureElement")):
+                moveis_elems.append(el)
             else:
                 include_elems.append(el)
+
+        caixas_ids = []
+        caixas_svg = []
+        if moveis_elems:
+            s_box = ifcopenshell.geom.settings()
+            s_box.set(s_box.USE_WORLD_COORDS, True)
+            for el in moveis_elems:
+                try:
+                    shape = ifcopenshell.geom.create_shape(s_box, el)
+                    verts = shape.geometry.verts
+                    if not verts:
+                        continue
+                    xs = verts[0::3]
+                    ys = verts[1::3]
+                    xmin, xmax = float(min(xs)), float(max(xs))
+                    ymin, ymax = float(min(ys)), float(max(ys))
+                    d = f"M {xmin:.6g},{-ymax:.6g} L {xmax:.6g},{-ymax:.6g} L {xmax:.6g},{-ymin:.6g} L {xmin:.6g},{-ymin:.6g} L {xmin:.6g},{-ymax:.6g}"
+                    caixas_svg.append(f'<g class="{el.is_a()}" ifc:guid="{el.GlobalId}"><path d="{d}"/></g>')
+                    caixas_ids.append(el.id())
+                except Exception:
+                    pass
 
         st = ifcopenshell.geom.settings(ELEMENT_HIERARCHY=True)
         st.set("dimensionality", W.SURFACES_AND_SOLIDS)
@@ -225,7 +253,16 @@ def processar(pedido: dict, fase=None) -> dict:
         svg = buf.get_value()
         svg = _somente_pavimento(svg, pav.GlobalId)
 
+        if caixas_svg:
+            bloco_caixas = "\n" + "\n".join(caixas_svg) + "\n"
+            idx = svg.rfind("</svg>")
+            if idx != -1:
+                svg = svg[:idx] + bloco_caixas + svg[idx:]
+            else:
+                svg = svg + bloco_caixas
+
         enviados = [sh.id for sh in shapes if sh.id in selecionados]
+        enviados.extend(caixas_ids)
         enviados_set = set(enviados)
         falhas = [id_step for id_step, _ in elementos if id_step not in enviados_set and id_step not in aberturas]
         n_paths = len(re.findall(r"<path\b", svg))
@@ -240,7 +277,7 @@ def processar(pedido: dict, fase=None) -> dict:
             "svg": svg,
             "n_paths": n_paths,
             "enviados": enviados,
-            "caixas": [],
+            "caixas": caixas_ids,
             "falhas_geometria": falhas,
             "tempos": tempos,
         }

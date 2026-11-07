@@ -176,14 +176,17 @@ def _mem_mb():
         return None
 
 
-def _medir(f, caso, gid, escala, n, limite_s, cats):
+def _medir(f, caso, gid, escala, n, limite_s, cats, com_secundarias=False):
     """Devolve (linhas, svg). Estouro ou falha viram linha com `erro` (nao interrompe as demais medicoes)."""
     gerar = P.gerar_planta if caso == "planta" else C.gerar_corte
     linhas, ultimo = [], None
+    kw = dict(limite_s=limite_s, categorias_ocultas=cats)
+    if caso == "planta":
+        kw["ocultar_secundarias"] = not com_secundarias
     for i in range(n):
         t0 = time.perf_counter()
         try:
-            r = gerar(f, gid, limite_s=limite_s, categorias_ocultas=cats)  # executor padrao: processo auxiliar real
+            r = gerar(f, gid, **kw)  # executor padrao: processo auxiliar real
             svg = estilo.aplicar_estilo(r.svg, escala)
         except auxiliar.AuxiliarEstourouTempo as e:
             linhas.append(dict(i=i + 1, t=time.perf_counter() - t0, mem=_mem_mb(), erro=f"ESTOUROU (limite {e.limite_s:g} s, fase {e.fase or '?'})"))
@@ -262,12 +265,17 @@ def main(argv=None):
     ap.add_argument("--pavimento", help="nome ou indice (ordem de cota); padrao: o com mais paredes")
     ap.add_argument("--limite-s", type=float, default=float(auxiliar.LIMITE_PADRAO_S), help="limite do processo auxiliar por desenho (padrao 180)")
     ap.add_argument("--sem-moveis", action="store_true", help="oculta IfcFurnishingElement (moveis) do desenho")
+    ap.add_argument("--com-secundarias", action="store_true", help="inclui pecas finas e acabamento (desativa ocultar_secundarias)")
     a = ap.parse_args(argv)
     saida = Path(a.saida)
     saida.mkdir(parents=True, exist_ok=True)
     tmp = Path(tempfile.mkdtemp(prefix="medir_s06_"))
     cats = ("IfcFurnishingElement",) if a.sem_moveis else ()
-    extra = {"limite do auxiliar": f"{a.limite_s:g} s", "moveis ocultos": "sim" if a.sem_moveis else "nao"}
+    extra = {
+        "limite do auxiliar": f"{a.limite_s:g} s",
+        "moveis ocultos": "sim" if a.sem_moveis else "nao",
+        "secundarias ocultas": "nao" if a.com_secundarias else "sim",
+    }
     try:
         if a.ifc:
             cop = tmp / "copia.ifc"
@@ -292,7 +300,7 @@ def main(argv=None):
                     resultados[f"{caso} {esc}"] = [dict(i=1, t=0.0, mem=None, erro=f"FALHOU (vistas: {e})")]
                 continue
             for caso, gid in (("planta", gp), ("corte", gc)):
-                linhas, svg = _medir(f, caso, gid, esc, a.repeticoes, a.limite_s, cats)
+                linhas, svg = _medir(f, caso, gid, esc, a.repeticoes, a.limite_s, cats, com_secundarias=a.com_secundarias)
                 resultados[f"{caso} {esc}"] = linhas
                 if svg is not None:
                     caminho = saida / f"{caso}_{sufixo}.svg"

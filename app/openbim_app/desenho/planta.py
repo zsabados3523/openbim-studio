@@ -27,6 +27,7 @@ class Planta:
     unidade_escala: float
     altura_corte: float
     caixas: tuple[int, ...]
+    em_cache: tuple[int, ...] = ()
 
 
 def _altura_corte(ifc: ifcopenshell.file, anotacao) -> float:
@@ -54,6 +55,7 @@ def gerar_planta(
     categorias_ocultas: Iterable[str] = (),
     ocultar_secundarias: bool = True,
     moveis_como_caixa: bool = True,
+    cache_tipo: bool = True,
     threads: int | None = None,
     limite_triangulos: int | None = None,
     limite_s: float = auxiliar.LIMITE_PADRAO_S,
@@ -89,6 +91,7 @@ def gerar_planta(
             unidade_escala=scale,
             altura_corte=altura_corte,
             caixas=(),
+            em_cache=(),
         )
 
     pedido = {
@@ -103,6 +106,7 @@ def gerar_planta(
             "pavimento": pav.GlobalId,
         },
         "moveis_como_caixa": bool(moveis_como_caixa),
+        "cache_tipo": bool(cache_tipo),
         "limite_triangulos": limite_triangulos,
     }
     if threads is not None:
@@ -119,4 +123,5 @@ def gerar_planta(
         unidade_escala=scale,
         altura_corte=altura_corte,
         caixas=tuple(int(x) for x in r.get("caixas") or ()),
+        em_cache=tuple(int(x) for x in r.get("em_cache") or ()),
     )

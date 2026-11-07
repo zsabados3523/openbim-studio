@@ -3,7 +3,6 @@
 import re
 import time
 import traceback
-
 import ifcopenshell
 import ifcopenshell.geom
 import ifcopenshell.ifcopenshell_wrapper as W
@@ -13,6 +12,73 @@ from obim_geometria import nucleos
 
 
 _GRUPO = re.compile(r"<g\b[^>]*?(/?)>|</g>")
+_TOK_RE = re.compile(r"[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?|[a-zA-Z]")
+
+
+def _fmt(v: float) -> str:
+    return f"{round(v, 4) + 0.0:.4f}"
+
+
+def _transladar_d(d: str, dx: float, dy: float) -> str:
+    tokens = _TOK_RE.findall(d)
+    out, i, n, cmd = [], 0, len(tokens), ""
+    while i < n:
+        tok = tokens[i]
+        if tok.isalpha():
+            cmd = tok
+            out.append(tok)
+            i += 1
+            continue
+        if cmd in ("M", "L", "T", "C", "S", "Q") and i + 1 < n:
+            out.append(f"{_fmt(float(tok) + dx)},{_fmt(float(tokens[i + 1]) - dy)}")
+            i += 2
+        elif cmd in ("A", "a") and i + 6 < n:
+            rx, ry, rot, laf, sf = tokens[i : i + 5]
+            out.extend([rx, ry, rot, laf, sf, f"{_fmt(float(tokens[i + 5]) + dx)},{_fmt(float(tokens[i + 6]) - dy)}"])
+            i += 7
+        elif cmd in ("H", "h"):
+            out.append(_fmt(float(tok) + dx))
+            i += 1
+        elif cmd in ("V", "v"):
+            out.append(_fmt(float(tok) - dy))
+            i += 1
+        else:
+            out.append(tok)
+            i += 1
+    return " ".join(out)
+
+
+def _clonar_path(tag_path: str, dx: float, dy: float) -> str:
+    m = re.search(r'\bd\s*=\s*(["\'])(.*?)\1', tag_path)
+    if not m:
+        return tag_path
+    novo_d = _transladar_d(m.group(2), dx, dy)
+    return tag_path[: m.start(2)] + novo_d + tag_path[m.end(2) :]
+
+
+def _obter_rep_id(el) -> int | None:
+    try:
+        rep_prod = getattr(el, "Representation", None)
+        if rep_prod is None:
+            return None
+        reps = getattr(rep_prod, "Representations", None)
+        if not reps:
+            return None
+        rep = reps[0]
+        items = getattr(rep, "Items", ()) or ()
+        for it in items:
+            if it.is_a("IfcMappedItem"):
+                return None
+        return rep.id()
+    except Exception:
+        return None
+
+
+def _extrair_caminhos(svg: str, guid: str) -> list[str]:
+    m = re.search(r'<g\b([^>]*\b(?:ifc:)?guid=[\"\']' + re.escape(guid) + r'[\"\'][^>]*)>(.*?)</g>', svg, re.DOTALL)
+    if not m or m.group(1).rstrip().endswith("/"):
+        return []
+    return re.findall(r"<path\b[^>]*>", m.group(2))
 
 
 def _somente_pavimento(svg: str, guid: str) -> str:
@@ -134,6 +200,7 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
         "n_paths": len(re.findall(r"<path\b", svg)),
         "enviados": enviados,
         "caixas": [],
+        "em_cache": [],
         "falhas_geometria": falhas,
         "tempos": {
             "abrir_s": float(abrir_s),
@@ -171,12 +238,16 @@ def processar(pedido: dict, fase=None) -> dict:
         if fase is not None:
             fase("geometria")
 
+        cache_tipo = bool(pedido.get("cache_tipo", True))
         moveis_como_caixa = bool(pedido.get("moveis_como_caixa", True))
 
         selecionados = {id_step for id_step, _ in elementos}
         include_elems = []
         aberturas = set()
         moveis_elems = []
+        primarias = {}
+        replicas = []
+
         for id_step, _ in elementos:
             el = f.by_id(id_step)
             if el is None:
@@ -186,6 +257,38 @@ def processar(pedido: dict, fase=None) -> dict:
             elif moveis_como_caixa and (el.is_a("IfcFurnishingElement") or el.is_a("IfcSystemFurnitureElement")):
                 moveis_elems.append(el)
             else:
+                if cache_tipo:
+                    rep_id = _obter_rep_id(el)
+                    if rep_id is not None:
+                        try:
+                            m = ifcopenshell.util.placement.get_local_placement(el.ObjectPlacement)
+                            pure_z = (
+                                abs(float(m[2, 2]) - 1.0) < 1e-4
+                                and abs(float(m[0, 2])) < 1e-4
+                                and abs(float(m[1, 2])) < 1e-4
+                                and abs(float(m[2, 0])) < 1e-4
+                                and abs(float(m[2, 1])) < 1e-4
+                            )
+                            if not pure_z:
+                                include_elems.append(el)
+                                continue
+                            x_pos = float(m[0, 3]) * scale
+                            y_pos = float(m[1, 3]) * scale
+                            z_pos = float(m[2, 3]) * scale
+                            rel_z = round(altura_corte_m - z_pos, 4) + 0.0
+                            rot_2x2 = tuple(round(float(m[r, c]), 4) + 0.0 for r in (0, 1) for c in (0, 1))
+                            chave = (rep_id, el.is_a(), rel_z, rot_2x2)
+                            if chave not in primarias:
+                                primarias[chave] = (el, x_pos, y_pos)
+                                include_elems.append(el)
+                            else:
+                                prim_el, px, py = primarias[chave]
+                                dx = x_pos - px
+                                dy = y_pos - py
+                                replicas.append((el, prim_el, dx, dy))
+                            continue
+                        except Exception:
+                            pass
                 include_elems.append(el)
 
         caixas_ids = []
@@ -267,15 +370,39 @@ def processar(pedido: dict, fase=None) -> dict:
             else:
                 svg = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:ifc="http://www.ifcopenshell.org/ns"></svg>'
 
-        if caixas_svg:
+        shapes_ids = {sh.id for sh in shapes}
+        em_cache_ids, replicas_sem_linhas, replicas_svg = [], [], []
+        if replicas:
+            caminhos_primarias = {}
+            for rep_el, prim_el, dx, dy in replicas:
+                if prim_el.id() not in shapes_ids:
+                    continue
+                prim_gid = prim_el.GlobalId
+                if prim_gid not in caminhos_primarias:
+                    caminhos_primarias[prim_gid] = _extrair_caminhos(svg, prim_gid)
+                caminhos = caminhos_primarias[prim_gid]
+                if caminhos:
+                    novos_paths = [_clonar_path(p, dx, dy) for p in caminhos]
+                    replicas_svg.append(f'<g class="{rep_el.is_a()}" ifc:guid="{rep_el.GlobalId}">{"".join(novos_paths)}</g>')
+                    em_cache_ids.append(rep_el.id())
+                else:
+                    replicas_sem_linhas.append(rep_el.id())
+
+        extra_svg = replicas_svg + caixas_svg
+        if extra_svg:
             if "xmlns:ifc=" not in svg:
                 svg = re.sub(r"(<svg\b[^>]*)", r'\1 xmlns:ifc="http://www.ifcopenshell.org/ns"', svg, count=1)
-            bloco_caixas = "\n" + "\n".join(caixas_svg) + "\n"
+            bloco_extra = "\n" + "\n".join(extra_svg) + "\n"
             idx = svg.rfind("</svg>")
-            svg = svg[:idx] + bloco_caixas + svg[idx:]
+            if idx != -1:
+                svg = svg[:idx] + bloco_extra + svg[idx:]
+            else:
+                svg = svg + bloco_extra
 
         enviados = [sh.id for sh in shapes if sh.id in selecionados]
         enviados.extend(caixas_ids)
+        enviados.extend(em_cache_ids)
+        enviados.extend(replicas_sem_linhas)
         enviados_set = set(enviados)
         falhas = [
             id_step for id_step, _ in elementos
@@ -294,6 +421,7 @@ def processar(pedido: dict, fase=None) -> dict:
             "n_paths": n_paths,
             "enviados": enviados,
             "caixas": caixas_ids,
+            "em_cache": em_cache_ids,
             "falhas_geometria": falhas,
             "tempos": tempos,
         }

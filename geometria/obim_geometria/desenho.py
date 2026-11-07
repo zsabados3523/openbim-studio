@@ -190,6 +190,7 @@ def processar(pedido: dict, fase=None) -> dict:
 
         caixas_ids = []
         caixas_svg = []
+        moveis_excluidos = set()
         if moveis_elems:
             s_box = ifcopenshell.geom.settings()
             s_box.set(s_box.USE_WORLD_COORDS, True)
@@ -197,13 +198,18 @@ def processar(pedido: dict, fase=None) -> dict:
                 try:
                     shape = ifcopenshell.geom.create_shape(s_box, el)
                     verts = shape.geometry.verts
-                    if not verts:
+                    if not verts or len(verts) < 3:
+                        continue
+                    zs = verts[2::3]
+                    zmin = float(min(zs))
+                    if zmin > altura_corte_m:
+                        moveis_excluidos.add(el.id())
                         continue
                     xs = verts[0::3]
                     ys = verts[1::3]
                     xmin, xmax = float(min(xs)), float(max(xs))
                     ymin, ymax = float(min(ys)), float(max(ys))
-                    d = f"M {xmin:.6g},{-ymax:.6g} L {xmax:.6g},{-ymax:.6g} L {xmax:.6g},{-ymin:.6g} L {xmin:.6g},{-ymin:.6g} L {xmin:.6g},{-ymax:.6g}"
+                    d = f"M {xmin:.4f},{-ymax:.4f} L {xmax:.4f},{-ymax:.4f} L {xmax:.4f},{-ymin:.4f} L {xmin:.4f},{-ymin:.4f} L {xmin:.4f},{-ymax:.4f}"
                     caixas_svg.append(f'<g class="{el.is_a()}" ifc:guid="{el.GlobalId}"><path d="{d}"/></g>')
                     caixas_ids.append(el.id())
                 except Exception:
@@ -253,18 +259,28 @@ def processar(pedido: dict, fase=None) -> dict:
         svg = buf.get_value()
         svg = _somente_pavimento(svg, pav.GlobalId)
 
+        if re.search(r"<svg\b[^>]*/>", svg):
+            svg = re.sub(r"(<svg\b[^>]*?)/[ \t]*>", r"\1></svg>", svg, count=1)
+        elif "</svg>" not in svg:
+            if "<svg" in svg:
+                svg = svg + "</svg>"
+            else:
+                svg = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:ifc="http://www.ifcopenshell.org/ns"></svg>'
+
         if caixas_svg:
+            if "xmlns:ifc=" not in svg:
+                svg = re.sub(r"(<svg\b[^>]*)", r'\1 xmlns:ifc="http://www.ifcopenshell.org/ns"', svg, count=1)
             bloco_caixas = "\n" + "\n".join(caixas_svg) + "\n"
             idx = svg.rfind("</svg>")
-            if idx != -1:
-                svg = svg[:idx] + bloco_caixas + svg[idx:]
-            else:
-                svg = svg + bloco_caixas
+            svg = svg[:idx] + bloco_caixas + svg[idx:]
 
         enviados = [sh.id for sh in shapes if sh.id in selecionados]
         enviados.extend(caixas_ids)
         enviados_set = set(enviados)
-        falhas = [id_step for id_step, _ in elementos if id_step not in enviados_set and id_step not in aberturas]
+        falhas = [
+            id_step for id_step, _ in elementos
+            if id_step not in enviados_set and id_step not in aberturas and id_step not in moveis_excluidos
+        ]
         n_paths = len(re.findall(r"<path\b", svg))
         tempos = {
             "abrir_s": float(abrir_s),

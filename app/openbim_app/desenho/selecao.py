@@ -17,6 +17,14 @@ class SelecaoInvalida(ValueError):
     """Parâmetros de vista, pavimento ou categoria inválidos para seleção."""
 
 
+CATEGORIAS_PADRAO_PLANTA_OCULTAS: tuple[str, ...] = (
+    "IfcMember",
+    "IfcPlate",
+    "IfcMechanicalFastener",
+    "IfcRailing",
+)
+
+
 @dataclasses.dataclass(frozen=True)
 class Selecao:
     ids: tuple[int, ...]

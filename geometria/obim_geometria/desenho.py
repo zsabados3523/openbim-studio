@@ -171,15 +171,49 @@ def processar(pedido: dict, fase=None) -> dict:
         if fase is not None:
             fase("geometria")
 
+        moveis_como_caixa = bool(pedido.get("moveis_como_caixa", True))
+
         selecionados = {id_step for id_step, _ in elementos}
         include_elems = []
         aberturas = set()
+        moveis_elems = []
         for id_step, _ in elementos:
             el = f.by_id(id_step)
-            if el is not None and el.is_a("IfcOpeningElement"):
+            if el is None:
+                continue
+            if el.is_a("IfcOpeningElement"):
                 aberturas.add(id_step)
+            elif moveis_como_caixa and (el.is_a("IfcFurnishingElement") or el.is_a("IfcSystemFurnitureElement")):
+                moveis_elems.append(el)
             else:
                 include_elems.append(el)
+
+        caixas_ids = []
+        caixas_svg = []
+        moveis_excluidos = set()
+        if moveis_elems:
+            s_box = ifcopenshell.geom.settings()
+            s_box.set(s_box.USE_WORLD_COORDS, True)
+            for el in moveis_elems:
+                try:
+                    shape = ifcopenshell.geom.create_shape(s_box, el)
+                    verts = shape.geometry.verts
+                    if not verts or len(verts) < 3:
+                        continue
+                    zs = verts[2::3]
+                    zmin = float(min(zs))
+                    if zmin > altura_corte_m:
+                        moveis_excluidos.add(el.id())
+                        continue
+                    xs = verts[0::3]
+                    ys = verts[1::3]
+                    xmin, xmax = float(min(xs)), float(max(xs))
+                    ymin, ymax = float(min(ys)), float(max(ys))
+                    d = f"M {xmin:.4f},{-ymax:.4f} L {xmax:.4f},{-ymax:.4f} L {xmax:.4f},{-ymin:.4f} L {xmin:.4f},{-ymin:.4f} L {xmin:.4f},{-ymax:.4f}"
+                    caixas_svg.append(f'<g class="{el.is_a()}" ifc:guid="{el.GlobalId}"><path d="{d}"/></g>')
+                    caixas_ids.append(el.id())
+                except Exception:
+                    pass
 
         st = ifcopenshell.geom.settings(ELEMENT_HIERARCHY=True)
         st.set("dimensionality", W.SURFACES_AND_SOLIDS)
@@ -225,9 +259,28 @@ def processar(pedido: dict, fase=None) -> dict:
         svg = buf.get_value()
         svg = _somente_pavimento(svg, pav.GlobalId)
 
+        if re.search(r"<svg\b[^>]*/>", svg):
+            svg = re.sub(r"(<svg\b[^>]*?)/[ \t]*>", r"\1></svg>", svg, count=1)
+        elif "</svg>" not in svg:
+            if "<svg" in svg:
+                svg = svg + "</svg>"
+            else:
+                svg = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:ifc="http://www.ifcopenshell.org/ns"></svg>'
+
+        if caixas_svg:
+            if "xmlns:ifc=" not in svg:
+                svg = re.sub(r"(<svg\b[^>]*)", r'\1 xmlns:ifc="http://www.ifcopenshell.org/ns"', svg, count=1)
+            bloco_caixas = "\n" + "\n".join(caixas_svg) + "\n"
+            idx = svg.rfind("</svg>")
+            svg = svg[:idx] + bloco_caixas + svg[idx:]
+
         enviados = [sh.id for sh in shapes if sh.id in selecionados]
+        enviados.extend(caixas_ids)
         enviados_set = set(enviados)
-        falhas = [id_step for id_step, _ in elementos if id_step not in enviados_set and id_step not in aberturas]
+        falhas = [
+            id_step for id_step, _ in elementos
+            if id_step not in enviados_set and id_step not in aberturas and id_step not in moveis_excluidos
+        ]
         n_paths = len(re.findall(r"<path\b", svg))
         tempos = {
             "abrir_s": float(abrir_s),
@@ -240,7 +293,7 @@ def processar(pedido: dict, fase=None) -> dict:
             "svg": svg,
             "n_paths": n_paths,
             "enviados": enviados,
-            "caixas": [],
+            "caixas": caixas_ids,
             "falhas_geometria": falhas,
             "tempos": tempos,
         }

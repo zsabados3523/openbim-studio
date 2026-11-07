@@ -53,6 +53,7 @@ def gerar_planta(
     *,
     categorias_ocultas: Iterable[str] = (),
     ocultar_secundarias: bool = True,
+    moveis_como_caixa: bool = True,
     threads: int | None = None,
     limite_triangulos: int | None = None,
     limite_s: float = auxiliar.LIMITE_PADRAO_S,
@@ -101,6 +102,7 @@ def gerar_planta(
             "escala": scale,
             "pavimento": pav.GlobalId,
         },
+        "moveis_como_caixa": bool(moveis_como_caixa),
         "limite_triangulos": limite_triangulos,
     }
     if threads is not None:
@@ -116,5 +118,5 @@ def gerar_planta(
         tempos=dict(r["tempos"]),
         unidade_escala=scale,
         altura_corte=altura_corte,
-        caixas=tuple(r["caixas"]),
+        caixas=tuple(int(x) for x in r.get("caixas") or ()),
     )

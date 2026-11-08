@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Cliente do processo auxiliar de geometria e desenho."""
+from __future__ import annotations
+
 import json
 import logging
 import multiprocessing
@@ -86,7 +88,18 @@ def _limpar_pastas_antigas():
         pass
 
 
-def preparar(ifc, pedido: dict) -> Preparado:
+def preparar(ifc, pedido: dict, *, caminho_ifc: str | Path | None = None) -> Preparado:
+    if caminho_ifc is not None:
+        c = Path(caminho_ifc).resolve()
+        if c.is_file():
+            _limpar_pastas_antigas()
+            p = dict(pedido)
+            p.setdefault("protocolo", PROTOCOLO)
+            p.setdefault("threads", threads_padrao())
+            p["arquivo"] = str(c)
+            pasta = Path(tempfile.mkdtemp(prefix="obim-desenho-", dir=tempfile.gettempdir()))
+            return Preparado(p, pasta, copia_s=0.0)
+
     _limpar_pastas_antigas()
     p = dict(pedido)
     p.setdefault("protocolo", PROTOCOLO)

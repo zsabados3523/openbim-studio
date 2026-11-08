@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
+from pathlib import Path
 from typing import Iterable
 
 import ifcopenshell
@@ -61,6 +62,7 @@ def gerar_planta(
     limite_s: float = auxiliar.LIMITE_PADRAO_S,
     cancelar=None,
     executor=None,
+    caminho_ifc: str | Path | None = None,
 ) -> Planta:
     if ocultar_secundarias:
         cats = tuple(dict.fromkeys((*categorias_ocultas, *selecao.CATEGORIAS_PADRAO_PLANTA_OCULTAS)))
@@ -112,7 +114,7 @@ def gerar_planta(
     if threads is not None:
         pedido["threads"] = threads
 
-    with auxiliar.preparar(ifc, pedido) as p:
+    with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc) as p:
         r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor)
 
     return Planta(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+from pathlib import Path
 from typing import Any, Iterable
 
 import ifcopenshell
@@ -145,6 +146,7 @@ def selecionar(
     limite_s: float = auxiliar.LIMITE_PADRAO_S,
     cancelar=None,
     sessao: SessaoSelecao | None = None,
+    caminho_ifc: str | Path | None = None,
 ) -> Selecao:
     cats = tuple(categorias_ocultas)
     _validar_categorias(ifc, cats)
@@ -261,7 +263,7 @@ def selecionar(
             "elementos": [[e.id(), e.GlobalId] for e in faltantes],
             "threads": auxiliar.threads_padrao(),
         }
-        preparado = auxiliar.preparar(ifc, pedido)
+        preparado = auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc)
         try:
             resposta = auxiliar.executar(
                 preparado,

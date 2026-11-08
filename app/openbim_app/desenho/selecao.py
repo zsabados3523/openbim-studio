@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import dataclasses
+import math
+import numbers
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -16,6 +18,15 @@ from openbim_app.desenho import auxiliar
 
 class SelecaoInvalida(ValueError):
     """Parâmetros de vista, pavimento ou categoria inválidos para seleção."""
+
+
+def _validar_profundidade_corte(profundidade_corte: Any) -> None:
+    if profundidade_corte is None:
+        return
+    if isinstance(profundidade_corte, bool) or not isinstance(profundidade_corte, (int, float, numbers.Real)):
+        raise ValueError(f"profundidade_corte deve ser int ou float, recebido: {profundidade_corte!r}")
+    if not math.isfinite(profundidade_corte) or profundidade_corte <= 0:
+        raise ValueError(f"profundidade_corte deve ser positivo e finito, recebido: {profundidade_corte!r}")
 
 
 CATEGORIAS_PADRAO_PLANTA_OCULTAS: tuple[str, ...] = (
@@ -158,7 +169,9 @@ def selecionar(
     cancelar=None,
     sessao: SessaoSelecao | None = None,
     caminho_ifc: str | Path | None = None,
+    profundidade_corte: float | None = None,
 ) -> Selecao:
+    _validar_profundidade_corte(profundidade_corte)
     cats = tuple(categorias_ocultas)
     _validar_categorias(ifc, cats)
 
@@ -222,6 +235,7 @@ def selecionar(
     if bloco is None or not bloco.is_a("IfcBlock") or anotacao.ObjectPlacement is None:
         raise SelecaoInvalida("Vista CORTE sem IfcBlock ou ObjectPlacement")
 
+    scale = float(ifcopenshell.util.unit.calculate_unit_scale(ifc))
     M_placement = ifcopenshell.util.placement.get_local_placement(anotacao.ObjectPlacement)
     pos = getattr(bloco, "Position", None)
     M_block = (
@@ -229,11 +243,15 @@ def selecionar(
         if pos is not None
         else np.eye(4)
     )
-    M_total = M_placement @ M_block
-    scale = float(ifcopenshell.util.unit.calculate_unit_scale(ifc))
     dx = float(bloco.XLength)
     dy = float(bloco.YLength)
-    dz = float(bloco.ZLength)
+    if profundidade_corte is not None:
+        dz = float(profundidade_corte) / scale
+        M_block = np.array(M_block, copy=True)
+        M_block[2, 3] = -dz
+    else:
+        dz = float(bloco.ZLength)
+    M_total = M_placement @ M_block
 
     corners = []
     for x in (0.0, dx):

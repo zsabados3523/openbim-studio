@@ -142,6 +142,45 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
                         "IfcLabel", "1/1000" if pr.Name == "Scale" else "1:1000"
                     )
 
+    esc = float(vista["escala"])
+    prof = vista.get("profundidade_corte")
+    if prof is None:
+        prof = pedido.get("profundidade_corte")
+    if prof is not None:
+        bloco = None
+        if ann.Representation and ann.Representation.Representations:
+            for rep in ann.Representation.Representations:
+                for itm in getattr(rep, "Items", ()) or ():
+                    if itm.is_a("IfcCsgSolid"):
+                        cand_bloco = getattr(itm, "TreeRootExpression", None)
+                        if cand_bloco is not None and cand_bloco.is_a("IfcBlock"):
+                            bloco = cand_bloco
+                            break
+                    elif itm.is_a("IfcBlock"):
+                        bloco = itm
+                        break
+                if bloco is not None:
+                    break
+        if bloco is not None:
+            prof_val = float(prof) / esc
+            bloco.ZLength = prof_val
+            pos = getattr(bloco, "Position", None)
+            loc_antigo = getattr(pos, "Location", None) if pos else None
+            coords = getattr(loc_antigo, "Coordinates", None) if loc_antigo else None
+            ox = float(coords[0]) if coords and len(coords) > 0 else 0.0
+            oy = float(coords[1]) if coords and len(coords) > 1 else 0.0
+            pt = f.create_entity("IfcCartesianPoint", Coordinates=(ox, oy, -prof_val))
+            cam_rel = getattr(getattr(ann, "ObjectPlacement", None), "RelativePlacement", None)
+            if pos is None or pos == cam_rel:
+                bloco.Position = f.create_entity(
+                    "IfcAxis2Placement3D",
+                    Location=pt,
+                    Axis=getattr(pos, "Axis", None) if pos else None,
+                    RefDirection=getattr(pos, "RefDirection", None) if pos else None,
+                )
+            else:
+                pos.Location = pt
+
     if fase is not None:
         fase("geometria")
 
@@ -154,7 +193,6 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
     st.set("elevation-ref-guid", vista["guid"])
 
     m = ifcopenshell.util.placement.get_local_placement(ann.ObjectPlacement)
-    esc = float(vista["escala"])
     orig_cam = [float(m[0, 3]) * esc, float(m[1, 3]) * esc, float(m[2, 3]) * esc]
     st.set("model-offset", [-orig_cam[0], -orig_cam[1], -orig_cam[2]])
 

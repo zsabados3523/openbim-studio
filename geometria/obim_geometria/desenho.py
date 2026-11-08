@@ -142,10 +142,6 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
                         "IfcLabel", "1/1000" if pr.Name == "Scale" else "1:1000"
                     )
 
-    elementos = pedido.get("elementos", [])
-    incl = [f.by_id(i) for i, _ in elementos if not f.by_id(i).is_a("IfcOpeningElement")] + [ann]
-    selecionados = {i for i, _ in elementos}
-
     if fase is not None:
         fase("geometria")
 
@@ -159,7 +155,42 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
 
     m = ifcopenshell.util.placement.get_local_placement(ann.ObjectPlacement)
     esc = float(vista["escala"])
-    st.set("model-offset", [-float(m[0, 3]) * esc, -float(m[1, 3]) * esc, -float(m[2, 3]) * esc])
+    orig_cam = [float(m[0, 3]) * esc, float(m[1, 3]) * esc, float(m[2, 3]) * esc]
+    st.set("model-offset", [-orig_cam[0], -orig_cam[1], -orig_cam[2]])
+
+    u_axis, v_axis, w_axis = m[:3, 0], m[:3, 1], m[:3, 2]
+
+    elementos = pedido.get("elementos", [])
+    moveis_caixa2d = bool(pedido.get("moveis_caixa2d", True))
+    incl, moveis_corte = [], []
+    s_box = ifcopenshell.geom.settings()
+    s_box.set(s_box.USE_WORLD_COORDS, True)
+    for i, _ in elementos:
+        el = f.by_id(i)
+        if el is None or el.is_a("IfcOpeningElement"):
+            continue
+        is_movel = el.is_a("IfcFurnishingElement") or el.is_a("IfcSystemFurnitureElement")
+        if is_movel and moveis_caixa2d:
+            cruza, us, vs = False, [], []
+            try:
+                shape = ifcopenshell.geom.create_shape(s_box, el)
+                verts = shape.geometry.verts
+                if verts and len(verts) >= 3:
+                    ws = []
+                    for k in range(0, len(verts), 3):
+                        diff = [verts[k] - orig_cam[0], verts[k + 1] - orig_cam[1], verts[k + 2] - orig_cam[2]]
+                        us.append(diff[0] * u_axis[0] + diff[1] * u_axis[1] + diff[2] * u_axis[2])
+                        vs.append(diff[0] * v_axis[0] + diff[1] * v_axis[1] + diff[2] * v_axis[2])
+                        ws.append(diff[0] * w_axis[0] + diff[1] * w_axis[1] + diff[2] * w_axis[2])
+                    cruza = (min(ws) <= 0.0 <= max(ws))
+            except Exception:
+                pass
+            if us and vs:
+                moveis_corte.append((el, min(us), max(us), min(vs), max(vs), cruza))
+        else:
+            incl.append(el)
+    incl.append(ann)
+    selecionados = {i for i, _ in elementos}
 
     buf = ifcopenshell.geom.serializers.buffer()
     sr = ifcopenshell.geom.serializers.svg(buf, st)
@@ -190,7 +221,40 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
     finalize_s = time.perf_counter() - t2
 
     svg = buf.get_value()
+    caixas_ids, caixas_svg = [], []
+    if moveis_corte:
+        m_m3 = re.search(
+            r'ifc:matrix3="\[\[\s*[-+0-9.eE]+\s*,\s*[-+0-9.eE]+\s*,\s*([-+0-9.eE]+)\s*\]\s*,\s*\[\s*[-+0-9.eE]+\s*,\s*[-+0-9.eE]+\s*,\s*([-+0-9.eE]+)\s*\]',
+            svg,
+        )
+        if m_m3:
+            tx, ty = float(m_m3.group(1)), float(m_m3.group(2))
+        else:
+            m_vb = re.search(r'viewBox="[-+0-9.eE]+\s+[-+0-9.eE]+\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)"', svg)
+            tx = float(m_vb.group(1)) / 2.0 if m_vb else 0.0
+            ty = float(m_vb.group(2)) / 2.0 if m_vb else 0.0
+        for el, min_u, max_u, min_v, max_v, cruza in moveis_corte:
+            try:
+                x0, x1 = min_u + tx, max_u + tx
+                y0, y1 = ty - max_v, ty - min_v
+                d = f"M {x0:.4f},{y0:.4f} L {x1:.4f},{y0:.4f} L {x1:.4f},{y1:.4f} L {x0:.4f},{y1:.4f} L {x0:.4f},{y0:.4f}"
+                cls_p = "cut" if cruza else "boundary"
+                caixas_svg.append(f'<g class="{el.is_a()}" ifc:guid="{el.GlobalId}"><path d="{d}" class="{cls_p}"/></g>')
+                caixas_ids.append(el.id())
+            except Exception:
+                pass
+
+        if caixas_svg:
+            if "xmlns:ifc=" not in svg:
+                svg = re.sub(r"(<svg\b[^>]*)", r'\1 xmlns:ifc="http://www.ifcopenshell.org/ns"', svg, count=1)
+            if svg.rstrip().endswith("/>"):
+                svg = svg.rstrip()[:-2] + "></svg>"
+            bloco = "\n" + "\n".join(caixas_svg) + "\n"
+            idx = svg.rfind("</svg>")
+            svg = (svg[:idx] + bloco + svg[idx:]) if idx != -1 else (svg + bloco)
+
     enviados = [sh.id for sh in shapes if sh.id in selecionados]
+    enviados.extend(caixas_ids)
     enviados_set = set(enviados)
     falhas = [i for i, _ in elementos if i not in enviados_set and not f.by_id(i).is_a("IfcOpeningElement")]
 
@@ -199,7 +263,7 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
         "svg": svg,
         "n_paths": len(re.findall(r"<path\b", svg)),
         "enviados": enviados,
-        "caixas": [],
+        "caixas": caixas_ids,
         "em_cache": [],
         "falhas_geometria": falhas,
         "tempos": {

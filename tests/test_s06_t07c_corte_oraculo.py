@@ -85,7 +85,7 @@ def proibido(ped):
 def test_parede_porta_laje_e_movel_por_modelo(esq, off, base, k):
     K_ = K()
     f, g = C.modelo(esq, off, base, k, vaos=(C.PORTA,))
-    c = K_.gerar_corte(f, C.corte(f, off, base, k), executor=executor_local())
+    c = K_.gerar_corte(f, C.corte(f, off, base, k), moveis_caixa2d=False, executor=executor_local())
     assert isinstance(c, K_.Corte) and dataclasses.is_dataclass(c) and c.unidade_escala == pytest.approx(1.0 / k) and c.caixas == ()
     assert c.n_paths > 0 and c.n_paths == len(re.findall(r"<path\b", c.svg)) and B.svg_valido(c.svg)
     assert [float(v) for v in re.search(r'<svg [^>]*viewBox="([^"]+)"', c.svg).group(1).split()] == pytest.approx([0.0, 0.0, C.DX, C.DY], abs=TOL)
@@ -187,13 +187,13 @@ def test_oculto_some_deterministico_e_entrada_intacta():
         f, g = C.modelo(esq, C.GEO, 100.0, 1.0, vaos=(C.PORTA,))
         gv = C.corte(f, C.GEO, 100.0, 1.0)
         antes, n_ann = f.to_string(), len(f.by_type("IfcAnnotation"))
-        ligado, de_novo = K_.gerar_corte(f, gv, executor=executor_local()), K_.gerar_corte(f, gv, executor=executor_local())
+        ligado, de_novo = K_.gerar_corte(f, gv, moveis_caixa2d=False, executor=executor_local()), K_.gerar_corte(f, gv, moveis_caixa2d=False, executor=executor_local())
         assert f.to_string() == antes and len(f.by_type("IfcAnnotation")) == n_ann and ligado.svg == de_novo.svg and ligado.selecao == de_novo.selecao
         assert "OBIM_Vista" not in antes and "AlturaCorte" not in antes
-        um, tres = K_.gerar_corte(f, gv, threads=1, executor=executor_local()), K_.gerar_corte(f, gv, threads=3, executor=executor_local())
+        um, tres = K_.gerar_corte(f, gv, moveis_caixa2d=False, threads=1, executor=executor_local()), K_.gerar_corte(f, gv, moveis_caixa2d=False, threads=3, executor=executor_local())
         assert um.n_paths == tres.n_paths == ligado.n_paths
         assert set(re.findall(r'ifc:guid="([^"]+)"', um.svg)) == set(re.findall(r'ifc:guid="([^"]+)"', tres.svg)) == set(re.findall(r'ifc:guid="([^"]+)"', ligado.svg))
-        oculto = K_.gerar_corte(f, gv, categorias_ocultas=("IfcFurnishingElement",), executor=executor_local())
+        oculto = K_.gerar_corte(f, gv, moveis_caixa2d=False, categorias_ocultas=("IfcFurnishingElement",), executor=executor_local())
         assert oculto.selecao.ocultos_por_classe == {X.MOVEL[esq]: 1} and "M" not in {f.by_id(i).Name for i in oculto.selecao.ids}
         assert oculto.n_paths == ligado.n_paths - 4 and B.grupo(oculto.svg, g["P"]) is not None  # o móvel eram 4 linhas de vista
         assert f.to_string() == antes
@@ -216,7 +216,7 @@ def test_filho_real_igual_ao_executor_local(m):
     esq, off, base, k = m
     f, g = C.modelo(esq, off, base, k, vaos=(C.PORTA,))
     gv = C.corte(f, off, base, k)
-    loc, real = K_.gerar_corte(f, gv, executor=executor_local()), K_.gerar_corte(f, gv)
+    loc, real = K_.gerar_corte(f, gv, moveis_caixa2d=False, executor=executor_local()), K_.gerar_corte(f, gv, moveis_caixa2d=False)
     assert real.svg == loc.svg and real.n_paths == loc.n_paths == 20 and real.selecao == loc.selecao and real.caixas == loc.caixas
     assert not multiprocessing.active_children()
 

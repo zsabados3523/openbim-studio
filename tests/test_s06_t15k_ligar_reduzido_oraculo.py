@@ -74,6 +74,19 @@ def _pedido_corte(f, gid):
             "vista": {"tipo": "CORTE", "guid": gid, "escala": 1.0}}
 
 
+def _confere_chamadas(f, gid, tipo, esp, ex, r):
+    """Planta: 1 preparo (desenho). Corte: 2 (caixas com superconjunto dos ids, depois desenho)."""
+    anot = f.by_guid(gid).id()
+    ops = [p["op"] for p in ex.chamadas]
+    if tipo == "planta":
+        assert ops == ["desenho"] and len(esp.chamadas) == 1, "preparar deve usar escrever_reduzido"
+    else:
+        assert ops == ["caixas", "desenho"] and len(esp.chamadas) == 2
+        assert set(esp.chamadas[0][1]) >= set(r.selecao.ids), "caixas: ids contêm a seleção final"
+    assert esp.chamadas[-1][1] == sorted(r.selecao.ids), "desenho: ids = seleção final"
+    assert all(c[2] == anot for c in esp.chamadas), "anotação = a vista pedida"
+
+
 # 1) desenho idêntico, reduzido x completo ------------------------------------------------------
 @pytest.mark.parametrize("tipo", ["planta", "corte"])
 def test_desenho_identico_reduzido_e_completo(tipo, monkeypatch):
@@ -82,10 +95,7 @@ def test_desenho_identico_reduzido_e_completo(tipo, monkeypatch):
     esp = EspiaoRed(monkeypatch, "real")
     ex = ExecArquivo()
     r_red = _gerar(f, gid, tipo, ex)
-    assert len(esp.chamadas) == 1, "preparar deve usar escrever_reduzido quando não há caminho_ifc"
-    _ifc, ids, anot, _saida = esp.chamadas[0]
-    assert anot == f.by_guid(gid).id(), "anotação do reduzido = a vista pedida"
-    assert ids == sorted(r_red.selecao.ids)
+    _confere_chamadas(f, gid, tipo, esp, ex, r_red)
     n_red = ex.n_ent[0]
 
     EspiaoRed(monkeypatch, "erro")
@@ -119,7 +129,7 @@ def test_falha_do_reduzido_cai_no_completo(modo, monkeypatch):
     esp = EspiaoRed(monkeypatch, modo)
     ex = ExecArquivo()
     r = _gerar(f, gc, "corte", ex)
-    assert len(esp.chamadas) == 1 and ex.n_ent[0] > 300, "o reduzido foi tentado e o arquivo final é o completo"
+    assert len(esp.chamadas) == 2 and min(ex.n_ent) > 300, "cada preparo tentou o reduzido e caiu no completo"
     EspiaoRed(monkeypatch, "erro")
     r2 = _gerar(f, gc, "corte", ExecArquivo())
     assert _norm(r.svg) == _norm(r2.svg)

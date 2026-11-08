@@ -4,14 +4,18 @@ from __future__ import annotations
 
 import dataclasses
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 import ifcopenshell
 import ifcopenshell.util.unit
 
 from openbim_app import vistas_ifc
 from openbim_app.desenho import auxiliar, selecao
-from openbim_app.desenho.selecao import Selecao, SelecaoInvalida
+from openbim_app.desenho.selecao import (
+    Selecao,
+    SelecaoInvalida,
+    _validar_profundidade_corte,
+)
 
 _SVG_VAZIO = '<svg xmlns="http://www.w3.org/2000/svg" version="1.1"></svg>'
 
@@ -39,7 +43,9 @@ def gerar_corte(
     executor=None,
     caminho_ifc: str | Path | None = None,
     moveis_caixa2d: bool = True,
+    profundidade_corte: float | None = None,
 ) -> Corte:
+    _validar_profundidade_corte(profundidade_corte)
     if ocultar_secundarias:
         cats = tuple(dict.fromkeys((*categorias_ocultas, *selecao.CATEGORIAS_PADRAO_PLANTA_OCULTAS)))
     else:
@@ -59,6 +65,7 @@ def gerar_corte(
         limite_s=limite_s,
         cancelar=cancelar,
         caminho_ifc=caminho_ifc,
+        profundidade_corte=profundidade_corte,
     )
     if not sel.ids:
         return Corte(
@@ -70,18 +77,24 @@ def gerar_corte(
             caixas=(),
         )
 
-    pedido = {
+    vista_dict: dict[str, Any] = {
+        "tipo": "CORTE",
+        "guid": gid_vista,
+        "escala": scale,
+    }
+    if profundidade_corte is not None:
+        vista_dict["profundidade_corte"] = float(profundidade_corte)
+
+    pedido: dict[str, Any] = {
         "protocolo": 1,
         "op": "desenho",
         "elementos": [[i, ifc.by_id(i).GlobalId] for i in sel.ids],
-        "vista": {
-            "tipo": "CORTE",
-            "guid": gid_vista,
-            "escala": scale,
-        },
+        "vista": vista_dict,
         "limite_triangulos": limite_triangulos,
         "moveis_caixa2d": bool(moveis_caixa2d),
     }
+    if profundidade_corte is not None:
+        pedido["profundidade_corte"] = float(profundidade_corte)
     if threads is not None:
         pedido["threads"] = threads
 

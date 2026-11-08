@@ -6,7 +6,12 @@ metros. O dono da faixa é definido pelo centro do item: a <= centro < b.
 """
 from __future__ import annotations
 
+import json
+import multiprocessing
+import os
 import re
+import threading
+import time
 
 TOL = 1e-6
 
@@ -145,6 +150,85 @@ def unir(svgs) -> str:
     return unido
 
 
+def _erro(tipo: str, mensagem: str) -> dict:
+    return {"ok": False, "erro": {"tipo": tipo, "mensagem": f"faixa: {mensagem}", "rastro": ""}}
+
+
+_SPAWN = threading.Lock()
+
+
 def rodar_filho(pedido: dict) -> dict:
-    """Etapa B: abre o processo spawn de `obim_geometria.processo.entrada`."""
-    raise NotImplementedError("rodar_filho será implementado na etapa B")
+    """Roda `obim_geometria.processo.entrada` num processo spawn; nunca levanta."""
+    from obim_geometria.processo import entrada
+
+    limite_s = float(os.environ.get("OBIM_FAIXAS_LIMITE_S", "300"))
+    ctx = multiprocessing.get_context("spawn")
+    rx, tx = ctx.Pipe(duplex=False)
+    proc, resposta, fase = None, None, ""
+    try:
+        proc = ctx.Process(target=entrada, args=(tx, json.dumps(pedido)), daemon=True)
+        atual = multiprocessing.current_process()
+        antigo_daemon = atual.daemon
+        with _SPAWN:
+            if antigo_daemon:
+                atual.daemon = False
+            try:
+                proc.start()
+            finally:
+                atual.daemon = antigo_daemon
+        tx.close()
+        inicio = time.monotonic()
+        while resposta is None:
+            if time.monotonic() - inicio > limite_s:
+                return _erro("AuxiliarEstourouTempo", f"filho excedeu {limite_s:g} s (fase '{fase}')")
+            if rx.poll(0.05):
+                try:
+                    bruto = rx.recv_bytes()
+                except (EOFError, OSError):
+                    break
+                try:
+                    msg = json.loads(bruto.decode("utf-8"))
+                except Exception as e:
+                    return _erro("ProtocoloInvalido", f"resposta não é JSON: {e}")
+                if not isinstance(msg, dict):
+                    return _erro("ProtocoloInvalido", "resposta não é um dicionário")
+                if msg.get("tipo") == "fase":
+                    fase = msg.get("fase", fase)
+                elif msg.get("tipo") == "resposta":
+                    resposta = msg.get("dados")
+            elif not proc.is_alive():
+                while rx.poll(0.01):
+                    try:
+                        bruto = rx.recv_bytes()
+                    except (EOFError, OSError):
+                        break
+                    try:
+                        msg = json.loads(bruto.decode("utf-8"))
+                    except Exception as e:
+                        return _erro("ProtocoloInvalido", f"resposta não é JSON: {e}")
+                    if not isinstance(msg, dict):
+                        return _erro("ProtocoloInvalido", "resposta não é um dicionário")
+                    if msg.get("tipo") == "fase":
+                        fase = msg.get("fase", fase)
+                    elif msg.get("tipo") == "resposta":
+                        resposta = msg.get("dados")
+                        break
+                break
+        if isinstance(resposta, dict):
+            return resposta
+        return _erro("AuxiliarCaiu", f"filho saiu sem resposta (código {getattr(proc, 'exitcode', None)}, fase '{fase}')")
+    except Exception as e:
+        return _erro(type(e).__name__, str(e))
+    finally:
+        for c in (rx, tx):
+            try:
+                c.close()
+            except Exception:
+                pass
+        if proc is not None:
+            try:
+                if proc.is_alive():
+                    proc.kill()
+                proc.join(timeout=5.0)
+            except Exception:
+                pass

@@ -4,12 +4,13 @@ import math
 import re
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 import ifcopenshell
 import ifcopenshell.geom
 import ifcopenshell.ifcopenshell_wrapper as W
 import ifcopenshell.util.element
 import ifcopenshell.util.placement
-from obim_geometria import nucleos
+from obim_geometria import faixas, nucleos
 
 
 def caixa_valida(c) -> list[float] | None:
@@ -342,6 +343,246 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
     }
 
 
+_PROJ_RE = re.compile(r'<g\b[^>]*\bclass=["\']projection["\'][^>]*>(.*?)</g>', re.S)
+_PATH_RE = re.compile(r"<path\b[^>]*>", re.S)
+_D_ATTR = re.compile(r'\bd\s*=\s*(["\'])(.*?)\1', re.S)
+_PRODUTO_RE = re.compile(r'<g\b[^>]*\bid=["\']product-[^"\']*["\'][^>]*>.*?</g>\s*', re.S)
+_GUID_ATTR = re.compile(r'\bifc:guid\s*=\s*["\']([^"\']*)["\']')
+
+
+def _tx_ty(svg: str) -> tuple[float, float]:
+    """Deslocamento do SVG: meia largura/altura do viewBox (não ler matrix3: locale)."""
+    raiz = re.search(r"<svg\b[^>]*>", svg, re.S | re.I)
+    vb = re.search(r'\bviewBox\s*=\s*["\']([^"\']*)["\']', raiz.group(0), re.I) if raiz else None
+    if vb is None:
+        return 0.0, 0.0
+    nums = re.findall(r'[-+]?(?:\d*[.,]\d+|\d+)(?:[eE][-+]?\d+)?', vb.group(1))
+    try:
+        vals = [float(t.replace(",", ".")) for t in nums[:4]]
+    except ValueError:
+        return 0.0, 0.0
+    if len(vals) < 4:
+        return 0.0, 0.0
+    return vals[2] / 2.0, vals[3] / 2.0
+
+
+def _polilinhas_d(d: str) -> list[list[tuple[float, float]]]:
+    toks = _TOK_RE.findall(d)
+    runs, atual, cmd, i = [], None, "", 0
+    while i < len(toks):
+        tok = toks[i]
+        if tok.isalpha():
+            cmd = tok
+            i += 1
+            continue
+        if cmd in ("M", "L") and i + 1 < len(toks):
+            try:
+                p = (float(tok), float(toks[i + 1]))
+            except ValueError:
+                i += 1
+                continue
+            if cmd == "M" or atual is None:
+                if atual:
+                    runs.append(atual)
+                atual = [p]
+            else:
+                atual.append(p)
+            i += 2
+        else:
+            i += 1
+    if atual:
+        runs.append(atual)
+    return runs
+
+
+def _recortar_segmento(p, q, xa, xb):
+    x0, y0 = p
+    x1, y1 = q
+    dx = x1 - x0
+    t0, t1 = 0.0, 1.0
+    if dx == 0.0:
+        if (xa is not None and x0 < xa) or (xb is not None and x0 > xb):
+            return None
+    else:
+        if xa is not None:
+            t = (xa - x0) / dx
+            if dx > 0:
+                t0 = max(t0, t)
+            else:
+                t1 = min(t1, t)
+        if xb is not None:
+            t = (xb - x0) / dx
+            if dx > 0:
+                t1 = min(t1, t)
+            else:
+                t0 = max(t0, t)
+    if t0 > t1:
+        return None
+    a = (x0 + t0 * dx, y0 + t0 * (y1 - y0))
+    b = (x0 + t1 * dx, y0 + t1 * (y1 - y0))
+    if xb is not None and a[0] == xb and b[0] == xb:
+        return None
+    return a, b
+
+
+def _recortar_d(d: str, xa: float | None, xb: float | None) -> list[str]:
+    saida = []
+    for pts in _polilinhas_d(d):
+        runs = []
+        atual = []
+        for p, q in zip(pts, pts[1:]):
+            c = _recortar_segmento(p, q, xa, xb)
+            if c is None:
+                if atual:
+                    runs.append(atual)
+                    atual = []
+                continue
+            a, b = c
+            if atual and abs(atual[-1][0] - a[0]) <= 1e-9 and abs(atual[-1][1] - a[1]) <= 1e-9:
+                atual.append(b)
+            else:
+                if atual:
+                    runs.append(atual)
+                atual = [a, b]
+        if atual:
+            runs.append(atual)
+        for run in runs:
+            if len(run) >= 2:
+                saida.append("M" + " L".join(f"{x:.9g},{y:.9g}" for x, y in run))
+    return saida
+
+
+def _filtrar_grupos(svg: str, guids: set[str]) -> str:
+    def manter(m):
+        achado = _GUID_ATTR.search(m.group(0))
+        return m.group(0) if achado is not None and achado.group(1) in guids else ""
+
+    return _PRODUTO_RE.sub(manter, svg)
+
+
+def _recortar_svg_faixa(svg: str, faixa: dict, donos_guids: set[str]) -> str:
+    tx, _ty = _tx_ty(svg)
+    u0, u1 = faixa.get("u0"), faixa.get("u1")
+    xa = None if u0 is None else float(u0) + tx
+    xb = None if u1 is None else float(u1) + tx
+    m = _PROJ_RE.search(svg)
+    if m is not None and (xa is not None or xb is not None):
+        novos = []
+        for tag in _PATH_RE.findall(m.group(1)):
+            dm = _D_ATTR.search(tag)
+            if dm is None:
+                continue
+            novos.extend(f'<path d="{d}"/>' for d in _recortar_d(dm.group(2), xa, xb))
+        svg = svg[: m.start(1)] + "\n" + "\n".join(novos) + "\n" + svg[m.end(1) :]
+    return _filtrar_grupos(svg, donos_guids)
+
+
+def _itens_das_faixas(f: ifcopenshell.file, pedido: dict):
+    vista = pedido["vista"]
+    ann = f.by_guid(vista["guid"])
+    esc = float(vista["escala"])
+    m = ifcopenshell.util.placement.get_local_placement(ann.ObjectPlacement)
+    orig = [float(m[0, 3]) * esc, float(m[1, 3]) * esc, float(m[2, 3]) * esc]
+    u_axis = m[:3, 0]
+    coords = pedido.get("caixas_coords") or {}
+    moveis_caixa2d = bool(pedido.get("moveis_caixa2d", True))
+    itens, primeira = [], set()
+    for i, guid in pedido.get("elementos", []):
+        c = caixa_valida(coords.get(i) if i in coords else coords.get(str(i)))
+        el = f.by_id(i)
+        if c is None or el is None:
+            return None
+        us = []
+        for x in (c[0], c[3]):
+            for y in (c[1], c[4]):
+                for z in (c[2], c[5]):
+                    diff = (x - orig[0], y - orig[1], z - orig[2])
+                    us.append(diff[0] * float(u_axis[0]) + diff[1] * float(u_axis[1]) + diff[2] * float(u_axis[2]))
+        itens.append((i, guid, min(us), max(us)))
+        if moveis_caixa2d and (el.is_a("IfcFurnishingElement") or el.is_a("IfcSystemFurnitureElement")):
+            primeira.add(i)
+    return itens, primeira
+
+
+def _corte_em_faixas(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
+    n = faixas._validar_n(pedido.get("faixas"))
+
+    def normal() -> dict:
+        return _corte(f, pedido, fase, abrir_s)
+
+    if n == 1 or not pedido.get("elementos"):
+        return normal()
+    dados = _itens_das_faixas(f, pedido)
+    if dados is None:
+        return normal()
+    itens, primeira = dados
+    if not itens:
+        return normal()
+    limites = faixas.limites(itens, n, so_primeira=primeira)
+    if len(limites) <= 1:
+        return normal()
+    divisao = faixas.dividir(itens, n, so_primeira=primeira)
+    total_threads = nucleos.limitar_threads(pedido.get("threads"))
+    simultaneos = max(1, min(len(limites), total_threads))
+    threads_filho = max(1, total_threads // simultaneos)
+
+    pedidos = []
+    for k, (a, b) in enumerate(limites):
+        donos = []
+        for i, _guid, u0, u1 in itens:
+            if i in primeira:
+                if k == 0:
+                    donos.append(i)
+                continue
+            centro = (u0 + u1) / 2.0
+            if (a is None or centro >= a) and (b is None or centro < b):
+                donos.append(i)
+        q = dict(pedido)
+        q.pop("faixas", None)
+        q["elementos"] = [list(e) for e in divisao[k]]
+        q["faixa"] = {"u0": a, "u1": b, "donos": donos}
+        q["threads"] = threads_filho
+        pedidos.append(q)
+
+    try:
+        with ThreadPoolExecutor(max_workers=simultaneos) as ex:
+            futuros = [ex.submit(faixas.rodar_filho, q) for q in pedidos]
+            resultados = [fut.result() for fut in futuros]
+        if any(not isinstance(r, dict) or not r.get("ok") or not r.get("svg") for r in resultados):
+            return normal()
+        svg = faixas.unir([r["svg"] for r in resultados])
+    except Exception:
+        return normal()
+
+    enviados, caixas = [], []
+    for r in resultados:
+        enviados.extend(r.get("enviados") or ())
+        caixas.extend(r.get("caixas") or ())
+    enviados = list(dict.fromkeys(enviados))
+    caixas = list(dict.fromkeys(caixas))
+    enviados_set = set(enviados)
+    falhas = [
+        i for i, _ in pedido.get("elementos", [])
+        if i not in enviados_set and not f.by_id(i).is_a("IfcOpeningElement")
+    ]
+    tempos = {
+        "abrir_s": float(abrir_s),
+        "geo_s": float(sum(float((r.get("tempos") or {}).get("geo_s", 0.0)) for r in resultados)),
+        "write_s": float(sum(float((r.get("tempos") or {}).get("write_s", 0.0)) for r in resultados)),
+        "finalize_s": float(sum(float((r.get("tempos") or {}).get("finalize_s", 0.0)) for r in resultados)),
+    }
+    return {
+        "ok": True,
+        "svg": svg,
+        "n_paths": len(re.findall(r"<path\b", svg)),
+        "enviados": enviados,
+        "caixas": caixas,
+        "em_cache": [],
+        "falhas_geometria": falhas,
+        "tempos": tempos,
+    }
+
+
 def processar(pedido: dict, fase=None) -> dict:
     try:
         t_a0 = time.perf_counter()
@@ -359,6 +600,19 @@ def processar(pedido: dict, fase=None) -> dict:
 
         vista = pedido["vista"]
         if vista.get("tipo") == "CORTE":
+            faixa = pedido.get("faixa")
+            if faixa is not None:
+                try:
+                    r = _corte(f, pedido, fase, abrir_s)
+                    if r.get("ok") and r.get("svg"):
+                        donos_guids = {f.by_id(i).GlobalId for i in faixa.get("donos") or ()}
+                        r["svg"] = _recortar_svg_faixa(r["svg"], faixa, donos_guids)
+                        r["n_paths"] = len(re.findall(r"<path\b", r["svg"]))
+                    return r
+                except Exception as e:
+                    return {"ok": False, "erro": {"tipo": type(e).__name__, "mensagem": f"faixa: {e}", "rastro": traceback.format_exc()}}
+            if "faixas" in pedido and not (type(pedido.get("faixas")) is int and pedido.get("faixas") == 1):
+                return _corte_em_faixas(f, pedido, fase, abrir_s)
             return _corte(f, pedido, fase, abrir_s)
         scale = float(vista["escala"])
         altura_corte_m = float(vista["altura_corte_m"])

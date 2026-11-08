@@ -58,6 +58,7 @@ class Selecao:
     sem_geometria: int
     falhas_geometria: tuple[int, ...] = ()
     erros_geometria: tuple[str, ...] = ()
+    caixas_envolventes: dict[int, tuple[float, float, float, float, float, float]] = dataclasses.field(default_factory=dict)
 
 
 class SessaoSelecao:
@@ -209,6 +210,7 @@ def selecionar(
             ocultos_por_classe=ocultos,
             sem_geometria=sem_geometria,
             falhas_geometria=(),
+            caixas_envolventes={},
         )
 
     # CORTE
@@ -367,6 +369,20 @@ def selecionar(
                 mensagens.append(msg)
     erros_geometria = tuple(mensagens)
 
+    caixas_dict: dict[int, tuple[float, float, float, float, float, float]] = {}
+    for i in ids:
+        val = guardadas.get(i)
+        if isinstance(val, (list, tuple)) and len(val) >= 6:
+            try:
+                floats = tuple(float(x) for x in val[:6])
+            except (ValueError, TypeError):
+                continue
+            if not all(math.isfinite(x) for x in floats):
+                continue
+            if floats[0] > floats[3] or floats[1] > floats[4] or floats[2] > floats[5]:
+                continue
+            caixas_dict[int(i)] = floats
+
     return Selecao(
         ids=tuple(sorted(set(ids))),
         tipo="CORTE",
@@ -376,4 +392,5 @@ def selecionar(
         sem_geometria=sem_geometria,
         falhas_geometria=falhas_geometria,
         erros_geometria=erros_geometria,
+        caixas_envolventes=caixas_dict,
     )

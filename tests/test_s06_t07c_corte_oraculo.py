@@ -102,7 +102,7 @@ def test_parede_porta_laje_e_movel_por_modelo(esq, off, base, k):
     proj = {C.local(p) for sp in B.subcaminhos(C.projecao(c.svg)) for p in sp}
     assert {(5.1, 0.0), (5.4, 0.0), (5.1, 1.5), (5.4, 1.5)} <= {(round(x, 1), round(z, 1)) for x, z in proj}
     assert not any(g[n] in c.svg for n in ("Fundo", "Atras", "Longe"))  # além da profundidade, atrás da câmera, a 150 m
-    assert {f.by_id(i).Name for i in c.selecao.ids} == {"P", "L", "M", "Oporta", "porta"} and c.selecao.tipo == "CORTE"
+    assert {f.by_id(i).Name for i in c.selecao.ids} == {"P", "L", "M", "porta"} and c.selecao.tipo == "CORTE"
 
 
 def test_parede_inteira_e_janela_no_meio():

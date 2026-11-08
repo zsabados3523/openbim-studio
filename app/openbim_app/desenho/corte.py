@@ -85,6 +85,12 @@ def gerar_corte(
     if profundidade_corte is not None:
         vista_dict["profundidade_corte"] = float(profundidade_corte)
 
+    cx_env = getattr(sel, "caixas_envolventes", None) or {}
+    caixas_coords = {
+        int(i): list(cx_env[i] if i in cx_env else cx_env[str(i)])
+        for i in sel.ids
+        if (i in cx_env or str(i) in cx_env)
+    }
     pedido: dict[str, Any] = {
         "protocolo": 1,
         "op": "desenho",
@@ -92,6 +98,7 @@ def gerar_corte(
         "vista": vista_dict,
         "limite_triangulos": limite_triangulos,
         "moveis_caixa2d": bool(moveis_caixa2d),
+        "caixas_coords": caixas_coords,
     }
     if profundidade_corte is not None:
         pedido["profundidade_corte"] = float(profundidade_corte)

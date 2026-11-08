@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Motor de desenho de planta (modo pavimento do motor SVG, sem criar entidade no arquivo)."""
+import math
 import re
 import time
 import traceback
@@ -9,6 +10,20 @@ import ifcopenshell.ifcopenshell_wrapper as W
 import ifcopenshell.util.element
 import ifcopenshell.util.placement
 from obim_geometria import nucleos
+
+
+def caixa_valida(c) -> list[float] | None:
+    if not isinstance(c, (list, tuple)) or len(c) < 6:
+        return None
+    try:
+        floats = [float(x) for x in c[:6]]
+    except (TypeError, ValueError):
+        return None
+    if not all(math.isfinite(x) for x in floats):
+        return None
+    if floats[0] > floats[3] or floats[1] > floats[4] or floats[2] > floats[5]:
+        return None
+    return floats
 
 
 _GRUPO = re.compile(r"<g\b[^>]*?(/?)>|</g>")
@@ -198,8 +213,10 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
 
     u_axis, v_axis, w_axis = m[:3, 0], m[:3, 1], m[:3, 2]
 
+    orig_cam_m = orig_cam
     elementos = pedido.get("elementos", [])
     moveis_caixa2d = bool(pedido.get("moveis_caixa2d", True))
+    caixas_coords = pedido.get("caixas_coords") or {}
     incl, moveis_corte = [], []
     s_box = ifcopenshell.geom.settings()
     s_box.set(s_box.USE_WORLD_COORDS, True)
@@ -209,22 +226,34 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
             continue
         is_movel = el.is_a("IfcFurnishingElement") or el.is_a("IfcSystemFurnitureElement")
         if is_movel and moveis_caixa2d:
-            cruza, us, vs = False, [], []
-            try:
-                shape = ifcopenshell.geom.create_shape(s_box, el)
-                verts = shape.geometry.verts
-                if verts and len(verts) >= 3:
-                    ws = []
-                    for k in range(0, len(verts), 3):
-                        diff = [verts[k] - orig_cam[0], verts[k + 1] - orig_cam[1], verts[k + 2] - orig_cam[2]]
-                        us.append(diff[0] * u_axis[0] + diff[1] * u_axis[1] + diff[2] * u_axis[2])
-                        vs.append(diff[0] * v_axis[0] + diff[1] * v_axis[1] + diff[2] * v_axis[2])
-                        ws.append(diff[0] * w_axis[0] + diff[1] * w_axis[1] + diff[2] * w_axis[2])
-                    cruza = (min(ws) <= 0.0 <= max(ws))
-            except Exception:
-                pass
-            if us and vs:
+            c = caixa_valida(caixas_coords.get(el.id()) if el.id() in caixas_coords else caixas_coords.get(str(el.id())))
+            if c is not None:
+                corners = [[x, y, z] for x in (c[0], c[3]) for y in (c[1], c[4]) for z in (c[2], c[5])]
+                us, vs, ws = [], [], []
+                for x, y, z in corners:
+                    diff = [x - orig_cam_m[0], y - orig_cam_m[1], z - orig_cam_m[2]]
+                    us.append(diff[0] * u_axis[0] + diff[1] * u_axis[1] + diff[2] * u_axis[2])
+                    vs.append(diff[0] * v_axis[0] + diff[1] * v_axis[1] + diff[2] * v_axis[2])
+                    ws.append(diff[0] * w_axis[0] + diff[1] * w_axis[1] + diff[2] * w_axis[2])
+                cruza = (min(ws) <= 0.0 <= max(ws))
                 moveis_corte.append((el, min(us), max(us), min(vs), max(vs), cruza))
+            else:
+                cruza, us, vs = False, [], []
+                try:
+                    shape = ifcopenshell.geom.create_shape(s_box, el)
+                    verts = shape.geometry.verts
+                    if verts and len(verts) >= 3:
+                        ws = []
+                        for k in range(0, len(verts), 3):
+                            diff = [verts[k] - orig_cam[0], verts[k + 1] - orig_cam[1], verts[k + 2] - orig_cam[2]]
+                            us.append(diff[0] * u_axis[0] + diff[1] * u_axis[1] + diff[2] * u_axis[2])
+                            vs.append(diff[0] * v_axis[0] + diff[1] * v_axis[1] + diff[2] * v_axis[2])
+                            ws.append(diff[0] * w_axis[0] + diff[1] * w_axis[1] + diff[2] * w_axis[2])
+                        cruza = (min(ws) <= 0.0 <= max(ws))
+                except Exception:
+                    pass
+                if us and vs:
+                    moveis_corte.append((el, min(us), max(us), min(vs), max(vs), cruza))
         else:
             incl.append(el)
     incl.append(ann)
@@ -397,28 +426,41 @@ def processar(pedido: dict, fase=None) -> dict:
         caixas_svg = []
         moveis_excluidos = set()
         if moveis_elems:
+            caixas_coords = pedido.get("caixas_coords") or {}
             s_box = ifcopenshell.geom.settings()
             s_box.set(s_box.USE_WORLD_COORDS, True)
             for el in moveis_elems:
-                try:
-                    shape = ifcopenshell.geom.create_shape(s_box, el)
-                    verts = shape.geometry.verts
-                    if not verts or len(verts) < 3:
-                        continue
-                    zs = verts[2::3]
-                    zmin = float(min(zs))
+                c = caixa_valida(caixas_coords.get(el.id()) if el.id() in caixas_coords else caixas_coords.get(str(el.id())))
+                if c is not None:
+                    zmin = min(c[2], c[5])
                     if zmin > altura_corte_m:
                         moveis_excluidos.add(el.id())
                         continue
-                    xs = verts[0::3]
-                    ys = verts[1::3]
-                    xmin, xmax = float(min(xs)), float(max(xs))
-                    ymin, ymax = float(min(ys)), float(max(ys))
+                    xmin, xmax = min(c[0], c[3]), max(c[0], c[3])
+                    ymin, ymax = min(c[1], c[4]), max(c[1], c[4])
                     d = f"M {xmin:.4f},{-ymax:.4f} L {xmax:.4f},{-ymax:.4f} L {xmax:.4f},{-ymin:.4f} L {xmin:.4f},{-ymin:.4f} L {xmin:.4f},{-ymax:.4f}"
                     caixas_svg.append(f'<g class="{el.is_a()}" ifc:guid="{el.GlobalId}"><path d="{d}"/></g>')
                     caixas_ids.append(el.id())
-                except Exception:
-                    pass
+                else:
+                    try:
+                        shape = ifcopenshell.geom.create_shape(s_box, el)
+                        verts = shape.geometry.verts
+                        if not verts or len(verts) < 3:
+                            continue
+                        zs = verts[2::3]
+                        zmin = float(min(zs))
+                        if zmin > altura_corte_m:
+                            moveis_excluidos.add(el.id())
+                            continue
+                        xs = verts[0::3]
+                        ys = verts[1::3]
+                        xmin, xmax = float(min(xs)), float(max(xs))
+                        ymin, ymax = float(min(ys)), float(max(ys))
+                        d = f"M {xmin:.4f},{-ymax:.4f} L {xmax:.4f},{-ymax:.4f} L {xmax:.4f},{-ymin:.4f} L {xmin:.4f},{-ymin:.4f} L {xmin:.4f},{-ymax:.4f}"
+                        caixas_svg.append(f'<g class="{el.is_a()}" ifc:guid="{el.GlobalId}"><path d="{d}"/></g>')
+                        caixas_ids.append(el.id())
+                    except Exception:
+                        pass
 
         st = ifcopenshell.geom.settings(ELEMENT_HIERARCHY=True)
         st.set("dimensionality", W.SURFACES_AND_SOLIDS)

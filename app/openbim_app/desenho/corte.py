@@ -30,13 +30,17 @@ def gerar_corte(
     gid_vista: str,
     *,
     categorias_ocultas: Iterable[str] = (),
+    ocultar_secundarias: bool = True,
     threads: int | None = None,
     limite_triangulos: int | None = None,
     limite_s: float = auxiliar.LIMITE_PADRAO_S,
     cancelar=None,
     executor=None,
 ) -> Corte:
-    cats = tuple(categorias_ocultas)
+    if ocultar_secundarias:
+        cats = tuple(dict.fromkeys((*categorias_ocultas, *selecao.CATEGORIAS_PADRAO_PLANTA_OCULTAS)))
+    else:
+        cats = tuple(categorias_ocultas)
     selecao._validar_categorias(ifc, cats)
 
     info = vistas_ifc.ler_vista(ifc, gid_vista)

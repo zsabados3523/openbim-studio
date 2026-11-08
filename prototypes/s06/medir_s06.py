@@ -180,9 +180,7 @@ def _medir(f, caso, gid, escala, n, limite_s, cats, com_secundarias=False):
     """Devolve (linhas, svg). Estouro ou falha viram linha com `erro` (nao interrompe as demais medicoes)."""
     gerar = P.gerar_planta if caso == "planta" else C.gerar_corte
     linhas, ultimo = [], None
-    kw = dict(limite_s=limite_s, categorias_ocultas=cats)
-    if caso == "planta":
-        kw["ocultar_secundarias"] = not com_secundarias
+    kw = dict(limite_s=limite_s, categorias_ocultas=cats, ocultar_secundarias=not com_secundarias)
     for i in range(n):
         t0 = time.perf_counter()
         try:

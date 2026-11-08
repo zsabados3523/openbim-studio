@@ -117,4 +117,4 @@ def cru_corte():
     import openbim_app.desenho.corte as K
     import s06_t07c_aux as C
     f, g = C.modelo("IFC4", vaos=(C.PORTA,))
-    return K.gerar_corte(f, C.corte(f), executor=L.executar).svg, g
+    return K.gerar_corte(f, C.corte(f), moveis_caixa2d=False, executor=L.executar).svg, g

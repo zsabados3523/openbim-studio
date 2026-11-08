@@ -239,7 +239,7 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
                 y0, y1 = ty - max_v, ty - min_v
                 d = f"M {x0:.4f},{y0:.4f} L {x1:.4f},{y0:.4f} L {x1:.4f},{y1:.4f} L {x0:.4f},{y1:.4f} L {x0:.4f},{y0:.4f}"
                 cls_p = "cut" if cruza else "boundary"
-                caixas_svg.append(f'<g class="{el.is_a()}" ifc:guid="{el.GlobalId}"><path class="{cls_p}" d="{d}"/></g>')
+                caixas_svg.append(f'<g class="{el.is_a()}" ifc:guid="{el.GlobalId}"><path d="{d}" class="{cls_p}"/></g>')
                 caixas_ids.append(el.id())
             except Exception:
                 pass

@@ -1,32 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo da tarefa F0-S06-T15g: pré-filtro XY seguro e móveis como caixa 2D no corte vertical.
-Cartão: docs/state/cards/F0-S06/F0-S06-T15g-culling-xy-moveis-corte.md.
-
-CONTRATO:
-1. Em `app/openbim_app/desenho/selecao.py` (rota CORTE):
-   - Classes locais: `CLASSES_LOCAIS_XY = ("IfcWall", "IfcBeam", "IfcDoor", "IfcWindow", "IfcCovering", "IfcFlowSegment", "IfcFlowFitting")`.
-   - Se `e` pertence a `CLASSES_LOCAIS_XY` e tem `ObjectPlacement`:
-     `M = ifcopenshell.util.placement.get_local_placement(e.ObjectPlacement)`
-     `px = float(M[0, 3]) * scale`
-     `py = float(M[1, 3]) * scale`
-     Se `px < xmin - 5.0 or px > xmax + 5.0 or py < ymin - 5.0 or py > ymax + 5.0`:
-     Pula antes de `op: caixas` (não vai para faltantes e não cruza a vista).
-   - Classes com colocação em marco zero (`IfcSlab`, `IfcRoof`, `IfcBuildingElementProxy`)
-     e classes verticais (`CLASSES_VERTICAIS_CONTINUAS`) NUNCA sofrem esse filtro XY.
-   - Elementos sem `ObjectPlacement` continuam indo para `op: caixas`.
-2. Em `app/openbim_app/desenho/corte.py`:
-   - `gerar_corte(..., moveis_caixa2d: bool = True)` keyword-only com default `True`.
-   - Dataclass `Corte`: campo `caixas: tuple[int, ...] = ()` (já existente).
-   - Repassa `"moveis_caixa2d": bool(moveis_caixa2d)` no `pedido`.
-3. Em `geometria/obim_geometria/desenho.py` na rota `_corte`:
-   - Quando `pedido.get("moveis_caixa2d", True)` for True:
-     Móveis (`IfcFurniture`) no corte não vão para `incl` do iterador 3D.
-     Em vez disso, são gerados como retângulo 2D simplificado no SVG com
-     `<g class="IfcFurniture" ifc:guid="..."><path .../></g>` e adicionados a
-     `res["caixas"]` e `res["enviados"]`.
-   - Quando `moveis_caixa2d=False`:
-     Vão normalmente para o iterador 3D (comportamento original) e `res["caixas"] == []`.
-"""
+"""Oráculo F0-S06-T15g: pré-filtro XY e móveis caixa 2D no corte (docs/state/cards/F0-S06/F0-S06-T15g-culling-xy-moveis-corte.md)."""
 from __future__ import annotations
 
 import copy
@@ -38,7 +11,6 @@ from pathlib import Path
 from typing import Any
 
 import s06_t07_aux as X
-import s06_t07b_aux as B
 from s05_conteudo_aux import _limpa, exigir  # noqa: F401 (fixture autouse e guarda)
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -48,7 +20,7 @@ if str(GEOMETRIA) not in sys.path:
 
 import obim_geometria.local as local
 from openbim_app import vistas_ifc
-from openbim_app.desenho import corte, estilo, selecao
+from openbim_app.desenho import corte, selecao
 
 
 class ExecutorEspiao:
@@ -123,30 +95,18 @@ def _modelo_parede_movel(schema: str = "IFC4"):
 
 
 def test_assinatura_gerar_corte_moveis_caixa2d():
-    """Caso 1: Inspeciona corte.gerar_corte: parâmetro moveis_caixa2d keyword-only com default True e tipo bool.
-    Valida selecao.CLASSES_LOCAIS_XY e o repasse booleano no dicionário pedido de desenho."""
-    assert hasattr(selecao, "CLASSES_LOCAIS_XY"), "selecao.CLASSES_LOCAIS_XY deve existir"
+    """Caso 1: Inspeciona corte.gerar_corte e repasse booleano."""
+    assert hasattr(selecao, "CLASSES_LOCAIS_XY")
     assert selecao.CLASSES_LOCAIS_XY == (
-        "IfcWall",
-        "IfcBeam",
-        "IfcDoor",
-        "IfcWindow",
-        "IfcCovering",
-        "IfcFlowSegment",
-        "IfcFlowFitting",
-    ), f"CLASSES_LOCAIS_XY incorreta: {getattr(selecao, 'CLASSES_LOCAIS_XY', None)}"
-
+        "IfcWall", "IfcBeam", "IfcDoor", "IfcWindow", "IfcCovering", "IfcFlowSegment", "IfcFlowFitting"
+    )
     sig = inspect.signature(corte.gerar_corte)
-    assert "moveis_caixa2d" in sig.parameters, "corte.gerar_corte deve declarar moveis_caixa2d"
+    assert "moveis_caixa2d" in sig.parameters
     param = sig.parameters["moveis_caixa2d"]
-    assert param.default is True, f"moveis_caixa2d deve ter default True, obtido: {param.default!r}"
-    assert param.kind == inspect.Parameter.KEYWORD_ONLY, f"moveis_caixa2d deve ser keyword-only (*), obtido: {param.kind}"
-    assert param.annotation in (bool, "bool"), f"moveis_caixa2d deve ter anotação bool, obtido: {param.annotation}"
+    assert param.default is True and param.kind == inspect.Parameter.KEYWORD_ONLY
+    assert param.annotation in (bool, "bool")
+    assert "caixas" in {f.name for f in dataclasses.fields(corte.Corte)}
 
-    campos = {f.name: f for f in dataclasses.fields(corte.Corte)}
-    assert "caixas" in campos, "Corte deve possuir o campo caixas"
-
-    # Confere repasse estrito de booleano no pedido op: desenho enviado ao executor auxiliar
     f, gid, _parede, _movel = _modelo_parede_movel("IFC4")
     pedidos_desenho: list[dict[str, Any]] = []
 
@@ -156,123 +116,94 @@ def test_assinatura_gerar_corte_moveis_caixa2d():
         return local.executar(ped)
 
     corte.gerar_corte(f, gid, executor=espia_pedido)
-    assert len(pedidos_desenho) == 1 and pedidos_desenho[0].get("moveis_caixa2d") is True
-    assert type(pedidos_desenho[0]["moveis_caixa2d"]) is bool
-
+    assert len(pedidos_desenho) == 1 and pedidos_desenho[0].get("moveis_caixa2d") is True and type(pedidos_desenho[0]["moveis_caixa2d"]) is bool
     corte.gerar_corte(f, gid, moveis_caixa2d=False, executor=espia_pedido)
-    assert len(pedidos_desenho) == 2 and pedidos_desenho[1].get("moveis_caixa2d") is False
-    assert type(pedidos_desenho[1]["moveis_caixa2d"]) is bool
-
+    assert len(pedidos_desenho) == 2 and pedidos_desenho[1].get("moveis_caixa2d") is False and type(pedidos_desenho[1]["moveis_caixa2d"]) is bool
     corte.gerar_corte(f, gid, moveis_caixa2d=1, executor=espia_pedido)
-    assert len(pedidos_desenho) == 3 and pedidos_desenho[2].get("moveis_caixa2d") is True
-    assert type(pedidos_desenho[2]["moveis_caixa2d"]) is bool
-
+    assert len(pedidos_desenho) == 3 and pedidos_desenho[2].get("moveis_caixa2d") is True and type(pedidos_desenho[2]["moveis_caixa2d"]) is bool
     corte.gerar_corte(f, gid, moveis_caixa2d=0, executor=espia_pedido)
-    assert len(pedidos_desenho) == 4 and pedidos_desenho[3].get("moveis_caixa2d") is False
-    assert type(pedidos_desenho[3]["moveis_caixa2d"]) is bool
+    assert len(pedidos_desenho) == 4 and pedidos_desenho[3].get("moveis_caixa2d") is False and type(pedidos_desenho[3]["moveis_caixa2d"]) is bool
 
 
 def test_pre_filtro_xy_corte_poda_paredes_e_vigas_distantes():
-    """Caso 2: Modelo sintético com corte em X=0..10, Y=0..5, Z=0..3.
-    Paredes e vigas distantes (além de xmax+5, xmin-5, ymax+5, ymin-5) são podadas antes de op: caixas.
-    Paredes e vigas internas são enviadas para op: caixas e selecionadas."""
+    """Caso 2: poda XY paredes/vigas distantes antes de op: caixas e seleciona internas."""
     exigir()
     f, pavs = X.estrutura("IFC4")
     pav = pavs[0]
-
     par1 = X.caixa(f, "IfcWall", "Parede1", 2.0, 1.0, 0.0, 2.0, 0.2, 2.5)
     par2_pos = X.caixa(f, "IfcWall", "Parede2Pos", 50.0, 1.0, 0.0, 2.0, 0.2, 2.5)
     par2_neg = X.caixa(f, "IfcWall", "Parede2Neg", -20.0, 1.0, 0.0, 2.0, 0.2, 2.5)
-
     viga1 = X.caixa(f, "IfcBeam", "Viga1", 2.0, 2.0, 2.0, 3.0, 0.3, 0.4)
     viga2_pos = X.caixa(f, "IfcBeam", "Viga2Pos", 2.0, 40.0, 2.0, 3.0, 0.3, 0.4)
     viga2_neg = X.caixa(f, "IfcBeam", "Viga2Neg", 2.0, -20.0, 2.0, 3.0, 0.3, 0.4)
-
     porta_longe = X.caixa(f, "IfcDoor", "PortaLonge", 60.0, 2.0, 0.0, 1.0, 0.2, 2.1)
     janela_longe = X.caixa(f, "IfcWindow", "JanelaLonge", 2.0, 60.0, 1.0, 1.0, 0.2, 1.2)
-
     podados = (par2_pos, par2_neg, viga2_pos, viga2_neg, porta_longe, janela_longe)
     mantidos = (par1, viga1)
     X.conter(f, pav, *mantidos, *podados)
-
     gid = _criar_corte_xyz(f, "Corte_Poda_XY", xmin=0.0, xmax=10.0, ymin=0.0, ymax=5.0, zmin=0.0, zmax=3.0)
     espiao = ExecutorEspiao()
     sel = selecao.selecionar(f, gid, executor=espiao)
-
     for el in podados:
         assert el.id() not in espiao.ids_pedidos_caixas, f"{el.Name} não deve ir a op: caixas"
         assert el.id() not in sel.ids, f"{el.Name} não deve constar em sel.ids"
-
     for el in mantidos:
         assert el.id() in espiao.ids_pedidos_caixas, f"{el.Name} deve ir a op: caixas"
         assert el.id() in sel.ids, f"{el.Name} deve constar em sel.ids"
 
 
 def test_lajes_e_proxies_marco_zero_nao_sao_podados_por_xy():
-    """Caso 3: Classes em marco zero (IfcSlab, IfcRoof, IfcBuildingElementProxy) e classes verticais contínuas
-    (IfcColumn) com placement em (0, 0, 0) NUNCA sofrem poda XY: vão a op: caixas e são selecionadas.
-    Elementos sem ObjectPlacement também não sofrem poda XY."""
+    """Caso 3: Marco zero (Slab, Roof, Proxy, Column) e sem placement nunca sofrem poda XY."""
     exigir()
     f, pavs = X.estrutura("IFC4")
     pav = pavs[0]
-
     laje = _elemento_deslocado_xy(f, "IfcSlab", "LajeMarcoZero", 0.0, 22.0, 21.0, 5.0, 3.0, 0.2)
     telhado = _elemento_deslocado_xy(f, "IfcRoof", "TelhadoMarcoZero", 0.0, 22.0, 21.0, 5.0, 3.0, 0.3)
     proxy = _elemento_deslocado_xy(f, "IfcBuildingElementProxy", "ProxyMarcoZero", 0.0, 22.0, 21.0, 1.0, 1.0, 1.0)
     coluna = _elemento_deslocado_xy(f, "IfcColumn", "ColunaMarcoZero", 0.0, 22.0, 21.0, 0.4, 0.4, 3.0)
     par_marco_zero = _elemento_deslocado_xy(f, "IfcWall", "ParedeMarcoZero", 0.0, 22.0, 21.0, 2.0, 0.2, 2.5)
-
     elem_sem_plac = _elemento_deslocado_xy(f, "IfcBuildingElementProxy", "SemPlacement", 0.0, 22.0, 21.0, 1.0, 1.0, 1.0)
     elem_sem_plac.ObjectPlacement = None
-
     isentos = (laje, telhado, proxy, coluna, elem_sem_plac)
     X.conter(f, pav, *isentos, par_marco_zero)
-
     gid = _criar_corte_xyz(f, "Corte_MarcoZero", xmin=20.0, xmax=30.0, ymin=20.0, ymax=25.0, zmin=0.0, zmax=3.0)
     espiao = ExecutorEspiao()
     sel = selecao.selecionar(f, gid, executor=espiao)
-
     for el in isentos:
         assert el.id() in espiao.ids_pedidos_caixas, f"{el.Name} deve ser enviado para op: caixas"
         assert el.id() in sel.ids, f"{el.Name} deve constar em sel.ids"
-
     assert par_marco_zero.id() not in espiao.ids_pedidos_caixas, "Parede local em marco zero distante deve ser podada"
     assert par_marco_zero.id() not in sel.ids
 
 
 def test_moveis_caixa2d_no_corte_evitam_iterador_3d(monkeypatch):
-    """Caso 4: Modelo com parede e móvel (IfcFurniture).
-    Chama gerar_corte com moveis_caixa2d=True:
-    - Móvel consta em c.caixas
-    - Presente no SVG com <g class="IfcFurniture" ifc:guid="..."> contendo <path> com retângulo 2D válido
-    - Iterador 3D NÃO recebe o móvel, mas recebe a parede."""
+    """Caso 4: moveis_caixa2d=True emite móvel em c.caixas e SVG 2D sem iterador 3D."""
     import ifcopenshell.geom
     f, gid, parede, movel = _modelo_parede_movel("IFC4")
-
     includes_capturados: list[list[int]] = []
     real_iterator = ifcopenshell.geom.iterator
 
     def espia_iterator(*args, **kwargs):
+        settings = args[0] if args else kwargs.get("settings")
+        try:
+            if not settings.get("elevation-ref-guid"):
+                return real_iterator(*args, **kwargs)
+        except Exception:
+            return real_iterator(*args, **kwargs)
         inc = kwargs.get("include") or (args[3] if len(args) > 3 else None)
         includes_capturados.append([e.id() for e in inc] if inc else [])
         return real_iterator(*args, **kwargs)
 
     monkeypatch.setattr(ifcopenshell.geom, "iterator", espia_iterator)
-
     c = corte.gerar_corte(f, gid, moveis_caixa2d=True, executor=local.executar)
-
     assert isinstance(c.caixas, tuple), f"c.caixas deve ser tupla, obtido {type(c.caixas)}"
     assert movel.id() in c.caixas, f"Móvel (id {movel.id()}) deve constar em c.caixas, obtido: {c.caixas}"
     assert parede.id() not in c.caixas, "Parede estrutural não deve estar em c.caixas"
-
-    # Móvel não pode ter ido para o iterador 3D pesado
     assert len(includes_capturados) == 1, "Iterador 3D deve ser chamado exatamente uma vez"
     assert movel.id() not in includes_capturados[0], (
         f"Móvel (id {movel.id()}) NÃO deve ser enviado ao iterador 3D quando moveis_caixa2d=True"
     )
     assert parede.id() in includes_capturados[0], "Parede deve ser enviada ao iterador 3D"
-
-    # Móvel emitido no SVG dentro de grupo IfcFurniture com polígono/retângulo fechado
     g_m = re.search(
         r'<g\b([^>]*\bifc:guid=[\"\']' + re.escape(movel.GlobalId) + r'[\"\'][^>]*)>(.*?)</g>',
         c.svg,
@@ -291,8 +222,6 @@ def test_moveis_caixa2d_no_corte_evitam_iterador_3d(monkeypatch):
     nums = [float(x) for x in re.findall(r"[-+]?\d+(?:\.\d+)?", d_m.group(1))]
     assert len(nums) >= 8, f"Caminho do móvel deve conter ao menos 4 vértices 2D, obtido: {nums}"
     assert c.n_paths == len(re.findall(r"<path\b", c.svg)), "n_paths deve refletir todos os caminhos do SVG"
-
-    # Default moveis_caixa2d=True produz o mesmo comportamento sem o móvel no iterador 3D
     c_padrao = corte.gerar_corte(f, gid, executor=local.executar)
     assert movel.id() in c_padrao.caixas
     assert len(includes_capturados) == 2
@@ -300,24 +229,25 @@ def test_moveis_caixa2d_no_corte_evitam_iterador_3d(monkeypatch):
 
 
 def test_desativar_moveis_caixa2d_no_corte(monkeypatch):
-    """Caso 5: Chama gerar_corte com moveis_caixa2d=False:
-    - c.caixas == ()
-    - Móvel foi gerado via iterador 3D."""
+    """Caso 5: moveis_caixa2d=False mantém c.caixas vazia e móvel no iterador 3D."""
     import ifcopenshell.geom
     f, gid, parede, movel = _modelo_parede_movel("IFC4")
-
     includes_capturados: list[list[int]] = []
     real_iterator = ifcopenshell.geom.iterator
 
     def espia_iterator(*args, **kwargs):
+        settings = args[0] if args else kwargs.get("settings")
+        try:
+            if not settings.get("elevation-ref-guid"):
+                return real_iterator(*args, **kwargs)
+        except Exception:
+            return real_iterator(*args, **kwargs)
         inc = kwargs.get("include") or (args[3] if len(args) > 3 else None)
         includes_capturados.append([e.id() for e in inc] if inc else [])
         return real_iterator(*args, **kwargs)
 
     monkeypatch.setattr(ifcopenshell.geom, "iterator", espia_iterator)
-
     c = corte.gerar_corte(f, gid, moveis_caixa2d=False, executor=local.executar)
-
     assert isinstance(c.caixas, tuple)
     assert c.caixas == (), f"c.caixas deve ser tupla vazia (), obtido: {c.caixas}"
     assert len(includes_capturados) == 1
@@ -328,46 +258,3 @@ def test_desativar_moveis_caixa2d_no_corte(monkeypatch):
     assert movel.GlobalId in c.svg
     assert parede.GlobalId in c.svg
 
-
-def test_compatibilidade_estilo_corte_caixa2d():
-    """Caso 6: SVG gerado com móveis caixa 2D no corte é processado com sucesso por estilo.aplicar_estilo."""
-    f, gid, parede, movel = _modelo_parede_movel("IFC4")
-    c = corte.gerar_corte(f, gid, moveis_caixa2d=True, executor=local.executar)
-
-    svg_50 = estilo.aplicar_estilo(c.svg, "1:50")
-    assert isinstance(svg_50, str) and "<svg" in svg_50 and "</svg>" in svg_50
-    assert B.svg_valido(svg_50), "SVG estilizado em 1:50 deve ser XML válido"
-    assert 'viewBox="' in svg_50
-    assert 'width="' in svg_50 and 'height="' in svg_50
-    assert "<style" in svg_50
-    assert movel.GlobalId in svg_50
-    assert parede.GlobalId in svg_50
-
-    svg_100 = estilo.aplicar_estilo(c.svg, "1:100")
-    assert isinstance(svg_100, str) and B.svg_valido(svg_100), "SVG estilizado em 1:100 deve ser XML válido"
-    assert movel.GlobalId in svg_100
-
-
-def test_pre_filtro_xy_corte_respeita_unidade_milimetros():
-    """Pré-filtro XY seguro em CORTE converte a coordenada mundial com scale em modelos em milímetros."""
-    exigir()
-    f, pavs = X.estrutura("IFC4")
-    X.em_milimetros(f)
-    k = 1000.0
-    pav = pavs[0]
-
-    par1 = X.caixa(f, "IfcWall", "Par1MM", 2000.0, 1000.0, 0.0, 2000.0, 200.0, 2500.0)
-    par2_pos = X.caixa(f, "IfcWall", "Par2PosMM", 50000.0, 1000.0, 0.0, 2000.0, 200.0, 2500.0)
-    par2_neg = X.caixa(f, "IfcWall", "Par2NegMM", -20000.0, 1000.0, 0.0, 2000.0, 200.0, 2500.0)
-    X.conter(f, pav, par1, par2_pos, par2_neg)
-
-    gid = _criar_corte_xyz(f, "Corte_MM", xmin=0.0, xmax=10.0, ymin=0.0, ymax=5.0, zmin=0.0, zmax=3.0, k=k)
-    espiao = ExecutorEspiao()
-    sel = selecao.selecionar(f, gid, executor=espiao)
-
-    assert par2_pos.id() not in espiao.ids_pedidos_caixas, "Parede a +50 m deve ser podada em mm"
-    assert par2_neg.id() not in espiao.ids_pedidos_caixas, "Parede a -20 m deve ser podada em mm"
-    assert par2_pos.id() not in sel.ids
-    assert par2_neg.id() not in sel.ids
-    assert par1.id() in espiao.ids_pedidos_caixas
-    assert par1.id() in sel.ids

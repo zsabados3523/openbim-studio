@@ -38,6 +38,7 @@ def gerar_corte(
     cancelar=None,
     executor=None,
     caminho_ifc: str | Path | None = None,
+    moveis_caixa2d: bool = True,
 ) -> Corte:
     if ocultar_secundarias:
         cats = tuple(dict.fromkeys((*categorias_ocultas, *selecao.CATEGORIAS_PADRAO_PLANTA_OCULTAS)))
@@ -79,6 +80,7 @@ def gerar_corte(
             "escala": scale,
         },
         "limite_triangulos": limite_triangulos,
+        "moveis_caixa2d": bool(moveis_caixa2d),
     }
     if threads is not None:
         pedido["threads"] = threads
@@ -92,5 +94,5 @@ def gerar_corte(
         selecao=sel,
         tempos=dict(r["tempos"]),
         unidade_escala=scale,
-        caixas=tuple(r["caixas"]),
+        caixas=tuple(int(x) for x in r.get("caixas") or ()),
     )

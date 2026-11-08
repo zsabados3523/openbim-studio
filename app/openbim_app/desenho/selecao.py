@@ -31,6 +31,11 @@ CLASSES_VERTICAIS_CONTINUAS: tuple[str, ...] = (
     "IfcStairFlight",
 )
 
+CLASSES_LOCAIS_XY: tuple[str, ...] = (
+    "IfcWall", "IfcBeam", "IfcDoor", "IfcWindow", "IfcCovering", "IfcFlowSegment", "IfcFlowFitting"
+)
+
+
 
 @dataclasses.dataclass(frozen=True)
 class Selecao:
@@ -261,8 +266,9 @@ def selecionar(
 
     guardadas = sessao._caixas if sessao is not None else {}
     erros_por_id = sessao._erros if sessao is not None else {}
-    z_min_seguro = zmin - 4.0
-    z_max_seguro = zmax + 4.0
+    z_min_seguro, z_max_seguro = zmin - 4.0, zmax + 4.0
+    x_min_seguro, x_max_seguro = xmin - 5.0, xmax + 5.0
+    y_min_seguro, y_max_seguro = ymin - 5.0, ymax + 5.0
 
     faltantes: list[Any] = []
     for e in visiveis_com_rep:
@@ -276,6 +282,10 @@ def selecionar(
                 pz = float(M[2, 3]) * scale
                 if pz < z_min_seguro or pz > z_max_seguro:
                     continue
+                if any(e.is_a(c) for c in CLASSES_LOCAIS_XY):
+                    px, py = float(M[0, 3]) * scale, float(M[1, 3]) * scale
+                    if px < x_min_seguro or px > x_max_seguro or py < y_min_seguro or py > y_max_seguro:
+                        continue
             except Exception:
                 pass
         faltantes.append(e)

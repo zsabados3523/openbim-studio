@@ -96,6 +96,12 @@ def gerar_planta(
             em_cache=(),
         )
 
+    cx_env = getattr(sel, "caixas_envolventes", None) or {}
+    caixas_coords = {
+        int(i): list(cx_env[i] if i in cx_env else cx_env[str(i)])
+        for i in sel.ids
+        if (i in cx_env or str(i) in cx_env)
+    }
     pedido = {
         "protocolo": 1,
         "op": "desenho",
@@ -110,6 +116,7 @@ def gerar_planta(
         "moveis_como_caixa": bool(moveis_como_caixa),
         "cache_tipo": bool(cache_tipo),
         "limite_triangulos": limite_triangulos,
+        "caixas_coords": caixas_coords,
     }
     if threads is not None:
         pedido["threads"] = threads

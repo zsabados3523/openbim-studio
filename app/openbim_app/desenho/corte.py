@@ -44,8 +44,11 @@ def gerar_corte(
     caminho_ifc: str | Path | None = None,
     moveis_caixa2d: bool = True,
     profundidade_corte: float | None = None,
+    faixas: int = 1,
 ) -> Corte:
     _validar_profundidade_corte(profundidade_corte)
+    if isinstance(faixas, bool) or not isinstance(faixas, int) or faixas < 1:
+        raise ValueError(f"número de faixas inválido: {faixas!r}")
     if ocultar_secundarias:
         cats = tuple(dict.fromkeys((*categorias_ocultas, *selecao.CATEGORIAS_PADRAO_PLANTA_OCULTAS)))
     else:
@@ -104,6 +107,8 @@ def gerar_corte(
         pedido["profundidade_corte"] = float(profundidade_corte)
     if threads is not None:
         pedido["threads"] = threads
+    if faixas != 1:
+        pedido["faixas"] = faixas
 
     with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc) as p:
         r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor)

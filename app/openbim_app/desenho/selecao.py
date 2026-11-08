@@ -25,6 +25,12 @@ CATEGORIAS_PADRAO_PLANTA_OCULTAS: tuple[str, ...] = (
     "IfcRailing",
 )
 
+CLASSES_VERTICAIS_CONTINUAS: tuple[str, ...] = (
+    "IfcColumn",
+    "IfcStair",
+    "IfcStairFlight",
+)
+
 
 @dataclasses.dataclass(frozen=True)
 class Selecao:
@@ -255,7 +261,24 @@ def selecionar(
 
     guardadas = sessao._caixas if sessao is not None else {}
     erros_por_id = sessao._erros if sessao is not None else {}
-    faltantes = [e for e in visiveis_com_rep if e.id() not in guardadas]
+    z_min_seguro = zmin - 4.0
+    z_max_seguro = zmax + 4.0
+
+    faltantes: list[Any] = []
+    for e in visiveis_com_rep:
+        if e.id() in guardadas:
+            continue
+        if e.is_a("IfcOpeningElement"):
+            continue
+        if e.ObjectPlacement is not None and not any(e.is_a(c) for c in CLASSES_VERTICAIS_CONTINUAS):
+            try:
+                M = ifcopenshell.util.placement.get_local_placement(e.ObjectPlacement)
+                pz = float(M[2, 3]) * scale
+                if pz < z_min_seguro or pz > z_max_seguro:
+                    continue
+            except Exception:
+                pass
+        faltantes.append(e)
 
     if faltantes:
         pedido = {
@@ -297,12 +320,20 @@ def selecionar(
             and c[2] <= zmax and c[5] >= zmin
         )
 
-    ids = [e.id() for e in visiveis_com_rep if cruza(e.id())]
+    ids = [
+        e.id()
+        for e in visiveis_com_rep
+        if not e.is_a("IfcOpeningElement") and cruza(e.id())
+    ]
     falhas_geometria = tuple(sorted(
-        e.id() for e in visiveis_com_rep if e.id() in guardadas and guardadas[e.id()] is None
+        e.id()
+        for e in visiveis_com_rep
+        if not e.is_a("IfcOpeningElement") and e.id() in guardadas and guardadas[e.id()] is None
     ))
     mensagens: list[str] = []
     for elem in visiveis_com_rep:  # só erro de elemento visível no corte, sem duplicar
+        if elem.is_a("IfcOpeningElement"):
+            continue
         for msg in erros_por_id.get(elem.id(), ()):
             if msg not in mensagens:
                 mensagens.append(msg)

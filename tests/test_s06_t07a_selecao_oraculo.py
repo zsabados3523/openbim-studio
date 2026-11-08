@@ -197,7 +197,7 @@ def test_corte_conta_candidatos_sem_geometria(esq, off, base):
     f, pavs, _ = X.casa(esq, off, base)  # 3 por pavimento (X, A, B) x 2; no corte o candidato é todo IfcElement do modelo
     g = X.vista(f, "CORTE", pavs[0], origem=(off[0], off[1], base), tamanho=(10.0, 10.0, 6.0))
     s = S().selecionar(f, g)
-    assert s.sem_geometria == 6 and len(s.ids) == 16
+    assert s.sem_geometria == 6 and len(s.ids) == 14  # T15f: 2 aberturas podadas do corte
 
 
 @MOD

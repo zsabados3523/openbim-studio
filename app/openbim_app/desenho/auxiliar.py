@@ -97,14 +97,14 @@ def preparar(ifc, pedido: dict, *, caminho_ifc: str | Path | None = None) -> Pre
             p.setdefault("protocolo", PROTOCOLO)
             p.setdefault("threads", threads_padrao())
             p["arquivo"] = str(c)
-            pasta = Path(tempfile.mkdtemp(prefix="obim-desenho-", dir=tempfile.gettempdir()))
+            pasta = Path(tempfile.mkdtemp(prefix="obim-desenho-", dir=tempfile.gettempdir())).resolve()
             return Preparado(p, pasta, copia_s=0.0)
 
     _limpar_pastas_antigas()
     p = dict(pedido)
     p.setdefault("protocolo", PROTOCOLO)
     p.setdefault("threads", threads_padrao())
-    pasta = Path(tempfile.mkdtemp(prefix="obim-desenho-", dir=tempfile.gettempdir()))
+    pasta = Path(tempfile.mkdtemp(prefix="obim-desenho-", dir=tempfile.gettempdir())).resolve()
     arquivo = (pasta / "modelo.ifc").resolve()
     t0 = time.perf_counter()
     try:

@@ -151,7 +151,7 @@ def test_preparar_sem_caminho_ifc_chama_write():
         assert p.copia_s >= 0.0
         caminho_temp = Path(p.pedido["arquivo"])
         assert caminho_temp.is_file()
-        assert caminho_temp.parent == p.pasta
+        assert caminho_temp.resolve().parent == p.pasta.resolve()
         assert caminho_temp.stat().st_size > 0
         conteudo = caminho_temp.read_text(encoding="utf-8", errors="replace")
         assert "ISO-10303-21" in conteudo
@@ -163,7 +163,7 @@ def test_preparar_sem_caminho_ifc_chama_write():
         assert p2.copia_s >= 0.0
         caminho_temp2 = Path(p2.pedido["arquivo"])
         assert caminho_temp2.is_file()
-        assert caminho_temp2.parent == p2.pasta
+        assert caminho_temp2.resolve().parent == p2.pasta.resolve()
 
     assert not p2.pasta.exists()
 

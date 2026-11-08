@@ -108,6 +108,7 @@ def gerar_planta(
         "elementos": [[i, ifc.by_id(i).GlobalId] for i in sel.ids],
         "vista": {
             "tipo": "PLANTA",
+            "guid": gid_vista,
             "altura_corte_m": altura_corte,
             "origem_pav": [ox, oy, oz],
             "escala": scale,

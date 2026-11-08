@@ -13,6 +13,8 @@ from pathlib import Path
 
 from obim_geometria.processo import PROTOCOLO, entrada
 
+from openbim_app.desenho.reduzido import escrever_reduzido
+
 LIMITE_PADRAO_S = 180
 _TRAVA_FILHO = threading.Lock()
 _logger = logging.getLogger(__name__)
@@ -108,10 +110,22 @@ def preparar(ifc, pedido: dict, *, caminho_ifc: str | Path | None = None) -> Pre
     arquivo = (pasta / "modelo.ifc").resolve()
     t0 = time.perf_counter()
     try:
-        ifc.write(str(arquivo))
-    except BaseException:
-        shutil.rmtree(pasta, ignore_errors=True)
-        raise
+        vista = p["vista"]
+        anotacao_id = ifc.by_guid(vista["guid"]).id()
+        ids = [int(e[0]) for e in p["elementos"]]
+        if not ids:
+            raise ValueError("pedido sem elementos para o IFC reduzido")
+        escrever_reduzido(ifc, ids, anotacao_id, str(arquivo))
+    except Exception:
+        try:
+            arquivo.unlink()
+        except OSError:
+            pass
+        try:
+            ifc.write(str(arquivo))
+        except BaseException:
+            shutil.rmtree(pasta, ignore_errors=True)
+            raise
     copia_s = time.perf_counter() - t0
     p["arquivo"] = str(arquivo)
     return Preparado(p, pasta, copia_s)

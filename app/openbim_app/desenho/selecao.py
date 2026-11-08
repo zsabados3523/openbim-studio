@@ -314,6 +314,7 @@ def selecionar(
         pedido = {
             "op": "caixas",
             "elementos": [[e.id(), e.GlobalId] for e in faltantes],
+            "vista": {"guid": gid_vista},
             "threads": auxiliar.threads_padrao(),
         }
         preparado = auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc)

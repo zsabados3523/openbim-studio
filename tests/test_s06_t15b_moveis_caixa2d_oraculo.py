@@ -126,18 +126,18 @@ def _verificar_caixa_2d_no_svg(
 
 
 def test_assinatura_gerar_planta_moveis_como_caixa():
-    """Caso 1: Inspeciona gerar_planta: parâmetro moveis_como_caixa keyword-only com default True e tipo bool."""
+    """Caso 1: Inspeciona gerar_planta: parâmetro moveis_como_caixa keyword-only com default False (T15q) e tipo bool."""
     sig = inspect.signature(planta.gerar_planta)
     assert "moveis_como_caixa" in sig.parameters, "gerar_planta deve declarar o parâmetro moveis_como_caixa"
     param = sig.parameters["moveis_como_caixa"]
     assert param.kind is inspect.Parameter.KEYWORD_ONLY, f"moveis_como_caixa deve ser keyword-only (*), obtido: {param.kind}"
-    assert param.default is True, f"moveis_como_caixa deve ter default True, obtido: {param.default!r}"
+    assert param.default is False, f"moveis_como_caixa deve ter default False, obtido: {param.default!r}"
     assert param.annotation in (bool, "bool"), f"Anotação de moveis_como_caixa deve ser bool, obtido: {param.annotation!r}"
     assert list(sig.parameters)[:2] == ["ifc", "gid_vista"], "Primeiros 2 parâmetros devem ser ifc e gid_vista"
 
 
 def test_moveis_simplificados_em_caixa_2d_por_padrao():
-    """Caso 2: Modelo com parede, laje e móvel; por padrão moveis_como_caixa=True simplifica o móvel em caixa 2D."""
+    """Caso 2: Modelo com parede, laje e móvel; com moveis_como_caixa=True simplifica o móvel em caixa 2D."""
     f, gid, _pav, elementos = _modelo_sintetico_t15b(schema="IFC4", com_sistema=False)
     parede = elementos["IfcWall"]
     laje = elementos["IfcSlab"]
@@ -161,9 +161,9 @@ def test_moveis_simplificados_em_caixa_2d_por_padrao():
     assert g_parede is not None, "Parede deve continuar no SVG"
     assert len(B.subcaminhos(g_parede)) > 0, "Parede deve ter caminhos desenhados"
 
+    # T15q: o default passou a ser False (forma real); sem a opcao, nao ha caixas.
     p_padrao = planta.gerar_planta(f, gid, executor=local.executar)
-    assert p_padrao.caixas == p.caixas
-    _verificar_caixa_2d_no_svg(p_padrao.svg, movel.GlobalId, "IfcFurnishingElement", xmin=1.0, xmax=1.8, ymin_svg=-2.6, ymax_svg=-2.0)
+    assert p_padrao.caixas == ()
 
 
 def test_desativar_moveis_como_caixa():
@@ -251,7 +251,7 @@ def test_pedido_passa_moveis_como_caixa_booleano():
     planta.gerar_planta(f, gid, executor=espia)
     assert len(pedidos_recebidos) == 1
     assert "moveis_como_caixa" in pedidos_recebidos[0]
-    assert pedidos_recebidos[0]["moveis_como_caixa"] is True
+    assert pedidos_recebidos[0]["moveis_como_caixa"] is False  # default T15q
     assert type(pedidos_recebidos[0]["moveis_como_caixa"]) is bool
 
     planta.gerar_planta(f, gid, moveis_como_caixa=False, executor=espia)

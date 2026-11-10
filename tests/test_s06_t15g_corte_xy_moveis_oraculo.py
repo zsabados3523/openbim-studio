@@ -103,7 +103,7 @@ def test_assinatura_gerar_corte_moveis_caixa2d():
     sig = inspect.signature(corte.gerar_corte)
     assert "moveis_caixa2d" in sig.parameters
     param = sig.parameters["moveis_caixa2d"]
-    assert param.default is True and param.kind == inspect.Parameter.KEYWORD_ONLY
+    assert param.default is False and param.kind == inspect.Parameter.KEYWORD_ONLY
     assert param.annotation in (bool, "bool")
     assert "caixas" in {f.name for f in dataclasses.fields(corte.Corte)}
 
@@ -116,7 +116,7 @@ def test_assinatura_gerar_corte_moveis_caixa2d():
         return local.executar(ped)
 
     corte.gerar_corte(f, gid, executor=espia_pedido)
-    assert len(pedidos_desenho) == 1 and pedidos_desenho[0].get("moveis_caixa2d") is True and type(pedidos_desenho[0]["moveis_caixa2d"]) is bool
+    assert len(pedidos_desenho) == 1 and pedidos_desenho[0].get("moveis_caixa2d") is False and type(pedidos_desenho[0]["moveis_caixa2d"]) is bool
     corte.gerar_corte(f, gid, moveis_caixa2d=False, executor=espia_pedido)
     assert len(pedidos_desenho) == 2 and pedidos_desenho[1].get("moveis_caixa2d") is False and type(pedidos_desenho[1]["moveis_caixa2d"]) is bool
     corte.gerar_corte(f, gid, moveis_caixa2d=1, executor=espia_pedido)
@@ -222,7 +222,7 @@ def test_moveis_caixa2d_no_corte_evitam_iterador_3d(monkeypatch):
     nums = [float(x) for x in re.findall(r"[-+]?\d+(?:\.\d+)?", d_m.group(1))]
     assert len(nums) >= 8, f"Caminho do móvel deve conter ao menos 4 vértices 2D, obtido: {nums}"
     assert c.n_paths == len(re.findall(r"<path\b", c.svg)), "n_paths deve refletir todos os caminhos do SVG"
-    c_padrao = corte.gerar_corte(f, gid, executor=local.executar)
+    c_padrao = corte.gerar_corte(f, gid, moveis_caixa2d=True, executor=local.executar)
     assert movel.id() in c_padrao.caixas
     assert len(includes_capturados) == 2
     assert movel.id() not in includes_capturados[1]

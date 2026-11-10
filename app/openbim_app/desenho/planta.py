@@ -58,7 +58,7 @@ def gerar_planta(
     *,
     categorias_ocultas: Iterable[str] = (),
     ocultar_secundarias: bool = True,
-    moveis_como_caixa: bool = True,
+    moveis_como_caixa: bool = False,
     cache_tipo: bool = True,
     threads: int | None = None,
     limite_triangulos: int | None = None,

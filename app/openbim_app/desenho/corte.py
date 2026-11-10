@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 from pathlib import Path
-from typing import Any, Iterable
+from typing import TYPE_CHECKING, Any, Iterable
 
 import ifcopenshell
 import ifcopenshell.util.unit
@@ -16,6 +16,9 @@ from openbim_app.desenho.selecao import (
     SelecaoInvalida,
     _validar_profundidade_corte,
 )
+
+if TYPE_CHECKING:
+    from openbim_app.desenho.cache import CacheDesenho
 
 _SVG_VAZIO = '<svg xmlns="http://www.w3.org/2000/svg" version="1.1"></svg>'
 
@@ -45,6 +48,7 @@ def gerar_corte(
     moveis_caixa2d: bool = True,
     profundidade_corte: float | None = None,
     faixas: int = 1,
+    cache: "CacheDesenho | None" = None,
 ) -> Corte:
     _validar_profundidade_corte(profundidade_corte)
     if isinstance(faixas, bool) or not isinstance(faixas, int) or faixas < 1:
@@ -110,8 +114,16 @@ def gerar_corte(
     if faixas != 1:
         pedido["faixas"] = faixas
 
-    with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc) as p:
-        r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor)
+    if cache is not None:
+        ch = cache.chave(ifc, pedido)
+        r = cache.obter(ch)
+        if r is None:
+            with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc) as p:
+                r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor)
+            cache.guardar(ch, r)
+    else:
+        with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc) as p:
+            r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor)
 
     return Corte(
         svg=r["svg"],

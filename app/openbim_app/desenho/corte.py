@@ -45,7 +45,7 @@ def gerar_corte(
     cancelar=None,
     executor=None,
     caminho_ifc: str | Path | None = None,
-    moveis_caixa2d: bool = True,
+    moveis_caixa2d: bool = False,
     profundidade_corte: float | None = None,
     faixas: int = 1,
     cache: "CacheDesenho | None" = None,

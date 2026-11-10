@@ -57,6 +57,7 @@ def modelo_oclusao(tampa: bool):
 def pedido_de(f, gid, pasta, **kw):
     """Pedido de `desenho` exatamente como `gerar_corte` o monta, apontando para o IFC completo gravado em `pasta` (a pasta do pedido real some ao sair do `with`)."""
     esp = ExecutorEspiao()
+    kw.setdefault("moveis_caixa2d", True)  # T15q: default virou False; estes testes cobrem a caixa 2D
     corte.gerar_corte(f, gid, executor=esp, **kw)
     p = copy.deepcopy(esp.pedidos_desenho[0])
     pasta.mkdir(exist_ok=True)

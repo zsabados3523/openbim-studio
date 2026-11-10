@@ -222,7 +222,7 @@ def test_corte_moveis_2d_caixas_coords_em_milimetros(monkeypatch):
 
     # Verifica também via gerar_corte completo com executor
     chamadas_cs.clear()
-    c = corte.gerar_corte(f, gid_corte, executor=local.executar)
+    c = corte.gerar_corte(f, gid_corte, moveis_caixa2d=True, executor=local.executar)
     assert movel.id() not in chamadas_cs
     assert movel.id() in c.caixas
     largura_c, altura_c = _dimensoes_svg(c.svg, movel.GlobalId)

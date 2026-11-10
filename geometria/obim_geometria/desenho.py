@@ -216,7 +216,7 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
 
     orig_cam_m = orig_cam
     elementos = pedido.get("elementos", [])
-    moveis_caixa2d = bool(pedido.get("moveis_caixa2d", True))
+    moveis_caixa2d = bool(pedido.get("moveis_caixa2d", False))
     caixas_coords = pedido.get("caixas_coords") or {}
     incl, moveis_corte = [], []
     s_box = ifcopenshell.geom.settings()
@@ -485,7 +485,7 @@ def _itens_das_faixas(f: ifcopenshell.file, pedido: dict):
     orig = [float(m[0, 3]) * esc, float(m[1, 3]) * esc, float(m[2, 3]) * esc]
     u_axis = m[:3, 0]
     coords = pedido.get("caixas_coords") or {}
-    moveis_caixa2d = bool(pedido.get("moveis_caixa2d", True))
+    moveis_caixa2d = bool(pedido.get("moveis_caixa2d", False))
     itens, primeira = [], set()
     for i, guid in pedido.get("elementos", []):
         c = caixa_valida(coords.get(i) if i in coords else coords.get(str(i)))
@@ -624,7 +624,7 @@ def processar(pedido: dict, fase=None) -> dict:
             fase("geometria")
 
         cache_tipo = bool(pedido.get("cache_tipo", True))
-        moveis_como_caixa = bool(pedido.get("moveis_como_caixa", True))
+        moveis_como_caixa = bool(pedido.get("moveis_como_caixa", False))
 
         selecionados = {id_step for id_step, _ in elementos}
         include_elems = []

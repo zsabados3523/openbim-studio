@@ -22,21 +22,32 @@ from openbim_app.desenho.auxiliar import DesenhoCancelado
 TIPOS = ("planta", "corte")
 
 
-def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache):
+def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, previa=None):
     from openbim_app.desenho.corte import gerar_corte
     from openbim_app.desenho.planta import gerar_planta
 
     progresso("calculando")
+    if tipo == "planta":
+        opcoes = {"pesados": "silhueta", **opcoes}
     gerar = gerar_planta if tipo == "planta" else gerar_corte
     # cache exato (chave do pedido real, com elementos): leitura e gravacao aqui dentro
     r = gerar(ifc, vista_guid, cache=cache, cancelar=cancelar, **opcoes)
-    return {
+    dados = {
         "svg": r.svg,
         "n_paths": r.n_paths,
         "tempos": dict(r.tempos),
         "caixas": list(r.caixas),
         "em_cache": list(getattr(r, "em_cache", ())),
     }
+    if tipo == "planta":
+        dados["pesados"] = [dict(d) for d in (getattr(r, "pesados", ()) or ())]
+    if tipo == "planta" and dados["pesados"]:
+        if previa is not None:
+            previa(dados)
+        from openbim_app.desenho import refino
+        dados = refino.refinar_pesados(
+            ifc, r.pedido, dados, cache=cache, cancelar=cancelar, progresso=progresso)
+    return dados
 
 
 class _Pedido:

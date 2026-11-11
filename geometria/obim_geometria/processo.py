@@ -5,9 +5,6 @@ import os
 import time
 import traceback
 
-# Ajudantes puros (texto/dicionario, sem geometria) que o app pode usar (ADR-004: o app so importa este modulo).
-from obim_geometria import pecas  # noqa: E402,F401
-
 PROTOCOLO = 1
 
 

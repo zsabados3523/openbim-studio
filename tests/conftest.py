@@ -16,6 +16,13 @@ from obrigatorio import ligar_ci  # noqa: E402
 
 ligar_ci()  # OBIM_CI=1: liga as chaves de obrigatório antes de qualquer teste ler o ambiente
 
+if os.environ.get("GITHUB_ACTIONS"):
+    # Guarda de travamento no CI: se a sessão passar de 45 min, imprime a pilha de todas as threads (mostra o teste preso)
+    # e encerra; o log vira anotação do job em vez de o job ser cancelado em silêncio aos 60 min.
+    import faulthandler
+
+    faulthandler.dump_traceback_later(2700, exit=True)
+
 
 def pytest_terminal_summary(terminalreporter):
     """RG-03: a contagem de pulos aparece sempre; no CI também vai para o resumo do job (GITHUB_STEP_SUMMARY)."""

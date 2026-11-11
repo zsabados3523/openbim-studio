@@ -17,11 +17,30 @@ from obrigatorio import ligar_ci  # noqa: E402
 ligar_ci()  # OBIM_CI=1: liga as chaves de obrigatório antes de qualquer teste ler o ambiente
 
 if os.environ.get("GITHUB_ACTIONS"):
-    # Guarda de travamento no CI: se a sessão passar de 45 min, imprime a pilha de todas as threads (mostra o teste preso)
-    # e encerra; o log vira anotação do job em vez de o job ser cancelado em silêncio aos 60 min.
-    import faulthandler
+    # Guarda de travamento no CI: se a sessão passar de 40 min, grava no resumo do job o teste em andamento e a pilha de
+    # todas as threads e encerra (o pytest captura o stderr, então o resumo é o único lugar que sobrevive).
+    import threading
+    import time
+    import traceback
 
-    faulthandler.dump_traceback_later(2700, exit=True)
+    _atual = {"id": "?", "t": time.monotonic()}
+
+    def pytest_runtest_logstart(nodeid, location):
+        _atual["id"], _atual["t"] = nodeid, time.monotonic()
+
+    def _vigia():
+        time.sleep(2400)
+        destino = os.environ.get("GITHUB_STEP_SUMMARY")
+        linhas = [f"### TRAVADO: teste em andamento {_atual['id']} ha {time.monotonic() - _atual['t']:.0f} s"]
+        for tid, fr in sys._current_frames().items():
+            linhas.append(f"thread {tid}:")
+            linhas.extend("    " + x.rstrip() for x in traceback.format_stack(fr)[-8:])
+        if destino:
+            with open(destino, "a", encoding="utf-8") as f:
+                f.write("\n".join(linhas) + "\n")
+        os._exit(1)
+
+    threading.Thread(target=_vigia, daemon=True).start()
 
 
 def pytest_terminal_summary(terminalreporter):

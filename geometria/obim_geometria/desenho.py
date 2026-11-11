@@ -10,7 +10,7 @@ import ifcopenshell.geom
 import ifcopenshell.ifcopenshell_wrapper as W
 import ifcopenshell.util.element
 import ifcopenshell.util.placement
-from obim_geometria import faixas, nucleos
+from obim_geometria import faixas, nucleos, silhueta
 
 
 def caixa_valida(c) -> list[float] | None:
@@ -33,6 +33,71 @@ _TOK_RE = re.compile(r"[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?|[a-zA-Z]")
 
 def _fmt(v: float) -> str:
     return f"{round(v, 4) + 0.0:.4f}"
+
+
+def _d_silhueta(aneis) -> str:
+    partes = []
+    for anel in aneis:
+        pts = [(float(x), -float(y)) for x, y in anel]
+        if len(pts) < 3:
+            continue
+        partes.append("M " + " L ".join(f"{_fmt(x)},{_fmt(y)}" for x, y in pts) + " Z")
+    return " ".join(partes)
+
+
+def _limiar_pesado(pedido: dict) -> int:
+    try:
+        return int(pedido.get("limiar_pesado", silhueta.LIMIAR_PADRAO))
+    except (TypeError, ValueError):
+        return silhueta.LIMIAR_PADRAO
+
+
+def _candidata_silhueta(el, moveis_como_caixa: bool) -> bool:
+    if el.is_a("IfcDoor") or el.is_a("IfcWindow"):
+        return False
+    try:
+        if getattr(el, "HasOpenings", None):
+            return False
+    except Exception:
+        pass
+    if moveis_como_caixa and (el.is_a("IfcFurnishingElement") or el.is_a("IfcSystemFurnitureElement")):
+        return False
+    return True
+
+
+def _grupo_silhueta(el, aneis) -> str | None:
+    d = _d_silhueta(aneis)
+    if not d:
+        return None
+    return f'<g class="{el.is_a()}" ifc:guid="{el.GlobalId}" data-silhueta="1"><path d="{d}" fill-rule="evenodd"/></g>'
+
+
+def _pesadas_para_svg(f: ifcopenshell.file, pedido: dict, elementos, altura_corte_m: float):
+    """Silhuetas do pedido inteiro (usado pelo pai das faixas): svg, info, ids desenhados, ids fora do corte."""
+    pesados_svg, pesados_info, ids, excluidos = [], [], set(), set()
+    if pedido.get("pesados") != "silhueta":
+        return pesados_svg, pesados_info, ids, excluidos
+    limiar = _limiar_pesado(pedido)
+    moveis_como_caixa = bool(pedido.get("moveis_como_caixa", False))
+    for id_step, _ in elementos:
+        el = f.by_id(id_step)
+        if el is None or el.is_a("IfcOpeningElement"):
+            continue
+        if not _candidata_silhueta(el, moveis_como_caixa):
+            continue
+        n_faces, aneis, zmin = silhueta.faces_e_silhueta(el, limiar, z_corte=altura_corte_m)
+        if not silhueta.eh_pesada(n_faces, limiar):
+            continue
+        if aneis is None or (zmin is not None and zmin > altura_corte_m):
+            excluidos.add(id_step)
+            continue
+        grupo = _grupo_silhueta(el, aneis)
+        if grupo is None:
+            continue
+        pesados_svg.append(grupo)
+        pesados_info.append({"guid": el.GlobalId, "id": el.id(), "faces": int(n_faces)})
+        ids.add(id_step)
+    return pesados_svg, pesados_info, ids, excluidos
 
 
 def _transladar_d(d: str, dx: float, dy: float) -> str:
@@ -625,6 +690,8 @@ def _processar_base(pedido: dict, fase=None) -> dict:
 
         cache_tipo = bool(pedido.get("cache_tipo", True))
         moveis_como_caixa = bool(pedido.get("moveis_como_caixa", False))
+        usar_silhueta = pedido.get("pesados") == "silhueta"
+        limiar_pesado = _limiar_pesado(pedido)
 
         selecionados = {id_step for id_step, _ in elementos}
         include_elems = []
@@ -632,6 +699,8 @@ def _processar_base(pedido: dict, fase=None) -> dict:
         moveis_elems = []
         primarias = {}
         replicas = []
+        pesadas = {}
+        pesadas_excluidas = set()
 
         for id_step, _ in elementos:
             el = f.by_id(id_step)
@@ -639,7 +708,17 @@ def _processar_base(pedido: dict, fase=None) -> dict:
                 continue
             if el.is_a("IfcOpeningElement"):
                 aberturas.add(id_step)
-            elif moveis_como_caixa and (el.is_a("IfcFurnishingElement") or el.is_a("IfcSystemFurnitureElement")):
+                continue
+            if usar_silhueta and _candidata_silhueta(el, moveis_como_caixa):
+                n_faces, aneis, zmin = silhueta.faces_e_silhueta(el, limiar_pesado, z_corte=altura_corte_m)
+                if silhueta.eh_pesada(n_faces, limiar_pesado):
+                    if aneis is None or (zmin is not None and zmin > altura_corte_m):
+                        pesadas_excluidas.add(id_step)
+                        continue
+                    if aneis:
+                        pesadas[id_step] = (el, n_faces, aneis)
+                        continue
+            if moveis_como_caixa and (el.is_a("IfcFurnishingElement") or el.is_a("IfcSystemFurnitureElement")):
                 moveis_elems.append(el)
             else:
                 if cache_tipo:
@@ -768,6 +847,14 @@ def _processar_base(pedido: dict, fase=None) -> dict:
             else:
                 svg = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:ifc="http://www.ifcopenshell.org/ns"></svg>'
 
+        pesados_svg, pesados_info = [], []
+        for el, n_faces, aneis in pesadas.values():
+            grupo = _grupo_silhueta(el, aneis)
+            if grupo is None:
+                continue
+            pesados_svg.append(grupo)
+            pesados_info.append({"guid": el.GlobalId, "id": el.id(), "faces": int(n_faces)})
+
         shapes_ids = {sh.id for sh in shapes}
         em_cache_ids, replicas_sem_linhas, replicas_svg = [], [], []
         if replicas:
@@ -786,7 +873,7 @@ def _processar_base(pedido: dict, fase=None) -> dict:
                 else:
                     replicas_sem_linhas.append(rep_el.id())
 
-        extra_svg = replicas_svg + caixas_svg
+        extra_svg = pesados_svg + replicas_svg + caixas_svg
         if extra_svg:
             if "xmlns:ifc=" not in svg:
                 svg = re.sub(r"(<svg\b[^>]*)", r'\1 xmlns:ifc="http://www.ifcopenshell.org/ns"', svg, count=1)
@@ -801,10 +888,12 @@ def _processar_base(pedido: dict, fase=None) -> dict:
         enviados.extend(caixas_ids)
         enviados.extend(em_cache_ids)
         enviados.extend(replicas_sem_linhas)
+        enviados.extend(info["id"] for info in pesados_info)
         enviados_set = set(enviados)
         falhas = [
             id_step for id_step, _ in elementos
             if id_step not in enviados_set and id_step not in aberturas and id_step not in moveis_excluidos
+            and id_step not in pesadas_excluidas
         ]
         n_paths = len(re.findall(r"<path\b", svg))
         tempos = {
@@ -820,6 +909,7 @@ def _processar_base(pedido: dict, fase=None) -> dict:
             "enviados": enviados,
             "caixas": caixas_ids,
             "em_cache": em_cache_ids,
+            "pesados": pesados_info,
             "falhas_geometria": falhas,
             "tempos": tempos,
         }
@@ -833,7 +923,7 @@ _GRUPO_ELEM = re.compile(r'<g\b(?![^>]*IfcBuildingStorey)[^>]*\bifc:guid\s*=\s*[
 def _planta_recortada(pedido: dict, fase) -> dict:
     """Filho de planta em faixas: caminho normal e depois recorte da projeção na faixa e filtro dos donos."""
     faixa = pedido["faixa"]
-    base = {k: v for k, v in pedido.items() if k != "faixa"}
+    base = {k: v for k, v in pedido.items() if k not in ("faixa", "pesados", "limiar_pesado")}
     r = _processar_base(base, fase)
     if not (r.get("ok") and r.get("svg")):
         return r
@@ -911,6 +1001,17 @@ def _planta_em_faixas(pedido: dict, fase, n: int) -> dict:
         itens = _itens_planta(pedido, total_threads)
         if not itens:
             return normal()
+
+        pesados_svg, pesados_info, pesadas_ids, pesadas_excluidas = [], [], set(), set()
+        if pedido.get("pesados") == "silhueta":
+            f = ifcopenshell.open(pedido.get("arquivo"))
+            altura_corte_m = float((pedido.get("vista") or {}).get("altura_corte_m", float("inf")))
+            pesados_svg, pesados_info, pesadas_ids, pesadas_excluidas = _pesadas_para_svg(f, pedido, pedido.get("elementos", []), altura_corte_m)
+        fora = pesadas_ids | pesadas_excluidas
+        itens = [it for it in itens if it[0] not in fora]
+        if not itens:
+            return normal()
+
         pesos = _pesos_planta(pedido, itens)
         lims = faixas.limites(itens, n, pesos=pesos)
         if len(lims) <= 1:
@@ -922,6 +1023,8 @@ def _planta_em_faixas(pedido: dict, fase, n: int) -> dict:
         for k, (a, b) in enumerate(lims):
             donos = [i for i, _g, u0, u1 in itens if (a is None or (u0 + u1) / 2.0 >= a) and (b is None or (u0 + u1) / 2.0 < b)]
             q = dict(base)
+            q.pop("pesados", None)
+            q.pop("limiar_pesado", None)
             q["elementos"] = [list(e) for e in divisao[k]]
             q["faixa"] = {"u0": a, "u1": b, "donos": donos}
             q["threads"] = threads_filho
@@ -933,16 +1036,25 @@ def _planta_em_faixas(pedido: dict, fase, n: int) -> dict:
         if any(not isinstance(r, dict) or not r.get("ok") or not r.get("svg") for r in resultados):
             return normal()
         svg = faixas.unir_planta([r["svg"] for r in resultados])
+        if pesados_svg:
+            if "xmlns:ifc=" not in svg:
+                svg = re.sub(r"(<svg\b[^>]*)", r'\1 xmlns:ifc="http://www.ifcopenshell.org/ns"', svg, count=1)
+            bloco = "\n" + "\n".join(pesados_svg) + "\n"
+            idx = svg.rfind("</svg>")
+            svg = (svg[:idx] + bloco + svg[idx:]) if idx != -1 else (svg + bloco)
     except Exception:
         return normal()
 
     def junta(chave):
         return list(dict.fromkeys(x for r in resultados for x in (r.get(chave) or ())))
 
+    enviados = junta("enviados")
+    enviados.extend(info["id"] for info in pesados_info)
+    enviados = list(dict.fromkeys(enviados))
     falhas = sorted({i for r, d in zip(resultados, donos_de) for i in (r.get("falhas_geometria") or ()) if i in d})
     tempos = {"abrir_s": 0.0, **{k: float(sum(float((r.get("tempos") or {}).get(k, 0.0)) for r in resultados)) for k in ("geo_s", "write_s", "finalize_s")}}
-    return {"ok": True, "svg": svg, "n_paths": len(re.findall(r"<path\b", svg)), "enviados": junta("enviados"), "caixas": junta("caixas"),
-            "em_cache": junta("em_cache"), "falhas_geometria": falhas, "tempos": tempos}
+    return {"ok": True, "svg": svg, "n_paths": len(re.findall(r"<path\b", svg)), "enviados": enviados, "caixas": junta("caixas"),
+            "em_cache": junta("em_cache"), "pesados": pesados_info, "falhas_geometria": falhas, "tempos": tempos}
 
 
 def processar(pedido: dict, fase=None) -> dict:

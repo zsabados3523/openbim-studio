@@ -205,11 +205,14 @@ def _erro(tipo: str, mensagem: str) -> dict:
 _SPAWN = threading.Lock()
 
 
-def rodar_filho(pedido: dict) -> dict:
+def rodar_filho(pedido: dict, limite_s: float | None = None) -> dict:
     """Roda `obim_geometria.processo.entrada` num processo spawn; nunca levanta."""
     from obim_geometria.processo import entrada
 
-    limite_s = float(os.environ.get("OBIM_FAIXAS_LIMITE_S", "300"))
+    if limite_s is None:
+        limite_s = float(os.environ.get("OBIM_FAIXAS_LIMITE_S", "300"))
+    else:
+        limite_s = float(limite_s)
     ctx = multiprocessing.get_context("spawn")
     rx, tx = ctx.Pipe(duplex=False)
     proc, resposta, fase = None, None, ""

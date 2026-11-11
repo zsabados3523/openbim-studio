@@ -32,6 +32,8 @@ class Planta:
     altura_corte: float
     caixas: tuple[int, ...]
     em_cache: tuple[int, ...] = ()
+    pesados: tuple = ()
+    pedido: dict | None = None
 
 
 def _altura_corte(ifc: ifcopenshell.file, anotacao) -> float:
@@ -68,7 +70,15 @@ def gerar_planta(
     caminho_ifc: str | Path | None = None,
     cache: "CacheDesenho | None" = None,
     faixas: int | None = None,
+    pesados: str | None = None,
+    limiar_pesado: int | None = None,
 ) -> Planta:
+    if pesados not in (None, "silhueta"):
+        raise ValueError(f"pesados inválido: {pesados!r} (esperado None ou 'silhueta')")
+    if limiar_pesado is not None and (
+        isinstance(limiar_pesado, bool) or not isinstance(limiar_pesado, int) or limiar_pesado < 1
+    ):
+        raise ValueError(f"limiar_pesado inválido: {limiar_pesado!r} (esperado inteiro >= 1 ou None)")
     if faixas is not None and (isinstance(faixas, bool) or not isinstance(faixas, int) or faixas < 1):
         raise ValueError(f"faixas inválidas: {faixas!r} (esperado inteiro >= 1 ou None)")
     if ocultar_secundarias:
@@ -130,6 +140,10 @@ def gerar_planta(
         pedido["threads"] = threads
     if faixas not in (None, 1):
         pedido["faixas"] = faixas
+    if pesados:
+        pedido["pesados"] = pesados
+        if limiar_pesado is not None:
+            pedido["limiar_pesado"] = limiar_pesado
 
     if cache is not None:
         ch = cache.chave(ifc, pedido)
@@ -151,4 +165,6 @@ def gerar_planta(
         altura_corte=altura_corte,
         caixas=tuple(int(x) for x in r.get("caixas") or ()),
         em_cache=tuple(int(x) for x in r.get("em_cache") or ()),
+        pesados=tuple(dict(d) for d in (r.get("pesados") or ())),
+        pedido=pedido,
     )

@@ -101,7 +101,7 @@ def test_mudar_parametro_da_vista_recalcula(pasta):
     c, esp = M().CacheDesenho(pasta), ExecutorEspiao()
     f, ga, _gb, _ = modelo_planta()
     planta_c(f, ga, c, esp)
-    planta_c(f, ga, c, esp, moveis_como_caixa=False)
+    planta_c(f, ga, c, esp, moveis_como_caixa=True)
     assert len(esp.pedidos_desenho) == 2
 
 

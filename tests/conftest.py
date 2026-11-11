@@ -16,6 +16,32 @@ from obrigatorio import ligar_ci  # noqa: E402
 
 ligar_ci()  # OBIM_CI=1: liga as chaves de obrigatório antes de qualquer teste ler o ambiente
 
+if os.environ.get("GITHUB_ACTIONS"):
+    # Guarda de travamento no CI: se a sessão passar de 40 min, grava no pytest.log o teste em andamento e a pilha de
+    # todas as threads e encerra (o pytest captura o stderr, então o resumo é o único lugar que sobrevive).
+    import threading
+    import time
+    import traceback
+
+    _atual = {"id": "?", "t": time.monotonic()}
+
+    def pytest_runtest_logstart(nodeid, location):
+        _atual["id"], _atual["t"] = nodeid, time.monotonic()
+
+    def _vigia():
+        time.sleep(2400)
+        destino = "pytest.log"  # o passo do CI redireciona a saída do pytest para este arquivo e depois o imprime
+        linhas = [f"### TRAVADO: teste em andamento {_atual['id']} ha {time.monotonic() - _atual['t']:.0f} s"]
+        for tid, fr in sys._current_frames().items():
+            linhas.append(f"thread {tid}:")
+            linhas.extend("    " + x.rstrip() for x in traceback.format_stack(fr)[-8:])
+        if destino:
+            with open(destino, "a", encoding="utf-8") as f:
+                f.write("\n".join(linhas) + "\n")
+        os._exit(1)
+
+    threading.Thread(target=_vigia, daemon=True).start()
+
 
 def pytest_terminal_summary(terminalreporter):
     """RG-03: a contagem de pulos aparece sempre; no CI também vai para o resumo do job (GITHUB_STEP_SUMMARY)."""

@@ -11,6 +11,7 @@ O chamador NAO deve alterar o ifc enquanto houver pedido em voo.
 from __future__ import annotations
 
 import functools
+import inspect
 import itertools
 import threading
 
@@ -49,6 +50,7 @@ class GerenteDesenho(QObject):
     progresso = Signal(str, str)
     pronto = Signal(str, object)
     falhou = Signal(str, str)
+    previa = Signal(str, object)
     _evento = Signal(object, str, object)  # (pedido, tipo do evento, carga); interno
 
     def __init__(self, cache=None, *, motor=None, chave_estado=None, parent=None):
@@ -115,9 +117,17 @@ class GerenteDesenho(QObject):
     def _rodar(self, ped, tipo, ifc, vista_guid, opcoes):
         # Thread de fundo: nada de Qt aqui alem de emitir o sinal interno (fila).
         try:
+            extra = {}
+            try:
+                params = inspect.signature(self._motor).parameters.values()
+            except (TypeError, ValueError):
+                params = ()
+            if "previa" in {p.name for p in params} or any(
+                    p.kind is inspect.Parameter.VAR_KEYWORD for p in params):
+                extra["previa"] = lambda d: self._evento.emit(ped, "previa", d)
             dados = self._motor(
                 tipo, ifc, vista_guid, opcoes, cancelar=ped.cancelar,
-                progresso=lambda m: self._evento.emit(ped, "progresso", m))
+                progresso=lambda m: self._evento.emit(ped, "progresso", m), **extra)
             if ped.cancelar.is_set():
                 return
             if self._cache is not None:
@@ -136,6 +146,9 @@ class GerenteDesenho(QObject):
     def _tratar(self, ped, tipo, carga):
         if self._ativos.get(ped.chave) is not ped or ped.cancelar.is_set():
             return  # cancelado ou estado velho: descarta
+        if tipo == "previa":
+            self.previa.emit(ped.chave, carga)
+            return  # pedido segue vivo: o pronto ainda vem
         if tipo == "progresso":
             self.progresso.emit(ped.chave, carga)
             return

@@ -26,32 +26,48 @@ def _validar_n(n) -> int:
     return n
 
 
-def limites(itens, n, *, so_primeira=()) -> list[tuple[float | None, float | None]]:
-    """Faixas contíguas da esquerda para a direita; só as bordas internas são cortes."""
+def limites(itens, n, *, so_primeira=(), pesos=None) -> list[tuple[float | None, float | None]]:
+    """Faixas contíguas da esquerda para a direita; só as bordas internas são cortes.
+
+    `pesos` (id -> custo relativo, padrão 1) equilibra o custo, não a contagem de itens.
+    """
     n = _validar_n(n)
     primeira = set(so_primeira)
-    centros = sorted({
-        (float(it[2]) + float(it[3])) / 2.0 for it in itens if it[0] not in primeira
-    })
+    por_centro: dict[float, float] = {}
+    for it in itens:
+        if it[0] not in primeira:
+            c = (float(it[2]) + float(it[3])) / 2.0
+            por_centro[c] = por_centro.get(c, 0.0) + float((pesos or {}).get(it[0], 1.0))
+    centros = sorted(por_centro)
     if len(centros) < 2 or n == 1:
         return [(None, None)]
     m = len(centros)
-    posicoes = sorted({
-        idx for k in range(1, n)
-        if 1 <= (idx := round(k * m / n)) <= m - 1
-    })
+    if pesos:
+        total, acum, posicoes = sum(por_centro.values()), 0.0, set()
+        alvos = [k * total / n for k in range(1, n)]
+        for idx, c in enumerate(centros[:-1], start=1):
+            acum += por_centro[c]
+            while alvos and acum >= alvos[0] - 1e-9:
+                alvos.pop(0)
+                posicoes.add(idx)
+        posicoes = sorted(posicoes)
+    else:
+        posicoes = sorted({
+            idx for k in range(1, n)
+            if 1 <= (idx := round(k * m / n)) <= m - 1
+        })
     bordas = [None] + [(centros[i - 1] + centros[i]) / 2.0 for i in posicoes] + [None]
     return list(zip(bordas, bordas[1:]))
 
 
-def dividir(itens, n, *, so_primeira=()) -> list[list[list]]:
+def dividir(itens, n, *, so_primeira=(), pesos=None) -> list[list[list]]:
     """Itens que encostam em cada faixa (fechado, com halo); `so_primeira` só na faixa 0."""
     n = _validar_n(n)
     if not itens:
         return []
     primeira = set(so_primeira)
     faixas = []
-    for k, (a, b) in enumerate(limites(itens, n, so_primeira=primeira)):
+    for k, (a, b) in enumerate(limites(itens, n, so_primeira=primeira, pesos=pesos)):
         itens_faixa = []
         for it in itens:
             i, guid, u0, u1 = it[0], it[1], float(it[2]), float(it[3])
@@ -148,6 +164,38 @@ def unir(svgs) -> str:
     if caixas:
         unido = unido.replace("</svg>", "".join(caixas) + "</svg>", 1)
     return unido
+
+
+_GRUPO_PLANTA = re.compile(r'<g\b(?![^>]*IfcBuildingStorey)[^>]*\bifc:guid\s*=\s*["\'][^"\']*["\'][^>]*?(?:/>|>.*?</g>)', re.S)
+
+
+def unir_planta(svgs) -> str:
+    """Une SVGs de planta já recortados: esqueleto do primeiro com projeção, uma projeção, grupos de elemento de todos."""
+    svgs = list(svgs)
+    if not svgs:
+        raise FaixasInvalidas("nenhum SVG para unir")
+    base = next((s for s in svgs if _PROJ.search(s)), None)
+    if base is None:
+        raise FaixasInvalidas("SVG sem grupo de projeção")
+    ini = _PROJ.search(base)
+    caminhos, dentro, fora = [], [], []
+    for svg in svgs:
+        proj = _PROJ.search(svg)
+        if proj is not None:
+            caminhos.extend(_PATH.findall(proj.group(1)))
+        if svg is base:
+            continue
+        corte = proj.start() if proj is not None else len(svg)
+        for m in _GRUPO_PLANTA.finditer(svg):
+            (dentro if m.start() < corte else fora).append(m.group(0))
+    topo = base[:ini.start(1)] + "\n" + "\n".join(caminhos) + "\n" + base[ini.end(1):]
+    if dentro:
+        i = _PROJ.search(topo).start()
+        topo = topo[:i] + "".join(dentro) + topo[i:]
+    if fora:
+        i = topo.rfind("</svg>")
+        topo = topo[:i] + "".join(fora) + topo[i:]
+    return topo
 
 
 def _erro(tipo: str, mensagem: str) -> dict:

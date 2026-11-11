@@ -234,7 +234,7 @@ def test_caso9_janela_nao_carrega_geometria_com_filho_real(tmp_path):
 
 
 # ---- caso 10: trava ampliada de app/ (sem marcador; o teste da regra 9 da S04 não muda) ----
-PROIBIDO = re.compile(r"ifcopenshell\.geom|from ifcopenshell import geom|ifcopenshell\.draw|serializers|(?i:\.iterator\()|\bSURFACES_AND_SOLIDS\b|\bNATIVE\b|obim_geometria\.(?!processo\b)|from obim_geometria import|import obim_geometria\b(?!\.processo)")
+PROIBIDO = re.compile(r"ifcopenshell\.geom|from ifcopenshell import geom|ifcopenshell\.draw|serializers|(?i:\.iterator\()|\bSURFACES_AND_SOLIDS\b|\bNATIVE\b|obim_geometria\.(?!processo\b|pecas\b)|from obim_geometria import|import obim_geometria\b(?!\.processo|\.pecas)")
 
 
 def proibidos(raiz):
@@ -249,7 +249,8 @@ def test_caso10_app_sem_geometria_nem_serializador_nem_iterator():
 @pytest.mark.parametrize("linha,barra", [("import ifcopenshell.geom", 1), ("from ifcopenshell import geom", 1), ("# ifcopenshell.draw", 1), ("x = G.serializers.svg", 1),
                                          ("it = G.iterator(s, f)", 1), ("x = W.SURFACES_AND_SOLIDS", 1), ("s.set('iterator-output', W.NATIVE)", 1), ("it = W.Iterator(s, f)", 1), ("from obim_geometria.caixas import x", 1), ("from obim_geometria import desenho", 1),
                                          ("import obim_geometria.local", 1), ("from obim_geometria.processo import entrada", 0), ("import ifcopenshell.ifcopenshell_wrapper as W", 0),
-                                         ("W.schema_by_name('IFC4')", 0), ("import obim_geometria.processo", 0)])
+                                         ("W.schema_by_name('IFC4')", 0), ("import obim_geometria.processo", 0),
+                                         ("import obim_geometria.pecas as pecas", 0), ("from obim_geometria.pecas import extrair_grupo", 0), ("import obim_geometria.pecasx", 1), ("from obim_geometria.faixas import x", 1)])
 def test_caso10_o_verificador_pega_e_deixa_passar(tmp_path, linha, barra):
     (tmp_path / "a.py").write_text(linha + "\n", encoding="utf-8")
     assert len(proibidos(tmp_path)) == barra

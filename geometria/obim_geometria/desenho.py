@@ -425,7 +425,7 @@ def _recortar_segmento(p, q, xa, xb):
     return a, b
 
 
-def _recortar_d(d: str, xa: float | None, xb: float | None) -> list[str]:
+def _recortar_d(d: str, xa: float | None, xb: float | None, fmt=lambda v: f"{v:.9g}") -> list[str]:
     saida = []
     for pts in _polilinhas_d(d):
         runs = []
@@ -448,7 +448,7 @@ def _recortar_d(d: str, xa: float | None, xb: float | None) -> list[str]:
             runs.append(atual)
         for run in runs:
             if len(run) >= 2:
-                saida.append("M" + " L".join(f"{x:.9g},{y:.9g}" for x, y in run))
+                saida.append("M" + " L".join(f"{fmt(x)},{fmt(y)}" for x, y in run))
     return saida
 
 
@@ -583,7 +583,7 @@ def _corte_em_faixas(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -
     }
 
 
-def processar(pedido: dict, fase=None) -> dict:
+def _processar_base(pedido: dict, fase=None) -> dict:
     try:
         t_a0 = time.perf_counter()
         f = ifcopenshell.open(pedido.get("arquivo"))
@@ -825,3 +825,136 @@ def processar(pedido: dict, fase=None) -> dict:
         }
     except Exception as e:
         return {"ok": False, "erro": {"tipo": type(e).__name__, "mensagem": str(e), "rastro": traceback.format_exc()}}
+
+
+_GRUPO_ELEM = re.compile(r'<g\b(?![^>]*IfcBuildingStorey)[^>]*\bifc:guid\s*=\s*["\']([^"\']*)["\'][^>]*?(?:/>|>.*?</g>)\s*', re.S)
+
+
+def _planta_recortada(pedido: dict, fase) -> dict:
+    """Filho de planta em faixas: caminho normal e depois recorte da projeção na faixa e filtro dos donos."""
+    faixa = pedido["faixa"]
+    base = {k: v for k, v in pedido.items() if k != "faixa"}
+    r = _processar_base(base, fase)
+    if not (r.get("ok") and r.get("svg")):
+        return r
+    try:
+        donos = set(faixa.get("donos") or ())
+        guids = {guid for i, guid in pedido.get("elementos", []) if i in donos}
+        svg = r["svg"]
+        u0, u1 = faixa.get("u0"), faixa.get("u1")
+        m = _PROJ_RE.search(svg)
+        if m is not None and (u0 is not None or u1 is not None):
+            novos = []
+            for tag in _PATH_RE.findall(m.group(1)):
+                dm = _D_ATTR.search(tag)
+                if dm is not None:
+                    novos.extend(f'<path d="{d}"/>' for d in _recortar_d(dm.group(2), u0, u1, repr))
+            svg = svg[: m.start(1)] + "\n" + "\n".join(novos) + "\n" + svg[m.end(1):]
+        r["svg"] = _GRUPO_ELEM.sub(lambda g: g.group(0) if g.group(1) in guids else "", svg)
+        r["n_paths"] = len(re.findall(r"<path\b", r["svg"]))
+        return r
+    except Exception as e:
+        return {"ok": False, "erro": {"tipo": type(e).__name__, "mensagem": f"faixa: {e}", "rastro": traceback.format_exc()}}
+
+
+def _itens_planta(pedido: dict, total_threads: int):
+    """(id, guid, u0, u1) pelas caixas do pedido, completadas por `caixas.processar`; None se faltar alguma."""
+    from obim_geometria import caixas as cx
+
+    elementos = pedido.get("elementos", [])
+    coords = {}
+    for i, _g in elementos:
+        c = caixa_valida((pedido.get("caixas_coords") or {}).get(i) or (pedido.get("caixas_coords") or {}).get(str(i)))
+        if c is not None:
+            coords[i] = c
+    falta = [e for e in elementos if e[0] not in coords]
+    if falta:
+        r = cx.processar({"arquivo": pedido.get("arquivo"), "elementos": falta, "threads": total_threads})
+        if not r.get("ok"):
+            return None
+        for i, _g in falta:
+            c = caixa_valida((r.get("caixas_envolventes") or {}).get(str(i)) or (r.get("caixas_envolventes") or {}).get(i))
+            if c is not None:
+                coords[i] = c
+    if any(i not in coords for i, _g in elementos):
+        return None
+    return [(i, g, min(coords[i][0], coords[i][3]), max(coords[i][0], coords[i][3])) for i, g in elementos]
+
+
+PESO_MOVEL = 300.0
+MIN_ITENS_PESO = 200  # modelo pequeno é rápido de qualquer jeito: divisão por contagem
+
+
+def _pesos_planta(pedido: dict, itens) -> dict | None:
+    """Móvel desenhado em linhas custa ordens de grandeza mais que parede: pesa mais no equilíbrio das faixas."""
+    if pedido.get("moveis_como_caixa") or len(itens) < MIN_ITENS_PESO:
+        return None
+    try:
+        f = ifcopenshell.open(pedido.get("arquivo"))
+        pesos = {i: PESO_MOVEL for i, _g, _a, _b in itens
+                 if (e := f.by_id(i)).is_a("IfcFurnishingElement") or e.is_a("IfcSystemFurnitureElement")}
+    except Exception:
+        return None
+    return pesos or None
+
+
+def _planta_em_faixas(pedido: dict, fase, n: int) -> dict:
+    base = {k: v for k, v in pedido.items() if k != "faixas"}
+
+    def normal() -> dict:
+        return _processar_base(base, fase)
+
+    try:
+        if not pedido.get("elementos"):
+            return normal()
+        total_threads = nucleos.limitar_threads(pedido.get("threads"))
+        itens = _itens_planta(pedido, total_threads)
+        if not itens:
+            return normal()
+        pesos = _pesos_planta(pedido, itens)
+        lims = faixas.limites(itens, n, pesos=pesos)
+        if len(lims) <= 1:
+            return normal()
+        divisao = faixas.dividir(itens, n, pesos=pesos)
+        simultaneos = max(1, min(len(lims), total_threads))
+        threads_filho = max(1, total_threads // simultaneos)
+        pedidos, donos_de = [], []
+        for k, (a, b) in enumerate(lims):
+            donos = [i for i, _g, u0, u1 in itens if (a is None or (u0 + u1) / 2.0 >= a) and (b is None or (u0 + u1) / 2.0 < b)]
+            q = dict(base)
+            q["elementos"] = [list(e) for e in divisao[k]]
+            q["faixa"] = {"u0": a, "u1": b, "donos": donos}
+            q["threads"] = threads_filho
+            pedidos.append(q)
+            donos_de.append(set(donos))
+        with ThreadPoolExecutor(max_workers=simultaneos) as ex:
+            futuros = [ex.submit(faixas.rodar_filho, q) for q in pedidos]
+            resultados = [fut.result() for fut in futuros]
+        if any(not isinstance(r, dict) or not r.get("ok") or not r.get("svg") for r in resultados):
+            return normal()
+        svg = faixas.unir_planta([r["svg"] for r in resultados])
+    except Exception:
+        return normal()
+
+    def junta(chave):
+        return list(dict.fromkeys(x for r in resultados for x in (r.get(chave) or ())))
+
+    falhas = sorted({i for r, d in zip(resultados, donos_de) for i in (r.get("falhas_geometria") or ()) if i in d})
+    tempos = {"abrir_s": 0.0, **{k: float(sum(float((r.get("tempos") or {}).get(k, 0.0)) for r in resultados)) for k in ("geo_s", "write_s", "finalize_s")}}
+    return {"ok": True, "svg": svg, "n_paths": len(re.findall(r"<path\b", svg)), "enviados": junta("enviados"), "caixas": junta("caixas"),
+            "em_cache": junta("em_cache"), "falhas_geometria": falhas, "tempos": tempos}
+
+
+def processar(pedido: dict, fase=None) -> dict:
+    vista = pedido.get("vista")
+    if isinstance(vista, dict) and vista.get("tipo") == "CORTE":
+        return _processar_base(pedido, fase)
+    if pedido.get("faixa") is not None:
+        return _planta_recortada(pedido, fase)
+    if "faixas" in pedido and not (type(pedido["faixas"]) is int and pedido["faixas"] == 1):
+        try:
+            n = faixas._validar_n(pedido["faixas"])
+        except faixas.FaixasInvalidas as e:
+            return {"ok": False, "erro": {"tipo": "FaixasInvalidas", "mensagem": str(e), "rastro": ""}}
+        return _planta_em_faixas(pedido, fase, n)
+    return _processar_base(pedido, fase)

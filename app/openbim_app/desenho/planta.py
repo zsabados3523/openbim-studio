@@ -67,7 +67,10 @@ def gerar_planta(
     executor=None,
     caminho_ifc: str | Path | None = None,
     cache: "CacheDesenho | None" = None,
+    faixas: int | None = None,
 ) -> Planta:
+    if faixas is not None and (isinstance(faixas, bool) or not isinstance(faixas, int) or faixas < 1):
+        raise ValueError(f"faixas inválidas: {faixas!r} (esperado inteiro >= 1 ou None)")
     if ocultar_secundarias:
         cats = tuple(dict.fromkeys((*categorias_ocultas, *selecao.CATEGORIAS_PADRAO_PLANTA_OCULTAS)))
     else:
@@ -125,6 +128,8 @@ def gerar_planta(
     }
     if threads is not None:
         pedido["threads"] = threads
+    if faixas not in (None, 1):
+        pedido["faixas"] = faixas
 
     if cache is not None:
         ch = cache.chave(ifc, pedido)

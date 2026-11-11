@@ -2,7 +2,7 @@
 """Refino das peças pesadas de um desenho, uma a uma (ADR-004: sem geometria no app)."""
 from __future__ import annotations
 
-import obim_geometria.pecas as pecas
+from obim_geometria.processo import pecas
 
 from openbim_app.desenho import auxiliar
 

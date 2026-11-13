@@ -219,8 +219,8 @@ def rodar_filho(pedido: dict, limite_s: float | None = None) -> dict:
     try:
         proc = ctx.Process(target=entrada, args=(tx, json.dumps(pedido)), daemon=True)
         atual = multiprocessing.current_process()
-        antigo_daemon = atual.daemon
         with _SPAWN:
+            antigo_daemon = atual.daemon
             if antigo_daemon:
                 atual.daemon = False
             try:

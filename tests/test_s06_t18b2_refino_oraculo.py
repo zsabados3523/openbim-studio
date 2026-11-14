@@ -17,7 +17,7 @@ import obim_geometria.local as L
 import obim_geometria.pecas as P
 from openbim_app.desenho.auxiliar import DesenhoCancelado
 from openbim_app.desenho.cache import CacheDesenho
-from openbim_app.desenho.refino import refinar_pesados
+from openbim_app.desenho.refino import _chave_cache, refinar_pesados
 
 OP = dict(pesados="silhueta", limiar_pesado=50)
 
@@ -51,6 +51,8 @@ class Espiao:
         self.guids, self.falha, self.explode, self.depois = [], set(falha), set(explode), depois
 
     def __call__(self, pedido):
+        if pedido.get("op") == "peca_visivel":  # T19c2b: motor novo recusado, cai no desenho
+            return {"ok": False, "elegivel": False, "motivo": "teste"}
         gid = pedido["elementos"][0][1]
         self.guids.append(gid)
         if self.depois:
@@ -87,7 +89,7 @@ def test_nao_muta_entradas_e_devolve_copia(cena):
     p0, r0 = copy.deepcopy(p), copy.deepcopy(r)
     out = refinar_pesados(f, p, r, executor=Espiao())
     assert p == p0 and r == r0 and out is not r and "refinadas" not in r
-    assert {k: v for k, v in out.items() if k not in ("svg", "refinadas", "em_cache", "falhas_refino")} == {k: v for k, v in r.items() if k not in ("svg", "em_cache")}
+    assert {k: v for k, v in out.items() if k not in ("svg", "refinadas", "em_cache", "falhas_refino", "motores", "motivos_hlr")} == {k: v for k, v in r.items() if k not in ("svg", "em_cache")}
 
 
 def test_cache_miss_guarda_e_segunda_chamada_e_hit(cena, tmp_path):
@@ -97,7 +99,7 @@ def test_cache_miss_guarda_e_segunda_chamada_e_hit(cena, tmp_path):
     o1 = refinar_pesados(f, p, r, executor=e1, cache=cache)
     assert len(e1.guids) == 3 and o1["em_cache"] == []
     for gid, i in ids.items():  # chave de UMA peça
-        assert cache.obter(cache.chave(f, P.pedido_peca(p, i))) is not None
+        assert cache.obter(_chave_cache(cache, f, P.pedido_peca(p, i))) is not None
     e2 = Espiao()
     o2 = refinar_pesados(f, p, r, executor=e2, cache=cache)
     assert e2.guids == [] and sorted(o2["em_cache"]) == sorted(o1["refinadas"]) and o2["refinadas"] == o1["refinadas"]

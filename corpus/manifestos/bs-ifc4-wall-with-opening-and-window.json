@@ -1,0 +1,20 @@
+{
+  "nome": "bs-ifc4-wall-with-opening-and-window",
+  "origem": "https://github.com/buildingSMART/Sample-Test-Files",
+  "versao_ou_commit": "80d976a9b193a26a8e928c3e79bff67af1de68a8",
+  "data_acesso": "2026-11-14",
+  "sha256": "73b0e45d931d5dc13bfee5fdc7bd80f796526445458b2de74c4168d209097832",
+  "tamanho_bytes": 12492,
+  "licenca": "CC-BY-4.0",
+  "atribuicao": "(C) buildingSMART International Ltd., CC BY 4.0",
+  "pode_ir_no_git": "nao",
+  "esquema": "IFC4",
+  "programa_de_origem": "RDF - Test Application - 0.10",
+  "contagens": {},
+  "valores_conhecidos": {},
+  "cobre": [
+    "planta",
+    "corte"
+  ],
+  "observacoes": ""
+}

@@ -1,0 +1,21 @@
+{
+  "nome": "bs-ifc4-building-architecture",
+  "origem": "https://github.com/buildingSMART/Sample-Test-Files",
+  "versao_ou_commit": "80d976a9b193a26a8e928c3e79bff67af1de68a8",
+  "data_acesso": "2026-11-14",
+  "sha256": "8790a1e193e82b8e7e7f337ec2633cd40f2120590317a1443503a25b079e2e80",
+  "tamanho_bytes": 142325,
+  "licenca": "CC-BY-4.0",
+  "atribuicao": "(C) buildingSMART International Ltd., CC BY 4.0",
+  "pode_ir_no_git": "nao",
+  "esquema": "IFC4",
+  "programa_de_origem": "BIM_Tools - Sketchup_IFC_manager - 5.6.0",
+  "contagens": {},
+  "valores_conhecidos": {},
+  "cobre": [
+    "abrir",
+    "planta",
+    "corte"
+  ],
+  "observacoes": ""
+}

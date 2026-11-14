@@ -1,46 +1,61 @@
 [
   {
     "nome": "bs-ifc4-building-architecture",
-    "url": "https://raw.githubusercontent.com/buildingSMART/Sample-Test-Files/80d976a9b193a26a8e928c3e79bff67af1de68a8/IFC%204.0.2.1%20(IFC%204%20ADD2%20TC1)/Building-Architecture.ifc",
+    "url": "https://raw.githubusercontent.com/buildingSMART/Sample-Test-Files/80d976a9b193a26a8e928c3e79bff67af1de68a8/IFC%204.0.2.1%20(IFC%204%20ADD2%20TC1)/Simple-Scene/Building-Architecture.ifc",
     "licenca": "CC-BY-4.0",
     "atribuicao": "(C) buildingSMART International Ltd., CC BY 4.0",
     "origem": "https://github.com/buildingSMART/Sample-Test-Files",
     "versao_ou_commit": "80d976a9b193a26a8e928c3e79bff67af1de68a8",
-    "pode_ir_no_git": "sim",
-    "cobre": ["abrir", "planta", "corte"],
+    "pode_ir_no_git": "nao",
+    "cobre": [
+      "abrir",
+      "planta",
+      "corte"
+    ],
     "tamanho_esperado": 142325
   },
   {
     "nome": "bs-ifc4-building-structural",
-    "url": "https://raw.githubusercontent.com/buildingSMART/Sample-Test-Files/80d976a9b193a26a8e928c3e79bff67af1de68a8/IFC%204.0.2.1%20(IFC%204%20ADD2%20TC1)/Building-Structural.ifc",
+    "url": "https://raw.githubusercontent.com/buildingSMART/Sample-Test-Files/80d976a9b193a26a8e928c3e79bff67af1de68a8/IFC%204.0.2.1%20(IFC%204%20ADD2%20TC1)/Simple-Scene/Building-Structural.ifc",
     "licenca": "CC-BY-4.0",
     "atribuicao": "(C) buildingSMART International Ltd., CC BY 4.0",
     "origem": "https://github.com/buildingSMART/Sample-Test-Files",
     "versao_ou_commit": "80d976a9b193a26a8e928c3e79bff67af1de68a8",
-    "pode_ir_no_git": "sim",
-    "cobre": ["abrir", "planta"],
+    "pode_ir_no_git": "nao",
+    "cobre": [
+      "abrir",
+      "planta"
+    ],
     "tamanho_esperado": 185185
   },
   {
     "nome": "bs-ifc2x3-building-architecture",
-    "url": "https://raw.githubusercontent.com/buildingSMART/Sample-Test-Files/80d976a9b193a26a8e928c3e79bff67af1de68a8/IFC%202.3.0.1%20(IFC%202x3%20TC1)/Building-Architecture.ifc",
+    "url": "https://raw.githubusercontent.com/buildingSMART/Sample-Test-Files/80d976a9b193a26a8e928c3e79bff67af1de68a8/IFC%202.3.0.1%20(IFC%202x3%20TC1)/Simple-Scene/Building-Architecture.ifc",
     "licenca": "CC-BY-4.0",
     "atribuicao": "(C) buildingSMART International Ltd., CC BY 4.0",
     "origem": "https://github.com/buildingSMART/Sample-Test-Files",
     "versao_ou_commit": "80d976a9b193a26a8e928c3e79bff67af1de68a8",
-    "pode_ir_no_git": "sim",
-    "cobre": ["abrir", "planta", "corte"],
+    "pode_ir_no_git": "nao",
+    "cobre": [
+      "abrir",
+      "planta",
+      "corte"
+    ],
     "tamanho_esperado": 92542
   },
   {
     "nome": "bs-ifc4x3-building-architecture",
-    "url": "https://raw.githubusercontent.com/buildingSMART/Sample-Test-Files/80d976a9b193a26a8e928c3e79bff67af1de68a8/IFC%204.3.2.0%20(IFC%204.3%20ADD2)/Building-Architecture.ifc",
+    "url": "https://raw.githubusercontent.com/buildingSMART/Sample-Test-Files/80d976a9b193a26a8e928c3e79bff67af1de68a8/IFC%204.3.2.0%20(IFC%204.3%20ADD2)/Simple-Scene/Building-Architecture.ifc",
     "licenca": "CC-BY-4.0",
     "atribuicao": "(C) buildingSMART International Ltd., CC BY 4.0",
     "origem": "https://github.com/buildingSMART/Sample-Test-Files",
     "versao_ou_commit": "80d976a9b193a26a8e928c3e79bff67af1de68a8",
-    "pode_ir_no_git": "sim",
-    "cobre": ["abrir", "planta", "corte"],
+    "pode_ir_no_git": "nao",
+    "cobre": [
+      "abrir",
+      "planta",
+      "corte"
+    ],
     "tamanho_esperado": 141965
   },
   {
@@ -50,8 +65,11 @@
     "atribuicao": "(C) buildingSMART International Ltd., CC BY 4.0",
     "origem": "https://github.com/buildingSMART/Sample-Test-Files",
     "versao_ou_commit": "80d976a9b193a26a8e928c3e79bff67af1de68a8",
-    "pode_ir_no_git": "sim",
-    "cobre": ["planta", "corte"],
+    "pode_ir_no_git": "nao",
+    "cobre": [
+      "planta",
+      "corte"
+    ],
     "tamanho_esperado": 12492
   },
   {
@@ -61,8 +79,11 @@
     "atribuicao": "Copyright (c) 2020 Andre \"MG\" Wisen, MIT",
     "origem": "https://github.com/andrewisen/bim-whale-ifc-samples",
     "versao_ou_commit": "595fa90e3af7120d004fcb37a79d8657f1d1c9c2",
-    "pode_ir_no_git": "sim",
-    "cobre": ["abrir", "planta"],
+    "pode_ir_no_git": "nao",
+    "cobre": [
+      "abrir",
+      "planta"
+    ],
     "tamanho_esperado": 39818
   },
   {
@@ -72,8 +93,11 @@
     "atribuicao": "Copyright (c) 2020 Andre \"MG\" Wisen, MIT",
     "origem": "https://github.com/andrewisen/bim-whale-ifc-samples",
     "versao_ou_commit": "595fa90e3af7120d004fcb37a79d8657f1d1c9c2",
-    "pode_ir_no_git": "sim",
-    "cobre": ["planta", "desempenho"],
+    "pode_ir_no_git": "nao",
+    "cobre": [
+      "planta",
+      "desempenho"
+    ],
     "tamanho_esperado": 584056
   },
   {
@@ -83,8 +107,10 @@
     "atribuicao": "Copyright (c) 2020 Andre \"MG\" Wisen, MIT",
     "origem": "https://github.com/andrewisen/bim-whale-ifc-samples",
     "versao_ou_commit": "595fa90e3af7120d004fcb37a79d8657f1d1c9c2",
-    "pode_ir_no_git": "sim",
-    "cobre": ["corte"],
+    "pode_ir_no_git": "nao",
+    "cobre": [
+      "corte"
+    ],
     "tamanho_esperado": 616509
   },
   {
@@ -95,7 +121,11 @@
     "origem": "https://github.com/andrewisen/bim-whale-ifc-samples",
     "versao_ou_commit": "595fa90e3af7120d004fcb37a79d8657f1d1c9c2",
     "pode_ir_no_git": "nao",
-    "cobre": ["planta", "corte", "desempenho"],
+    "cobre": [
+      "planta",
+      "corte",
+      "desempenho"
+    ],
     "tamanho_esperado": 44337371
   },
   {
@@ -106,7 +136,10 @@
     "origem": "https://www.ifcwiki.org/index.php?title=KIT_IFC_Examples",
     "versao_ou_commit": "2021-11-15",
     "pode_ir_no_git": "nao",
-    "cobre": ["planta", "corte"],
+    "cobre": [
+      "planta",
+      "corte"
+    ],
     "tamanho_esperado": 2570803
   },
   {
@@ -117,7 +150,10 @@
     "origem": "https://www.ifcwiki.org/index.php?title=KIT_IFC_Examples",
     "versao_ou_commit": "2021-11-15",
     "pode_ir_no_git": "nao",
-    "cobre": ["planta", "corte"],
+    "cobre": [
+      "planta",
+      "corte"
+    ],
     "tamanho_esperado": 10934237
   },
   {
@@ -128,7 +164,9 @@
     "origem": "https://www.ifcwiki.org/index.php?title=KIT_IFC_Examples",
     "versao_ou_commit": "2021-11-15",
     "pode_ir_no_git": "nao",
-    "cobre": ["planta"],
+    "cobre": [
+      "planta"
+    ],
     "tamanho_esperado": 1280471
   }
 ]

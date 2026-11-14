@@ -14,6 +14,9 @@ def executar(pedido: dict) -> dict:
         if op == "desenho":
             from obim_geometria import desenho
             return desenho.processar(pedido)
+        if op == "peca_visivel":
+            from obim_geometria import peca_visivel
+            return peca_visivel.processar(pedido)
         return {"ok": False, "erro": {"tipo": "OperacaoDesconhecida", "mensagem": f"Operação desconhecida: {op}", "rastro": ""}}
     except Exception as e:
         return {"ok": False, "erro": {"tipo": type(e).__name__, "mensagem": str(e), "rastro": traceback.format_exc()}}

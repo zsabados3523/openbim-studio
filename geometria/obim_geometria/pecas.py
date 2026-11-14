@@ -75,27 +75,63 @@ def mesclar_pesado(svg: str, guid: str, grupo_exato: str) -> str:
     return "".join(partes)
 
 
-def refinar_peca(pedido: dict, id_step, executor=None, limite_s: float = 3600.0) -> dict:
+def _motivo_queda(resp) -> str:
+    if not isinstance(resp, dict):
+        return "resposta inválida do executor"
+    if resp.get("elegivel") is False and resp.get("motivo"):
+        return str(resp["motivo"])
+    if not resp.get("ok"):
+        erro = resp.get("erro")
+        msg = erro.get("mensagem") if isinstance(erro, dict) else erro
+        return str(msg or resp.get("motivo") or "falha no motor de visibilidade")
+    return "grupo ausente na resposta"
+
+
+def refinar_peca(pedido: dict, id_step, executor=None, limite_s: float = 3600.0, motor: str = "auto") -> dict:
     """Roda a peça sozinha (exata) e devolve o grupo dela; nunca levanta."""
     tempos = {}
+    motivo_hlr = None
+
+    def _com_motor(d: dict) -> dict:
+        d["motor"] = "hlr"
+        if motivo_hlr is not None:
+            d["motivo_hlr"] = motivo_hlr
+        return d
+
     try:
+        if motor not in ("auto", "hlr"):
+            raise ValueError(f"motor inválido: {motor!r}")
         q = pedido_peca(pedido, id_step)
         guid = q["elementos"][0][1]
         if executor is None:
             from obim_geometria import faixas
 
             executor = lambda p: faixas.rodar_filho(p, limite_s=limite_s)  # noqa: E731
+        if motor == "auto":
+            try:
+                rv = executor({**q, "op": "peca_visivel"})
+            except Exception as exc:
+                motivo_hlr = f"{type(exc).__name__}: {exc}"
+            else:
+                if isinstance(rv, dict) and rv.get("ok") and rv.get("grupo"):
+                    return {
+                        "ok": True,
+                        "grupo": rv["grupo"],
+                        "tempos": rv.get("tempos") or {},
+                        "motor": "visibilidade",
+                    }
+                motivo_hlr = _motivo_queda(rv)
         r = executor(q)
         if not isinstance(r, dict):
-            return {"ok": False, "grupo": None, "tempos": tempos, "erro": "resposta inválida do executor"}
+            return _com_motor({"ok": False, "grupo": None, "tempos": tempos, "erro": "resposta inválida do executor"})
         tempos = r.get("tempos") or {}
         if not r.get("ok"):
             erro = r.get("erro")
             msg = erro.get("mensagem") if isinstance(erro, dict) else erro
-            return {"ok": False, "grupo": None, "tempos": tempos, "erro": str(msg or "falha na peça")}
+            return _com_motor({"ok": False, "grupo": None, "tempos": tempos, "erro": str(msg or "falha na peça")})
         grupo = extrair_grupo(r.get("svg") or "", guid)
         if grupo is None:
-            return {"ok": False, "grupo": None, "tempos": tempos, "erro": f"peça {guid} ausente no SVG"}
-        return {"ok": True, "grupo": grupo, "tempos": tempos}
+            return _com_motor({"ok": False, "grupo": None, "tempos": tempos, "erro": f"peça {guid} ausente no SVG"})
+        return _com_motor({"ok": True, "grupo": grupo, "tempos": tempos})
     except Exception as e:
-        return {"ok": False, "grupo": None, "tempos": tempos, "erro": f"{type(e).__name__}: {e}"}
+        return _com_motor({"ok": False, "grupo": None, "tempos": tempos, "erro": f"{type(e).__name__}: {e}"})

@@ -23,8 +23,8 @@ def _mod():
 def _cenario(tmp_path, **mudar):
     """Corpus com 1 modelo e manifesto válido; `mudar` sobrescreve campos (None remove o campo)."""
     corpus, manif = tmp_path / "corpus", tmp_path / "manifestos"
-    corpus.mkdir()
-    manif.mkdir()
+    corpus.mkdir(exist_ok=True)
+    manif.mkdir(exist_ok=True)
     (corpus / "m.ifc").write_bytes(DADOS)
     m = {"nome": "m", "origem": "x", "versao_ou_commit": "v1", "data_acesso": "2026-11-14",
          "sha256": hashlib.sha256(DADOS).hexdigest(), "tamanho_bytes": len(DADOS), "licenca": "CC-BY-4.0",

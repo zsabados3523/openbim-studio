@@ -1,0 +1,19 @@
+{
+  "nome": "bimwhale-tall-building",
+  "origem": "https://github.com/andrewisen/bim-whale-ifc-samples",
+  "versao_ou_commit": "595fa90e3af7120d004fcb37a79d8657f1d1c9c2",
+  "data_acesso": "2026-11-14",
+  "sha256": "9f180a7148bb7bcf43dd80800068553f1c8b189ebe0dc84b6c498061832960d1",
+  "tamanho_bytes": 616509,
+  "licenca": "MIT",
+  "atribuicao": "Copyright (c) 2020 Andre \"MG\" Wisen, MIT",
+  "pode_ir_no_git": "sim",
+  "esquema": "IFC2X3",
+  "programa_de_origem": "21.1.10.26 - Exporter 21.1.10.26 - Alternate UI 21.1.10.26",
+  "contagens": {},
+  "valores_conhecidos": {},
+  "cobre": [
+    "corte"
+  ],
+  "observacoes": ""
+}

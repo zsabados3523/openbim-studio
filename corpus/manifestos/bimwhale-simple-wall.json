@@ -1,0 +1,20 @@
+{
+  "nome": "bimwhale-simple-wall",
+  "origem": "https://github.com/andrewisen/bim-whale-ifc-samples",
+  "versao_ou_commit": "595fa90e3af7120d004fcb37a79d8657f1d1c9c2",
+  "data_acesso": "2026-11-14",
+  "sha256": "a653f7accd6d7e6f9f03a6a9318b5379e5f4c3a9b8b0b2b192996d92fb35a41f",
+  "tamanho_bytes": 39818,
+  "licenca": "MIT",
+  "atribuicao": "Copyright (c) 2020 Andre \"MG\" Wisen, MIT",
+  "pode_ir_no_git": "sim",
+  "esquema": "IFC2X3",
+  "programa_de_origem": "21.1.0.108 - Exporter 21.1.0.108 - Alternate UI 21.1.0.108",
+  "contagens": {},
+  "valores_conhecidos": {},
+  "cobre": [
+    "abrir",
+    "planta"
+  ],
+  "observacoes": ""
+}

@@ -113,7 +113,7 @@ def conferir(pasta_corpus, pasta_manifestos) -> list[str]:
 
     if dir_corpus.is_dir():
         for arq in sorted(dir_corpus.iterdir()):
-            if not arq.is_file() or arq.name.startswith("README"):
+            if not arq.is_file() or arq.name.startswith("README") or arq.name == "lista.json":
                 continue
             if arq.stem in modelos_por_stem:
                 erros.append(

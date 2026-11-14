@@ -45,6 +45,13 @@ def entrada(tx, pedido_json):
                 tx.send_bytes(json.dumps({"tipo": "fase", "fase": nome, "tempo": 0.0}).encode("utf-8"))
 
             resp = desenho.processar(pedido, fase)
+        elif op == "peca_visivel":
+            from obim_geometria import peca_visivel
+
+            def fase(nome):
+                tx.send_bytes(json.dumps({"tipo": "fase", "fase": nome, "tempo": 0.0}).encode("utf-8"))
+
+            resp = peca_visivel.processar(pedido, fase)
         else:
             resp = {"ok": False, "erro": {"tipo": "OperacaoDesconhecida", "mensagem": f"Operação desconhecida: {op}", "rastro": ""}}
         tx.send_bytes(json.dumps({"tipo": "resposta", "dados": resp}).encode("utf-8"))

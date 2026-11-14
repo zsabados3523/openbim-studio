@@ -7,7 +7,7 @@
   "tamanho_bytes": 12492,
   "licenca": "CC-BY-4.0",
   "atribuicao": "(C) buildingSMART International Ltd., CC BY 4.0",
-  "pode_ir_no_git": "sim",
+  "pode_ir_no_git": "nao",
   "esquema": "IFC4",
   "programa_de_origem": "RDF - Test Application - 0.10",
   "contagens": {},

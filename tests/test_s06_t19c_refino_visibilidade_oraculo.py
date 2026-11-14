@@ -101,11 +101,11 @@ def test_mesclar_pesado_com_grupo_do_motor_nao_duplica(tmp_path):
     p, el = _peca(tmp_path, CASOS["cadeira"])
     p.update(pesados="silhueta", limiar_pesado=20)
     sil = L.executar(p)
-    assert sil["ok"] and re.search(r'ifc:guid="%s"[^>]*data-silhueta|data-silhueta[^>]*ifc:guid="%s"' % (re.escape(el.GlobalId),) * 2, sil["svg"])
+    assert sil["ok"] and re.search(r'ifc:guid="%s"[^>]*data-silhueta|data-silhueta[^>]*ifc:guid="%s"' % ((re.escape(el.GlobalId),) * 2), sil["svg"])
     r = P.refinar_peca(p, el.id(), executor=L.executar)
     assert r["ok"] and r["motor"] == "visibilidade"
     final = P.mesclar_pesado(sil["svg"], el.GlobalId, r["grupo"])
-    assert final.count('ifc:guid="%s"' % el.GlobalId) == 1 and "data-silhueta" not in final.split("</style>")[1]
+    assert final.count('ifc:guid="%s"' % el.GlobalId) == 1 and not re.search(r'ifc:guid="%s"[^>]*data-silhueta' % re.escape(el.GlobalId), final)  # a outra peca pesada segue silhueta
     assert P.mesclar_pesado(final, el.GlobalId, r["grupo"]) == final
 
 

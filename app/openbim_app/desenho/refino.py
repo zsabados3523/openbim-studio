@@ -6,11 +6,47 @@ import obim_geometria.pecas as pecas
 
 from openbim_app.desenho import auxiliar
 
+_VERSAO_REFINO = "visibilidade-v1"
+
 
 def _erro(exc: Exception) -> str:
     if isinstance(exc, auxiliar.FalhaNoAuxiliar):
         return f"{exc.tipo}: {exc.mensagem}"
     return f"{type(exc).__name__}: {exc}"
+
+
+def _chave_cache(cache, ifc, pedido_peca: dict) -> str | None:
+    if cache is None:
+        return None
+    return cache.chave(ifc, {**pedido_peca, "motor": "auto", "versao_refino": _VERSAO_REFINO})
+
+
+def _refinar_uma(ifc, pedido_peca: dict, ident, *, executor, limite_s: float, cancelar) -> dict:
+    with auxiliar.preparar(ifc, pedido_peca) as preparado:
+        interrompido: list[auxiliar.ErroAuxiliar] = []
+
+        def _exec(q_op: dict) -> dict:
+            if interrompido:
+                exc = interrompido[0]
+                return {"ok": False, "erro": {"tipo": type(exc).__name__, "mensagem": str(exc), "rastro": ""}}
+            prep_op = auxiliar.Preparado(q_op, preparado.pasta, preparado.copia_s)
+            try:
+                return auxiliar.executar(
+                    prep_op,
+                    limite_s=limite_s,
+                    cancelar=cancelar,
+                    executor=executor,
+                )
+            except (auxiliar.DesenhoCancelado, auxiliar.AuxiliarEstourouTempo) as exc:
+                interrompido.append(exc)
+                raise
+            except auxiliar.FalhaNoAuxiliar as exc:
+                return {"ok": False, "erro": {"tipo": exc.tipo, "mensagem": exc.mensagem, "rastro": exc.rastro}}
+
+        resp = pecas.refinar_peca(preparado.pedido, ident, executor=_exec, limite_s=limite_s)
+        if interrompido:
+            raise interrompido[0]
+        return resp
 
 
 def refinar_pesados(
@@ -35,6 +71,8 @@ def refinar_pesados(
     refinadas: list[str] = []
     em_cache: list[str] = []
     falhas: list[dict] = []
+    motores: dict[str, str] = {}
+    motivos_hlr: dict[str, str] = {}
     ordenados = sorted(pesados, key=lambda d: d.get("faces", 0))
     total = len(ordenados)
 
@@ -43,24 +81,31 @@ def refinar_pesados(
             raise auxiliar.DesenhoCancelado("Operação cancelada antes de refinar a peça")
         guid, ident = peca["guid"], peca["id"]
         pedido_peca = pecas.pedido_peca(pedido, ident)
-        chave = cache.chave(ifc, pedido_peca) if cache is not None else None
+        chave = _chave_cache(cache, ifc, pedido_peca)
         dados = cache.obter(chave) if chave is not None else None
         grupo = None
-        if dados is not None:
+        motor_usado = None
+        motivo_hlr = None
+        if dados is not None and dados.get("motor") in ("visibilidade", "hlr"):
             grupo = dados.get("grupo") or dados.get("svg")
+            motor_usado = dados["motor"]
+            motivo_hlr = dados.get("motivo_hlr")
         de_cache = grupo is not None
         if not de_cache:
             try:
-                with auxiliar.preparar(ifc, pedido_peca) as preparado:
-                    r = auxiliar.executar(
-                        preparado,
-                        limite_s=limite_s,
-                        cancelar=cancelar,
-                        executor=executor,
-                    )
-                grupo = pecas.extrair_grupo(r.get("svg") or "", guid)
-                if grupo is None:
-                    raise ValueError(f"peça {guid} ausente no SVG da peça")
+                resp = _refinar_uma(
+                    ifc,
+                    pedido_peca,
+                    ident,
+                    executor=executor,
+                    limite_s=limite_s,
+                    cancelar=cancelar,
+                )
+                if not resp.get("ok") or not resp.get("grupo"):
+                    raise RuntimeError(resp.get("erro") or f"peça {guid} falhou no refino")
+                grupo = resp["grupo"]
+                motor_usado = resp.get("motor") or "hlr"
+                motivo_hlr = resp.get("motivo_hlr")
             except auxiliar.DesenhoCancelado:
                 raise
             except Exception as exc:
@@ -69,13 +114,19 @@ def refinar_pesados(
                     progresso(f"peça {n}/{total} falhou: {guid}")
                 continue
             if cache is not None and chave is not None:
-                cache.guardar(chave, {"svg": grupo, "grupo": grupo})
+                entrada_cache = {"svg": grupo, "grupo": grupo, "motor": motor_usado}
+                if motivo_hlr is not None:
+                    entrada_cache["motivo_hlr"] = motivo_hlr
+                cache.guardar(chave, entrada_cache)
         svg = pecas.mesclar_pesado(svg, guid, grupo)
         refinadas.append(guid)
+        motores[guid] = motor_usado
+        if motivo_hlr is not None:
+            motivos_hlr[guid] = motivo_hlr
         if de_cache:
             em_cache.append(guid)
         if progresso is not None:
-            progresso(f"peça {n}/{total} refinada: {guid}")
+            progresso(f"peça {n}/{total} refinada ({motor_usado}): {guid}")
         if ao_refinar is not None:
             ao_refinar(svg, guid)
 
@@ -83,4 +134,6 @@ def refinar_pesados(
     out["refinadas"] = refinadas
     out["em_cache"] = em_cache
     out["falhas_refino"] = falhas
+    out["motores"] = motores
+    out["motivos_hlr"] = motivos_hlr
     return out

@@ -134,7 +134,7 @@ def preparar(ifc, pedido: dict, *, caminho_ifc: str | Path | None = None) -> Pre
 def _tratar_resposta(raw: dict) -> dict:
     if not isinstance(raw, dict):
         raise ProtocoloInvalido(f"Resposta inválida do processo auxiliar: esperava dict, obteve {type(raw).__name__}")
-    if raw.get("ok"):
+    if raw.get("ok") or raw.get("elegivel") is False:
         return raw
     erro = raw.get("erro", {})
     tipo, msg, rastro = erro.get("tipo", "RuntimeError"), erro.get("mensagem", ""), erro.get("rastro", "")

@@ -13,6 +13,7 @@ from s05_conteudo_aux import _limpa  # noqa: F401  (autouse)
 from test_s06_t18b2_refino_oraculo import _ordem, _sil, cena  # noqa: F401  (fixture)
 
 import obim_geometria.pecas as P
+from openbim_app.desenho import auxiliar
 from openbim_app.desenho.auxiliar import DesenhoCancelado
 from openbim_app.desenho.cache import CacheDesenho
 from openbim_app.desenho.refino import refinar_pesados
@@ -35,7 +36,7 @@ class Fake:
             self.depois(len(self.chamadas))
         if op == "peca_visivel":
             if gid in self.inel:
-                return {"ok": True, "elegivel": False, "motivo": "porta", "tempos": {}}
+                return {"ok": False, "elegivel": False, "motivo": "porta"}  # como peca_visivel._inelegivel
             return {"ok": True, "grupo": _g(gid, "mv"), "tempos": {}}
         if gid in self.falha:
             return {"ok": False, "erro": {"tipo": "X", "mensagem": "quebrou", "rastro": ""}}
@@ -111,3 +112,32 @@ def test_cancelar_antes_e_no_meio(cena):
     with pytest.raises(DesenhoCancelado):
         refinar_pesados(f, p, r, executor=ex2, cancelar=ev2)
     assert [g for _o, g in ex2.chamadas] == _ordem(r)[:2]
+
+
+def test_tratar_resposta_preserva_inelegivel_e_ainda_levanta_nas_outras_falhas():
+    r = {"ok": False, "elegivel": False, "motivo": "porta"}
+    assert auxiliar._tratar_resposta(r) == r  # contrato novo: sem levantar, motivo intacto
+    for raw in ({"ok": False, "erro": {"tipo": "X", "mensagem": "m", "rastro": ""}}, {"ok": False, "elegivel": True, "erro": {"tipo": "X", "mensagem": "m"}}):
+        with pytest.raises(auxiliar.FalhaNoAuxiliar):
+            auxiliar._tratar_resposta(raw)
+
+
+def test_estouro_de_tempo_no_motor_novo_nao_cai_no_hlr(cena, tmp_path):
+    f, p, r, _b, _ids = cena
+    ordem = _ordem(r)
+    cache = CacheDesenho(tmp_path / "c")
+    ex = Fake()
+    base = ex.__call__
+
+    def estoura(q):
+        if q.get("op") == "peca_visivel" and q["elementos"][0][1] == ordem[1]:
+            ex.chamadas.append(("peca_visivel", ordem[1]))
+            raise auxiliar.AuxiliarEstourouTempo(1.0, "peca_visivel")
+        return base(q)
+
+    out = refinar_pesados(f, p, r, executor=estoura, cache=cache)
+    assert ex.ops(ordem[1]) == ["peca_visivel"]  # desenho nao chamado
+    assert [d["guid"] for d in out["falhas_refino"]] == [ordem[1]] and out["falhas_refino"][0]["erro"]
+    assert out["refinadas"] == [ordem[0], ordem[2]] and ordem[1] not in out["motores"] and ordem[1] not in out.get("motivos_hlr", {})
+    assert len(_sil(out["svg"])) == 1 and ordem[1] in _sil(out["svg"])[0]
+    assert not any(ordem[1] in a.read_text() for a in cache.pasta.glob("*.json"))  # nao guardada

@@ -1,0 +1,29 @@
+{
+  "nome": "casa-simples",
+  "origem": "scripts/gerar_casa_simples.py",
+  "versao_ou_commit": "cc15640",
+  "data_acesso": "2026-11-14",
+  "sha256": "121d8a91e7070d73a179dbb7e6eda7f46dc9897c1f37b32b545803f8ec9495be",
+  "tamanho_bytes": 4341,
+  "licenca": "propria",
+  "atribuicao": "OpenBIM Studio (AGPL-3.0-or-later)",
+  "pode_ir_no_git": "sim",
+  "esquema": "IFC4",
+  "programa_de_origem": "IfcOpenShell 0.9.0",
+  "contagens": {
+    "paredes": 4,
+    "lajes": 1,
+    "pavimentos": 1
+  },
+  "valores_conhecidos": {
+    "altura_parede_m": 2.8,
+    "espessura_parede_m": 0.15,
+    "largura_planta_m": 6.0,
+    "profundidade_planta_m": 4.0
+  },
+  "cobre": [
+    "abrir",
+    "planta"
+  ],
+  "observacoes": "Amostra minima gerada por scripts/gerar_casa_simples.py (4 paredes com geometria e 1 laje sem geometria)."
+}

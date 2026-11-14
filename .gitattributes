@@ -9,3 +9,5 @@
 *.lock text eol=lf
 *.cpp text eol=lf
 CMakeLists.txt text eol=lf
+# corpus: bytes fixos, a soma sha256 do manifesto vale no Windows
+*.ifc -text

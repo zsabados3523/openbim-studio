@@ -16,15 +16,6 @@ def _fmt(v: float) -> str:
     return f"{round(float(v), 6) + 0.0:.6f}"
 
 
-def _tem_item_mapeado(el) -> bool:
-    rep_prod = getattr(el, "Representation", None)
-    for rep in getattr(rep_prod, "Representations", None) or ():
-        for it in getattr(rep, "Items", None) or ():
-            if it.is_a("IfcMappedItem"):
-                return True
-    return False
-
-
 def _inelegivel(motivo: str) -> dict:
     return {"ok": False, "elegivel": False, "motivo": motivo}
 
@@ -42,7 +33,7 @@ def _grupo_svg(el, polilinhas) -> tuple[str, int]:
 
 
 def processar(pedido: dict, fase=None) -> dict:
-    """Gera o grupo `<g>` da peça usando `visibilidade.linhas_visiveis` se ela for elegível."""
+    """Gera o grupo `<g>` da peça (inclusive com IfcMappedItem) via `visibilidade.linhas_visiveis` se elegível."""
     try:
         t_a0 = time.perf_counter()
         f = ifcopenshell.open(pedido.get("arquivo"))
@@ -66,13 +57,12 @@ def processar(pedido: dict, fase=None) -> dict:
             return _inelegivel("porta_janela")
         if getattr(el, "HasOpenings", None):
             return _inelegivel("aberturas")
-        if _tem_item_mapeado(el):
-            return _inelegivel("mapeada")
         if getattr(el, "Representation", None) is None:
             return _inelegivel("sem_geometria")
 
         t_g0 = time.perf_counter()
         cfg = ifcopenshell.geom.settings()
+        # USE_WORLD_COORDS já resolve IfcMappedItem e aplica a transformação da instância no mundo.
         cfg.set(cfg.USE_WORLD_COORDS, True)
         try:
             forma = ifcopenshell.geom.create_shape(cfg, el)

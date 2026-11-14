@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Oráculo F0-S06-T19c: `pecas.refinar_peca(pedido, id, executor, limite_s, motor="auto"|"hlr")` usa o motor `visibilidade.linhas_visiveis`
-(op "peca_visivel", módulo `obim_geometria.peca_visivel`, roteada em `local.executar` e `processo.entrada`) para peça sem aberturas, sem item mapeado,
+(op "peca_visivel", módulo `obim_geometria.peca_visivel`, roteada em `local.executar` e `processo.entrada`) para peça sem aberturas (item mapeado é elegível desde a T19c2),
 que não é porta/janela e fica INTEIRA abaixo do corte; senão (ou se o motor falhar) cai no HLR. Resposta traz `motor` ("visibilidade"|"hlr") e, no HLR
 por queda, `motivo_hlr`. Referência: HLR da mesma malha (helper da T19b2), 0,1 mm de papel em 1:50, cobertura >= 99% nos dois sentidos. Especificação: cartão T19."""
 from __future__ import annotations
@@ -47,6 +47,27 @@ def _mapear(f, el):
     alvo = f.create_entity("IfcCartesianTransformationOperator3D", LocalOrigin=X._pt(f, 0, 0, 0))
     rep.Items = [f.create_entity("IfcMappedItem", MappingSource=mapa, MappingTarget=alvo)]
     rep.RepresentationType = "MappedRepresentation"
+
+
+def _duas_instancias(tmp):
+    """Peça mapeada (cadeira) com 2 instâncias do mesmo mapa: A em OFF sem rotação; B deslocada e rodada 90 graus (X local -> Y do mundo). Devolve (pedido, A, B, malha_mundo_A, malha_mundo_B)."""
+    f, g, vista, mov, par = modelo_denso(24)
+    a = X.caixa(f, "IfcFurniture", "PecaT19c", OFF[0], OFF[1], 0.0, 0.5, 0.5, 0.5)
+    X.conter(f, f.by_type("IfcBuildingStorey")[0], a)
+    densificar(f, a, (CASOS["cadeira"][0].tolist(), CASOS["cadeira"][1].tolist()))
+    _mapear(f, a)
+    mapa = a.Representation.Representations[0].Items[0].MappingSource
+    b = X.caixa(f, "IfcFurniture", "PecaT19c_B", 4.0, 2.0, 0.0, 0.5, 0.5, 0.5)
+    X.conter(f, f.by_type("IfcBuildingStorey")[0], b)
+    b.ObjectPlacement.RelativePlacement.RefDirection = f.create_entity("IfcDirection", DirectionRatios=(0.0, 1.0, 0.0))
+    rep = b.Representation.Representations[0]
+    rep.Items = [f.create_entity("IfcMappedItem", MappingSource=mapa, MappingTarget=f.create_entity("IfcCartesianTransformationOperator3D", LocalOrigin=X._pt(f, 0, 0, 0)))]
+    rep.RepresentationType = "MappedRepresentation"
+    p = pedido_planta(f, vista, tmp)
+    v, t = CASOS["cadeira"]
+    va = v + np.array([OFF[0], OFF[1], 0.0])
+    vb = np.stack([4.0 - v[:, 1], 2.0 + v[:, 0], v[:, 2]], 1)  # rotação de 90 graus em z + deslocamento
+    return p, a, b, (va, t), (vb, t)
 
 
 def _espiao():
@@ -109,16 +130,31 @@ def test_mesclar_pesado_com_grupo_do_motor_nao_duplica(tmp_path):
     assert P.mesclar_pesado(final, el.GlobalId, r["grupo"]) == final
 
 
-@pytest.mark.parametrize("caso,motivo", [("aberturas", "aberturas"), ("porta", "porta_janela"), ("janela", "porta_janela"), ("mapeada", "mapeada")])
+@pytest.mark.parametrize("caso,motivo", [("aberturas", "aberturas"), ("porta", "porta_janela"), ("janela", "porta_janela")])
 def test_inelegivel_vai_ao_hlr_com_motivo(caso, motivo, tmp_path):
     cls = {"porta": "IfcDoor", "janela": "IfcWindow"}.get(caso, "IfcFurniture")
-    depois = {"aberturas": _abertura, "mapeada": _mapear}.get(caso)
+    depois = {"aberturas": _abertura}.get(caso)
     p, el = _peca(tmp_path, CASOS["cadeira"], cls=cls, depois=depois)
     ex, ops = _espiao()
     r = P.refinar_peca(p, el.id(), executor=ex)
     assert r["motor"] == "hlr" and r["motivo_hlr"] == motivo and ops == ["peca_visivel", "desenho"], r
     esperado = P.refinar_peca(p, el.id(), executor=L.executar, motor="hlr")
     assert (r["ok"], r["grupo"]) == (esperado["ok"], esperado["grupo"])
+
+
+@pytest.mark.parametrize("quem", [0, 1])
+def test_peca_mapeada_e_elegivel_e_grupo_igual_ao_hlr_no_mundo(quem, tmp_path):
+    p, a, b, *malhas = _duas_instancias(tmp_path)
+    el = (a, b)[quem]
+    ex, ops = _espiao()
+    r = P.refinar_peca(p, el.id(), executor=ex)
+    assert r.get("motor") == "visibilidade" and "motivo_hlr" not in r and ops == ["peca_visivel"], r
+    assert r["ok"], r
+    got = _segs_grupo(r["grupo"])
+    ref = _referencia(malhas[quem])
+    assert len(got) and _cobertura(ref, got) >= 0.99, "linha do HLR sem par no motor"
+    pg, wg = _amostra(got)
+    assert float(wg[_dist(pg, _pseg(ref)) <= TOL].sum() / wg.sum()) >= 0.99, "linha do motor sem par no HLR"
 
 
 def test_peca_que_cruza_o_corte_vai_ao_hlr_e_traz_grupo(tmp_path):

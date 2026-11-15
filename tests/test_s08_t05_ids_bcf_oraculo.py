@@ -172,21 +172,37 @@ def test_bcf_estrutura_minima(arq, versao):
         nomes = zf.namelist()
         assert "bcf.version" in nomes
         ver = _lido(zf, "bcf.version")
-        assert ver.get("VersionId") == versao
+        assert _tag(ver) == "Version" and ver.get("VersionId") == versao  # version.xsd 2.1 e 3.0
         pastas = {n.split("/")[0] for n in nomes if "/" in n}
         assert len(pastas) == 3
         for p in pastas:
             uuid.UUID(p)  # nome da pasta = GUID do topico
             mk = _lido(zf, f"{p}/markup.bcf")
+            assert _tag(mk) == "Markup"
             topico = next(e for e in mk.iter() if _tag(e) == "Topic")
             assert topico.get("Guid") == p
             assert next(e for e in topico.iter() if _tag(e) == "Title").text
-            vps = [e.text for e in mk.iter() if _tag(e) == "Viewpoint" and e.text]
+            if versao == "3.0":  # markup.xsd 3.0: Topic exige TopicType, TopicStatus, CreationDate e CreationAuthor
+                assert topico.get("TopicType") and topico.get("TopicStatus")
+                assert next(e for e in topico.iter() if _tag(e) == "CreationDate").text
+                assert next(e for e in topico.iter() if _tag(e) == "CreationAuthor").text
+            pai = {c: e for e in mk.iter() for c in e}
+            vps = []
+            for e in mk.iter():
+                if _tag(e) == "Viewpoint" and e.text:
+                    caixa = pai[e]  # markup.xsd: Viewpoint fica dentro de Viewpoints (tipo ViewPoint), que exige @Guid
+                    assert _tag(caixa) == "Viewpoints"
+                    uuid.UUID(caixa.get("Guid"))
+                    vps.append(e.text)
             assert vps and all(f"{p}/{v}" in nomes for v in vps)
             for v in vps:
                 vi = _lido(zf, f"{p}/{v}")
                 assert _tag(vi) == "VisualizationInfo"
-                assert any(_tag(e) == "Component" and e.get("IfcGuid") for e in vi.iter())
+                uuid.UUID(vi.get("Guid"))  # visinfo.xsd 2.1 e 3.0: @Guid obrigatorio
+                comps = [e for e in vi.iter() if _tag(e) == "Component" and e.get("IfcGuid")]
+                assert comps and all(len(e.get("IfcGuid")) == 22 for e in comps)
+                if versao == "2.1":  # visinfo.xsd 2.1: Components/Visibility obrigatorio
+                    assert any(_tag(e) == "Visibility" for e in vi.iter())
 
 
 @pytest.mark.parametrize("arq,versao", sorted(BCF_ARQUIVOS.items()))

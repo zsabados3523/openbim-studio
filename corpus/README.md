@@ -38,3 +38,9 @@ Gera os 5 modelos IFC4 (`casa-terrea`, `sobrado`, `moveis-repetidos`, `parede-cu
 ```bash
 ~/miniforge3/envs/openbim/bin/python scripts/gerar_modelos.py
 ```
+
+## Casos proprios IDS e BCF (F0-S08-T05)
+Depois de gerar os modelos do T04 em `corpus/`, gera os 3 arquivos IDS 1.0 em `corpus/ids/` e os 2 arquivos BCF (`2.1` e `3.0`) em `corpus/bcf/`, cada pasta com seu `manifesto.json`:
+```bash
+~/miniforge3/envs/openbim/bin/python scripts/gerar_casos_ids_bcf.py
+```

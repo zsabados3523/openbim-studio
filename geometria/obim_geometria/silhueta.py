@@ -5,8 +5,9 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 
 import ifcopenshell.geom
+import ifcopenshell.util.unit
 import numpy as np
-from obim_geometria import nucleos
+from obim_geometria import malha_direta, nucleos
 from shapely import polygons, union_all
 
 LIMIAR_PADRAO = 40000
@@ -30,15 +31,34 @@ def _n_faces(forma) -> int:
 
 
 def formas_do_mundo(f, elementos, threads: int | None = None) -> dict:
-    """Triangula `elementos` em coordenadas do mundo num único iterador (`{id_step: forma}`)."""
+    """Lê malhas diretas ou triangula `elementos` em coordenadas do mundo (`{id_step: forma}`)."""
     formas = {}
     try:
         elems = [el for el in (elementos or ()) if el is not None]
         if f is None or not elems:
             return formas
+        try:
+            escala = float(ifcopenshell.util.unit.calculate_unit_scale(f))
+        except Exception:
+            escala = 1.0
+        restantes, vistos = [], set()
+        for el in elems:
+            eid = el.id()
+            if eid in vistos:
+                continue
+            vistos.add(eid)
+            malha = malha_direta.malha_mundo(el, escala)
+            if malha is not None:
+                verts, tris = malha
+                if len(verts) and len(tris):
+                    formas[eid] = malha_direta.FormaDireta(eid, verts, tris)
+                    continue
+            restantes.append(el)
+        if not restantes:
+            return formas
         cfg = ifcopenshell.geom.settings()
         cfg.set(cfg.USE_WORLD_COORDS, True)
-        it = ifcopenshell.geom.iterator(cfg, f, nucleos.limitar_threads(threads), include=elems)
+        it = ifcopenshell.geom.iterator(cfg, f, nucleos.limitar_threads(threads), include=restantes)
         if it.initialize():
             while True:
                 try:
@@ -71,10 +91,9 @@ def faces_e_silhueta(x, limiar: int = LIMIAR_PADRAO, z_corte: float | None = Non
         n_faces = _n_faces(forma)
         if not eh_pesada(n_faces, limiar):
             return n_faces, None, None
-        vs, fs = geo.verts, geo.faces
-        verts = [(vs[k], vs[k + 1], vs[k + 2]) for k in range(0, len(vs), 3)]
-        tris = [(fs[k], fs[k + 1], fs[k + 2]) for k in range(0, len(fs), 3)]
-        zmin = min((v[2] for v in verts), default=None)
+        verts = np.asarray(geo.verts, dtype=float).reshape(-1, 3)
+        tris = np.asarray(geo.faces, dtype=int).reshape(-1, 3)
+        zmin = float(verts[:, 2].min()) if len(verts) else None
         if z_corte is not None and zmin is not None and zmin > z_corte:
             return n_faces, None, zmin
         return n_faces, silhueta_xy(verts, tris), zmin

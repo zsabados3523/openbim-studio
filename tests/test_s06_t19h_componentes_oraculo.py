@@ -283,8 +283,11 @@ def test_regra4_dividir_elementos_respeita_threads_do_pedido(monkeypatch, tmp_pa
     C.dividir_elementos(ped["arquivo"], ped["elementos"], threads=None)
     assert usados == [1, __import__("obim_geometria.nucleos", fromlist=["x"]).limitar_threads(None)]
     usados.clear()
+    from obim_geometria import silhueta as _S
+    o_fm = _S.formas_do_mundo
+    monkeypatch.setattr(_S, "formas_do_mundo", lambda f, el, threads=None: usados.append(threads) or o_fm(f, el, threads=threads))  # T19g: a malha e lida direto, sem iterator; o que importa e o pedido chegar a leitura da divisao
     D.processar({**copy.deepcopy(ped), "componentes": True, "threads": 1})
-    assert usados and usados[0] == 1, "o pedido com threads=1 tem de chegar ao iterator da divisão"
+    assert usados and usados[0] == 1, "o pedido com threads=1 tem de chegar a leitura das formas da divisão"
 
 # ---------------------------------------------------------------- tempo (sintético)
 def test_um_filho_por_peca_separada_com_a_mesma_cobertura(monkeypatch, tmp_path):

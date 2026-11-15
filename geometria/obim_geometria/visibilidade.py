@@ -324,7 +324,13 @@ def secao_plana(verts: np.ndarray, tris: np.ndarray, quadro) -> list:
         np.round(Vq / tol_w).astype(np.int64), axis=0, return_index=True, return_inverse=True
     )
     P = Vq[idx]
-    Tw = _dedup_triangulos(inv.ravel()[T])
+    Tw = inv.ravel()[T]
+    Tw = Tw[(Tw[:, 0] != Tw[:, 1]) & (Tw[:, 1] != Tw[:, 2]) & (Tw[:, 0] != Tw[:, 2])]
+    # dedup por orientacao: triangulos opostos (parede interna entre pecas encostadas) ficam, os dois
+    rot = np.argmin(Tw, axis=1)
+    Tc = np.stack([Tw[np.arange(len(Tw)), (rot + k) % 3] for k in range(3)], axis=1)
+    _, u_idx = np.unique(Tc, axis=0, return_index=True)
+    Tw = Tw[np.sort(u_idx)]
     segs = _segmentos_corte_plano(P, Tw)
     if len(segs) == 0:
         return []
@@ -341,13 +347,17 @@ def secao_plana(verts: np.ndarray, tris: np.ndarray, quadro) -> list:
     # regra par-impar por raio para +u contra os segmentos originais (arestas internas
     # de pecas encostadas cruzam duas vezes e se anulam).
     pts = np.array([[q.x, q.y] for q in (p.representative_point() for p in pols)])
-    y1, y2 = segs[:, 0, 1][None, :], segs[:, 1, 1][None, :]
-    x1, x2 = segs[:, 0, 0][None, :], segs[:, 1, 0][None, :]
-    py, px = pts[:, 1:2], pts[:, 0:1]
-    cruza = (y1 > py) != (y2 > py)
-    dy = np.where(y2 == y1, 1.0, y2 - y1)
-    xi = x1 + (py - y1) * (x2 - x1) / dy
-    impar = (cruza & (px < xi)).sum(axis=1) % 2 == 1
+    impar = np.zeros(len(pols), dtype=np.int64)
+    for i in range(0, len(pols), 256):  # em blocos: nunca materializa faces x segmentos inteiro
+        py, px = pts[i:i + 256, 1:2], pts[i:i + 256, 0:1]
+        y1, y2 = segs[:, 0, 1][None, :], segs[:, 1, 1][None, :]
+        x1, x2 = segs[:, 0, 0][None, :], segs[:, 1, 0][None, :]
+        f, k = np.nonzero((y1 > py) != (y2 > py))
+        dy = y2[0, k] - y1[0, k]
+        xi = x1[0, k] + (py[f, 0] - y1[0, k]) * (x2[0, k] - x1[0, k]) / dy
+        ok = px[f, 0] < xi
+        impar[i:i + 256] = np.bincount(f[ok], minlength=len(py))
+    impar = impar % 2 == 1
     solidas = [p for p, k in zip(pols, impar) if k]
     if not solidas:
         return []

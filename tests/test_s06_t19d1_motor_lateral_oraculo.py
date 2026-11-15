@@ -413,3 +413,34 @@ def test_secao_com_furo_mantem_o_vazio():
     t2 = np.concatenate([t, ilha[1] + len(p)])
     s2 = V.secao_plana(*_mundo(AXIAL, (p2, t2)), AXIAL)
     assert abs(sum(g.area for g in s2) - 13.0) <= 1e-9
+
+
+def _juntar(partes):
+    p = np.concatenate([x[0] for x in partes])
+    t = np.concatenate([x[1] + sum(len(y[0]) for y in partes[:i]) for i, x in enumerate(partes)])
+    return p, t
+
+
+def test_pecas_encostadas_na_mesma_malha_somam_as_areas():
+    """Revisão Argon (15/11): a parede interna compartilhada tem 2 triângulos opostos; nenhum pode ser colapsado."""
+    V = _V()
+    m = _juntar([_caixa(0, 0, -1, 1, 1, 1), _caixa(1, 0, -1, 2, 1, 1)])
+    s = V.secao_plana(*_mundo(AXIAL, m), AXIAL)
+    assert abs(sum(g.area for g in s) - 2.0) <= 1e-9
+    # vértices exatamente em w = 0 (costura): cada caixa partida em duas metades
+    m2 = _juntar([_caixa(0, 0, -1, 1, 1, 0), _caixa(0, 0, 0, 1, 1, 1), _caixa(1, 0, -1, 2, 1, 0), _caixa(1, 0, 0, 2, 1, 1)])
+    s2 = V.secao_plana(*_mundo(AXIAL, m2), AXIAL)
+    assert abs(sum(g.area for g in s2) - 2.0) <= 1e-9
+
+
+def test_secao_grande_nao_estoura_memoria():
+    """5000 caixas lado a lado: a conta par-impar não pode materializar faces x segmentos densos (< 600 MB de pico)."""
+    import tracemalloc
+    V = _V()
+    m = _juntar([_caixa(2 * k, 0, -1, 2 * k + 1, 1, 1) for k in range(3000)])
+    tracemalloc.start()
+    s = V.secao_plana(*_mundo(AXIAL, m), AXIAL)
+    pico = tracemalloc.get_traced_memory()[1]
+    tracemalloc.stop()
+    assert len(s) == 3000 and abs(sum(g.area for g in s) - 3000.0) <= 1e-6
+    assert pico < 600e6

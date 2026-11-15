@@ -292,8 +292,12 @@ def _segmentos_corte_plano(P: np.ndarray, Tw: np.ndarray, eps: float = 1e-12) ->
             hi = np.maximum(va, vb)
             return lo.astype(np.int64) * nP + hi
 
-        comuns = np.intersect1d(_chaves_costura(seam_neg), _chaves_costura(seam_pos))
+        kn, cn = np.unique(_chaves_costura(seam_neg), return_counts=True)
+        kp, cp = np.unique(_chaves_costura(seam_pos), return_counts=True)
+        comuns, i_n, i_p = np.intersect1d(kn, kp, return_indices=True)
         if len(comuns):
+            mult = np.minimum(cn[i_n], cp[i_p])  # pecas encostadas repetem a costura: um segmento por par
+            comuns = np.repeat(comuns, mult)
             lo_s = comuns // nP
             hi_s = comuns % nP
             segs_list.append(np.stack([P[lo_s, :2], P[hi_s, :2]], axis=1))

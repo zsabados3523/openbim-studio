@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Motor de desenho de planta (modo pavimento do motor SVG, sem criar entidade no arquivo)."""
 import math
+import os
 import re
 import threading
 import time
@@ -1155,10 +1156,56 @@ def _repartir_lotes(grupos, formas: dict, n_lotes: int) -> list[list[int]]:
     return lotes
 
 
+def _gravar_previa(pedido: dict, f, formas: dict, elementos, pesados_svg: list[str], base: dict, fase) -> None:
+    try:
+        destino = pedido.get("previa_arquivo")
+        if not destino:
+            return
+        q_esq = {k: v for k, v in base.items() if k not in ("pesados", "limiar_pesado", "componentes", "previa_arquivo")}
+        q_esq["elementos"] = []
+        r_esq = _processar_base(q_esq, fase)
+        if not r_esq.get("ok") or not isinstance(r_esq.get("svg"), str):
+            return
+        esqueleto = r_esq["svg"]
+        if f is None:
+            f = _abrir_ifc(pedido.get("arquivo"))
+        altura_corte_m = float((pedido.get("vista") or {}).get("altura_corte_m", float("inf")))
+        moveis_como_caixa = bool(pedido.get("moveis_como_caixa", False))
+        guids_pesados = set()
+        for g in pesados_svg:
+            m = re.search(r'\bifc:guid="([^"]+)"', g)
+            if m:
+                guids_pesados.add(m.group(1))
+        novos = []
+        for id_step, guid in elementos:
+            if guid in guids_pesados:
+                continue
+            try:
+                el = f.by_id(id_step)
+            except Exception:
+                el = None
+            if el is None or el.is_a("IfcOpeningElement") or not _candidata_silhueta(el, moveis_como_caixa):
+                continue
+            forma = formas.get(id_step)
+            alvo = _FormaId(el.id(), forma) if hasattr(forma, "geometry") else el
+            _, aneis, _ = silhueta.faces_e_silhueta(alvo, 1, z_corte=altura_corte_m)
+            if aneis:
+                grupo = _grupo_silhueta(el, aneis)
+                if grupo is not None:
+                    novos.append(grupo)
+        svg = _injetar_silhuetas(esqueleto, list(pesados_svg) + novos)
+        tmp = f"{destino}.tmp"
+        with open(tmp, "w", encoding="utf-8") as fp:
+            fp.write(svg)
+        os.replace(tmp, destino)
+    except Exception:
+        pass
+
+
 def _planta_por_componentes(pedido: dict, fase) -> dict:
     from obim_geometria import componentes
 
-    base = {k: v for k, v in pedido.items() if k != "componentes"}
+    base = {k: v for k, v in pedido.items() if k not in ("componentes", "previa_arquivo")}
     elementos = pedido.get("elementos") or []
     f = None
     formas = {}
@@ -1225,6 +1272,8 @@ def _planta_por_componentes(pedido: dict, fase) -> dict:
         )
         if len(grupos) <= 1:
             return fallback()
+        if pedido.get("previa_arquivo"):
+            _gravar_previa(pedido, f, formas, elementos, pesados_svg, base, fase)
 
         total_threads = nucleos.limitar_threads(pedido.get("threads"))
         n_lotes = max(1, min(len(grupos), total_threads))

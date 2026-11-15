@@ -100,11 +100,10 @@ class GerenteDesenho(QObject):
         if self._padrao:
             self._cache = None  # cache fica no motor padrao
         self._threads: set = set()
-        self._trava = threading.RLock()
+        self._trava = threading.Lock()
         self._ativos: dict[str, _Pedido] = {}
         self._por_vista: dict[str, _Pedido] = {}
         self._sessoes: dict[int, tuple[object, SessaoSelecao, object]] = {}
-        self._em_voo: dict[SessaoSelecao, int] = {}
         self._evento.connect(self._tratar, Qt.ConnectionType.QueuedConnection)
 
     def pedir(self, tipo, ifc, vista_guid, *, revisao=None, **opcoes) -> str:
@@ -133,8 +132,9 @@ class GerenteDesenho(QObject):
         return chave
 
     def _limpar_mortas_travado(self) -> None:
-        for k in [k for k, (_, _, ref) in self._sessoes.items() if ref() is None]:
-            del self._sessoes[k]
+        for k, (_, _, ref) in list(self._sessoes.items()):
+            if ref() is None:
+                self._sessoes.pop(k, None)
 
     def _limpar_mortas(self) -> None:
         with self._trava:
@@ -145,12 +145,10 @@ class GerenteDesenho(QObject):
 
         def _ao_morrer(ref_morta):
             g = ref_gerente()
-            if g is None:
-                return
-            with g._trava:
+            if g is not None:
                 atual = g._sessoes.get(chave_ifc)
                 if atual is not None and atual[2] is ref_morta:
-                    del g._sessoes[chave_ifc]
+                    g._sessoes.pop(chave_ifc, None)
 
         try:
             return weakref.ref(ifc, _ao_morrer)
@@ -165,40 +163,42 @@ class GerenteDesenho(QObject):
             if atual is not None and atual[2]() is ifc and atual[0] == revisao:
                 return atual[1]
             sessao = SessaoSelecao()
-            self._sessoes[chave_ifc] = (revisao, sessao, self._criar_ref(ifc, chave_ifc))
+            ref = atual[2] if atual is not None and atual[2]() is ifc else self._criar_ref(ifc, chave_ifc)
+            self._sessoes[chave_ifc] = (revisao, sessao, ref)
             return sessao
 
     @staticmethod
-    def _clonar_sessao(sessao: SessaoSelecao, ids) -> SessaoSelecao:
+    def _copiar_sessao_sem(sessao: SessaoSelecao, excluir) -> SessaoSelecao:
         nova = SessaoSelecao()
-        excluir = {int(i) for i in ids}
-        nova._caixas = {k: (list(v) if v is not None else None) for k, v in sessao._caixas.items() if k not in excluir}
-        nova._erros = {k: list(v) for k, v in sessao._erros.items() if k not in excluir}
+        nova._caixas = sessao._caixas.copy()
+        nova._erros = sessao._erros.copy()
+        nova.invalidar(excluir)
         return nova
 
     def invalidar(self, ifc=None, ids=None) -> None:
+        excluir = None if ids is None else tuple(int(i) for i in ids)
         with self._trava:
             self._limpar_mortas_travado()
             if ifc is None:
-                if ids is None:
+                if excluir is None:
                     self._sessoes.clear()
-                else:
-                    for chave_ifc, (rev, sessao, ref) in list(self._sessoes.items()):
-                        if sessao in self._em_voo:
-                            self._sessoes[chave_ifc] = (rev, self._clonar_sessao(sessao, ids), ref)
-                        else:
-                            sessao.invalidar(ids)
+                    return
+                for chave_ifc, (rev, sessao, ref) in list(self._sessoes.items()):
+                    vivo = ref()
+                    if vivo is None:
+                        self._sessoes.pop(chave_ifc, None)
+                        continue
+                    self._sessoes[chave_ifc] = (rev, self._copiar_sessao_sem(sessao, excluir), ref)
+                    del vivo
                 return
             chave_ifc = id(ifc)
             atual = self._sessoes.get(chave_ifc)
             if atual is None or atual[2]() is not ifc:
                 return
-            if ids is None:
-                del self._sessoes[chave_ifc]
-            elif atual[1] in self._em_voo:
-                self._sessoes[chave_ifc] = (atual[0], self._clonar_sessao(atual[1], ids), atual[2])
+            if excluir is None:
+                self._sessoes.pop(chave_ifc, None)
             else:
-                atual[1].invalidar(ids)
+                self._sessoes[chave_ifc] = (atual[0], self._copiar_sessao_sem(atual[1], excluir), atual[2])
 
     def cancelar(self, chave) -> None:
         ped = self._ativos.pop(chave, None)
@@ -232,20 +232,9 @@ class GerenteDesenho(QObject):
                 extra["previa"] = lambda d: self._evento.emit(ped, "previa", d)
             if sessao is not None and ("sessao_selecao" in nomes or tem_kw):
                 extra["sessao_selecao"] = sessao
-                with self._trava:
-                    self._em_voo[sessao] = self._em_voo.get(sessao, 0) + 1
-            try:
-                dados = self._motor(
-                    tipo, ifc, vista_guid, opcoes, cancelar=ped.cancelar,
-                    progresso=lambda m: self._evento.emit(ped, "progresso", m), **extra)
-            finally:
-                if "sessao_selecao" in extra:
-                    with self._trava:
-                        n = self._em_voo.get(sessao, 0) - 1
-                        if n > 0:
-                            self._em_voo[sessao] = n
-                        else:
-                            self._em_voo.pop(sessao, None)
+            dados = self._motor(
+                tipo, ifc, vista_guid, opcoes, cancelar=ped.cancelar,
+                progresso=lambda m: self._evento.emit(ped, "progresso", m), **extra)
             if ped.cancelar.is_set():
                 return
             if self._cache is not None:

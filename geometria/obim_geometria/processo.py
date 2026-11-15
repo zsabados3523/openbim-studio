@@ -38,13 +38,13 @@ def entrada(tx, pedido_json):
             from obim_geometria import caixas
             tx.send_bytes(json.dumps({"tipo": "fase", "fase": "geometria", "tempo": 0.0}).encode("utf-8"))
             resp = caixas.processar(pedido)
-        elif op == "desenho":
+        elif op in ("desenho", "desenho_lote"):
             from obim_geometria import desenho
 
             def fase(nome):
                 tx.send_bytes(json.dumps({"tipo": "fase", "fase": nome, "tempo": 0.0}).encode("utf-8"))
 
-            resp = desenho.processar(pedido, fase)
+            resp = (desenho.processar_lote if op == "desenho_lote" else desenho.processar)(pedido, fase)
         elif op == "peca_visivel":
             from obim_geometria import peca_visivel
 

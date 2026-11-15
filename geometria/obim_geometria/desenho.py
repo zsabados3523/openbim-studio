@@ -2,6 +2,7 @@
 """Motor de desenho de planta (modo pavimento do motor SVG, sem criar entidade no arquivo)."""
 import math
 import re
+import threading
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
@@ -684,10 +685,29 @@ def _corte_em_faixas(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -
     }
 
 
+_ARQ_LOTE: dict[tuple[str, str | None], object] | None = None
+_LOTE_TLS = threading.local()
+
+
+def _abrir_ifc(caminho, pavimento: str | None = None):
+    """Abre o IFC, reaproveitando por `(caminho, pavimento)` durante `processar_lote`."""
+    cache = getattr(_LOTE_TLS, "cache", None)
+    if cache is None:
+        cache = _ARQ_LOTE
+    if cache is not None and caminho is not None:
+        chave = (str(caminho), pavimento)
+        if chave not in cache:
+            cache[chave] = ifcopenshell.open(caminho)
+        return cache[chave]
+    return ifcopenshell.open(caminho)
+
+
 def _processar_base(pedido: dict, fase=None) -> dict:
     try:
         t_a0 = time.perf_counter()
-        f = ifcopenshell.open(pedido.get("arquivo"))
+        vista = pedido.get("vista")
+        pav_guid = vista.get("pavimento") if isinstance(vista, dict) else None
+        f = _abrir_ifc(pedido.get("arquivo"), pav_guid)
         abrir_s = time.perf_counter() - t_a0
 
         elementos = pedido.get("elementos", [])
@@ -1113,6 +1133,28 @@ def _eh_abertura(f, id_step: int) -> bool:
         return False
 
 
+def _peso_grupo(grupo, formas: dict) -> int:
+    total = 0
+    for id_step, _ in grupo:
+        sh = formas.get(id_step)
+        geo = getattr(sh, "geometry", None)
+        faces = getattr(geo, "faces", None) if geo is not None else None
+        total += (len(faces) // 3) if faces else 1
+    return total
+
+
+def _repartir_lotes(grupos, formas: dict, n_lotes: int) -> list[list[int]]:
+    """Repartição gulosa (LPT): ordena por peso decrescente e aloca no lote de menor soma."""
+    pesos = [_peso_grupo(g, formas) for g in grupos]
+    lotes: list[list[int]] = [[] for _ in range(n_lotes)]
+    somas = [0] * n_lotes
+    for idx_g in sorted(range(len(grupos)), key=lambda i: -pesos[i]):
+        k = min(range(n_lotes), key=lambda j: somas[j])
+        lotes[k].append(idx_g)
+        somas[k] += pesos[idx_g]
+    return lotes
+
+
 def _planta_por_componentes(pedido: dict, fase) -> dict:
     from obim_geometria import componentes
 
@@ -1152,7 +1194,7 @@ def _planta_por_componentes(pedido: dict, fase) -> dict:
             return fallback()
 
         if pedido.get("pesados") == "silhueta":
-            f = ifcopenshell.open(pedido.get("arquivo"))
+            f = _abrir_ifc(pedido.get("arquivo"))
             altura_corte_m = float((pedido.get("vista") or {}).get("altura_corte_m", float("inf")))
             pesados_svg, pesados_info, pesadas_ids, pesadas_excluidas = _pesadas_para_svg(
                 f, pedido, elementos, altura_corte_m, formas=formas
@@ -1163,32 +1205,62 @@ def _planta_por_componentes(pedido: dict, fase) -> dict:
         if not restantes:
             return fallback()
 
+        faltam = [id_step for id_step, _ in restantes if id_step not in formas]
+        if faltam:
+            if f is None:
+                f = _abrir_ifc(pedido.get("arquivo"))
+            incl = []
+            for id_step in dict.fromkeys(faltam):
+                try:
+                    el = f.by_id(id_step)
+                    if el is not None and not el.is_a("IfcOpeningElement"):
+                        incl.append(el)
+                except Exception:
+                    pass
+            if incl:
+                formas.update(silhueta.formas_do_mundo(f, incl, threads=pedido.get("threads")))
+
         grupos = componentes.dividir_elementos(
-            pedido.get("arquivo"), restantes, threads=pedido.get("threads"), formas=formas
+            pedido.get("arquivo"), restantes, threads=pedido.get("threads"), formas=formas, f=f
         )
         if len(grupos) <= 1:
             return fallback()
 
         total_threads = nucleos.limitar_threads(pedido.get("threads"))
-        simultaneos = max(1, min(len(grupos), total_threads))
-        threads_filho = max(1, total_threads // simultaneos)
-        pedidos = []
-        for grupo in grupos:
-            q = dict(base)
-            q.pop("pesados", None)
-            q.pop("limiar_pesado", None)
-            q["elementos"] = [list(e) for e in grupo]
-            q["threads"] = threads_filho
-            pedidos.append(q)
+        n_lotes = max(1, min(len(grupos), total_threads))
+        threads_filho = max(1, total_threads // n_lotes)
+        lotes_idx = _repartir_lotes(grupos, formas, n_lotes)
+        lotes_req = []
+        for indices in lotes_idx:
+            itens_q = []
+            for idx_g in indices:
+                q = dict(base)
+                q.pop("pesados", None)
+                q.pop("limiar_pesado", None)
+                q["elementos"] = [list(e) for e in grupos[idx_g]]
+                q["threads"] = threads_filho
+                itens_q.append(q)
+            lotes_req.append({**base, "op": "desenho_lote", "pedidos": itens_q})
 
-        with ThreadPoolExecutor(max_workers=simultaneos) as ex:
-            futuros = [ex.submit(faixas.rodar_filho, q) for q in pedidos]
-            resultados = []
+        with ThreadPoolExecutor(max_workers=n_lotes) as ex:
+            futuros = [
+                ex.submit(faixas.rodar_filho, lote, limite_s=300.0 * len(lote["pedidos"]))
+                for lote in lotes_req
+            ]
+            lotes_resp = []
             for fut in futuros:
                 try:
-                    resultados.append(fut.result())
+                    lotes_resp.append(fut.result())
                 except Exception:
-                    resultados.append(None)
+                    lotes_resp.append(None)
+
+        resultados = [None] * len(grupos)
+        for indices, resp_lote in zip(lotes_idx, lotes_resp):
+            itens_r = resp_lote.get("resultados") if isinstance(resp_lote, dict) and resp_lote.get("ok") else None
+            if isinstance(itens_r, list):
+                for pos, idx_g in enumerate(indices):
+                    if pos < len(itens_r):
+                        resultados[idx_g] = itens_r[pos]
 
         ok_resultados, falhas_filhos = [], set()
         for grupo, res in zip(grupos, resultados):
@@ -1202,8 +1274,9 @@ def _planta_por_componentes(pedido: dict, fase) -> dict:
 
         if falhas_filhos:
             try:
-                f_chk = f if f is not None else ifcopenshell.open(pedido.get("arquivo"))
-                falhas_filhos = {i for i in falhas_filhos if not _eh_abertura(f_chk, i)}
+                if f is None:
+                    f = _abrir_ifc(pedido.get("arquivo"))
+                falhas_filhos = {i for i in falhas_filhos if not _eh_abertura(f, i)}
             except Exception:
                 pass
 
@@ -1279,3 +1352,36 @@ def processar(pedido: dict, fase=None) -> dict:
     if pedido.get("componentes"):
         return _planta_por_componentes(pedido, fase)
     return _processar_base(pedido, fase)
+
+
+def processar_lote(pedido: dict, fase=None) -> dict:
+    """Processa um lote de pedidos de desenho reaproveitando cada IFC aberto."""
+    pedidos = pedido.get("pedidos") if isinstance(pedido, dict) else None
+    if not isinstance(pedidos, list) or not pedidos:
+        return {
+            "ok": False,
+            "erro": {"tipo": "ProtocoloInvalido", "mensagem": "Pedido de lote sem lista 'pedidos' não vazia", "rastro": ""},
+        }
+    global _ARQ_LOTE
+    anterior_tls = getattr(_LOTE_TLS, "cache", None)
+    cache: dict[tuple[str, str | None], object] = {}
+    _LOTE_TLS.cache = cache
+    eh_main = threading.current_thread() is threading.main_thread()
+    anterior = _ARQ_LOTE
+    if eh_main:
+        _ARQ_LOTE = cache
+    try:
+        resultados = []
+        for q in pedidos:
+            try:
+                resultados.append(processar(q, fase))
+            except Exception as e:
+                resultados.append({
+                    "ok": False,
+                    "erro": {"tipo": type(e).__name__, "mensagem": str(e), "rastro": traceback.format_exc()},
+                })
+        return {"ok": True, "resultados": resultados}
+    finally:
+        _LOTE_TLS.cache = anterior_tls
+        if eh_main:
+            _ARQ_LOTE = anterior

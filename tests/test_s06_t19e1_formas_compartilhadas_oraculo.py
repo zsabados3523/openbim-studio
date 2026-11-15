@@ -102,3 +102,15 @@ def test_pai_da_planta_por_componentes_faz_zero_create_shape_e_um_iterador(monke
     r = D.processar(copy.deepcopy(ped))
     assert r["ok"] and r["grupos"] == 3 and [p["id"] for p in r["pesados"]] == [ids[2]]
     assert not n_cs and len(n_it) == 1, f"create_shape no pai: {len(n_cs)}, iteradores no pai: {len(n_it)}"
+
+
+def test_dividir_elementos_ignora_abertura_sem_forma(monkeypatch, tmp_path):
+    ped, ids = _cena(tmp_path, [_caixa(0, 0, 0, 1, 1, 1), _caixa(3, 0, 0, 4, 1, 1), _caixa(6, 0, 0, 7, 1, 1)], classes={2: "IfcOpeningElement"})
+    f, els = _els(ped)
+    formas = S.formas_do_mundo(f, [e for e in els if not e.is_a("IfcOpeningElement")], threads=1)
+    chamadas, abertos = [], []
+    o_it, o_open = ifcopenshell.geom.iterator, ifcopenshell.open
+    monkeypatch.setattr(ifcopenshell.geom, "iterator", lambda *a, **k: chamadas.append(1) or o_it(*a, **k))
+    monkeypatch.setattr(ifcopenshell, "open", lambda *a, **k: abertos.append(1) or o_open(*a, **k))
+    C.dividir_elementos(ped["arquivo"], ped["elementos"], threads=1, formas=formas)
+    assert not chamadas and not abertos, "IfcOpeningElement nunca tem forma: não pode reabrir o arquivo nem rodar o iterador"

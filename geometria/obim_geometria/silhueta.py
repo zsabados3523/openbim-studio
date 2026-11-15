@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ifcopenshell.geom
 import numpy as np
+from obim_geometria import nucleos
 from shapely import polygons, unary_union
 
 LIMIAR_PADRAO = 40000
@@ -24,6 +25,32 @@ def _forma(x):
 
 def _n_faces(forma) -> int:
     return len(forma.geometry.faces) // 3
+
+
+def formas_do_mundo(f, elementos, threads: int | None = None) -> dict:
+    """Triangula `elementos` em coordenadas do mundo num único iterador (`{id_step: forma}`)."""
+    formas = {}
+    try:
+        elems = [el for el in (elementos or ()) if el is not None]
+        if f is None or not elems:
+            return formas
+        cfg = ifcopenshell.geom.settings()
+        cfg.set(cfg.USE_WORLD_COORDS, True)
+        it = ifcopenshell.geom.iterator(cfg, f, nucleos.limitar_threads(threads), include=elems)
+        if it.initialize():
+            while True:
+                try:
+                    sh = it.get()
+                    geo = getattr(sh, "geometry", None)
+                    if geo is not None and geo.verts and geo.faces:
+                        formas[sh.id] = sh
+                except Exception:
+                    pass
+                if not it.next():
+                    break
+    except Exception:
+        pass
+    return formas
 
 
 def contar_faces(x) -> int:

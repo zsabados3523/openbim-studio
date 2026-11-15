@@ -473,6 +473,15 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
                 prof_motor = float(bloco.ZLength) * esc
             else:
                 raise ValueError("vista sem profundidade de corte")
+            if (
+                bloco is None
+                or getattr(bloco, "XLength", None) is None
+                or getattr(bloco, "YLength", None) is None
+            ):
+                raise ValueError("vista sem dimensoes de janela")
+            largura = float(bloco.XLength) * esc
+            altura = float(bloco.YLength) * esc
+            janela = (-largura / 2.0, largura / 2.0, -altura / 2.0, altura / 2.0)
             quadro = SimpleNamespace(
                 origem=np.asarray(m[:3, 3], dtype=np.float64) * esc,
                 u=np.asarray(m[:3, 0], dtype=np.float64),
@@ -480,9 +489,9 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
                 w=np.asarray(m[:3, 2], dtype=np.float64),
             )
             pols_linhas = visibilidade.linhas_visiveis_vista(
-                [(v, t) for _el, v, t in elegiveis], quadro, profundidade=prof_motor
+                [(v, t) for _el, v, t in elegiveis], quadro, profundidade=prof_motor, janela=janela
             )
-            pols_tampas = [visibilidade.secao_plana(v, t, quadro) for _el, v, t in elegiveis]
+            pols_tampas = [visibilidade.secao_plana(v, t, quadro, janela=janela) for _el, v, t in elegiveis]
             motor_ids = [el.id() for el, _v, _t in elegiveis]
             motor_set = set(motor_ids)
             incl = [el for el in incl if el.id() not in motor_set]

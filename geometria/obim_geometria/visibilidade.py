@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import numbers
 import numpy as np
 
 from obim_geometria.visib_base import (
@@ -308,8 +309,39 @@ def _extrair_poligonos(geom) -> list:
     return []
 
 
-def secao_plana(verts: np.ndarray, tris: np.ndarray, quadro) -> list:
+def _validar_janela(janela) -> tuple[float, float, float, float] | None:
+    """Valida janela (umin, umax, vmin, vmax) ou None."""
+    if janela is None:
+        return None
+    if not isinstance(janela, (tuple, list)) or len(janela) != 4:
+        raise ValueError("janela deve ser tupla/lista de 4 numeros")
+    vals = []
+    for x in janela:
+        if isinstance(x, bool) or not isinstance(x, numbers.Real):
+            raise ValueError("janela deve conter apenas numeros reais")
+        fx = float(x)
+        if not math.isfinite(fx):
+            raise ValueError("janela deve conter apenas numeros finitos")
+        vals.append(fx)
+    umin, umax, vmin, vmax = vals
+    if not (umin < umax and vmin < vmax):
+        raise ValueError("janela deve ter umin < umax e vmin < vmax")
+    return (umin, umax, vmin, vmax)
+
+
+def _validar_margem(margem) -> float:
+    """Valida margem numerica finita >= 0 (nao bool)."""
+    if isinstance(margem, bool) or not isinstance(margem, numbers.Real):
+        raise ValueError("margem deve ser numerica")
+    m = float(margem)
+    if not (math.isfinite(m) and m >= 0.0):
+        raise ValueError("margem deve ser finita e nao-negativa")
+    return m
+
+
+def secao_plana(verts: np.ndarray, tris: np.ndarray, quadro, *, janela=None) -> list:
     """Calcula poligonos 2D (u, v) da intersecao da malha com o plano w = 0 do quadro."""
+    jan = _validar_janela(janela)
     limpa = _limpar_malha(verts, tris)
     if limpa is None:
         return []
@@ -361,7 +393,16 @@ def secao_plana(verts: np.ndarray, tris: np.ndarray, quadro) -> list:
     solidas = [p for p, k in zip(pols, impar) if k]
     if not solidas:
         return []
-    return _extrair_poligonos(shapely.make_valid(unary_union(solidas)))
+    pols = _extrair_poligonos(shapely.make_valid(unary_union(solidas)))
+    if jan is None or not pols:
+        return pols
+    from shapely.geometry import box
+
+    caixa = box(jan[0], jan[2], jan[1], jan[3])
+    rec = []
+    for p in pols:
+        rec.extend(_extrair_poligonos(p.intersection(caixa)))
+    return rec
 
 
 def linhas_visiveis_vista(
@@ -369,6 +410,8 @@ def linhas_visiveis_vista(
     quadro,
     *,
     profundidade: float,
+    janela=None,
+    margem: float = 0.1,
     angulo_graus: float = 0.001,
     tol_z: float = 1e-4,
     min_len: float = 1e-4,
@@ -382,6 +425,8 @@ def linhas_visiveis_vista(
         raise ValueError("profundidade deve ser numerica") from exc
     if not (math.isfinite(prof) and prof >= 0.0):
         raise ValueError("profundidade deve ser finita e nao-negativa")
+    jan = _validar_janela(janela)
+    marg = _validar_margem(margem)
 
     pecas_l = list(pecas)
     if not pecas_l:
@@ -401,6 +446,19 @@ def linhas_visiveis_vista(
             recortadas.append(vazia)
             continue
         V2, T2 = _recortar_semi_espaco(V1, T1, -prof - V1[:, 2], plane_w=-prof)
+        if jan is not None and len(T2) > 0:
+            umin, umax, vmin, vmax = jan
+            pad = max(marg, 7e-7)
+            for eixo, lim, eh_max in (
+                (0, umax + pad, True),
+                (0, umin - pad, False),
+                (1, vmax + pad, True),
+                (1, vmin - pad, False),
+            ):
+                if len(T2) == 0:
+                    break
+                s = (V2[:, eixo] - lim) if eh_max else (lim - V2[:, eixo])
+                V2, T2 = _recortar_semi_espaco(V2, T2, s)
         recortadas.append((V2, T2) if len(T2) else vazia)
     return linhas_visiveis_multi(
         recortadas, angulo_graus=angulo_graus, tol_z=tol_z, min_len=min_len

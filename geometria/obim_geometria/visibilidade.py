@@ -23,9 +23,13 @@ from obim_geometria.visib_mapa import (
 )
 
 
-def _visibilidade_hibrida(P, Tw, a, b, ea, eb, tol_z: float, d_eps: float, min_len: float) -> np.ndarray:
+def _visibilidade_hibrida(
+    P, Tw, a, b, ea, eb, tol_z: float, d_eps: float, min_len: float, prep=None
+) -> np.ndarray:
     """Combina z-buffer conservador em grade adaptativa com recorte analitico exato em blocos."""
-    A, gx, gy, nx_, ny_, cc_, tx0, tx1, ty0, ty1, tzmax, tv, area2 = _preparar_triangulos(P, Tw)
+    A, gx, gy, nx_, ny_, cc_, tx0, tx1, ty0, ty1, tzmax, tv, area2 = (
+        prep if prep is not None else _preparar_triangulos(P, Tw)
+    )
     mn_x = float(min(a[:, 0].min(), b[:, 0].min(), tx0.min() if len(A) else math.inf))
     mn_y = float(min(a[:, 1].min(), b[:, 1].min(), ty0.min() if len(A) else math.inf))
     mx_x = float(max(a[:, 0].max(), b[:, 0].max(), tx1.max() if len(A) else -math.inf))
@@ -184,6 +188,39 @@ def _visibilidade_hibrida(P, Tw, a, b, ea, eb, tol_z: float, d_eps: float, min_l
     return np.stack([s0[ok2], s1[ok2]], axis=1)
 
 
+def _limpar_malha(verts: np.ndarray, tris: np.ndarray) -> tuple[np.ndarray, np.ndarray] | None:
+    """Valida malha e remove vertices nao finitos e triangulos invalidos."""
+    V = np.asarray(verts, dtype=np.float64)
+    T_raw = np.asarray(tris)
+    if V.ndim != 2 or V.shape[1] != 3:
+        raise ValueError("verts deve ter formato (N, 3) de vertices")
+    if T_raw.ndim != 2 or T_raw.shape[1] != 3 or not np.issubdtype(T_raw.dtype, np.integer):
+        raise ValueError("tris deve ter formato (M, 3) de indices inteiros de triangulos")
+    if len(T_raw) == 0:
+        return None
+    T = T_raw.astype(np.int64, copy=False)
+    if len(V) == 0 or T.min() < 0 or T.max() >= len(V):
+        raise ValueError("tris contem indice de vertice fora dos limites")
+    fin_v = np.isfinite(V).all(axis=1)
+    T = T[fin_v[T].all(axis=1)]
+    if len(T) == 0:
+        return None
+    if not fin_v.all():
+        V, T = V[fin_v], (np.cumsum(fin_v, dtype=np.int64) - 1)[T]
+    if np.abs(V).max() > 1e12:
+        raise ValueError("coordenadas de verts excedem o limite de 1e12")
+    return V, T
+
+
+def _dedup_triangulos(Tw: np.ndarray) -> np.ndarray:
+    """Remove triangulos degenerados em indice e duplicatas preservando a ordem."""
+    Tw = Tw[(Tw[:, 0] != Tw[:, 1]) & (Tw[:, 1] != Tw[:, 2]) & (Tw[:, 0] != Tw[:, 2])]
+    if len(Tw) == 0:
+        return Tw
+    _, u_idx = np.unique(np.sort(Tw, axis=1), axis=0, return_index=True)
+    return Tw[np.sort(u_idx)]
+
+
 def linhas_visiveis(
     verts: np.ndarray,
     tris: np.ndarray,
@@ -197,44 +234,58 @@ def linhas_visiveis(
     A vista e sempre de cima (+Z); quem chama gira a malha para outras
     vistas (corte e vistas laterais ficam na T19d).
     """
+    return linhas_visiveis_multi([(verts, tris)], angulo_graus=angulo_graus, tol_z=tol_z, min_len=min_len)[0]
+
+
+def linhas_visiveis_multi(
+    pecas: list[tuple[np.ndarray, np.ndarray]],
+    *,
+    angulo_graus: float = 0.001,
+    tol_z: float = 1e-4,
+    min_len: float = 1e-4,
+) -> list[list[np.ndarray]]:
+    """Calcula polilinhas visiveis de cada peca com oclusao mutua por todas as pecas."""
     for nome, val in (("angulo_graus", angulo_graus), ("tol_z", tol_z), ("min_len", min_len)):
         fv = float(val)
         if not (math.isfinite(fv) and fv >= 0.0):
             raise ValueError(f"{nome} deve ser nao-negativo e finito")
     if float(min_len) < 1e-5:
         raise ValueError("min_len deve ser >= 1e-5")
-    V = np.asarray(verts, dtype=np.float64)
-    T_raw = np.asarray(tris)
-    if V.ndim != 2 or V.shape[1] != 3:
-        raise ValueError("verts deve ter formato (N, 3) de vertices")
-    if T_raw.ndim != 2 or T_raw.shape[1] != 3 or not np.issubdtype(T_raw.dtype, np.integer):
-        raise ValueError("tris deve ter formato (M, 3) de indices inteiros de triangulos")
-    if len(T_raw) == 0:
+    pecas_l = list(pecas)
+    if not pecas_l:
         return []
-    T = T_raw.astype(np.int64, copy=False)
-    if len(V) == 0 or T.min() < 0 or T.max() >= len(V):
-        raise ValueError("tris contem indice de vertice fora dos limites")
-    fin_v = np.isfinite(V).all(axis=1)
-    T = T[fin_v[T].all(axis=1)]
-    if len(T) == 0:
-        return []
-    if not fin_v.all():
-        V = V[fin_v]
-        T = (np.cumsum(fin_v, dtype=np.int64) - 1)[T]
-    if np.abs(V).max() > 1e12:
-        raise ValueError("coordenadas de verts excedem o limite de 1e12")
+    limpas = [_limpar_malha(v, t) for v, t in pecas_l]
+    v_parts, offsets, v_off = [], [], 0
+    for item in limpas:
+        offsets.append(None if item is None else (v_off, item[1]))
+        if item is not None:
+            v_parts.append(item[0])
+            v_off += len(item[0])
+    if not v_parts:
+        return [[] for _ in pecas_l]
+    V_all = v_parts[0] if len(v_parts) == 1 else np.vstack(v_parts)
     _, idx, inv = np.unique(
-        np.round(V / 1e-6).astype(np.int64), axis=0, return_index=True, return_inverse=True
+        np.round(V_all / 1e-6).astype(np.int64), axis=0, return_index=True, return_inverse=True
     )
-    P = V[idx]
-    Tw = inv.ravel()[T]
-    Tw = Tw[(Tw[:, 0] != Tw[:, 1]) & (Tw[:, 1] != Tw[:, 2]) & (Tw[:, 0] != Tw[:, 2])]
-    if len(Tw) == 0:
-        return []
-    _, u_idx = np.unique(np.sort(Tw, axis=1), axis=0, return_index=True)
-    Tw = Tw[np.sort(u_idx)]
-    a, b, ang, silh, Tw_ok, ea, eb = _arestas_candidatas(P, Tw)
-    m = ((ang >= angulo_graus) | silh) & (np.hypot(*(b - a)[:, :2].T) > min_len)
-    if not np.any(m):
-        return []
-    return list(_visibilidade_hibrida(P, Tw_ok, a[m], b[m], ea[m], eb[m], tol_z, -1e-6, min_len))
+    P, inv_flat = V_all[idx], inv.ravel()
+    cands, tw_oks = [None] * len(pecas_l), []
+    for i, off_t in enumerate(offsets):
+        if off_t is None:
+            continue
+        Tw_i = _dedup_triangulos(inv_flat[off_t[1] + off_t[0]])
+        if len(Tw_i) == 0:
+            continue
+        a, b, ang, silh, Tw_ok_i, ea, eb = _arestas_candidatas(P, Tw_i)
+        if len(Tw_ok_i):
+            tw_oks.append(Tw_ok_i)
+        m = ((ang >= angulo_graus) | silh) & (np.hypot(*(b - a)[:, :2].T) > min_len)
+        if np.any(m):
+            cands[i] = (a[m], b[m], ea[m], eb[m])
+    if not tw_oks:
+        return [[] for _ in pecas_l]
+    Tw_comb = tw_oks[0] if len(tw_oks) == 1 else _dedup_triangulos(np.vstack(tw_oks))
+    prep = _preparar_triangulos(P, Tw_comb)
+    return [
+        [] if c is None else list(_visibilidade_hibrida(P, Tw_comb, *c, tol_z, -1e-6, min_len, prep=prep))
+        for c in cands
+    ]

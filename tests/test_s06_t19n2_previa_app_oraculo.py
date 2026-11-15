@@ -16,7 +16,7 @@ from test_s06_t19h_componentes_oraculo import _caixa, _cena
 
 
 def _preparar(tmp_path, componentes):
-    ped, _ = _cena(tmp_path, [_caixa(3 * k, 0, 0, 3 * k + 1, 1, 1) for k in range(9)], corte=0.5)  # 9 grupos em 3 lotes: o auxiliar demora o bastante para a prévia vir antes do fim
+    ped, _ = _cena(tmp_path, [_caixa(3 * k, 0, 0, 3 * k + 1, 1, 1) for k in range(18)], corte=0.5)  # 18 grupos em 6 lotes: o auxiliar demora o bastante para a prévia vir antes do fim
     if componentes:
         ped["componentes"] = True
     ped.update({"protocolo": 1, "op": "desenho", "threads": 3})

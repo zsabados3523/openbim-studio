@@ -28,7 +28,7 @@ def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, 
 
     progresso("calculando")
     if tipo == "planta":
-        opcoes = {"pesados": "silhueta", "componentes": True, **opcoes}
+        opcoes = {"pesados": "silhueta", "componentes": True, "motor_visivel": True, **opcoes}
         if previa is not None:
             def _cb_previa(svg):
                 try:

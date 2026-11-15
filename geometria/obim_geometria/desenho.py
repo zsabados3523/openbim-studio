@@ -6,7 +6,7 @@ import re
 import threading
 import time
 import traceback
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 import ifcopenshell
 import ifcopenshell.geom
 import ifcopenshell.ifcopenshell_wrapper as W
@@ -896,14 +896,7 @@ def _processar_base(pedido: dict, fase=None) -> dict:
 
         svg = buf.get_value()
         svg = _somente_pavimento(svg, pav.GlobalId)
-
-        if re.search(r"<svg\b[^>]*/>", svg):
-            svg = re.sub(r"(<svg\b[^>]*?)/[ \t]*>", r"\1></svg>", svg, count=1)
-        elif "</svg>" not in svg:
-            if "<svg" in svg:
-                svg = svg + "</svg>"
-            else:
-                svg = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:ifc="http://www.ifcopenshell.org/ns"></svg>'
+        svg = _normalizar_svg_vazio(svg)
 
         pesados_svg, pesados_info = [], []
         for el, n_faces, aneis in pesadas.values():
@@ -1156,7 +1149,39 @@ def _repartir_lotes(grupos, formas: dict, n_lotes: int) -> list[list[int]]:
     return lotes
 
 
-def _gravar_previa(pedido: dict, f, formas: dict, elementos, pesados_svg: list[str], base: dict, fase, fut_esq=None) -> None:
+def _normalizar_svg_vazio(svg: str) -> str:
+    """Garante tag `<svg>...</svg>` aberta e fechada para inserção de grupos."""
+    if re.search(r"<svg\b[^>]*/>", svg):
+        return re.sub(r"(<svg\b[^>]*?)/[ \t]*>", r"\1></svg>", svg, count=1)
+    if "</svg>" not in svg:
+        if "<svg" in svg:
+            return svg + "</svg>"
+        return '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:ifc="http://www.ifcopenshell.org/ns"></svg>'
+    return svg
+
+
+def _esqueleto_svg() -> str:
+    """Gera o esqueleto SVG padrão do motor sem reabrir o arquivo IFC."""
+    f0 = ifcopenshell.file(schema="IFC4")
+    st = ifcopenshell.geom.settings(ELEMENT_HIERARCHY=True)
+    st.set("dimensionality", W.SURFACES_AND_SOLIDS)
+    st.set("iterator-output", W.NATIVE)
+    st.set("apply-default-materials", True)
+    st.set("svg-write-poly", True)
+    st.set("svg-xmlns", True)
+    st.set("svg-poly", True)
+    st.set("door-arcs", True)
+    st.set("section-height-from-storeys", True)
+    st.set("svg-project", True)
+    st.set("section-height", 0.5)
+    buf = ifcopenshell.geom.serializers.buffer()
+    sr = ifcopenshell.geom.serializers.svg(buf, st)
+    sr.setFile(f0)
+    sr.finalize()
+    return _normalizar_svg_vazio(buf.get_value())
+
+
+def _gravar_previa(pedido: dict, f, formas: dict, elementos, pesados_svg: list[str]) -> None:
     try:
         destino = pedido.get("previa_arquivo")
         if not destino:
@@ -1192,21 +1217,13 @@ def _gravar_previa(pedido: dict, f, formas: dict, elementos, pesados_svg: list[s
 
         with ThreadPoolExecutor(max_workers=nucleos.limitar_threads(pedido.get("threads"))) as ex_sil:
             aneis_lista = list(ex_sil.map(_uma_silhueta, (alvo for _, alvo in candidatos)))
-        if fut_esq is None:
-            q_esq = {k: v for k, v in base.items() if k not in ("pesados", "limiar_pesado", "componentes", "previa_arquivo")}
-            q_esq["elementos"] = []
-            r_esq = _processar_base(q_esq, fase=None)
-        else:
-            r_esq = fut_esq.result()
-        if not r_esq.get("ok") or not isinstance(r_esq.get("svg"), str):
-            return
         novos = []
         for (el, _), aneis in zip(candidatos, aneis_lista):
             if aneis:
                 grupo = _grupo_silhueta(el, aneis)
                 if grupo is not None:
                     novos.append(grupo)
-        svg = _injetar_silhuetas(r_esq["svg"], list(pesados_svg) + novos)
+        svg = _injetar_silhuetas(_esqueleto_svg(), list(pesados_svg) + novos)
         tmp = f"{destino}.tmp"
         with open(tmp, "w", encoding="utf-8") as fp:
             fp.write(svg)
@@ -1220,19 +1237,6 @@ def _planta_por_componentes(pedido: dict, fase) -> dict:
 
     base = {k: v for k, v in pedido.items() if k not in ("componentes", "previa_arquivo")}
     elementos = pedido.get("elementos") or []
-    fut_esq = None
-    if pedido.get("previa_arquivo") and elementos:
-        q_esq = {k: v for k, v in base.items() if k not in ("pesados", "limiar_pesado")}
-        q_esq["elementos"] = []
-        fut_esq = Future()
-
-        def _calc_esq():
-            try:
-                fut_esq.set_result(_processar_base(q_esq, fase=None))
-            except Exception as exc:
-                fut_esq.set_exception(exc)
-
-        threading.Thread(target=_calc_esq, daemon=True).start()
     f = None
     formas = {}
     pesados_svg, pesados_info, pesadas_ids, pesadas_excluidas = [], [], set(), set()
@@ -1299,7 +1303,7 @@ def _planta_por_componentes(pedido: dict, fase) -> dict:
         if len(grupos) <= 1:
             return fallback()
         if pedido.get("previa_arquivo"):
-            _gravar_previa(pedido, f, formas, elementos, pesados_svg, base, fase, fut_esq)
+            _gravar_previa(pedido, f, formas, elementos, pesados_svg)
 
         total_threads = nucleos.limitar_threads(pedido.get("threads"))
         n_lotes = max(1, min(len(grupos), total_threads))

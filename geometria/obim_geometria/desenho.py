@@ -438,31 +438,10 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
     motor_visivel = bool(pedido.get("motor_visivel"))
     elegiveis, pols_linhas, pols_tampas, motor_ids = [], [], [], []
     motor_geo_s, motor_s = 0.0, 0.0
-    if motor_visivel and incl:
-        cands = [
-            el for el in incl
-            if not el.is_a("IfcDoor") and not el.is_a("IfcWindow")
-            and not getattr(el, "HasOpenings", None)
-            and getattr(el, "Representation", None) is not None
-        ]
-        if cands:
-            t_mg0 = time.perf_counter()
-            try:
-                formas = silhueta.formas_do_mundo(f, cands, threads=num_threads)
-            except Exception:
-                formas = {}
-            motor_geo_s = time.perf_counter() - t_mg0
-            for el in cands:
-                dados = _malha_caixa(formas.get(el.id()))
-                if dados is not None:
-                    elegiveis.append((el, dados[0], dados[1]))
 
     buf = ifcopenshell.geom.serializers.buffer()
     sr = ifcopenshell.geom.serializers.svg(buf, st)
     sr.setFile(f)
-
-    if fase is not None:
-        fase("motor")
 
     def _janela_bloco():
         if (
@@ -497,6 +476,33 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
             or min(vs) > janela[3] + 0.1
         )
 
+    janela, incl_podada, geo_ok = None, None, False
+    if motor_visivel and incl:
+        try:
+            janela = _janela_bloco()
+            incl_podada = [el for el in incl if _na_janela(el, janela)]
+            cands = [
+                el for el in incl_podada
+                if not el.is_a("IfcDoor") and not el.is_a("IfcWindow")
+                and not getattr(el, "HasOpenings", None) and getattr(el, "Representation", None) is not None
+            ]
+            if cands:
+                t_mg0 = time.perf_counter()
+                try:
+                    formas = silhueta.formas_do_mundo(f, cands, threads=num_threads)
+                    for el in cands:
+                        dados = _malha_caixa(formas.get(el.id()))
+                        if dados is not None:
+                            elegiveis.append((el, dados[0], dados[1]))
+                finally:
+                    motor_geo_s = time.perf_counter() - t_mg0
+            geo_ok = True
+        except Exception:
+            elegiveis, geo_ok = [], False
+
+    if fase is not None:
+        fase("motor")
+
     if motor_visivel and elegiveis:
         t_m0 = time.perf_counter()
         try:
@@ -506,7 +512,6 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
                 prof_motor = float(bloco.ZLength) * esc
             else:
                 raise ValueError("vista sem profundidade de corte")
-            janela = _janela_bloco()
             quadro = SimpleNamespace(
                 origem=np.asarray(m[:3, 3], dtype=np.float64) * esc,
                 u=np.asarray(m[:3, 0], dtype=np.float64),
@@ -519,16 +524,12 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
             pols_tampas = [visibilidade.secao_plana(v, t, quadro, janela=janela) for _el, v, t in elegiveis]
             motor_ids = [el.id() for el, _v, _t in elegiveis]
             motor_set = set(motor_ids)
-            incl = [el for el in incl if el.id() not in motor_set and _na_janela(el, janela)]
+            incl = [el for el in incl_podada if el.id() not in motor_set]
         except Exception:
             pols_linhas, pols_tampas, motor_ids = [], [], []
         motor_s = time.perf_counter() - t_m0
-    elif motor_visivel and incl:
-        try:
-            janela = _janela_bloco()
-            incl = [el for el in incl if _na_janela(el, janela)]
-        except Exception:
-            pass
+    elif motor_visivel and geo_ok:
+        incl = incl_podada
 
     incl.append(ann)
 

@@ -41,24 +41,44 @@ def formas_do_mundo(f, elementos, threads: int | None = None) -> dict:
             escala = float(ifcopenshell.util.unit.calculate_unit_scale(f))
         except Exception:
             escala = 1.0
-        restantes, vistos = [], set()
+        n_threads = nucleos.limitar_threads(threads)
+        unicos, vistos = [], set()
         for el in elems:
             eid = el.id()
-            if eid in vistos:
-                continue
-            vistos.add(eid)
-            malha = malha_direta.malha_mundo(el, escala)
-            if malha is not None:
-                verts, tris = malha
-                if len(verts) and len(tris):
-                    formas[eid] = malha_direta.FormaDireta(eid, verts, tris)
-                    continue
-            restantes.append(el)
+            if eid not in vistos:
+                vistos.add(eid)
+                unicos.append((eid, el))
+        cache = {}
+
+        def _ler_direta(par):
+            eid, el = par
+            try:
+                malha = malha_direta.malha_mundo(el, escala, cache)
+                if malha is not None:
+                    verts, tris = malha
+                    if len(verts) and len(tris):
+                        return eid, el, malha_direta.FormaDireta(eid, verts, tris)
+            except Exception:
+                pass
+            return eid, el, None
+
+        if n_threads == 1 or len(unicos) <= 1:
+            lidos = [_ler_direta(par) for par in unicos]
+        else:
+            with ThreadPoolExecutor(max_workers=min(n_threads, len(unicos))) as ex:
+                lidos = list(ex.map(_ler_direta, unicos))
+
+        restantes = []
+        for eid, el, forma in lidos:
+            if forma is not None:
+                formas[eid] = forma
+            else:
+                restantes.append(el)
         if not restantes:
             return formas
         cfg = ifcopenshell.geom.settings()
         cfg.set(cfg.USE_WORLD_COORDS, True)
-        it = ifcopenshell.geom.iterator(cfg, f, nucleos.limitar_threads(threads), include=restantes)
+        it = ifcopenshell.geom.iterator(cfg, f, n_threads, include=restantes)
         if it.initialize():
             while True:
                 try:

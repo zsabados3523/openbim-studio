@@ -11,7 +11,8 @@ import ifcopenshell.geom
 import ifcopenshell.ifcopenshell_wrapper as W
 import ifcopenshell.util.element
 import ifcopenshell.util.placement
-from obim_geometria import faixas, nucleos, silhueta
+import numpy as np
+from obim_geometria import faixas, nucleos, peca_visivel, silhueta, visibilidade
 
 
 def caixa_valida(c) -> list[float] | None:
@@ -702,6 +703,79 @@ def _abrir_ifc(caminho, pavimento: str | None = None):
     return ifcopenshell.open(caminho)
 
 
+def _malha_caixa(sh):
+    geo = getattr(sh, "geometry", None) if sh is not None else None
+    vs, fs = (getattr(geo, "verts", None), getattr(geo, "faces", None)) if geo is not None else (None, None)
+    if vs is None or fs is None or len(vs) < 9 or len(fs) < 3:
+        return None
+    verts, tris = np.asarray(vs, dtype=np.float64).reshape(-1, 3), np.asarray(fs, dtype=np.int64).reshape(-1, 3)
+    if not len(verts) or not len(tris) or not np.isfinite(verts).all():
+        return None
+    mn, mx = verts.min(axis=0), verts.max(axis=0)
+    return verts, tris, (float(mn[0]), float(mn[1]), float(mx[0]), float(mx[1])), float(mn[2]), float(mx[2])
+
+
+def _motor_planta(
+    f, hlr_cands: list, pesadas: dict, moveis_elems: list, caixas_coords: dict,
+    altura_corte_m: float, num_threads: int,
+) -> tuple[list[str], list[int], set[int], float, float]:
+    """Seleciona peças elegíveis e gera grupos SVG pelo motor de visibilidade."""
+    t_g0 = time.perf_counter()
+    moveis_caixas = {
+        el.id(): c for el in moveis_elems
+        if (c := caixa_valida(caixas_coords.get(el.id()) if el.id() in caixas_coords else caixas_coords.get(str(el.id())))) is not None
+    }
+    para_formas = [
+        el for el in hlr_cands + [e for e in moveis_elems if e.id() not in moveis_caixas]
+        if getattr(el, "Representation", None) is not None
+    ]
+    formas = silhueta.formas_do_mundo(f, para_formas, threads=num_threads) if para_formas else {}
+    geo_s = time.perf_counter() - t_g0
+
+    candidatas, excluidas, inel_boxes = [], set(), []
+    for el in hlr_cands:
+        if (dados := _malha_caixa(formas.get(el.id()))) is None:
+            continue
+        verts, tris, box_xy, z0, z1 = dados
+        if z0 > altura_corte_m:
+            excluidas.add(el.id())
+            continue
+        if not el.is_a("IfcDoor") and not el.is_a("IfcWindow") and not getattr(el, "HasOpenings", None) and z1 <= altura_corte_m:
+            candidatas.append((el, verts, tris, box_xy))
+        else:
+            inel_boxes.append(box_xy)
+    if not candidatas:
+        return [], [], excluidas, geo_s, 0.0
+
+    for _el, _nf, aneis in pesadas.values():
+        if aneis and (pts := [pt for anel in aneis for pt in anel]):
+            arr = np.asarray(pts, dtype=np.float64)
+            inel_boxes.append((float(arr[:, 0].min()), float(arr[:, 1].min()), float(arr[:, 0].max()), float(arr[:, 1].max())))
+    for el in moveis_elems:
+        c = moveis_caixas.get(el.id())
+        if c is not None and min(c[2], c[5]) <= altura_corte_m:
+            inel_boxes.append((min(c[0], c[3]), min(c[1], c[4]), max(c[0], c[3]), max(c[1], c[4])))
+        elif c is None and (dados := _malha_caixa(formas.get(el.id()))) is not None and dados[3] <= altura_corte_m:
+            inel_boxes.append(dados[2])
+
+    if inel_boxes:
+        ib = np.asarray(inel_boxes, dtype=np.float64)
+        elegiveis = [
+            it for it in candidatas if not np.any(
+                (ib[:, 2] + 0.001 >= it[3][0]) & (ib[:, 0] - 0.001 <= it[3][2])
+                & (ib[:, 3] + 0.001 >= it[3][1]) & (ib[:, 1] - 0.001 <= it[3][3]))
+        ]
+    else:
+        elegiveis = candidatas
+    if not elegiveis:
+        return [], [], excluidas, geo_s, 0.0
+
+    t_m0 = time.perf_counter()
+    pols = visibilidade.linhas_visiveis_multi([(v, t) for _el, v, t, _box in elegiveis])
+    motor_s = time.perf_counter() - t_m0
+    return [peca_visivel._grupo_svg(el, pl)[0] for (el, _v, _t, _box), pl in zip(elegiveis, pols)], [el.id() for el, *_ in elegiveis], excluidas, geo_s, motor_s
+
+
 def _processar_base(pedido: dict, fase=None) -> dict:
     try:
         t_a0 = time.perf_counter()
@@ -758,6 +832,9 @@ def _processar_base(pedido: dict, fase=None) -> dict:
         replicas = []
         pesadas = {}
         pesadas_excluidas = set()
+        hlr_cands = []
+        caixas_coords = pedido.get("caixas_coords") or {}
+        num_threads = nucleos.limitar_threads(pedido.get("threads"))
 
         for id_step, _ in elementos:
             el = f.by_id(id_step)
@@ -778,45 +855,60 @@ def _processar_base(pedido: dict, fase=None) -> dict:
             if moveis_como_caixa and (el.is_a("IfcFurnishingElement") or el.is_a("IfcSystemFurnitureElement")):
                 moveis_elems.append(el)
             else:
-                if cache_tipo:
-                    rep_id = _obter_rep_id(el)
-                    if rep_id is not None:
-                        try:
-                            m = ifcopenshell.util.placement.get_local_placement(el.ObjectPlacement)
-                            pure_z = (
-                                abs(float(m[2, 2]) - 1.0) < 1e-4
-                                and abs(float(m[0, 2])) < 1e-4
-                                and abs(float(m[1, 2])) < 1e-4
-                                and abs(float(m[2, 0])) < 1e-4
-                                and abs(float(m[2, 1])) < 1e-4
-                            )
-                            if not pure_z:
-                                include_elems.append(el)
-                                continue
-                            x_pos = float(m[0, 3]) * scale
-                            y_pos = float(m[1, 3]) * scale
-                            z_pos = float(m[2, 3]) * scale
-                            rel_z = round(altura_corte_m - z_pos, 4) + 0.0
-                            rot_2x2 = tuple(round(float(m[r, c]), 4) + 0.0 for r in (0, 1) for c in (0, 1))
-                            chave = (rep_id, el.is_a(), rel_z, rot_2x2)
-                            if chave not in primarias:
-                                primarias[chave] = (el, x_pos, y_pos)
-                                include_elems.append(el)
-                            else:
-                                prim_el, px, py = primarias[chave]
-                                dx = x_pos - px
-                                dy = y_pos - py
-                                replicas.append((el, prim_el, dx, dy))
+                hlr_cands.append(el)
+
+        motor_visivel = bool(pedido.get("motor_visivel"))
+        motor_svg, motor_ids, motor_excluidas, motor_geo_s, motor_s = [], [], set(), 0.0, 0.0
+        if motor_visivel and hlr_cands:
+            try:
+                motor_svg, motor_ids, motor_excluidas, motor_geo_s, motor_s = _motor_planta(
+                    f, hlr_cands, pesadas, moveis_elems, caixas_coords, altura_corte_m, num_threads
+                )
+                fora_hlr = set(motor_ids) | motor_excluidas
+                if fora_hlr:
+                    hlr_cands = [el for el in hlr_cands if el.id() not in fora_hlr]
+            except Exception:
+                motor_svg, motor_ids, motor_excluidas, motor_geo_s, motor_s = [], [], set(), 0.0, 0.0
+
+        for el in hlr_cands:
+            if cache_tipo:
+                rep_id = _obter_rep_id(el)
+                if rep_id is not None:
+                    try:
+                        m = ifcopenshell.util.placement.get_local_placement(el.ObjectPlacement)
+                        pure_z = (
+                            abs(float(m[2, 2]) - 1.0) < 1e-4
+                            and abs(float(m[0, 2])) < 1e-4
+                            and abs(float(m[1, 2])) < 1e-4
+                            and abs(float(m[2, 0])) < 1e-4
+                            and abs(float(m[2, 1])) < 1e-4
+                        )
+                        if not pure_z:
+                            include_elems.append(el)
                             continue
-                        except Exception:
-                            pass
-                include_elems.append(el)
+                        x_pos = float(m[0, 3]) * scale
+                        y_pos = float(m[1, 3]) * scale
+                        z_pos = float(m[2, 3]) * scale
+                        rel_z = round(altura_corte_m - z_pos, 4) + 0.0
+                        rot_2x2 = tuple(round(float(m[r, c]), 4) + 0.0 for r in (0, 1) for c in (0, 1))
+                        chave = (rep_id, el.is_a(), rel_z, rot_2x2)
+                        if chave not in primarias:
+                            primarias[chave] = (el, x_pos, y_pos)
+                            include_elems.append(el)
+                        else:
+                            prim_el, px, py = primarias[chave]
+                            dx = x_pos - px
+                            dy = y_pos - py
+                            replicas.append((el, prim_el, dx, dy))
+                        continue
+                    except Exception:
+                        pass
+            include_elems.append(el)
 
         caixas_ids = []
         caixas_svg = []
         moveis_excluidos = set()
         if moveis_elems:
-            caixas_coords = pedido.get("caixas_coords") or {}
             s_box = ifcopenshell.geom.settings()
             s_box.set(s_box.USE_WORLD_COORDS, True)
             for el in moveis_elems:
@@ -867,8 +959,6 @@ def _processar_base(pedido: dict, fase=None) -> dict:
         buf = ifcopenshell.geom.serializers.buffer()
         sr = ifcopenshell.geom.serializers.svg(buf, st)
         sr.setFile(f)
-
-        num_threads = nucleos.limitar_threads(pedido.get("threads"))
 
         if fase is not None:
             fase("motor")
@@ -930,7 +1020,7 @@ def _processar_base(pedido: dict, fase=None) -> dict:
                 else:
                     replicas_sem_linhas.append(rep_el.id())
 
-        extra_svg = pesados_svg + replicas_svg + caixas_svg
+        extra_svg = pesados_svg + replicas_svg + caixas_svg + motor_svg
         if extra_svg:
             if "xmlns:ifc=" not in svg:
                 svg = re.sub(r"(<svg\b[^>]*)", r'\1 xmlns:ifc="http://www.ifcopenshell.org/ns"', svg, count=1)
@@ -946,20 +1036,23 @@ def _processar_base(pedido: dict, fase=None) -> dict:
         enviados.extend(em_cache_ids)
         enviados.extend(replicas_sem_linhas)
         enviados.extend(info["id"] for info in pesados_info)
+        enviados.extend(motor_ids)
         enviados_set = set(enviados)
         falhas = [
             id_step for id_step, _ in elementos
             if id_step not in enviados_set and id_step not in aberturas and id_step not in moveis_excluidos
-            and id_step not in pesadas_excluidas
+            and id_step not in pesadas_excluidas and id_step not in motor_excluidas
         ]
         n_paths = len(re.findall(r"<path\b", svg))
         tempos = {
             "abrir_s": float(abrir_s),
-            "geo_s": float(geo_s),
+            "geo_s": float(geo_s + motor_geo_s),
             "write_s": float(write_s),
             "finalize_s": float(finalize_s),
         }
-        return {
+        if motor_visivel:
+            tempos["motor_s"] = float(motor_s)
+        resp = {
             "ok": True,
             "svg": svg,
             "n_paths": n_paths,
@@ -970,6 +1063,9 @@ def _processar_base(pedido: dict, fase=None) -> dict:
             "falhas_geometria": falhas,
             "tempos": tempos,
         }
+        if motor_visivel:
+            resp["motor_pecas"] = motor_ids
+        return resp
     except Exception as e:
         return {"ok": False, "erro": {"tipo": type(e).__name__, "mensagem": str(e), "rastro": traceback.format_exc()}}
 
@@ -1322,7 +1418,9 @@ def _planta_por_componentes(pedido: dict, fase) -> dict:
             for k in ("geo_s", "write_s", "finalize_s")
         },
     }
-    return {
+    if pedido.get("motor_visivel"):
+        tempos["motor_s"] = float(sum(float((r.get("tempos") or {}).get("motor_s", 0.0)) for r in ok_resultados))
+    resp = {
         "ok": True,
         "svg": svg,
         "n_paths": len(re.findall(r"<path\b", svg)),
@@ -1335,6 +1433,9 @@ def _planta_por_componentes(pedido: dict, fase) -> dict:
         "grupos": len(grupos),
         "grupos_ids": [[i for i, _ in g] for g in grupos],
     }
+    if pedido.get("motor_visivel"):
+        resp["motor_pecas"] = junta("motor_pecas")
+    return resp
 
 
 def processar(pedido: dict, fase=None) -> dict:

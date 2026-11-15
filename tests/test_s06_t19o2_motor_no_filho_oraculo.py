@@ -11,7 +11,9 @@ from __future__ import annotations
 import copy
 
 from s06_t07_aux import *  # noqa: F401,F403  (garante o caminho dos auxiliares)
-from test_s06_t19b1_visibilidade_oraculo import _caixa, _cobertura
+import numpy as np
+from test_s06_t19b1_visibilidade_oraculo import TOL, _amostra, _caixa, _cobertura, _dist
+from test_s06_t19b2_visibilidade_hlr_oraculo import _coplanares
 from test_s06_t19h_componentes_oraculo import Espiao, _cena, _guids, _segs
 
 import obim_geometria.desenho as D
@@ -19,9 +21,20 @@ import obim_geometria.desenho as D
 CORTE = 0.5
 
 
-def _confere(ref, r):
+def _confere(ref, r, malhas):
+    """Motor x HLR. O HLR desenha diagonais coplanares da triangulação (sem traço no contrato do motor, ver T19b2): o trecho do HLR que só cai sobre elas não conta."""
     a, b = _segs(ref["svg"]), _segs(r["svg"])
-    assert len(a) and _cobertura(a, b) >= 0.999, "linha do HLR faltando no motor"
+    assert len(a) and len(b)
+    cop, resto = [], []
+    for m in malhas:
+        c, rs = _coplanares(m)
+        cop.append(c)
+        resto.append(rs)
+    cop, resto = np.concatenate(cop), np.concatenate(resto)
+    p, w = _amostra(a)
+    ficar = ~((_dist(p, cop) <= TOL) & (_dist(p, resto) > TOL))
+    cob = float(w[ficar & (_dist(p, b) <= TOL)].sum() / w[ficar].sum())
+    assert cob >= 0.999, f"linha do HLR faltando no motor ({cob:.4f})"
     assert _cobertura(b, a) >= 0.999, "linha sobrando no motor"
 
 
@@ -38,30 +51,30 @@ def test_elegiveis_vao_ao_motor_e_batem_com_o_hlr(tmp_path):
     ped, ids, ref, r = _par(tmp_path, malhas)
     assert sorted(r["motor_pecas"]) == sorted(ids) and not r["falhas_geometria"]
     assert set(ids) <= set(r["enviados"])
-    assert "data-silhueta" not in r["svg"] and set(_guids(r["svg"])) == set(_guids(ref["svg"]))
-    _confere(ref, r)
+    assert "data-silhueta" not in r["svg"] and {g for _i, g in ped["elementos"]} <= set(_guids(r["svg"]))  # o HLR sem corte não grava guid nas projeções; o motor grava
+    _confere(ref, r, malhas)
 
 
 def test_vizinho_inelegivel_sobreposto_mantem_o_hlr(tmp_path):
     malhas = [_caixa(0, 0, 0, 2, 2, 0.3), _caixa(1, 1, 0, 3, 3, 1.0), _caixa(10, 0, 0, 11, 1, 0.3)]  # [1] cruza o corte e sobrepõe [0]
     ped, ids, ref, r = _par(tmp_path, malhas)
     assert r["motor_pecas"] == [ids[2]]
-    _confere(ref, r)
+    _confere(ref, r, malhas)
 
 
 def test_peca_acima_do_corte_some_sem_virar_falha(tmp_path):
     malhas = [_caixa(0, 0, 0, 1, 1, 0.3), _caixa(5, 0, 1.0, 6, 1, 2.0)]
     ped, ids, ref, r = _par(tmp_path, malhas)
     assert r["motor_pecas"] == [ids[0]] and not r["falhas_geometria"] and not ref["falhas_geometria"]
-    assert set(_guids(r["svg"])) == set(_guids(ref["svg"]))
-    _confere(ref, r)
+    assert ped["elementos"][1][1] not in r["svg"] and ped["elementos"][1][1] not in ref["svg"]
+    _confere(ref, r, malhas)
 
 
 def test_porta_fica_no_hlr(tmp_path):
     malhas = [_caixa(0, 0, 0, 1, 1, 0.3), _caixa(5, 0, 0, 6, 1, 0.3)]
     ped, ids, ref, r = _par(tmp_path, malhas, classes={0: "IfcDoor"})
     assert r["motor_pecas"] == [ids[1]]
-    _confere(ref, r)
+    _confere(ref, r, malhas)
 
 
 def test_sem_a_chave_nada_muda(tmp_path):
@@ -79,4 +92,4 @@ def test_componentes_repassa_a_chave_aos_filhos(monkeypatch, tmp_path):
     r = D.processar({**copy.deepcopy(ped), "componentes": True, "motor_visivel": True})
     assert r["ok"] and sorted(r["motor_pecas"]) == sorted(ids) and r["grupos"] == 3
     assert all(c.get("motor_visivel") for c in esp.chamadas)
-    _confere(ref, r)
+    _confere(ref, r, malhas)

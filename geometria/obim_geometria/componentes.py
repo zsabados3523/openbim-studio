@@ -2,6 +2,8 @@
 """Agrupamento de elementos por componentes conexos da pegada 2D real (XY)."""
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+
 import ifcopenshell
 import ifcopenshell.geom
 import numpy as np
@@ -91,42 +93,71 @@ def agrupar(pegadas, folga: float = FOLGA) -> list[list[int]]:
     return sorted(grupos.values(), key=lambda g: g[0])
 
 
-def dividir_elementos(arquivo, elementos, folga: float = FOLGA, threads: int | None = None) -> list[list]:
+def _pegada_da_forma(sh):
+    """Calcula a pegada 2D de uma forma já triangulada."""
+    try:
+        geo = sh.geometry
+        if geo.verts and geo.faces:
+            return pegada_xy(
+                np.asarray(geo.verts, dtype=float).reshape(-1, 3),
+                np.asarray(geo.faces, dtype=int).reshape(-1, 3),
+            )
+    except Exception:
+        pass
+    return None
+
+
+def dividir_elementos(
+    arquivo, elementos, folga: float = FOLGA, threads: int | None = None, formas: dict | None = None
+) -> list[list]:
     """Agrupa `elementos` (`[id_step, guid]`) pela pegada XY no mundo, mantendo a ordem original."""
     elems = [list(e) for e in elementos]
     if not elems:
         return []
     if len(elems) == 1:
         return [elems]
-    f = ifcopenshell.open(arquivo)
-    cfg = ifcopenshell.geom.settings()
-    cfg.set(cfg.USE_WORLD_COORDS, True)
-    incl = []
-    for id_step, _guid in elems:
+    formas_uso = dict(formas) if isinstance(formas, dict) else {}
+    faltam_ids = list(dict.fromkeys(
+        id_step for id_step, _guid in elems if formas_uso.get(id_step) is None
+    ))
+    if faltam_ids:
+        f = ifcopenshell.open(arquivo)
+        cfg = ifcopenshell.geom.settings()
+        cfg.set(cfg.USE_WORLD_COORDS, True)
+        incl = []
+        for id_step in faltam_ids:
+            try:
+                el = f.by_id(id_step)
+                if el is not None and not el.is_a("IfcOpeningElement"):
+                    incl.append(el)
+            except Exception:
+                pass
         try:
-            el = f.by_id(id_step)
-            if el is not None and not el.is_a("IfcOpeningElement"):
-                incl.append(el)
+            if incl:
+                it = ifcopenshell.geom.iterator(cfg, f, nucleos.limitar_threads(threads), include=incl)
+                if it.initialize():
+                    while True:
+                        try:
+                            sh = it.get()
+                            geo = sh.geometry
+                            if geo.verts and geo.faces:
+                                formas_uso[sh.id] = sh
+                        except Exception:
+                            pass
+                        if not it.next():
+                            break
         except Exception:
             pass
+    pares = [
+        (id_step, formas_uso[id_step])
+        for id_step in dict.fromkeys(i for i, _guid in elems)
+        if formas_uso.get(id_step) is not None
+    ]
     peg_por_id = {}
-    try:
-        it = ifcopenshell.geom.iterator(cfg, f, nucleos.limitar_threads(threads), include=incl)
-        if incl and it.initialize():
-            while True:
-                try:
-                    sh = it.get()
-                    geo = sh.geometry
-                    if geo.verts and geo.faces:
-                        peg_por_id[sh.id] = pegada_xy(
-                            np.asarray(geo.verts, dtype=float).reshape(-1, 3),
-                            np.asarray(geo.faces, dtype=int).reshape(-1, 3),
-                        )
-                except Exception:
-                    pass
-                if not it.next():
-                    break
-    except Exception:
-        pass
+    if pares:
+        with ThreadPoolExecutor(max_workers=nucleos.limitar_threads(threads)) as ex:
+            for (id_step, _sh), peg in zip(pares, ex.map(_pegada_da_forma, (sh for _, sh in pares))):
+                if peg is not None:
+                    peg_por_id[id_step] = peg
     pegadas = [peg_por_id.get(id_step) for id_step, _guid in elems]
     return [[elems[i] for i in g] for g in agrupar(pegadas, folga=folga)]

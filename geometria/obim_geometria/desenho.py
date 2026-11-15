@@ -72,20 +72,49 @@ def _grupo_silhueta(el, aneis) -> str | None:
     return f'<g class="{el.is_a()}" ifc:guid="{el.GlobalId}" data-silhueta="1"><path d="{d}" fill-rule="evenodd"/></g>'
 
 
-def _pesadas_para_svg(f: ifcopenshell.file, pedido: dict, elementos, altura_corte_m: float):
+class _FormaId:
+    """Envolve forma do iterador expondo `.id()` compatível com `entity_instance`."""
+
+    def __init__(self, id_step: int, forma):
+        self._id = id_step
+        self._forma = forma
+
+    def id(self) -> int:
+        return self._id
+
+    def __getattr__(self, nome):
+        return getattr(self._forma, nome)
+
+
+def _pesadas_para_svg(
+    f: ifcopenshell.file, pedido: dict, elementos, altura_corte_m: float, formas: dict | None = None
+):
     """Silhuetas do pedido inteiro (usado pelo pai das faixas): svg, info, ids desenhados, ids fora do corte."""
     pesados_svg, pesados_info, ids, excluidos = [], [], set(), set()
     if pedido.get("pesados") != "silhueta":
         return pesados_svg, pesados_info, ids, excluidos
     limiar = _limiar_pesado(pedido)
     moveis_como_caixa = bool(pedido.get("moveis_como_caixa", False))
+    candidatos = []
     for id_step, _ in elementos:
         el = f.by_id(id_step)
         if el is None or el.is_a("IfcOpeningElement"):
             continue
         if not _candidata_silhueta(el, moveis_como_caixa):
             continue
-        n_faces, aneis, zmin = silhueta.faces_e_silhueta(el, limiar, z_corte=altura_corte_m)
+        candidatos.append((id_step, el))
+    if isinstance(formas, dict):
+        faltantes, vistos = [], set()
+        for id_step, el in candidatos:
+            if id_step not in formas and id_step not in vistos:
+                faltantes.append(el)
+                vistos.add(id_step)
+        if faltantes:
+            formas.update(silhueta.formas_do_mundo(f, faltantes, threads=pedido.get("threads")))
+    for id_step, el in candidatos:
+        forma = formas.get(id_step) if isinstance(formas, dict) else None
+        alvo = _FormaId(el.id(), forma) if hasattr(forma, "geometry") else el
+        n_faces, aneis, zmin = silhueta.faces_e_silhueta(alvo, limiar, z_corte=altura_corte_m)
         if not silhueta.eh_pesada(n_faces, limiar):
             continue
         if aneis is None or (zmin is not None and zmin > altura_corte_m):
@@ -1090,6 +1119,7 @@ def _planta_por_componentes(pedido: dict, fase) -> dict:
     base = {k: v for k, v in pedido.items() if k != "componentes"}
     elementos = pedido.get("elementos") or []
     f = None
+    formas = {}
     pesados_svg, pesados_info, pesadas_ids, pesadas_excluidas = [], [], set(), set()
     pesadas_prontas = False
     restantes = list(elementos)
@@ -1125,7 +1155,7 @@ def _planta_por_componentes(pedido: dict, fase) -> dict:
             f = ifcopenshell.open(pedido.get("arquivo"))
             altura_corte_m = float((pedido.get("vista") or {}).get("altura_corte_m", float("inf")))
             pesados_svg, pesados_info, pesadas_ids, pesadas_excluidas = _pesadas_para_svg(
-                f, pedido, elementos, altura_corte_m
+                f, pedido, elementos, altura_corte_m, formas=formas
             )
         pesadas_prontas = True
 
@@ -1134,7 +1164,7 @@ def _planta_por_componentes(pedido: dict, fase) -> dict:
             return fallback()
 
         grupos = componentes.dividir_elementos(
-            pedido.get("arquivo"), restantes, threads=pedido.get("threads")
+            pedido.get("arquivo"), restantes, threads=pedido.get("threads"), formas=formas
         )
         if len(grupos) <= 1:
             return fallback()

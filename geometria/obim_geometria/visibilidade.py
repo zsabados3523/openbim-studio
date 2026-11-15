@@ -337,8 +337,21 @@ def secao_plana(verts: np.ndarray, tris: np.ndarray, quadro) -> list:
     pols = [p for p in pols if not p.is_empty and p.area > 1e-12]
     if not pols:
         return []
-    comb = functools.reduce(lambda a, b: a.symmetric_difference(b), pols)
-    return _extrair_poligonos(shapely.make_valid(comb))
+    # polygonize devolve todas as faces do arranjo (o vao de um furo tambem e uma face):
+    # regra par-impar por raio para +u contra os segmentos originais (arestas internas
+    # de pecas encostadas cruzam duas vezes e se anulam).
+    pts = np.array([[q.x, q.y] for q in (p.representative_point() for p in pols)])
+    y1, y2 = segs[:, 0, 1][None, :], segs[:, 1, 1][None, :]
+    x1, x2 = segs[:, 0, 0][None, :], segs[:, 1, 0][None, :]
+    py, px = pts[:, 1:2], pts[:, 0:1]
+    cruza = (y1 > py) != (y2 > py)
+    dy = np.where(y2 == y1, 1.0, y2 - y1)
+    xi = x1 + (py - y1) * (x2 - x1) / dy
+    impar = (cruza & (px < xi)).sum(axis=1) % 2 == 1
+    solidas = [p for p, k in zip(pols, impar) if k]
+    if not solidas:
+        return []
+    return _extrair_poligonos(shapely.make_valid(unary_union(solidas)))
 
 
 def linhas_visiveis_vista(

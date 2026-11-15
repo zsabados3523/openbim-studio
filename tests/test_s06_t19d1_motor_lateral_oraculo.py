@@ -397,3 +397,19 @@ def test_referencia_hlr_linhas_e_tampas(tmp_path):
     assert abs(meu.area - 1.13) <= 1e-9  # K1 (1 x 1) + tampo 1,2 x 0,05 + 2 pernas da frente 0,05 x 0,7 (0,06 + 0,07)
     for nome in ("MesaB", "Oclusor", "AtrasDaCamera", "AlemDoAlcance"):
         assert V.secao_plana(*malhas[nomes.index(nome)], Q) == [], f"{nome} não cruza o plano"
+
+
+def test_secao_com_furo_mantem_o_vazio():
+    """Parede com abertura / tubo oco: a tampa tem furo (revisão Argon, 15/11). Moldura 4x4 com vão 2x2, feita de 4 caixas numa malha."""
+    V = _V()
+    partes = [_caixa(0, 0, -1, 4, 1, 1), _caixa(0, 3, -1, 4, 4, 1), _caixa(0, 1, -1, 1, 3, 1), _caixa(3, 1, -1, 4, 3, 1)]
+    p = np.concatenate([x[0] for x in partes])
+    t = np.concatenate([x[1] + sum(len(y[0]) for y in partes[:i]) for i, x in enumerate(partes)])
+    s = V.secao_plana(*_mundo(AXIAL, (p, t)), AXIAL)
+    assert abs(sum(g.area for g in s) - 12.0) <= 1e-9, "o vão 2x2 não pode ser tampado"
+    assert sum(len(g.interiors) for g in s) == 1
+    ilha = _caixa(1.5, 1.5, -1, 2.5, 2.5, 1)  # ilha dentro do vão (outra peça solta na mesma malha): conta de novo
+    p2 = np.concatenate([p, ilha[0]])
+    t2 = np.concatenate([t, ilha[1] + len(p)])
+    s2 = V.secao_plana(*_mundo(AXIAL, (p2, t2)), AXIAL)
+    assert abs(sum(g.area for g in s2) - 13.0) <= 1e-9

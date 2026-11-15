@@ -14,6 +14,7 @@ import functools
 import inspect
 import itertools
 import threading
+import weakref
 
 from PySide6.QtCore import QObject, Qt, Signal, Slot
 
@@ -99,16 +100,18 @@ class GerenteDesenho(QObject):
         if self._padrao:
             self._cache = None  # cache fica no motor padrao
         self._threads: set = set()
-        self._trava = threading.Lock()
+        self._trava = threading.RLock()
         self._ativos: dict[str, _Pedido] = {}
         self._por_vista: dict[str, _Pedido] = {}
-        self._sessoes: dict[int, tuple[object, SessaoSelecao]] = {}
+        self._sessoes: dict[int, tuple[object, SessaoSelecao, object]] = {}
+        self._em_voo: dict[SessaoSelecao, int] = {}
         self._evento.connect(self._tratar, Qt.ConnectionType.QueuedConnection)
 
     def pedir(self, tipo, ifc, vista_guid, *, revisao=None, **opcoes) -> str:
         if tipo not in TIPOS:
             raise ValueError(f"tipo de desenho invalido: {tipo!r}")
         chave = self._chave_estado(tipo, ifc, vista_guid, opcoes)
+        sessao = self._obter_sessao(ifc, revisao) if revisao is not None else self._limpar_mortas()
         if chave in self._ativos:
             return chave
         antigo = self._por_vista.get(vista_guid)
@@ -121,7 +124,6 @@ class GerenteDesenho(QObject):
                 self._ativos[chave] = self._por_vista[vista_guid] = ped
                 self._evento.emit(ped, "pronto", dados)  # fila: nunca sincrono
                 return chave
-        sessao = self._obter_sessao(ifc, revisao) if revisao is not None else None
         self._ativos[chave] = self._por_vista[vista_guid] = ped
         ped.thread = threading.Thread(
             target=self._rodar, args=(ped, tipo, ifc, vista_guid, dict(opcoes), sessao), daemon=True)
@@ -130,29 +132,71 @@ class GerenteDesenho(QObject):
         ped.thread.start()
         return chave
 
+    def _limpar_mortas_travado(self) -> None:
+        for k in [k for k, (_, _, ref) in self._sessoes.items() if ref() is None]:
+            del self._sessoes[k]
+
+    def _limpar_mortas(self) -> None:
+        with self._trava:
+            self._limpar_mortas_travado()
+
+    def _criar_ref(self, ifc, chave_ifc: int):
+        ref_gerente = weakref.ref(self)
+
+        def _ao_morrer(ref_morta):
+            g = ref_gerente()
+            if g is None:
+                return
+            with g._trava:
+                atual = g._sessoes.get(chave_ifc)
+                if atual is not None and atual[2] is ref_morta:
+                    del g._sessoes[chave_ifc]
+
+        try:
+            return weakref.ref(ifc, _ao_morrer)
+        except TypeError:
+            return lambda o=ifc: o
+
     def _obter_sessao(self, ifc, revisao) -> SessaoSelecao:
         with self._trava:
-            atual = self._sessoes.get(id(ifc))
-            if atual is not None and atual[0] == revisao:
+            self._limpar_mortas_travado()
+            chave_ifc = id(ifc)
+            atual = self._sessoes.get(chave_ifc)
+            if atual is not None and atual[2]() is ifc and atual[0] == revisao:
                 return atual[1]
             sessao = SessaoSelecao()
-            self._sessoes[id(ifc)] = (revisao, sessao)
+            self._sessoes[chave_ifc] = (revisao, sessao, self._criar_ref(ifc, chave_ifc))
             return sessao
+
+    @staticmethod
+    def _clonar_sessao(sessao: SessaoSelecao, ids) -> SessaoSelecao:
+        nova = SessaoSelecao()
+        excluir = {int(i) for i in ids}
+        nova._caixas = {k: (list(v) if v is not None else None) for k, v in sessao._caixas.items() if k not in excluir}
+        nova._erros = {k: list(v) for k, v in sessao._erros.items() if k not in excluir}
+        return nova
 
     def invalidar(self, ifc=None, ids=None) -> None:
         with self._trava:
+            self._limpar_mortas_travado()
             if ifc is None:
                 if ids is None:
                     self._sessoes.clear()
                 else:
-                    for _, sessao in self._sessoes.values():
-                        sessao.invalidar(ids)
+                    for chave_ifc, (rev, sessao, ref) in list(self._sessoes.items()):
+                        if sessao in self._em_voo:
+                            self._sessoes[chave_ifc] = (rev, self._clonar_sessao(sessao, ids), ref)
+                        else:
+                            sessao.invalidar(ids)
                 return
-            atual = self._sessoes.get(id(ifc))
-            if atual is None:
+            chave_ifc = id(ifc)
+            atual = self._sessoes.get(chave_ifc)
+            if atual is None or atual[2]() is not ifc:
                 return
             if ids is None:
-                del self._sessoes[id(ifc)]
+                del self._sessoes[chave_ifc]
+            elif atual[1] in self._em_voo:
+                self._sessoes[chave_ifc] = (atual[0], self._clonar_sessao(atual[1], ids), atual[2])
             else:
                 atual[1].invalidar(ids)
 
@@ -188,9 +232,20 @@ class GerenteDesenho(QObject):
                 extra["previa"] = lambda d: self._evento.emit(ped, "previa", d)
             if sessao is not None and ("sessao_selecao" in nomes or tem_kw):
                 extra["sessao_selecao"] = sessao
-            dados = self._motor(
-                tipo, ifc, vista_guid, opcoes, cancelar=ped.cancelar,
-                progresso=lambda m: self._evento.emit(ped, "progresso", m), **extra)
+                with self._trava:
+                    self._em_voo[sessao] = self._em_voo.get(sessao, 0) + 1
+            try:
+                dados = self._motor(
+                    tipo, ifc, vista_guid, opcoes, cancelar=ped.cancelar,
+                    progresso=lambda m: self._evento.emit(ped, "progresso", m), **extra)
+            finally:
+                if "sessao_selecao" in extra:
+                    with self._trava:
+                        n = self._em_voo.get(sessao, 0) - 1
+                        if n > 0:
+                            self._em_voo[sessao] = n
+                        else:
+                            self._em_voo.pop(sessao, None)
             if ped.cancelar.is_set():
                 return
             if self._cache is not None:

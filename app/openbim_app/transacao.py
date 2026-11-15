@@ -222,6 +222,7 @@ class Historico:
 
     def _quebrar(self, a, motivo, causa=None):
         self._quebrado = True
+        self._revisao += 1
         a.transaction = self._sent
         raise HistoricoQuebrado(motivo) from causa
 
@@ -360,6 +361,7 @@ class Historico:
             yield
 
     def encerrar(self):
+        self._revisao += 1
         a = self._arquivo
         if a is not None:
             a.history.clear(), a.future.clear()

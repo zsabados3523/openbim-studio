@@ -6,7 +6,7 @@ import re
 import threading
 import time
 import traceback
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 import ifcopenshell
 import ifcopenshell.geom
 import ifcopenshell.ifcopenshell_wrapper as W
@@ -1156,13 +1156,11 @@ def _repartir_lotes(grupos, formas: dict, n_lotes: int) -> list[list[int]]:
     return lotes
 
 
-def _gravar_previa(pedido: dict, f, formas: dict, elementos, pesados_svg: list[str], base: dict, fase) -> None:
+def _gravar_previa(pedido: dict, f, formas: dict, elementos, pesados_svg: list[str], base: dict, fase, fut_esq=None) -> None:
     try:
         destino = pedido.get("previa_arquivo")
         if not destino:
             return
-        q_esq = {k: v for k, v in base.items() if k not in ("pesados", "limiar_pesado", "componentes", "previa_arquivo")}
-        q_esq["elementos"] = []
         if f is None:
             f = _abrir_ifc(pedido.get("arquivo"))
         altura_corte_m = float((pedido.get("vista") or {}).get("altura_corte_m", float("inf")))
@@ -1192,10 +1190,13 @@ def _gravar_previa(pedido: dict, f, formas: dict, elementos, pesados_svg: list[s
             except Exception:
                 return None
 
-        with ThreadPoolExecutor(max_workers=1) as ex_esq:
-            fut_esq = ex_esq.submit(_processar_base, q_esq, fase)
-            with ThreadPoolExecutor(max_workers=nucleos.limitar_threads(pedido.get("threads"))) as ex_sil:
-                aneis_lista = list(ex_sil.map(_uma_silhueta, (alvo for _, alvo in candidatos)))
+        with ThreadPoolExecutor(max_workers=nucleos.limitar_threads(pedido.get("threads"))) as ex_sil:
+            aneis_lista = list(ex_sil.map(_uma_silhueta, (alvo for _, alvo in candidatos)))
+        if fut_esq is None:
+            q_esq = {k: v for k, v in base.items() if k not in ("pesados", "limiar_pesado", "componentes", "previa_arquivo")}
+            q_esq["elementos"] = []
+            r_esq = _processar_base(q_esq, fase=None)
+        else:
             r_esq = fut_esq.result()
         if not r_esq.get("ok") or not isinstance(r_esq.get("svg"), str):
             return
@@ -1219,6 +1220,19 @@ def _planta_por_componentes(pedido: dict, fase) -> dict:
 
     base = {k: v for k, v in pedido.items() if k not in ("componentes", "previa_arquivo")}
     elementos = pedido.get("elementos") or []
+    fut_esq = None
+    if pedido.get("previa_arquivo") and elementos:
+        q_esq = {k: v for k, v in base.items() if k not in ("pesados", "limiar_pesado")}
+        q_esq["elementos"] = []
+        fut_esq = Future()
+
+        def _calc_esq():
+            try:
+                fut_esq.set_result(_processar_base(q_esq, fase=None))
+            except Exception as exc:
+                fut_esq.set_exception(exc)
+
+        threading.Thread(target=_calc_esq, daemon=True).start()
     f = None
     formas = {}
     pesados_svg, pesados_info, pesadas_ids, pesadas_excluidas = [], [], set(), set()
@@ -1285,7 +1299,7 @@ def _planta_por_componentes(pedido: dict, fase) -> dict:
         if len(grupos) <= 1:
             return fallback()
         if pedido.get("previa_arquivo"):
-            _gravar_previa(pedido, f, formas, elementos, pesados_svg, base, fase)
+            _gravar_previa(pedido, f, formas, elementos, pesados_svg, base, fase, fut_esq)
 
         total_threads = nucleos.limitar_threads(pedido.get("threads"))
         n_lotes = max(1, min(len(grupos), total_threads))

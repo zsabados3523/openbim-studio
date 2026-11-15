@@ -28,7 +28,23 @@ def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, 
 
     progresso("calculando")
     if tipo == "planta":
-        opcoes = {"pesados": "silhueta", **opcoes}
+        opcoes = {"pesados": "silhueta", "componentes": True, **opcoes}
+        if previa is not None:
+            def _cb_previa(svg):
+                try:
+                    previa({
+                        "svg": svg,
+                        "n_paths": svg.count("<path"),
+                        "tempos": {},
+                        "caixas": [],
+                        "em_cache": [],
+                        "pesados": [],
+                        "parcial": True,
+                    })
+                except Exception:
+                    pass
+
+            opcoes["previa"] = _cb_previa
     gerar = gerar_planta if tipo == "planta" else gerar_corte
     # cache exato (chave do pedido real, com elementos): leitura e gravacao aqui dentro
     r = gerar(ifc, vista_guid, cache=cache, cancelar=cancelar, **opcoes)

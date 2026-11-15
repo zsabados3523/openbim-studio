@@ -1,0 +1,28 @@
+{
+  "atribuicao": "OpenBIM Studio (AGPL-3.0-or-later)",
+  "cobre": [
+    "planta",
+    "furo-em-laje"
+  ],
+  "contagens": {
+    "IfcBuildingStorey": 1,
+    "IfcOpeningElement": 1,
+    "IfcSlab": 1
+  },
+  "data_acesso": "2026-11-15",
+  "esquema": "IFC4",
+  "licenca": "propria",
+  "nome": "laje-com-furo",
+  "observacoes": "Laje 8x6 m com furo retangular de 2x1,5 m via IfcRelVoidsElement.",
+  "origem": "scripts/gerar_modelos.py",
+  "pode_ir_no_git": "nao",
+  "programa_de_origem": "IfcOpenShell 0.9.0",
+  "sha256": "e84ddf07d9b870cb28810f5c41eface90da420d89aa9a31d05b29076b6f9d541",
+  "tamanho_bytes": 2457,
+  "valores_conhecidos": {
+    "area_bruta_m2": 48.0,
+    "area_furo_m2": 3.0,
+    "area_liquida_m2": 45.0
+  },
+  "versao_ou_commit": "1.0.0"
+}

@@ -73,6 +73,7 @@ def gerar_planta(
     pesados: str | None = None,
     limiar_pesado: int | None = None,
     componentes: bool | None = None,
+    previa=None,
 ) -> Planta:
     if pesados not in (None, "silhueta"):
         raise ValueError(f"pesados inválido: {pesados!r} (esperado None ou 'silhueta')")
@@ -155,11 +156,11 @@ def gerar_planta(
         r = cache.obter(ch)
         if r is None:
             with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc) as p:
-                r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor)
+                r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor, previa=previa)
             cache.guardar(ch, r)
     else:
         with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc) as p:
-            r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor)
+            r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor, previa=previa)
 
     return Planta(
         svg=r["svg"],

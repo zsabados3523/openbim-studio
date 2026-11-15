@@ -1,0 +1,32 @@
+{
+  "atribuicao": "OpenBIM Studio (AGPL-3.0-or-later)",
+  "cobre": [
+    "planta",
+    "corte",
+    "escada",
+    "telhado"
+  ],
+  "contagens": {
+    "IfcBuildingStorey": 2,
+    "IfcRoof": 1,
+    "IfcSlab": 2,
+    "IfcStair": 1,
+    "IfcWall": 8
+  },
+  "data_acesso": "2026-11-15",
+  "esquema": "IFC4",
+  "licenca": "propria",
+  "nome": "sobrado",
+  "observacoes": "Sobrado de 2 pavimentos com escada e telhado de 4 aguas.",
+  "origem": "scripts/gerar_modelos.py",
+  "pode_ir_no_git": "nao",
+  "programa_de_origem": "IfcOpenShell 0.9.0",
+  "sha256": "7294b08328a51dfabe57f3b617d45bfca54fa0c5c324143091ca64f4c671eea2",
+  "tamanho_bytes": 10297,
+  "valores_conhecidos": {
+    "aguas_telhado": 4,
+    "elevacao_pavimento_superior_m": 3.0,
+    "pe_direito_m": 2.8
+  },
+  "versao_ou_commit": "1.0.0"
+}

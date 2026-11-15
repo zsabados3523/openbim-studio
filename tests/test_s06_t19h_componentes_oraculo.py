@@ -46,7 +46,6 @@ def _laje(x0, y0, x1, y1):
 L_MALHA = _junta(_caixa(10, 0, 0, 13, 1, 1), _caixa(10, 1, 0, 11, 3, 1))  # em L: caixa 2D (10..13 x 0..3) contém o nicho
 G_MALHA = _caixa(12, 2, 0, 12.8, 2.8, 1)  # dentro do nicho do L: 20 cm de vão, caixas 2D se sobrepõem, pegadas não
 
-
 # ---------------------------------------------------------------- puros (casos 3 e 4)
 def test_pegada_e_agrupar_puros():
     C = _comp()
@@ -65,14 +64,13 @@ def test_pegada_e_agrupar_puros():
     assert C.agrupar([far[3], far[0], base]) == [[0], [1, 2]]  # ordem estável: menor índice; índices crescentes
     assert C.agrupar([]) == []
 
-
 # ---------------------------------------------------------------- cena com IFC
-def _cena(tmp, malhas, comp_rep=None, corte=50.0):
+def _cena(tmp, malhas, comp_rep=None, corte=50.0, classes=None):
     """IFC de 1 pavimento; cada peça é um proxy com a malha (mundo) como corpo. `comp_rep=(i, j, dx)`: a peça j reaproveita a representação da i, deslocada de dx."""
     f, pavs = X.estrutura("IFC4", n_pav=1)
     els = []
     for k, m in enumerate(malhas):
-        e = X.caixa(f, "IfcBuildingElementProxy", f"P{k}", 0, 0, 0, 1, 1, 1)
+        e = X.caixa(f, (classes or {}).get(k, "IfcBuildingElementProxy"), f"P{k}", 0, 0, 0, 1, 1, 1)
         X.conter(f, pavs[0], e)
         Z.densificar(f, e, ([tuple(map(float, p)) for p in m[0]], [tuple(map(int, q)) for q in m[1]]))
         els.append(e)
@@ -107,6 +105,25 @@ def _extra(seg, alvo, caixa, margem=0.05):
     return float(w[d & (_dist(p, alvo) > TOL)].sum())
 
 
+def _chaves(seg):
+    k = np.round(seg * 1e6).astype(np.int64)
+    return {bytes(r) for r in k.reshape(-1, 4)} | {bytes(r) for r in k[:, ::-1].reshape(-1, 4)}
+
+
+def _cob_rapida(a, b):
+    """Mesmo número de `_cobertura(a, b)` (fração do comprimento de `a` a <= TOL de `b`), mas os segmentos de `a` que têm igual em `b` (distância 0) entram sem amostrar:
+    só o resto passa pela amostragem de 1 mm. Necessário porque o teste de tempo compara ~10 km de traço."""
+    if len(a) == 0:
+        return 1.0
+    nb = _chaves(b)
+    k = np.round(a * 1e6).astype(np.int64).reshape(-1, 4)
+    igual = np.array([bytes(r) in nb for r in k])
+    comp = np.hypot(*(a[:, 1] - a[:, 0]).T)
+    resto = a[~igual]
+    cob = comp[igual].sum() + (_cobertura(resto, b) * comp[~igual].sum() if len(resto) else 0.0)
+    return float(cob / comp.sum())
+
+
 class Espiao:
     """Substitui `faixas.rodar_filho`: grava o pedido e delega ao `desenho.processar` no mesmo processo (serializado). `falha(pedido) -> None | "raise" | "ok_false"`."""
 
@@ -129,7 +146,6 @@ class Espiao:
 def _caixas_xy(ms):
     return [(m[0][:, 0].min(), m[0][:, 1].min(), m[0][:, 0].max(), m[0][:, 1].max()) for m in ms]
 
-
 # ---------------------------------------------------------------- casos 1, 2 e 5
 @pytest.mark.parametrize("corte", [50.0, 0.5], ids=["so_projecao", "com_corte"])
 def test_componentes_cobre_o_conjunto_com_oclusao_e_ordem(monkeypatch, tmp_path, corte):
@@ -137,7 +153,7 @@ def test_componentes_cobre_o_conjunto_com_oclusao_e_ordem(monkeypatch, tmp_path,
     DD, E = _caixa(20, 0, 0, 22, 2, 1), _caixa(21, 1, 0, 23, 3, 2)  # E mais alto cobre o canto de D
     malhas = [A, B, C, C2, DD, E, L_MALHA, G_MALHA]
     ped, ids = _cena(tmp_path, malhas, comp_rep=(0, 3, -3.0), corte=corte)  # cache de tipo ligado: A é o primário e C2 a réplica, em grupos diferentes
-    ref = D.processar(copy.deepcopy(ped))
+    ref = D.processar({**copy.deepcopy(ped), "cache_tipo": False})  # o conjunto com cache perde a projeção da réplica (T19j, fora daqui)
     assert ref["ok"] and "grupos" not in ref and "grupos_ids" not in ref
     esp = Espiao(monkeypatch)
     r = D.processar({**copy.deepcopy(ped), "componentes": True})
@@ -170,7 +186,6 @@ def test_laje_que_sobrepoe_tudo_vira_um_grupo_sem_filho(monkeypatch, tmp_path):
     assert r["ok"] and r["grupos"] == 1 and r["grupos_ids"] == [ids] and not esp.chamadas
     assert r["svg"] == ref["svg"]
 
-
 # ---------------------------------------------------------------- caso 6
 def test_falha_de_um_grupo_nao_derruba_os_demais(monkeypatch, tmp_path):
     malhas = [_caixa(0, 0, 0, 1, 1, 1), _caixa(3, 0, 0, 4, 1, 1), _caixa(6, 0, 0, 7, 1, 1), _prisma_ou(40, 0.5, 1.0, 20, 0)]
@@ -187,13 +202,86 @@ def test_falha_de_um_grupo_nao_derruba_os_demais(monkeypatch, tmp_path):
         guid = {e[0]: e[1] for e in ped["elementos"]}
         assert {guid[ids[0]], guid[ids[2]], guid[ids[3]]} <= gs and guid[ids[1]] not in gs
 
+# ---------------------------------------------------------------- lacunas da revisão (regras 1 a 4 do cartão, seção API)
+def _espia_silhueta(monkeypatch):
+    """Conta `_pesadas_para_svg` e `faces_e_silhueta` por elemento: cada pesada é triangulada UMA vez por pedido."""
+    n_pesadas, por_el = [0], {}
+    orig_p, orig_f = D._pesadas_para_svg, D.silhueta.faces_e_silhueta
+
+    def pesadas(*a, **k):
+        n_pesadas[0] += 1
+        return orig_p(*a, **k)
+
+    def faces(x, *a, **k):
+        por_el[x.id()] = por_el.get(x.id(), 0) + 1
+        return orig_f(x, *a, **k)
+    monkeypatch.setattr(D, "_pesadas_para_svg", pesadas)
+    monkeypatch.setattr(D.silhueta, "faces_e_silhueta", faces)
+    return n_pesadas, por_el
+
+def _pesado_ped(tmp_path, malhas, **kw):
+    ped, ids = _cena(tmp_path, malhas, corte=0.5, **kw)
+    ped.update({"pesados": "silhueta", "limiar_pesado": 100})  # prisma de 40 lados (~156 tri) é pesado
+    return ped, ids
+
+def test_regra1_so_pesadas_nao_recalcula_silhueta_e_nao_entra_em_grupos(monkeypatch, tmp_path):
+    ped, ids = _pesado_ped(tmp_path, [_prisma_ou(40, 0.5, 1.0, 0, 0), _prisma_ou(40, 0.5, 1.0, 5, 0)])
+    Espiao(monkeypatch)
+    n_pesadas, por_el = _espia_silhueta(monkeypatch)
+    r = D.processar({**copy.deepcopy(ped), "componentes": True})
+    assert r["ok"] and [p["id"] for p in r["pesados"]] == ids
+    assert r["grupos"] == 0 and r["grupos_ids"] == [], "pesadas de silhueta nunca entram em grupos_ids"
+    assert n_pesadas[0] == 1 and max(por_el.values()) == 1, f"silhueta recalculada: {n_pesadas[0]} chamadas, por elemento {por_el}"
+
+def test_regra1_e_3_um_grupo_com_pesada_calcula_silhueta_uma_vez(monkeypatch, tmp_path):
+    ped, ids = _pesado_ped(tmp_path, [_caixa(0, 0, 0, 1, 1, 1), _prisma_ou(40, 0.5, 1.0, 20, 0)])
+    esp = Espiao(monkeypatch)
+    n_pesadas, por_el = _espia_silhueta(monkeypatch)
+    r = D.processar({**copy.deepcopy(ped), "componentes": True})
+    assert r["ok"] and [p["id"] for p in r["pesados"]] == [ids[1]] and not esp.chamadas
+    assert r["grupos"] == 1 and r["grupos_ids"] == [[ids[0]]], "grupos_ids só dos restantes (a pesada fica de fora)"
+    assert n_pesadas[0] == 1 and max(por_el.values()) == 1, f"silhueta recalculada: {n_pesadas[0]} chamadas, por elemento {por_el}"
+    assert r["svg"].count("data-silhueta") == 1
+
+def test_regra3_queda_total_reporta_so_os_restantes(monkeypatch, tmp_path):
+    ped, ids = _pesado_ped(tmp_path, [_caixa(0, 0, 0, 1, 1, 1), _caixa(3, 0, 0, 4, 1, 1), _prisma_ou(40, 0.5, 1.0, 20, 0)])
+    Espiao(monkeypatch, falha=lambda p: "raise")  # todos os filhos morrem: cai no pedido inteiro sem filhos
+    n_pesadas, por_el = _espia_silhueta(monkeypatch)
+    r = D.processar({**copy.deepcopy(ped), "componentes": True})
+    assert r["ok"] and r["grupos"] == 1 and r["grupos_ids"] == [[ids[0], ids[1]]]
+    assert n_pesadas[0] == 1 and max(por_el.values()) == 1 and r["svg"].count("data-silhueta") == 1
+
+def test_regra2_abertura_nunca_entra_em_falhas_geometria(monkeypatch, tmp_path):
+    malhas = [_caixa(0, 0, 0, 3, 1, 1), _caixa(1, 0, 0, 2, 1, 1), _caixa(10, 0, 0, 11, 1, 1)]
+    ped, ids = _cena(tmp_path, malhas, classes={1: "IfcOpeningElement"})
+    Espiao(monkeypatch, falha=lambda p: "raise" if {ids[0], ids[1]} & {i for i, _ in p["elementos"]} else None)
+    r = D.processar({**copy.deepcopy(ped), "componentes": True})
+    assert r["ok"] and r["grupos"] >= 2 and r["falhas_geometria"] == [ids[0]], "o IfcOpeningElement não é peça desenhada: nunca em falhas_geometria"
+
+def test_regra4_dividir_elementos_respeita_threads_do_pedido(monkeypatch, tmp_path):
+    import ifcopenshell.geom as G
+    C = _comp()
+    ped, _ = _cena(tmp_path, [_caixa(0, 0, 0, 1, 1, 1), _caixa(3, 0, 0, 4, 1, 1)])
+    usados, orig = [], G.iterator
+
+    def it(cfg, f, n, *a, **k):
+        usados.append(n)
+        return orig(cfg, f, n, *a, **k)
+    monkeypatch.setattr(G, "iterator", it)
+    C.dividir_elementos(ped["arquivo"], ped["elementos"], threads=1)
+    C.dividir_elementos(ped["arquivo"], ped["elementos"], threads=None)
+    assert usados == [1, __import__("obim_geometria.nucleos", fromlist=["x"]).limitar_threads(None)]
+    usados.clear()
+    D.processar({**copy.deepcopy(ped), "componentes": True, "threads": 1})
+    assert usados and usados[0] == 1, "o pedido com threads=1 tem de chegar ao iterator da divisão"
 
 # ---------------------------------------------------------------- tempo (sintético)
 def test_tempo_dos_grupos_nao_cresce_com_o_conjunto(monkeypatch, tmp_path):
-    """36 peças pesadas (~1,2 mil triângulos cada) em grade 6x6, todas separadas (vão de 20 cm): o HLR do conjunto é superlinear nos triângulos do mesmo pedido; por componentes custa ~a soma das peças.
-    Medido na máquina de referência: grupos/conjunto = 0,72. Margem larga (0,85) e uma execução de cada; a parte estrutural (um filho por peça) não depende de relógio."""
+    """36 peças pesadas (prisma de 450 lados, ~1,8 mil triângulos cada) em grade 6x6, todas separadas (vão de 10 cm): o HLR do conjunto é superlinear nos triângulos do mesmo pedido; por componentes custa
+    ~a soma das peças mais ~0,2 s por filho. Medido com o espião em processo: conjunto 20,2 s, grupos 13,9 s, razão 0,69 (36x300 dava 0,88: o overhead por filho domina, não serve). Limite 0,85, uma execução de cada;
+    a parte estrutural (um filho por peça) não depende de relógio. Execução do teste ~35 s."""
     n = 36
-    malhas = [_prisma_ou(300, 0.5, 1.0, 1.2 * (k % 6), 1.2 * (k // 6)) for k in range(n)]
+    malhas = [_prisma_ou(450, 0.5, 1.0, 1.1 * (k % 6), 1.1 * (k // 6)) for k in range(n)]
     ped, ids = _cena(tmp_path, malhas)
     esp = Espiao(monkeypatch)
     t = time.perf_counter()
@@ -203,5 +291,6 @@ def test_tempo_dos_grupos_nao_cresce_com_o_conjunto(monkeypatch, tmp_path):
     rg = D.processar({**copy.deepcopy(ped), "componentes": True})
     t_comp = time.perf_counter() - t
     assert rc["ok"] and rg["ok"] and rg["grupos"] == n and [len(c["elementos"]) for c in esp.chamadas] == [1] * n
-    assert _cobertura(_segs(rc["svg"]), _segs(rg["svg"])) >= 0.999 and _cobertura(_segs(rg["svg"]), _segs(rc["svg"])) >= 0.999
+    sc, sg = _segs(rc["svg"]), _segs(rg["svg"])
+    assert _cob_rapida(sc, sg) >= 0.999 and _cob_rapida(sg, sc) >= 0.999
     assert t_comp < 0.85 * t_conj, f"conjunto {t_conj:.2f}s, grupos {t_comp:.2f}s"

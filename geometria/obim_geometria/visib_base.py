@@ -146,3 +146,160 @@ def _preparar_triangulos(P: np.ndarray, Tw: np.ndarray):
         A, gx, gy, nx_, ny_, cc_, V3[:, :, 0].min(1), V3[:, :, 0].max(1),
         V3[:, :, 1].min(1), V3[:, :, 1].max(1), V3[:, :, 2].max(1), tv, 0.5 * D,
     )
+
+
+def _ler_quadro(quadro) -> tuple[np.ndarray, np.ndarray]:
+    """Extrai (origem (3,), matriz_eixos (3,3)) de um quadro ortonormal (u, v, w)."""
+    origem = np.asarray(quadro.origem, dtype=np.float64).reshape(3)
+    axes = np.vstack([
+        np.asarray(quadro.u, dtype=np.float64).reshape(3),
+        np.asarray(quadro.v, dtype=np.float64).reshape(3),
+        np.asarray(quadro.w, dtype=np.float64).reshape(3),
+    ])
+    return origem, axes
+
+
+def _cruzar_plano(T_c: np.ndarray, s_raw: np.ndarray, s_c: np.ndarray, nV: int):
+    """Calcula intersecoes de arestas e rotaciona triangulos que cruzam s = 0."""
+    e_a = T_c
+    e_b = np.roll(T_c, -1, axis=1)
+    is_cross = (s_c * np.roll(s_c, -1, axis=1)) < 0.0
+    ca, cb = e_a[is_cross], e_b[is_cross]
+    lo = np.minimum(ca, cb)
+    hi = np.maximum(ca, cb)
+    keys = lo.astype(np.int64) * nV + hi
+    _, u_idx, inv = np.unique(keys, return_index=True, return_inverse=True)
+    lo_u, hi_u = lo[u_idx], hi[u_idx]
+    t_cut = -s_raw[lo_u] / (s_raw[hi_u] - s_raw[lo_u])
+    cut_id = np.full((len(T_c), 3), -1, dtype=np.int64)
+    cut_id[is_cross] = inv
+
+    def _rot(mask: np.ndarray, shift: np.ndarray):
+        Tm, sm, cm = T_c[mask], s_c[mask], cut_id[mask]
+        cols = (np.arange(3)[None, :] + shift[:, None]) % 3
+        rows = np.arange(len(Tm))[:, None]
+        return Tm[rows, cols], sm[rows, cols], cm[rows, cols]
+
+    n_neg = (s_c < 0.0).sum(axis=1)
+    m1 = n_neg == 1
+    m2 = n_neg == 2
+    r1 = _rot(m1, np.argmax(s_c[m1] < 0.0, axis=1)) if np.any(m1) else None
+    r2 = _rot(m2, (np.argmax(s_c[m2] > 0.0, axis=1) + 1) % 3) if np.any(m2) else None
+    return lo_u, hi_u, t_cut, r1, r2
+
+
+def _recortar_semi_espaco(
+    V: np.ndarray, T: np.ndarray, s: np.ndarray, plane_w: float | None = None, eps: float = 1e-12
+) -> tuple[np.ndarray, np.ndarray]:
+    """Recorta malha (V, T) mantendo a regiao s <= 0."""
+    if len(T) == 0 or len(V) == 0:
+        return V, T
+    s_snap = np.where(np.abs(s) <= eps, 0.0, s)
+    st = s_snap[T]
+    has_neg = (st < 0.0).any(axis=1)
+    has_pos = (st > 0.0).any(axis=1)
+    keep_mask = (~has_pos) & has_neg
+    tris_out = [T[keep_mask]]
+
+    all_zer = (~has_pos) & (~has_neg)
+    if np.any(all_zer):
+        Tz = T[all_zer]
+        nV = len(V)
+
+        def _arestas_tri(Tt: np.ndarray) -> np.ndarray:
+            if len(Tt) == 0:
+                return np.zeros(0, dtype=np.int64)
+            ea = Tt
+            eb = np.roll(Tt, -1, axis=1)
+            lo = np.minimum(ea, eb).ravel()
+            hi = np.maximum(ea, eb).ravel()
+            return lo.astype(np.int64) * nV + hi
+
+        pos_e = _arestas_tri(T[(~has_neg) & has_pos])
+        neg_e = _arestas_tri(T[keep_mask])
+        only_pos = np.setdiff1d(pos_e, neg_e)
+        if len(only_pos):
+            ez = _arestas_tri(Tz).reshape(-1, 3)
+            Tz = Tz[~np.isin(ez, only_pos).any(axis=1)]
+        if len(Tz):
+            tris_out.append(Tz)
+
+    V_out = V
+    cross = has_neg & has_pos
+    if np.any(cross):
+        nV = len(V)
+        lo_u, hi_u, t_cut, r1, r2 = _cruzar_plano(T[cross], s, st[cross], nV)
+        V_cut = V[lo_u] + t_cut[:, None] * (V[hi_u] - V[lo_u])
+        if plane_w is not None:
+            V_cut[:, 2] = plane_w
+        V_out = np.vstack([V, V_cut])
+        if r1 is not None:
+            T1, s1, c1 = r1
+            p1 = np.where(s1[:, 1] == 0.0, T1[:, 1], nV + np.maximum(c1[:, 0], 0))
+            p2 = np.where(s1[:, 2] == 0.0, T1[:, 2], nV + np.maximum(c1[:, 2], 0))
+            tris_out.append(np.stack([T1[:, 0], p1, p2], axis=1))
+        if r2 is not None:
+            T2, _, c2 = r2
+            tris_out.append(np.stack([T2[:, 0], T2[:, 1], nV + c2[:, 1]], axis=1))
+            tris_out.append(np.stack([T2[:, 0], nV + c2[:, 1], nV + c2[:, 2]], axis=1))
+
+    T_res = np.concatenate(tris_out, axis=0) if tris_out else np.zeros((0, 3), dtype=np.int64)
+    if len(T_res) == 0:
+        return np.zeros((0, 3), dtype=np.float64), np.zeros((0, 3), dtype=np.int64)
+    return V_out, T_res
+
+
+def _segmentos_corte_plano(P: np.ndarray, Tw: np.ndarray, eps: float = 1e-12) -> np.ndarray:
+    """Extrai segmentos 2D (K, 2, 2) em (u, v) da intersecao da malha com w = 0."""
+    if len(Tw) == 0 or len(P) == 0:
+        return np.zeros((0, 2, 2), dtype=np.float64)
+    w_raw = P[:, 2]
+    w = np.where(np.abs(w_raw) <= eps, 0.0, w_raw)
+    if not ((w > 0.0).any() and (w < 0.0).any()):
+        return np.zeros((0, 2, 2), dtype=np.float64)
+
+    nP = len(P)
+    sw = w[Tw]
+    has_neg = (sw < 0.0).any(axis=1)
+    has_pos = (sw > 0.0).any(axis=1)
+    segs_list: list[np.ndarray] = []
+
+    cross = has_neg & has_pos
+    if np.any(cross):
+        lo_u, hi_u, t_cut, r1, r2 = _cruzar_plano(Tw[cross], w_raw, sw[cross], nP)
+        pts_u = P[lo_u, :2] + t_cut[:, None] * (P[hi_u, :2] - P[lo_u, :2])
+        if r1 is not None:
+            T1, s1, c1 = r1
+            pA = np.where((s1[:, 1] == 0.0)[:, None], P[T1[:, 1], :2], pts_u[np.maximum(c1[:, 0], 0)])
+            pB = np.where((s1[:, 2] == 0.0)[:, None], P[T1[:, 2], :2], pts_u[np.maximum(c1[:, 2], 0)])
+            segs_list.append(np.stack([pA, pB], axis=1))
+        if r2 is not None:
+            _, _, c2 = r2
+            segs_list.append(np.stack([pts_u[c2[:, 1]], pts_u[c2[:, 2]]], axis=1))
+
+    z_cnt = (sw == 0.0).sum(axis=1)
+    seam_neg = (~has_pos) & has_neg & (z_cnt == 2)
+    seam_pos = (~has_neg) & has_pos & (z_cnt == 2)
+    if np.any(seam_neg) and np.any(seam_pos):
+        def _chaves_costura(mask: np.ndarray) -> np.ndarray:
+            Ts = Tw[mask]
+            ss = sw[mask]
+            idx_nz = np.argmax(ss != 0.0, axis=1)
+            rows = np.arange(len(Ts))
+            va = Ts[rows, (idx_nz + 1) % 3]
+            vb = Ts[rows, (idx_nz + 2) % 3]
+            lo = np.minimum(va, vb)
+            hi = np.maximum(va, vb)
+            return lo.astype(np.int64) * nP + hi
+
+        comuns = np.intersect1d(_chaves_costura(seam_neg), _chaves_costura(seam_pos))
+        if len(comuns):
+            lo_s = comuns // nP
+            hi_s = comuns % nP
+            segs_list.append(np.stack([P[lo_s, :2], P[hi_s, :2]], axis=1))
+
+    if not segs_list:
+        return np.zeros((0, 2, 2), dtype=np.float64)
+    segs = np.concatenate(segs_list, axis=0)
+    ok = np.hypot(*(segs[:, 1] - segs[:, 0]).T) > eps
+    return segs[ok]

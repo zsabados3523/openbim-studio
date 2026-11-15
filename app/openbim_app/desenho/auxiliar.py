@@ -166,7 +166,7 @@ def _acrescentar_tempos(resposta: dict, preparado: Preparado, auxiliar_s: float)
     return resposta
 
 
-def executar(preparado: Preparado, *, limite_s: float = LIMITE_PADRAO_S, cancelar: threading.Event | None = None, executor=None) -> dict:
+def executar(preparado: Preparado, *, limite_s: float = LIMITE_PADRAO_S, cancelar: threading.Event | None = None, executor=None, previa=None) -> dict:
     if preparado.pedido.get("protocolo") != PROTOCOLO:
         raise ProtocoloInvalido(f"Protocolo inválido: {preparado.pedido.get('protocolo')}")
     if executor is not None:
@@ -182,19 +182,31 @@ def executar(preparado: Preparado, *, limite_s: float = LIMITE_PADRAO_S, cancela
     try:
         if cancelar is not None and cancelar.is_set():
             raise DesenhoCancelado("Operação cancelada antes de iniciar")
+        previa_caminho = None
+        if callable(previa) and preparado.pedido.get("componentes"):
+            previa_caminho = preparado.pasta / "previa.svg"
+            preparado.pedido["previa_arquivo"] = str(previa_caminho)
         t0 = time.perf_counter()
-        resposta = _executar_filho(preparado, limite_s, cancelar)
+        resposta = _executar_filho(preparado, limite_s, cancelar, previa, previa_caminho)
         return _acrescentar_tempos(resposta, preparado, time.perf_counter() - t0)
     finally:
         _TRAVA_FILHO.release()
 
 
-def _executar_filho(preparado: Preparado, limite_s: float, cancelar: threading.Event | None) -> dict:
+def _executar_filho(
+    preparado: Preparado,
+    limite_s: float,
+    cancelar: threading.Event | None,
+    previa=None,
+    previa_caminho: Path | None = None,
+) -> dict:
     ctx = multiprocessing.get_context("spawn")
     rx, tx = ctx.Pipe(duplex=False)
     proc = None
     t_inicio, fase_atual, resposta_raw = time.monotonic(), "", None
     saiu_sem_resposta = False
+    previa_entregue = False
+    prox_previa = 0.0
 
     try:
         proc = ctx.Process(target=entrada, args=(tx, json.dumps(preparado.pedido)), daemon=True)
@@ -207,6 +219,20 @@ def _executar_filho(preparado: Preparado, limite_s: float, cancelar: threading.E
             decorrido = time.monotonic() - t_inicio
             if decorrido > limite_s:
                 raise AuxiliarEstourouTempo(limite_s, fase_atual)
+            if previa_caminho is not None and not previa_entregue:
+                agora = time.monotonic()
+                if agora >= prox_previa:
+                    prox_previa = agora + 0.1
+                    try:
+                        texto = previa_caminho.read_text(encoding="utf-8")
+                    except OSError:
+                        texto = None
+                    if texto is not None:
+                        previa_entregue = True
+                        try:
+                            previa(texto)
+                        except Exception:
+                            pass
             espera = min(0.05, max(0.001, limite_s - decorrido))
             if rx.poll(espera):
                 try:

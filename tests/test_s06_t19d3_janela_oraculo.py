@@ -290,7 +290,7 @@ def test_secao_com_janela_e_a_intersecao_com_o_retangulo(janela, nao_axial):
         got = shapely.unary_union(com)
         assert abs(got.area - esp.area) <= 1e-6 * max(esp.area, 1.0), f"{nome}: área {got.area} x {esp.area}"
         assert got.symmetric_difference(esp).area <= 1e-6 * max(esp.area, 1.0), nome
-        assert sum(len(g.interiors) for g in com) == sum(len(g.interiors) for g in shapely.get_parts(esp)), f"{nome}: furos"
+        assert sum(len(g.interiors) for g in com) == sum(len(g.interiors) for g in shapely.get_parts(esp) if g.geom_type == "Polygon"), f"{nome}: furos"
 
 
 def test_secao_janela_none_igual_e_furo_preservado_e_fora_vazio():

@@ -101,11 +101,11 @@ def _cena(tmp_path, inelegiveis=True):
         f.create_entity("IfcRelVoidsElement", GlobalId=ifcopenshell.guid.new(), RelatingBuildingElement=par, RelatedOpeningElement=vao, **X.kw(f))
         els["Parede"], els["Vao"] = par, vao
     x0, x1, y0, y1, z0, z1 = -2.0, 8.0, 0.0, 6.0, -1.0, 3.0
-    gid = vistas_ifc.criar_vista(f, "C", "CORTE", escala="1:50", origem=(x0, y0, z0), tamanho=(x1 - x0, z1 - z0, y1 - y0))
+    gid = vistas_ifc.criar_vista(f, "C", "CORTE", escala="1:50", origem=((x0 + x1) / 2, y0, (z0 + z1) / 2), tamanho=(x1 - x0, z1 - z0, y1 - y0))  # origem no centro: o SVG mostra a janela centrada no quadro (T19d3)
     eixo = f.by_guid(gid).ObjectPlacement.RelativePlacement
     eixo.Axis = f.create_entity("IfcDirection", DirectionRatios=(0.0, -1.0, 0.0))
     eixo.RefDirection = f.create_entity("IfcDirection", DirectionRatios=(1.0, 0.0, 0.0))
-    X.deslocar_bloco(f, gid, (0.0, 0.0, -(y1 - y0)))
+    X.deslocar_bloco(f, gid, (-(x1 - x0) / 2, -(z1 - z0) / 2, -(y1 - y0)))  # bloco centrado: mesmo volume no mundo
     arq = str(pathlib.Path(tmp_path) / "corte.ifc")
     f.write(arq)
     ped = {"protocolo": 1, "op": "desenho", "arquivo": arq, "elementos": [[e.id(), e.GlobalId] for e in els.values()], "threads": 1,

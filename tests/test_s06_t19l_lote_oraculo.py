@@ -85,6 +85,7 @@ def _cena_grupos(tmp_path):
 
 @pytest.mark.parametrize("threads,n_lotes", [(1, 1), (2, 2), (8, 4)])
 def test_pai_reparte_os_grupos_em_lotes(monkeypatch, tmp_path, threads, n_lotes):
+    monkeypatch.setattr("obim_geometria.nucleos.nucleos_fisicos", lambda: 8)  # guarda: o limite por nucleos fisicos nao depende da maquina do CI
     ped, ids = _cena_grupos(tmp_path)
     ped.update({"componentes": True, "threads": threads})
     esp = Espiao(monkeypatch)

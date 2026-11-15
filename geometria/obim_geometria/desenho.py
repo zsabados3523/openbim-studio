@@ -211,6 +211,13 @@ def _pavimento(ifc: ifcopenshell.file, vista: dict) -> object:
     return pav
 
 
+def _isolar_pavimento(f: ifcopenshell.file, pav) -> None:
+    """Tira da copia em memoria (do filho) os outros pavimentos: o serializador repete a projecao em cada um (custo ~ n de pavimentos)."""
+    for s in list(f.by_type("IfcBuildingStorey")):
+        if s.id() != pav.id():
+            f.remove(s)
+
+
 def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
     vista = pedido["vista"]
     ann = f.by_guid(vista["guid"])
@@ -682,6 +689,7 @@ def _processar_base(pedido: dict, fase=None) -> dict:
         scale = float(vista["escala"])
         altura_corte_m = float(vista["altura_corte_m"])
         pav = _pavimento(f, vista)
+        _isolar_pavimento(f, pav)
         elevacao = float(getattr(pav, "Elevation", 0.0) or 0.0)
         section_height = altura_corte_m - elevacao * scale
 

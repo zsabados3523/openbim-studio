@@ -18,11 +18,12 @@ import threading
 from PySide6.QtCore import QObject, Qt, Signal, Slot
 
 from openbim_app.desenho.auxiliar import DesenhoCancelado
+from openbim_app.desenho.selecao import SessaoSelecao
 
 TIPOS = ("planta", "corte")
 
 
-def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, previa=None):
+def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, previa=None, sessao_selecao=None):
     from openbim_app.desenho.corte import gerar_corte
     from openbim_app.desenho.planta import gerar_planta
 
@@ -49,7 +50,8 @@ def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, 
         opcoes = {"motor_visivel": True, **opcoes}
     gerar = gerar_planta if tipo == "planta" else gerar_corte
     # cache exato (chave do pedido real, com elementos): leitura e gravacao aqui dentro
-    r = gerar(ifc, vista_guid, cache=cache, cancelar=cancelar, **opcoes)
+    kw_sessao = {"sessao_selecao": sessao_selecao} if sessao_selecao is not None else {}
+    r = gerar(ifc, vista_guid, cache=cache, cancelar=cancelar, **kw_sessao, **opcoes)
     dados = {
         "svg": r.svg,
         "n_paths": r.n_paths,
@@ -100,9 +102,10 @@ class GerenteDesenho(QObject):
         self._trava = threading.Lock()
         self._ativos: dict[str, _Pedido] = {}
         self._por_vista: dict[str, _Pedido] = {}
+        self._sessoes: dict[int, tuple[object, SessaoSelecao]] = {}
         self._evento.connect(self._tratar, Qt.ConnectionType.QueuedConnection)
 
-    def pedir(self, tipo, ifc, vista_guid, **opcoes) -> str:
+    def pedir(self, tipo, ifc, vista_guid, *, revisao=None, **opcoes) -> str:
         if tipo not in TIPOS:
             raise ValueError(f"tipo de desenho invalido: {tipo!r}")
         chave = self._chave_estado(tipo, ifc, vista_guid, opcoes)
@@ -118,13 +121,40 @@ class GerenteDesenho(QObject):
                 self._ativos[chave] = self._por_vista[vista_guid] = ped
                 self._evento.emit(ped, "pronto", dados)  # fila: nunca sincrono
                 return chave
+        sessao = self._obter_sessao(ifc, revisao) if revisao is not None else None
         self._ativos[chave] = self._por_vista[vista_guid] = ped
         ped.thread = threading.Thread(
-            target=self._rodar, args=(ped, tipo, ifc, vista_guid, dict(opcoes)), daemon=True)
+            target=self._rodar, args=(ped, tipo, ifc, vista_guid, dict(opcoes), sessao), daemon=True)
         with self._trava:
             self._threads.add(ped.thread)
         ped.thread.start()
         return chave
+
+    def _obter_sessao(self, ifc, revisao) -> SessaoSelecao:
+        with self._trava:
+            atual = self._sessoes.get(id(ifc))
+            if atual is not None and atual[0] == revisao:
+                return atual[1]
+            sessao = SessaoSelecao()
+            self._sessoes[id(ifc)] = (revisao, sessao)
+            return sessao
+
+    def invalidar(self, ifc=None, ids=None) -> None:
+        with self._trava:
+            if ifc is None:
+                if ids is None:
+                    self._sessoes.clear()
+                else:
+                    for _, sessao in self._sessoes.values():
+                        sessao.invalidar(ids)
+                return
+            atual = self._sessoes.get(id(ifc))
+            if atual is None:
+                return
+            if ids is None:
+                del self._sessoes[id(ifc)]
+            else:
+                atual[1].invalidar(ids)
 
     def cancelar(self, chave) -> None:
         ped = self._ativos.pop(chave, None)
@@ -139,11 +169,12 @@ class GerenteDesenho(QObject):
         for ped in peds:
             self.cancelar(ped.chave)
         with self._trava:
+            self._sessoes.clear()
             vivas = list(self._threads)
         for t in vivas:
             t.join(timeout=10)
 
-    def _rodar(self, ped, tipo, ifc, vista_guid, opcoes):
+    def _rodar(self, ped, tipo, ifc, vista_guid, opcoes, sessao=None):
         # Thread de fundo: nada de Qt aqui alem de emitir o sinal interno (fila).
         try:
             extra = {}
@@ -151,9 +182,12 @@ class GerenteDesenho(QObject):
                 params = inspect.signature(self._motor).parameters.values()
             except (TypeError, ValueError):
                 params = ()
-            if "previa" in {p.name for p in params} or any(
-                    p.kind is inspect.Parameter.VAR_KEYWORD for p in params):
+            nomes = {p.name for p in params}
+            tem_kw = any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params)
+            if "previa" in nomes or tem_kw:
                 extra["previa"] = lambda d: self._evento.emit(ped, "previa", d)
+            if sessao is not None and ("sessao_selecao" in nomes or tem_kw):
+                extra["sessao_selecao"] = sessao
             dados = self._motor(
                 tipo, ifc, vista_guid, opcoes, cancelar=ped.cancelar,
                 progresso=lambda m: self._evento.emit(ped, "progresso", m), **extra)

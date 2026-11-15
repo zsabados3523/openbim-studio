@@ -170,7 +170,7 @@ class Historico:
             lateral, limite_bytes, codificar, anotar, avisar
         )
         self._lh, self._lf, self._ch, self._cf = [], [], [], []  # lateral e custos: histórico e refazer (o IFC guarda as dele)
-        self._descartados, self._aberta, self._quebrado, self._poda_pendente = 0, False, False, False
+        self._descartados, self._aberta, self._quebrado, self._poda_pendente, self._revisao = 0, False, False, False, 0
         with sessao.escrever() as esc:  # abre escrever() próprio: dentro de outro escrever() da mesma thread dá ReentradaProibida
             a = self._arquivo = esc.arquivo
             if a.transaction is not None:
@@ -182,6 +182,7 @@ class Historico:
     pode_refazer = property(lambda s: bool(s._lf))
     quebrado = property(lambda s: s._quebrado)
     descartados = property(lambda s: s._descartados)
+    revisao = property(lambda s: s._revisao)
 
     @property
     def limite_bytes(self):
@@ -258,10 +259,12 @@ class Historico:
     def _aberto(self, esc):  # marca "transação aberta" (transação e fora_do_historico não se aninham)
         a = self._pre(esc)
         self._aberta = True
+        self._revisao += 1
         try:
             yield a
         finally:
             self._aberta = False
+            self._revisao += 1
             if self._poda_pendente and not self._quebrado:
                 self._podar()
 
@@ -325,21 +328,25 @@ class Historico:
                 self._avisar("desfazer impossível: passos foram descartados por limite de memória")
             return None
         lado_ops, tr = de[-1], (a.history if desfazer else a.future)[-1]
-        self._ifc(a, desfazer)  # IFC primeiro; se falhar o lateral não é mexido
-        aplicado = False
+        self._revisao += 1
         try:
-            self._aplicar_lado(lado_ops, not desfazer)
-            aplicado = True
-            resumo = Resumo(*_resumo_ifc(a, tr.operations, not desfazer), *_resumo_lado(lado_ops, not desfazer))
-            self._anotar and self._anotar("desfazer" if desfazer else "refazer", self._codificar(tr.operations) if self._codificar else None, lado_ops)
-            para.append(de.pop())
-            para_c.append(de_c.pop())
-        except BaseException:  # tudo volta: modelo e lateral (só o que já foi aplicado)
-            if aplicado:
-                self._aplicar_lado(lado_ops, desfazer)
-            self._ifc(a, not desfazer)
-            raise
-        return resumo
+            self._ifc(a, desfazer)  # IFC primeiro; se falhar o lateral não é mexido
+            aplicado = False
+            try:
+                self._aplicar_lado(lado_ops, not desfazer)
+                aplicado = True
+                resumo = Resumo(*_resumo_ifc(a, tr.operations, not desfazer), *_resumo_lado(lado_ops, not desfazer))
+                self._anotar and self._anotar("desfazer" if desfazer else "refazer", self._codificar(tr.operations) if self._codificar else None, lado_ops)
+                para.append(de.pop())
+                para_c.append(de_c.pop())
+            except BaseException:  # tudo volta: modelo e lateral (só o que já foi aplicado)
+                if aplicado:
+                    self._aplicar_lado(lado_ops, desfazer)
+                self._ifc(a, not desfazer)
+                raise
+            return resumo
+        finally:
+            self._revisao += 1
 
     def desfazer(self, esc):
         return self._mover(esc, True)

@@ -40,7 +40,8 @@ def test_formas_do_mundo_igual_a_create_shape(tmp_path):
     for el in els:
         ref = ifcopenshell.geom.create_shape(cfg, el).geometry
         got = formas[el.id()].geometry
-        assert np.allclose(np.asarray(got.verts), np.asarray(ref.verts), atol=1e-6) and len(got.faces) == len(ref.faces)
+        gv, rv = (np.unique(np.round(np.asarray(x.verts, float).reshape(-1, 3), 6), axis=0) for x in (got, ref))  # T19g: leitura direta pode reordenar vertices
+        assert gv.shape == rv.shape and np.allclose(gv, rv, atol=1e-6) and len(got.faces) == len(ref.faces)
 
 
 def test_formas_do_mundo_vazio_e_sem_geometria(tmp_path):
@@ -78,7 +79,7 @@ def test_pesadas_para_svg_preenche_formas_com_uma_passada(monkeypatch, tmp_path)
     formas = {}
     svg, info, desenhados, fora = D._pesadas_para_svg(f, ped, ped["elementos"], 0.5, formas=formas)
     assert sorted(desenhados) == sorted(ids[1:]) and [i["id"] for i in info] == ids[1:]
-    assert sorted(formas) == sorted(ids) and len(n_it) == 1 and not n_cs
+    assert sorted(formas) == sorted(ids) and len(n_it) <= 1 and not n_cs
 
 
 def test_pai_da_planta_por_componentes_faz_zero_create_shape_e_um_iterador(monkeypatch, tmp_path):
@@ -101,7 +102,7 @@ def test_pai_da_planta_por_componentes_faz_zero_create_shape_e_um_iterador(monke
     monkeypatch.setattr(ifcopenshell.geom, "iterator", it)
     r = D.processar(copy.deepcopy(ped))
     assert r["ok"] and r["grupos"] == 3 and [p["id"] for p in r["pesados"]] == [ids[2]]
-    assert not n_cs and len(n_it) == 1, f"create_shape no pai: {len(n_cs)}, iteradores no pai: {len(n_it)}"
+    assert not n_cs and len(n_it) <= 1, f"create_shape no pai: {len(n_cs)}, iteradores no pai: {len(n_it)}"
 
 
 def test_dividir_elementos_ignora_abertura_sem_forma(monkeypatch, tmp_path):

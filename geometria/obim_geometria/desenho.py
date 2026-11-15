@@ -7,6 +7,7 @@ import threading
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 import ifcopenshell
 import ifcopenshell.geom
 import ifcopenshell.ifcopenshell_wrapper as W
@@ -250,6 +251,77 @@ def _isolar_pavimento(f: ifcopenshell.file, pav) -> None:
             f.remove(s)
 
 
+def _fmt6(v: float) -> str:
+    return f"{round(float(v), 6) + 0.0:.6f}"
+
+
+def _anel_d(coords, tx: float, ty: float) -> str | None:
+    pts = [(float(c[0]) + tx, ty - float(c[1])) for c in coords]
+    if len(pts) < 3:
+        return None
+    if pts[-1] != pts[0]:
+        pts.append(pts[0])
+    cmds = [f"M {_fmt6(pts[0][0])},{_fmt6(pts[0][1])}"]
+    cmds.extend(f"L {_fmt6(x)},{_fmt6(y)}" for x, y in pts[1:])
+    return " ".join(cmds)
+
+
+def _injetar_motor_corte(svg: str, els: list, pols_linhas: list, pols_tampas: list) -> str:
+    """Injeta linhas de projeção e tampas do motor lateral no SVG do corte."""
+    tx, ty = _tx_ty(svg)
+    proj_paths = []
+    for polilinhas in pols_linhas:
+        for poli in polilinhas:
+            pts = np.asarray(poli, dtype=np.float64)
+            if pts.ndim != 2 or pts.shape[0] < 2 or pts.shape[1] < 2:
+                continue
+            cmds = [f"M {_fmt6(pts[0, 0] + tx)},{_fmt6(ty - pts[0, 1])}"]
+            cmds.extend(f"L {_fmt6(p[0] + tx)},{_fmt6(ty - p[1])}" for p in pts[1:])
+            proj_paths.append(f'<path d="{" ".join(cmds)}"/>')
+
+    tampas_svg = []
+    for el, polys in zip(els, pols_tampas):
+        if not polys:
+            continue
+        subpaths = []
+        for poly in polys:
+            if poly.is_empty or poly.area <= 1e-12:
+                continue
+            d_ext = _anel_d(poly.exterior.coords, tx, ty)
+            if not d_ext:
+                continue
+            subpaths.append(d_ext)
+            for interior in poly.interiors:
+                d_int = _anel_d(interior.coords, tx, ty)
+                if d_int:
+                    subpaths.append(d_int)
+        if subpaths:
+            tampas_svg.append(
+                f'<g class="{el.is_a()}" ifc:guid="{el.GlobalId}"><path d="{" ".join(subpaths)}" fill-rule="evenodd"/></g>'
+            )
+
+    if "xmlns:ifc=" not in svg:
+        svg = re.sub(r"(<svg\b[^>]*)", r'\1 xmlns:ifc="http://www.ifcopenshell.org/ns"', svg, count=1)
+    if svg.rstrip().endswith("/>"):
+        svg = svg.rstrip()[:-2] + "></svg>"
+    proj_match = _PROJ_RE.search(svg)
+    if proj_match is not None:
+        if proj_paths:
+            svg = svg[: proj_match.end(1)] + "\n" + "\n".join(proj_paths) + "\n" + svg[proj_match.end(1) :]
+    else:
+        proj_self = re.search(r'<g\b[^>]*\bclass=["\']projection["\'][^>]*/>', svg)
+        bloco_proj = '<g class="projection">\n' + "\n".join(proj_paths) + ("\n" if proj_paths else "") + "</g>"
+        if proj_self is not None:
+            svg = svg[: proj_self.start()] + bloco_proj + svg[proj_self.end() :]
+        else:
+            tampas_svg.append(bloco_proj)
+    if tampas_svg:
+        bloco = "\n" + "\n".join(tampas_svg) + "\n"
+        idx = svg.rfind("</svg>")
+        svg = (svg[:idx] + bloco + svg[idx:]) if idx != -1 else (svg + bloco)
+    return svg
+
+
 def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
     vista = pedido["vista"]
     ann = f.by_guid(vista["guid"])
@@ -266,40 +338,39 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
     prof = vista.get("profundidade_corte")
     if prof is None:
         prof = pedido.get("profundidade_corte")
-    if prof is not None:
-        bloco = None
-        if ann.Representation and ann.Representation.Representations:
-            for rep in ann.Representation.Representations:
-                for itm in getattr(rep, "Items", ()) or ():
-                    if itm.is_a("IfcCsgSolid"):
-                        cand_bloco = getattr(itm, "TreeRootExpression", None)
-                        if cand_bloco is not None and cand_bloco.is_a("IfcBlock"):
-                            bloco = cand_bloco
-                            break
-                    elif itm.is_a("IfcBlock"):
-                        bloco = itm
+    bloco = None
+    if ann.Representation and ann.Representation.Representations:
+        for rep in ann.Representation.Representations:
+            for itm in getattr(rep, "Items", ()) or ():
+                if itm.is_a("IfcCsgSolid"):
+                    cand_bloco = getattr(itm, "TreeRootExpression", None)
+                    if cand_bloco is not None and cand_bloco.is_a("IfcBlock"):
+                        bloco = cand_bloco
                         break
-                if bloco is not None:
+                elif itm.is_a("IfcBlock"):
+                    bloco = itm
                     break
-        if bloco is not None:
-            prof_val = float(prof) / esc
-            bloco.ZLength = prof_val
-            pos = getattr(bloco, "Position", None)
-            loc_antigo = getattr(pos, "Location", None) if pos else None
-            coords = getattr(loc_antigo, "Coordinates", None) if loc_antigo else None
-            ox = float(coords[0]) if coords and len(coords) > 0 else 0.0
-            oy = float(coords[1]) if coords and len(coords) > 1 else 0.0
-            pt = f.create_entity("IfcCartesianPoint", Coordinates=(ox, oy, -prof_val))
-            cam_rel = getattr(getattr(ann, "ObjectPlacement", None), "RelativePlacement", None)
-            if pos is None or pos == cam_rel:
-                bloco.Position = f.create_entity(
-                    "IfcAxis2Placement3D",
-                    Location=pt,
-                    Axis=getattr(pos, "Axis", None) if pos else None,
-                    RefDirection=getattr(pos, "RefDirection", None) if pos else None,
-                )
-            else:
-                pos.Location = pt
+            if bloco is not None:
+                break
+    if prof is not None and bloco is not None:
+        prof_val = float(prof) / esc
+        bloco.ZLength = prof_val
+        pos = getattr(bloco, "Position", None)
+        loc_antigo = getattr(pos, "Location", None) if pos else None
+        coords = getattr(loc_antigo, "Coordinates", None) if loc_antigo else None
+        ox = float(coords[0]) if coords and len(coords) > 0 else 0.0
+        oy = float(coords[1]) if coords and len(coords) > 1 else 0.0
+        pt = f.create_entity("IfcCartesianPoint", Coordinates=(ox, oy, -prof_val))
+        cam_rel = getattr(getattr(ann, "ObjectPlacement", None), "RelativePlacement", None)
+        if pos is None or pos == cam_rel:
+            bloco.Position = f.create_entity(
+                "IfcAxis2Placement3D",
+                Location=pt,
+                Axis=getattr(pos, "Axis", None) if pos else None,
+                RefDirection=getattr(pos, "RefDirection", None) if pos else None,
+            )
+        else:
+            pos.Location = pt
 
     if fase is not None:
         fase("geometria")
@@ -361,8 +432,30 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
                     moveis_corte.append((el, min(us), max(us), min(vs), max(vs), cruza))
         else:
             incl.append(el)
-    incl.append(ann)
     selecionados = {i for i, _ in elementos}
+    num_threads = nucleos.limitar_threads(pedido.get("threads"))
+
+    motor_visivel = bool(pedido.get("motor_visivel"))
+    elegiveis, pols_linhas, pols_tampas, motor_ids = [], [], [], []
+    motor_geo_s, motor_s = 0.0, 0.0
+    if motor_visivel and incl:
+        cands = [
+            el for el in incl
+            if not el.is_a("IfcDoor") and not el.is_a("IfcWindow")
+            and not getattr(el, "HasOpenings", None)
+            and getattr(el, "Representation", None) is not None
+        ]
+        if cands:
+            t_mg0 = time.perf_counter()
+            try:
+                formas = silhueta.formas_do_mundo(f, cands, threads=num_threads)
+            except Exception:
+                formas = {}
+            motor_geo_s = time.perf_counter() - t_mg0
+            for el in cands:
+                dados = _malha_caixa(formas.get(el.id()))
+                if dados is not None:
+                    elegiveis.append((el, dados[0], dados[1]))
 
     buf = ifcopenshell.geom.serializers.buffer()
     sr = ifcopenshell.geom.serializers.svg(buf, st)
@@ -371,8 +464,44 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
     if fase is not None:
         fase("motor")
 
+    if motor_visivel and elegiveis:
+        t_m0 = time.perf_counter()
+        try:
+            if prof is not None:
+                prof_motor = float(prof)
+            elif bloco is not None and getattr(bloco, "ZLength", None) is not None:
+                prof_motor = float(bloco.ZLength) * esc
+            else:
+                raise ValueError("vista sem profundidade de corte")
+            if (
+                bloco is None
+                or getattr(bloco, "XLength", None) is None
+                or getattr(bloco, "YLength", None) is None
+            ):
+                raise ValueError("vista sem dimensoes de janela")
+            largura = float(bloco.XLength) * esc
+            altura = float(bloco.YLength) * esc
+            janela = (-largura / 2.0, largura / 2.0, -altura / 2.0, altura / 2.0)
+            quadro = SimpleNamespace(
+                origem=np.asarray(m[:3, 3], dtype=np.float64) * esc,
+                u=np.asarray(m[:3, 0], dtype=np.float64),
+                v=np.asarray(m[:3, 1], dtype=np.float64),
+                w=np.asarray(m[:3, 2], dtype=np.float64),
+            )
+            pols_linhas = visibilidade.linhas_visiveis_vista(
+                [(v, t) for _el, v, t in elegiveis], quadro, profundidade=prof_motor, janela=janela
+            )
+            pols_tampas = [visibilidade.secao_plana(v, t, quadro, janela=janela) for _el, v, t in elegiveis]
+            motor_ids = [el.id() for el, _v, _t in elegiveis]
+            motor_set = set(motor_ids)
+            incl = [el for el in incl if el.id() not in motor_set]
+        except Exception:
+            pols_linhas, pols_tampas, motor_ids = [], [], []
+        motor_s = time.perf_counter() - t_m0
+
+    incl.append(ann)
+
     t0 = time.perf_counter()
-    num_threads = nucleos.limitar_threads(pedido.get("threads"))
     it = ifcopenshell.geom.iterator(st, f, num_threads, include=incl)
     shapes = []
     if it.initialize():
@@ -425,12 +554,24 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
             idx = svg.rfind("</svg>")
             svg = (svg[:idx] + bloco + svg[idx:]) if idx != -1 else (svg + bloco)
 
+    if motor_ids:
+        svg = _injetar_motor_corte(svg, [el for el, _v, _t in elegiveis], pols_linhas, pols_tampas)
+
     enviados = [sh.id for sh in shapes if sh.id in selecionados]
     enviados.extend(caixas_ids)
+    enviados.extend(motor_ids)
     enviados_set = set(enviados)
     falhas = [i for i, _ in elementos if i not in enviados_set and not f.by_id(i).is_a("IfcOpeningElement")]
 
-    return {
+    tempos = {
+        "abrir_s": float(abrir_s),
+        "geo_s": float(geo_s + motor_geo_s),
+        "write_s": float(write_s),
+        "finalize_s": float(finalize_s),
+    }
+    if motor_visivel:
+        tempos["motor_s"] = float(motor_s)
+    resp = {
         "ok": True,
         "svg": svg,
         "n_paths": len(re.findall(r"<path\b", svg)),
@@ -438,13 +579,11 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
         "caixas": caixas_ids,
         "em_cache": [],
         "falhas_geometria": falhas,
-        "tempos": {
-            "abrir_s": float(abrir_s),
-            "geo_s": float(geo_s),
-            "write_s": float(write_s),
-            "finalize_s": float(finalize_s),
-        },
+        "tempos": tempos,
     }
+    if motor_visivel:
+        resp["motor_pecas"] = motor_ids
+    return resp
 
 
 _PROJ_RE = re.compile(r'<g\b[^>]*\bclass=["\']projection["\'][^>]*>(.*?)</g>', re.S)

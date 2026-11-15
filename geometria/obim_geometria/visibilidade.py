@@ -10,8 +10,11 @@ from obim_geometria.visib_base import (
     _cel_caixa,
     _expandir_celulas,
     _fatias,
+    _ler_quadro,
     _preparar_triangulos,
+    _recortar_semi_espaco,
     _rle_idx,
+    _segmentos_corte_plano,
     _subseg_cels,
 )
 from obim_geometria.visib_faixas import _passagem_faixas_orientadas
@@ -289,3 +292,116 @@ def linhas_visiveis_multi(
         [] if c is None else list(_visibilidade_hibrida(P, Tw_comb, *c, tol_z, -1e-6, min_len, prep=prep))
         for c in cands
     ]
+
+
+def _extrair_poligonos(geom) -> list:
+    """Extrai Polygon nao-degenerados de uma geometria Shapely."""
+    if geom.is_empty:
+        return []
+    if geom.geom_type == "Polygon":
+        return [geom] if geom.area > 1e-12 else []
+    if hasattr(geom, "geoms"):
+        out = []
+        for g in geom.geoms:
+            out.extend(_extrair_poligonos(g))
+        return out
+    return []
+
+
+def secao_plana(verts: np.ndarray, tris: np.ndarray, quadro) -> list:
+    """Calcula poligonos 2D (u, v) da intersecao da malha com o plano w = 0 do quadro."""
+    limpa = _limpar_malha(verts, tris)
+    if limpa is None:
+        return []
+    V, T = limpa
+    origem, axes = _ler_quadro(quadro)
+    Vq = (V - origem) @ axes.T
+    w = Vq[:, 2]
+    if not ((w > 1e-12).any() and (w < -1e-12).any()):
+        return []
+    tol_w = max(1e-9, float(np.abs(Vq).max()) * 1e-15)
+    _, idx, inv = np.unique(
+        np.round(Vq / tol_w).astype(np.int64), axis=0, return_index=True, return_inverse=True
+    )
+    P = Vq[idx]
+    Tw = inv.ravel()[T]
+    Tw = Tw[(Tw[:, 0] != Tw[:, 1]) & (Tw[:, 1] != Tw[:, 2]) & (Tw[:, 0] != Tw[:, 2])]
+    # dedup por orientacao: triangulos opostos (parede interna entre pecas encostadas) ficam, os dois
+    rot = np.argmin(Tw, axis=1)
+    Tc = np.stack([Tw[np.arange(len(Tw)), (rot + k) % 3] for k in range(3)], axis=1)
+    _, u_idx = np.unique(Tc, axis=0, return_index=True)
+    Tw = Tw[np.sort(u_idx)]
+    segs = _segmentos_corte_plano(P, Tw)
+    if len(segs) == 0:
+        return []
+    import functools
+    import shapely
+    from shapely.ops import polygonize, unary_union
+
+    nodada = unary_union(shapely.linestrings(segs))
+    pols = [shapely.make_valid(p) for p in polygonize(nodada)]
+    pols = [p for p in pols if not p.is_empty and p.area > 1e-12]
+    if not pols:
+        return []
+    # polygonize devolve todas as faces do arranjo (o vao de um furo tambem e uma face):
+    # regra par-impar por raio para +u contra os segmentos originais (arestas internas
+    # de pecas encostadas cruzam duas vezes e se anulam).
+    pts = np.array([[q.x, q.y] for q in (p.representative_point() for p in pols)])
+    impar = np.zeros(len(pols), dtype=np.int64)
+    for i in range(0, len(pols), 256):  # em blocos: nunca materializa faces x segmentos inteiro
+        py, px = pts[i:i + 256, 1:2], pts[i:i + 256, 0:1]
+        y1, y2 = segs[:, 0, 1][None, :], segs[:, 1, 1][None, :]
+        x1, x2 = segs[:, 0, 0][None, :], segs[:, 1, 0][None, :]
+        f, k = np.nonzero((y1 > py) != (y2 > py))
+        dy = y2[0, k] - y1[0, k]
+        xi = x1[0, k] + (py[f, 0] - y1[0, k]) * (x2[0, k] - x1[0, k]) / dy
+        ok = px[f, 0] < xi
+        impar[i:i + 256] = np.bincount(f[ok], minlength=len(py))
+    impar = impar % 2 == 1
+    solidas = [p for p, k in zip(pols, impar) if k]
+    if not solidas:
+        return []
+    return _extrair_poligonos(shapely.make_valid(unary_union(solidas)))
+
+
+def linhas_visiveis_vista(
+    pecas: list[tuple[np.ndarray, np.ndarray]],
+    quadro,
+    *,
+    profundidade: float,
+    angulo_graus: float = 0.001,
+    tol_z: float = 1e-4,
+    min_len: float = 1e-4,
+) -> list[list[np.ndarray]]:
+    """Calcula polilinhas visiveis em (u, v) no quadro dentro de -profundidade <= w <= 0."""
+    if isinstance(profundidade, bool):
+        raise ValueError("profundidade invalida")
+    try:
+        prof = float(profundidade)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("profundidade deve ser numerica") from exc
+    if not (math.isfinite(prof) and prof >= 0.0):
+        raise ValueError("profundidade deve ser finita e nao-negativa")
+
+    pecas_l = list(pecas)
+    if not pecas_l:
+        return []
+    origem, axes = _ler_quadro(quadro)
+    vazia = (np.zeros((0, 3), dtype=np.float64), np.zeros((0, 3), dtype=np.int64))
+    recortadas: list[tuple[np.ndarray, np.ndarray]] = []
+    for v, t in pecas_l:
+        limpa = _limpar_malha(v, t)
+        if limpa is None:
+            recortadas.append(vazia)
+            continue
+        V, T = limpa
+        Vq = (V - origem) @ axes.T
+        V1, T1 = _recortar_semi_espaco(Vq, T, Vq[:, 2], plane_w=0.0)
+        if len(T1) == 0:
+            recortadas.append(vazia)
+            continue
+        V2, T2 = _recortar_semi_espaco(V1, T1, -prof - V1[:, 2], plane_w=-prof)
+        recortadas.append((V2, T2) if len(T2) else vazia)
+    return linhas_visiveis_multi(
+        recortadas, angulo_graus=angulo_graus, tol_z=tol_z, min_len=min_len
+    )

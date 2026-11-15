@@ -276,10 +276,9 @@ def test_regra4_dividir_elementos_respeita_threads_do_pedido(monkeypatch, tmp_pa
     assert usados and usados[0] == 1, "o pedido com threads=1 tem de chegar ao iterator da divisão"
 
 # ---------------------------------------------------------------- tempo (sintético)
-def test_tempo_dos_grupos_nao_cresce_com_o_conjunto(monkeypatch, tmp_path):
-    """36 peças pesadas (prisma de 450 lados, ~1,8 mil triângulos cada) em grade 6x6, todas separadas (vão de 10 cm): o HLR do conjunto é superlinear nos triângulos do mesmo pedido; por componentes custa
-    ~a soma das peças mais ~0,2 s por filho. Medido com o espião em processo: conjunto 20,2 s, grupos 13,9 s, razão 0,69 (36x300 dava 0,88: o overhead por filho domina, não serve). Limite 0,85, uma execução de cada;
-    a parte estrutural (um filho por peça) não depende de relógio. Execução do teste ~35 s."""
+def test_um_filho_por_peca_separada_com_a_mesma_cobertura(monkeypatch, tmp_path):
+    """36 peças pesadas (prisma de 450 lados) em grade 6x6, todas separadas (vão de 10 cm): um filho por peça e o mesmo desenho do conjunto, nos dois sentidos. O ganho de tempo NÃO é afirmado aqui:
+    o espião roda os filhos em threads do mesmo processo (GIL), então não mostra paralelismo; medido 36x450: conjunto 20,2 s, grupos 20,4 s, razão 1,03. O tempo é medido no IFC real (cartão T19h, aceite)."""
     n = 36
     malhas = [_prisma_ou(450, 0.5, 1.0, 1.1 * (k % 6), 1.1 * (k // 6)) for k in range(n)]
     ped, ids = _cena(tmp_path, malhas)
@@ -293,4 +292,3 @@ def test_tempo_dos_grupos_nao_cresce_com_o_conjunto(monkeypatch, tmp_path):
     assert rc["ok"] and rg["ok"] and rg["grupos"] == n and [len(c["elementos"]) for c in esp.chamadas] == [1] * n
     sc, sg = _segs(rc["svg"]), _segs(rg["svg"])
     assert _cob_rapida(sc, sg) >= 0.999 and _cob_rapida(sg, sc) >= 0.999
-    assert t_comp < 0.85 * t_conj, f"conjunto {t_conj:.2f}s, grupos {t_comp:.2f}s"

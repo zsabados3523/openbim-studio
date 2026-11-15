@@ -72,6 +72,7 @@ def gerar_planta(
     faixas: int | None = None,
     pesados: str | None = None,
     limiar_pesado: int | None = None,
+    componentes: bool | None = None,
 ) -> Planta:
     if pesados not in (None, "silhueta"):
         raise ValueError(f"pesados inválido: {pesados!r} (esperado None ou 'silhueta')")
@@ -81,6 +82,8 @@ def gerar_planta(
         raise ValueError(f"limiar_pesado inválido: {limiar_pesado!r} (esperado inteiro >= 1 ou None)")
     if faixas is not None and (isinstance(faixas, bool) or not isinstance(faixas, int) or faixas < 1):
         raise ValueError(f"faixas inválidas: {faixas!r} (esperado inteiro >= 1 ou None)")
+    if componentes is not None and not isinstance(componentes, bool):
+        raise ValueError(f"componentes inválido: {componentes!r} (esperado bool ou None)")
     if ocultar_secundarias:
         cats = tuple(dict.fromkeys((*categorias_ocultas, *selecao.CATEGORIAS_PADRAO_PLANTA_OCULTAS)))
     else:
@@ -144,6 +147,8 @@ def gerar_planta(
         pedido["pesados"] = pesados
         if limiar_pesado is not None:
             pedido["limiar_pesado"] = limiar_pesado
+    if componentes:
+        pedido["componentes"] = True
 
     if cache is not None:
         ch = cache.chave(ifc, pedido)

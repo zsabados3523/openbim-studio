@@ -1057,6 +1057,175 @@ def _planta_em_faixas(pedido: dict, fase, n: int) -> dict:
             "em_cache": junta("em_cache"), "pesados": pesados_info, "falhas_geometria": falhas, "tempos": tempos}
 
 
+def _injetar_silhuetas(svg: str, pesados_svg: list[str]) -> str:
+    """Anexa os grupos de silhueta antes de `</svg>`, garantindo `xmlns:ifc`."""
+    if not pesados_svg:
+        return svg
+    if "xmlns:ifc=" not in svg:
+        svg = re.sub(r"(<svg\b[^>]*)", r'\1 xmlns:ifc="http://www.ifcopenshell.org/ns"', svg, count=1)
+    bloco = "\n" + "\n".join(pesados_svg) + "\n"
+    idx = svg.rfind("</svg>")
+    return (svg[:idx] + bloco + svg[idx:]) if idx != -1 else (svg + bloco)
+
+
+def _eh_abertura(f, id_step: int) -> bool:
+    try:
+        el = f.by_id(id_step)
+        return el is not None and el.is_a("IfcOpeningElement")
+    except Exception:
+        return False
+
+
+def _planta_por_componentes(pedido: dict, fase) -> dict:
+    from obim_geometria import componentes
+
+    base = {k: v for k, v in pedido.items() if k != "componentes"}
+    elementos = pedido.get("elementos") or []
+    f = None
+    pesados_svg, pesados_info, pesadas_ids, pesadas_excluidas = [], [], set(), set()
+    pesadas_prontas = False
+    restantes = list(elementos)
+
+    def fallback() -> dict:
+        if not pesadas_prontas:
+            r = _processar_base(base, fase)
+            if r.get("ok"):
+                r["grupos"] = 1 if elementos else 0
+                r["grupos_ids"] = [[i for i, _ in elementos]] if elementos else []
+            return r
+        q_rest = {k: v for k, v in base.items() if k not in ("pesados", "limiar_pesado")}
+        q_rest["elementos"] = [list(e) for e in restantes]
+        r = _processar_base(q_rest, fase)
+        if not r.get("ok"):
+            return r
+        if pesados_svg:
+            r["svg"] = _injetar_silhuetas(r["svg"], pesados_svg)
+            r["n_paths"] = len(re.findall(r"<path\b", r["svg"]))
+        env = list(r.get("enviados") or ())
+        env.extend(info["id"] for info in pesados_info)
+        r["enviados"] = list(dict.fromkeys(env))
+        r["pesados"] = list(pesados_info)
+        r["grupos"] = 1 if restantes else 0
+        r["grupos_ids"] = [[i for i, _ in restantes]] if restantes else []
+        return r
+
+    try:
+        if not elementos:
+            return fallback()
+
+        if pedido.get("pesados") == "silhueta":
+            f = ifcopenshell.open(pedido.get("arquivo"))
+            altura_corte_m = float((pedido.get("vista") or {}).get("altura_corte_m", float("inf")))
+            pesados_svg, pesados_info, pesadas_ids, pesadas_excluidas = _pesadas_para_svg(
+                f, pedido, elementos, altura_corte_m
+            )
+        pesadas_prontas = True
+
+        restantes = [e for e in elementos if e[0] not in (pesadas_ids | pesadas_excluidas)]
+        if not restantes:
+            return fallback()
+
+        grupos = componentes.dividir_elementos(
+            pedido.get("arquivo"), restantes, threads=pedido.get("threads")
+        )
+        if len(grupos) <= 1:
+            return fallback()
+
+        total_threads = nucleos.limitar_threads(pedido.get("threads"))
+        simultaneos = max(1, min(len(grupos), total_threads))
+        threads_filho = max(1, total_threads // simultaneos)
+        pedidos = []
+        for grupo in grupos:
+            q = dict(base)
+            q.pop("pesados", None)
+            q.pop("limiar_pesado", None)
+            q["elementos"] = [list(e) for e in grupo]
+            q["threads"] = threads_filho
+            pedidos.append(q)
+
+        with ThreadPoolExecutor(max_workers=simultaneos) as ex:
+            futuros = [ex.submit(faixas.rodar_filho, q) for q in pedidos]
+            resultados = []
+            for fut in futuros:
+                try:
+                    resultados.append(fut.result())
+                except Exception:
+                    resultados.append(None)
+
+        ok_resultados, falhas_filhos = [], set()
+        for grupo, res in zip(grupos, resultados):
+            if isinstance(res, dict) and res.get("ok") and isinstance(res.get("svg"), str) and res.get("svg"):
+                ok_resultados.append(res)
+            else:
+                falhas_filhos.update(i for i, _ in grupo)
+
+        if not ok_resultados:
+            return fallback()
+
+        if falhas_filhos:
+            try:
+                f_chk = f if f is not None else ifcopenshell.open(pedido.get("arquivo"))
+                falhas_filhos = {i for i in falhas_filhos if not _eh_abertura(f_chk, i)}
+            except Exception:
+                pass
+
+        svgs_ok = [r["svg"] for r in ok_resultados]
+        if any(faixas._PROJ.search(s) for s in svgs_ok):
+            svg = faixas.unir_planta(svgs_ok)
+        else:
+            svg = svgs_ok[0]
+            extras = [m.group(0) for s in svgs_ok[1:] for m in _GRUPO_ELEM.finditer(s)]
+            if extras:
+                idx = svg.rfind("</svg>")
+                bloco = "\n" + "\n".join(extras) + "\n"
+                svg = (svg[:idx] + bloco + svg[idx:]) if idx != -1 else (svg + bloco)
+
+        svg = _injetar_silhuetas(svg, pesados_svg)
+
+        ordem = {guid: idx for idx, (_i, guid) in enumerate(elementos)}
+        matches = list(_GRUPO_ELEM.finditer(svg))
+        if len(matches) > 1:
+            ordenados = [m.group(0) for m in sorted(matches, key=lambda m: ordem.get(m.group(1), len(ordem)))]
+            partes, pos = [], 0
+            for m, novo in zip(matches, ordenados):
+                partes.append(svg[pos : m.start()])
+                partes.append(novo)
+                pos = m.end()
+            partes.append(svg[pos:])
+            svg = "".join(partes)
+    except Exception:
+        return fallback()
+
+    def junta(chave):
+        return list(dict.fromkeys(x for r in ok_resultados for x in (r.get(chave) or ())))
+
+    enviados = junta("enviados")
+    enviados.extend(info["id"] for info in pesados_info)
+    enviados = list(dict.fromkeys(enviados))
+    falhas_set = falhas_filhos | {i for r in ok_resultados for i in (r.get("falhas_geometria") or ())}
+    falhas = [i for i, _ in elementos if i in falhas_set]
+    tempos = {
+        "abrir_s": 0.0,
+        **{
+            k: float(sum(float((r.get("tempos") or {}).get(k, 0.0)) for r in ok_resultados))
+            for k in ("geo_s", "write_s", "finalize_s")
+        },
+    }
+    return {
+        "ok": True,
+        "svg": svg,
+        "n_paths": len(re.findall(r"<path\b", svg)),
+        "enviados": enviados,
+        "caixas": junta("caixas"),
+        "em_cache": junta("em_cache"),
+        "pesados": pesados_info,
+        "falhas_geometria": falhas,
+        "tempos": tempos,
+        "grupos": len(grupos),
+        "grupos_ids": [[i for i, _ in g] for g in grupos],
+    }
+
+
 def processar(pedido: dict, fase=None) -> dict:
     vista = pedido.get("vista")
     if isinstance(vista, dict) and vista.get("tipo") == "CORTE":
@@ -1069,4 +1238,6 @@ def processar(pedido: dict, fase=None) -> dict:
         except faixas.FaixasInvalidas as e:
             return {"ok": False, "erro": {"tipo": "FaixasInvalidas", "mensagem": str(e), "rastro": ""}}
         return _planta_em_faixas(pedido, fase, n)
+    if pedido.get("componentes"):
+        return _planta_por_componentes(pedido, fase)
     return _processar_base(pedido, fase)

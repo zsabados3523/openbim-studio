@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+import re
 
 import ifcopenshell
 import ifcopenshell.geom
@@ -107,8 +108,24 @@ def _pegada_da_forma(sh):
     return None
 
 
+def _aberturas_step(arquivo, ids: list[int]) -> set[int]:
+    """IDs de `IfcOpeningElement` no STEP sem chamar `ifcopenshell.open`."""
+    alvo, achados = set(ids), set()
+    pat = re.compile(r"^\s*#(\d+)\s*=\s*IFCOPENING(?:ELEMENT|STANDARDCASE)\s*\(", re.I)
+    try:
+        with open(arquivo, "r", encoding="utf-8", errors="ignore") as fp:
+            for linha in fp:
+                if (m := pat.match(linha)) and (eid := int(m.group(1))) in alvo:
+                    achados.add(eid)
+                    if len(achados) == len(alvo):
+                        break
+    except Exception:
+        pass
+    return achados
+
+
 def dividir_elementos(
-    arquivo, elementos, folga: float = FOLGA, threads: int | None = None, formas: dict | None = None
+    arquivo, elementos, folga: float = FOLGA, threads: int | None = None, formas: dict | None = None, f=None
 ) -> list[list]:
     """Agrupa `elementos` (`[id_step, guid]`) pela pegada XY no mundo, mantendo a ordem original."""
     elems = [list(e) for e in elementos]
@@ -120,8 +137,13 @@ def dividir_elementos(
     faltam_ids = list(dict.fromkeys(
         id_step for id_step, _guid in elems if formas_uso.get(id_step) is None
     ))
+    if faltam_ids and f is None:
+        aberturas = _aberturas_step(arquivo, faltam_ids)
+        if aberturas:
+            faltam_ids = [i for i in faltam_ids if i not in aberturas]
     if faltam_ids:
-        f = ifcopenshell.open(arquivo)
+        if f is None:
+            f = ifcopenshell.open(arquivo)
         cfg = ifcopenshell.geom.settings()
         cfg.set(cfg.USE_WORLD_COORDS, True)
         incl = []

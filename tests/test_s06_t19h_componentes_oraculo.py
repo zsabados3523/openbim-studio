@@ -132,6 +132,17 @@ class Espiao:
         monkeypatch.setattr(F, "rodar_filho", self)
 
     def __call__(self, pedido, *a, **k):
+        if pedido.get("op") == "desenho_lote":  # T19l: um filho processa vários grupos; falha de um item não derruba os outros
+            itens = []
+            for q in pedido["pedidos"]:
+                try:
+                    itens.append(self._um(q))
+                except RuntimeError as e:
+                    itens.append({"ok": False, "erro": {"tipo": "RuntimeError", "mensagem": str(e), "rastro": ""}})
+            return {"ok": True, "resultados": itens}
+        return self._um(pedido)
+
+    def _um(self, pedido):
         ped = copy.deepcopy(pedido)
         with self._tr:
             self.chamadas.append(ped)

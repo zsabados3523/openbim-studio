@@ -408,3 +408,193 @@ def test_ponta_a_ponta_gerente_real_com_motor_padrao_falso(monkeypatch, app):
         assert _pedir(g, m, 4, "corte", ifc, "v1").sessao is None
     finally:
         g.encerrar()
+
+
+# ---------------------------------------------------------------- E) reprovacao Argon: reuso de id, invalidar em voo, cache, Historico
+
+import gc  # noqa: E402
+import weakref  # noqa: E402
+
+
+def _guardadas(g):
+    """Sessoes que o gerente ainda guarda em qualquer dict proprio (sem depender do nome do atributo)."""
+    achadas = []
+    for v in vars(g).values():
+        if isinstance(v, dict):
+            for x in v.values():
+                for y in (x if isinstance(x, tuple) else (x,)):
+                    if isinstance(y, SessaoSelecao):
+                        achadas.append(y)
+    return achadas
+
+
+class MotorSemIfc:
+    """Como Motor, mas NAO guarda o ifc (para o teste de referencia fraca)."""
+
+    def __init__(self):
+        self.sessoes = []
+
+    def __call__(self, tipo, ifc, guid, opcoes, *, cancelar, progresso, sessao_selecao=None):
+        self.sessoes.append(sessao_selecao)
+        return {"svg": "<svg/>", "n_paths": 0}
+
+
+def test_colisao_de_id_nunca_entrega_a_sessao_de_outro_modelo(gerente_com, monkeypatch):
+    # forca id() igual para objetos distintos: o gerente precisa conferir identidade, nao so o id
+    monkeypatch.setattr(gerente, "id", lambda o: 12345, raising=False)
+    m = MotorSemIfc()
+    g, m1, m2 = gerente_com(m), SimpleNamespace(), SimpleNamespace()
+    g.pedir("corte", m1, "v1", revisao=1)
+    assert girar(lambda: len(m.sessoes) >= 1)
+    g.pedir("corte", m2, "v2", revisao=1)
+    assert girar(lambda: len(m.sessoes) >= 2)
+    assert m.sessoes[0] is not None and m.sessoes[1] is not None and m.sessoes[1] is not m.sessoes[0]
+
+
+def test_colisao_de_id_com_o_primeiro_modelo_morto(gerente_com, monkeypatch):
+    monkeypatch.setattr(gerente, "id", lambda o: 12345, raising=False)
+    m = MotorSemIfc()
+    g, m1 = gerente_com(m), SimpleNamespace()
+    g.pedir("corte", m1, "v1", revisao=1)
+    assert girar(lambda: len(m.sessoes) >= 1 and not g._threads)
+    del m1
+    gc.collect()
+    g.pedir("corte", SimpleNamespace(), "v2", revisao=1)
+    assert girar(lambda: len(m.sessoes) >= 2)
+    assert m.sessoes[1] is not m.sessoes[0]
+
+
+def test_gerente_nao_segura_o_modelo_e_solta_a_sessao(gerente_com):
+    class Modelo:  # SimpleNamespace nao aceita weakref
+        pass
+    m = MotorSemIfc()
+    g, ifc = gerente_com(m), Modelo()
+    ref = weakref.ref(ifc)
+    g.pedir("corte", ifc, "v1", revisao=1)
+    assert girar(lambda: len(m.sessoes) >= 1 and not g._threads)
+    assert len(_guardadas(g)) == 1
+    del ifc
+    gc.collect()
+    assert ref() is None, "o gerente nao pode manter referencia forte ao modelo"
+    assert _guardadas(g) == [], "a entrada do modelo morto deve sumir do dicionario de sessoes"
+
+
+class MotorPortao:
+    """A 1a chamada espera o portao; as demais voltam na hora. Registra a sessao de cada chamada."""
+
+    def __init__(self):
+        self.sessoes, self.portao = [], threading.Event()
+
+    def __call__(self, tipo, ifc, guid, opcoes, *, cancelar, progresso, sessao_selecao=None):
+        self.sessoes.append(sessao_selecao)
+        if len(self.sessoes) == 1:
+            self.portao.wait(4)
+        return {"svg": "<svg/>", "n_paths": 0}
+
+
+def test_invalidar_ids_com_pedido_em_voo_troca_a_sessao(gerente_com):
+    m = MotorPortao()
+    g, ifc = gerente_com(m), SimpleNamespace()
+    try:
+        g.pedir("corte", ifc, "v1", revisao=1)
+        assert girar(lambda: len(m.sessoes) >= 1)
+        em_voo = m.sessoes[0]
+        assert isinstance(em_voo, SessaoSelecao)
+        g.invalidar(ifc=ifc, ids=[5])
+        g.pedir("corte", ifc, "v2", revisao=1)
+        assert girar(lambda: len(m.sessoes) >= 2)
+        assert m.sessoes[1] is not em_voo, "gravacao tardia do pedido velho nao pode contaminar o proximo"
+    finally:
+        m.portao.set()
+
+
+class CacheFalso:
+    def __init__(self):
+        self.dados = {}
+
+    def obter(self, chave):
+        return self.dados.get(chave)
+
+    def guardar(self, chave, dados):
+        self.dados[chave] = dados
+        return True
+
+
+def _chave(tipo, ifc, guid, opcoes):
+    return f"{tipo}|{guid}|{opcoes.get('x')}"
+
+
+def test_cache_hit_com_revisao_nova_descarta_a_sessao(app):
+    m, cache, ifc = MotorSemIfc(), CacheFalso(), SimpleNamespace()
+    g = gerente.GerenteDesenho(cache, motor=m, chave_estado=_chave)
+    try:
+        g.pedir("corte", ifc, "v1", x=1, revisao=1)
+        assert girar(lambda: m.sessoes and cache.dados and not g._threads)
+        s1 = m.sessoes[0]
+        assert isinstance(s1, SessaoSelecao)
+        g.pedir("corte", ifc, "v1", x=1, revisao=2)  # mesma chave: cache hit, motor nao roda
+        girar(lambda: False, 100)
+        assert len(m.sessoes) == 1
+        assert s1 not in _guardadas(g), "revisao nova deve descartar a sessao velha mesmo com cache hit"
+        g.pedir("corte", ifc, "v1", x=2, revisao=2)
+        assert girar(lambda: len(m.sessoes) >= 2)
+        assert m.sessoes[1] is not s1
+    finally:
+        g.encerrar()
+
+
+def test_pedido_ativo_com_revisao_nova_descarta_a_sessao(app):
+    m, ifc = MotorPortao(), SimpleNamespace()
+    g = gerente.GerenteDesenho(CacheFalso(), motor=m, chave_estado=_chave)
+    try:
+        g.pedir("corte", ifc, "v1", x=1, revisao=1)
+        assert girar(lambda: len(m.sessoes) >= 1)
+        s1 = m.sessoes[0]
+        g.pedir("corte", ifc, "v1", x=1, revisao=2)  # mesma chave, ainda ativo: devolve a chave
+        assert s1 not in _guardadas(g)
+        g.pedir("corte", ifc, "v2", x=1, revisao=2)
+        assert girar(lambda: len(m.sessoes) >= 2)
+        assert m.sessoes[1] is not s1
+    finally:
+        m.portao.set()
+        g.encerrar()
+
+
+def test_historico_revisao_sobe_em_encerrar():
+    exigir()
+    from s06_t04_sessao_aux import Sessao
+    s = Sessao(A.novo_arquivo("IFC4"))
+    r = s.h.revisao
+    s.h.encerrar()
+    assert s.h.revisao > r
+
+
+def test_historico_revisao_sobe_em_quebrar():
+    exigir()
+    from openbim_app.transacao import HistoricoQuebrado
+    from s06_t04_sessao_aux import Sessao
+    s = Sessao(A.novo_arquivo("IFC4"))
+    try:
+        r = s.h.revisao
+        with pytest.raises(HistoricoQuebrado):
+            s.h._quebrar(s.f, "motivo")
+        assert s.h.revisao > r
+    finally:
+        s.encerrar()
+
+
+def test_historico_revisao_sobe_quando_terceiros_trocam_a_transacao():
+    exigir()
+    from openbim_app.transacao import HistoricoQuebrado
+    from s06_t04_sessao_aux import Sessao
+    s = Sessao(A.novo_arquivo("IFC4"))
+    try:
+        r = s.h.revisao
+        with s.s.escrever() as esc:
+            s.f.transaction = None  # terceiros trocaram a sentinela
+            with pytest.raises(HistoricoQuebrado):
+                with s.h.transacao(esc):
+                    pass
+        assert s.h.quebrado and s.h.revisao > r
+    finally:
+        s.encerrar()

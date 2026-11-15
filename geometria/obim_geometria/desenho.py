@@ -1163,10 +1163,6 @@ def _gravar_previa(pedido: dict, f, formas: dict, elementos, pesados_svg: list[s
             return
         q_esq = {k: v for k, v in base.items() if k not in ("pesados", "limiar_pesado", "componentes", "previa_arquivo")}
         q_esq["elementos"] = []
-        r_esq = _processar_base(q_esq, fase)
-        if not r_esq.get("ok") or not isinstance(r_esq.get("svg"), str):
-            return
-        esqueleto = r_esq["svg"]
         if f is None:
             f = _abrir_ifc(pedido.get("arquivo"))
         altura_corte_m = float((pedido.get("vista") or {}).get("altura_corte_m", float("inf")))
@@ -1176,7 +1172,7 @@ def _gravar_previa(pedido: dict, f, formas: dict, elementos, pesados_svg: list[s
             m = re.search(r'\bifc:guid="([^"]+)"', g)
             if m:
                 guids_pesados.add(m.group(1))
-        novos = []
+        candidatos = []
         for id_step, guid in elementos:
             if guid in guids_pesados:
                 continue
@@ -1188,12 +1184,28 @@ def _gravar_previa(pedido: dict, f, formas: dict, elementos, pesados_svg: list[s
                 continue
             forma = formas.get(id_step)
             alvo = _FormaId(el.id(), forma) if hasattr(forma, "geometry") else el
-            _, aneis, _ = silhueta.faces_e_silhueta(alvo, 1, z_corte=altura_corte_m)
+            candidatos.append((el, alvo))
+
+        def _uma_silhueta(alvo):
+            try:
+                return silhueta.faces_e_silhueta(alvo, 1, z_corte=altura_corte_m)[1]
+            except Exception:
+                return None
+
+        with ThreadPoolExecutor(max_workers=1) as ex_esq:
+            fut_esq = ex_esq.submit(_processar_base, q_esq, fase)
+            with ThreadPoolExecutor(max_workers=nucleos.limitar_threads(pedido.get("threads"))) as ex_sil:
+                aneis_lista = list(ex_sil.map(_uma_silhueta, (alvo for _, alvo in candidatos)))
+            r_esq = fut_esq.result()
+        if not r_esq.get("ok") or not isinstance(r_esq.get("svg"), str):
+            return
+        novos = []
+        for (el, _), aneis in zip(candidatos, aneis_lista):
             if aneis:
                 grupo = _grupo_silhueta(el, aneis)
                 if grupo is not None:
                     novos.append(grupo)
-        svg = _injetar_silhuetas(esqueleto, list(pesados_svg) + novos)
+        svg = _injetar_silhuetas(r_esq["svg"], list(pesados_svg) + novos)
         tmp = f"{destino}.tmp"
         with open(tmp, "w", encoding="utf-8") as fp:
             fp.write(svg)

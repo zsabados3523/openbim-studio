@@ -287,15 +287,33 @@ def test_invalidar_tudo(gerente_com):
     assert _pedir(g, m, 4, "corte", b, "v2", revisao=1).sessao is not sb
 
 
-def test_invalidar_ids_so_esses_ids(gerente_com):
+def test_invalidar_ids_troca_por_copia_sem_esses_ids(gerente_com):
     m = Motor()
     g, a = gerente_com(m), SimpleNamespace()
     s = _pedir(g, m, 1, "corte", a, "v1", revisao=1).sessao
     s._caixas.update({5: [0.0] * 6, 6: [1.0] * 6, 7: None})
-    s._erros[5] = ["x"]
+    s._erros.update({5: ["x"], 6: ["y"]})
     g.invalidar(ifc=a, ids=[5, 7])
-    assert set(s._caixas) == {6} and 5 not in s._erros
-    assert _pedir(g, m, 2, "corte", a, "v1", revisao=1).sessao is s  # a sessao continua a mesma
+    # a instancia antiga nao e alterada (pedido em voo pode ainda grava-la)
+    assert set(s._caixas) == {5, 6, 7} and set(s._erros) == {5, 6}
+    n = _pedir(g, m, 2, "corte", a, "v1", revisao=1).sessao
+    assert n is not s and isinstance(n, SessaoSelecao)
+    assert n._caixas == {6: [1.0] * 6} and n._erros == {6: ["y"]}
+    # copia independente: gravar numa nao afeta a outra
+    n._caixas[9] = [2.0] * 6
+    n._erros[8] = ["w"]  # dict.copy() e raso: so os dicionarios sao independentes
+    assert 9 not in s._caixas and 8 not in s._erros
+
+
+def test_invalidar_ids_copia_tambem_os_erros(gerente_com):
+    m = Motor()
+    g, a = gerente_com(m), SimpleNamespace()
+    s = _pedir(g, m, 1, "corte", a, "v1", revisao=1).sessao
+    s._erros.update({1: ["a"], 2: ["b"], 3: ["c"]})
+    g.invalidar(ifc=a, ids=[2])
+    n = _pedir(g, m, 2, "corte", a, "v1", revisao=1).sessao
+    assert n is not s and n._erros == {1: ["a"], 3: ["c"]} and n._caixas == {}
+    assert s._erros == {1: ["a"], 2: ["b"], 3: ["c"]}
 
 
 def test_invalidar_sem_sessao_nao_levanta(gerente_com):

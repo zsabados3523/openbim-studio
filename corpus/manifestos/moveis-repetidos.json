@@ -1,0 +1,27 @@
+{
+  "atribuicao": "OpenBIM Studio (AGPL-3.0-or-later)",
+  "cobre": [
+    "planta",
+    "itens-mapeados"
+  ],
+  "contagens": {
+    "IfcBuildingStorey": 1,
+    "IfcFurniture": 8,
+    "IfcMappedItem": 8,
+    "IfcRepresentationMap": 1
+  },
+  "data_acesso": "2026-11-15",
+  "esquema": "IFC4",
+  "licenca": "propria",
+  "nome": "moveis-repetidos",
+  "observacoes": "8 moveis compartilhando uma unica IfcRepresentationMap.",
+  "origem": "scripts/gerar_modelos.py",
+  "pode_ir_no_git": "nao",
+  "programa_de_origem": "IfcOpenShell 0.9.0",
+  "sha256": "3c39213c7d380f1dc24db88acb8808dae002d26ab5b0a816788adf5b90596108",
+  "tamanho_bytes": 6581,
+  "valores_conhecidos": {
+    "quantidade_moveis": 8
+  },
+  "versao_ou_commit": "1.0.0"
+}

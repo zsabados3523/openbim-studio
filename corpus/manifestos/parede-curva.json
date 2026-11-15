@@ -1,0 +1,28 @@
+{
+  "atribuicao": "OpenBIM Studio (AGPL-3.0-or-later)",
+  "cobre": [
+    "planta",
+    "geometria-curva"
+  ],
+  "contagens": {
+    "IfcBuildingStorey": 1,
+    "IfcWall": 1
+  },
+  "data_acesso": "2026-11-15",
+  "esquema": "IFC4",
+  "licenca": "propria",
+  "nome": "parede-curva",
+  "observacoes": "Parede curva em arco (raio 5 m, 90 graus, altura 2,8 m).",
+  "origem": "scripts/gerar_modelos.py",
+  "pode_ir_no_git": "nao",
+  "programa_de_origem": "IfcOpenShell 0.9.0",
+  "sha256": "888d143e94582bf78664619a56456786b08e9e9879e4142ce0b407bf67e84bd2",
+  "tamanho_bytes": 2028,
+  "valores_conhecidos": {
+    "altura_m": 2.8,
+    "angulo_graus": 90.0,
+    "flecha_m": 1.464466,
+    "raio_m": 5.0
+  },
+  "versao_ou_commit": "1.0.0"
+}

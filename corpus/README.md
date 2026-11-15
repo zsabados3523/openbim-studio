@@ -32,3 +32,9 @@ Gerados por `scripts/gerar_modelo_grande.py`; ficam aqui só na sua máquina (`.
 - Medido com o iterador de geometria do ifcopenshell 0.9.0 no arquivo inteiro (não é estimativa):
   83334 paredes, 417 andares, **1.000.008 triângulos**, arquivo de ~74 MB (SHA-256 `0d4639449d5a18f1...`).
 - Tempo para gerar: ~60 s. Contar triângulos: ~10 s (multi-thread).
+
+## Modelos proprios gerados (F0-S08-T04)
+Gera os 5 modelos IFC4 (`casa-terrea`, `sobrado`, `moveis-repetidos`, `parede-curva`, `laje-com-furo`) em `corpus/` (fora do git) e os manifestos em `corpus/manifestos/`:
+```bash
+~/miniforge3/envs/openbim/bin/python scripts/gerar_modelos.py
+```

@@ -464,6 +464,39 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
     if fase is not None:
         fase("motor")
 
+    def _janela_bloco():
+        if (
+            bloco is None
+            or getattr(bloco, "XLength", None) is None
+            or getattr(bloco, "YLength", None) is None
+        ):
+            raise ValueError("vista sem dimensoes de janela")
+        largura = float(bloco.XLength) * esc
+        altura = float(bloco.YLength) * esc
+        if not (math.isfinite(largura) and math.isfinite(altura) and largura > 0.0 and altura > 0.0):
+            raise ValueError("vista sem dimensoes de janela")
+        return (-largura / 2.0, largura / 2.0, -altura / 2.0, altura / 2.0)
+
+    def _na_janela(el, janela):
+        if not caixas_coords:
+            return True
+        c = caixa_valida(caixas_coords.get(el.id()) if el.id() in caixas_coords else caixas_coords.get(str(el.id())))
+        if c is None:
+            return True
+        us, vs = [], []
+        for x in (c[0], c[3]):
+            for y in (c[1], c[4]):
+                for z in (c[2], c[5]):
+                    dx, dy, dz = x - orig_cam_m[0], y - orig_cam_m[1], z - orig_cam_m[2]
+                    us.append(dx * u_axis[0] + dy * u_axis[1] + dz * u_axis[2])
+                    vs.append(dx * v_axis[0] + dy * v_axis[1] + dz * v_axis[2])
+        return not (
+            max(us) < janela[0] - 0.1
+            or min(us) > janela[1] + 0.1
+            or max(vs) < janela[2] - 0.1
+            or min(vs) > janela[3] + 0.1
+        )
+
     if motor_visivel and elegiveis:
         t_m0 = time.perf_counter()
         try:
@@ -473,15 +506,7 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
                 prof_motor = float(bloco.ZLength) * esc
             else:
                 raise ValueError("vista sem profundidade de corte")
-            if (
-                bloco is None
-                or getattr(bloco, "XLength", None) is None
-                or getattr(bloco, "YLength", None) is None
-            ):
-                raise ValueError("vista sem dimensoes de janela")
-            largura = float(bloco.XLength) * esc
-            altura = float(bloco.YLength) * esc
-            janela = (-largura / 2.0, largura / 2.0, -altura / 2.0, altura / 2.0)
+            janela = _janela_bloco()
             quadro = SimpleNamespace(
                 origem=np.asarray(m[:3, 3], dtype=np.float64) * esc,
                 u=np.asarray(m[:3, 0], dtype=np.float64),
@@ -494,10 +519,16 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
             pols_tampas = [visibilidade.secao_plana(v, t, quadro, janela=janela) for _el, v, t in elegiveis]
             motor_ids = [el.id() for el, _v, _t in elegiveis]
             motor_set = set(motor_ids)
-            incl = [el for el in incl if el.id() not in motor_set]
+            incl = [el for el in incl if el.id() not in motor_set and _na_janela(el, janela)]
         except Exception:
             pols_linhas, pols_tampas, motor_ids = [], [], []
         motor_s = time.perf_counter() - t_m0
+    elif motor_visivel and incl:
+        try:
+            janela = _janela_bloco()
+            incl = [el for el in incl if _na_janela(el, janela)]
+        except Exception:
+            pass
 
     incl.append(ann)
 

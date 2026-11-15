@@ -49,7 +49,10 @@ def gerar_corte(
     profundidade_corte: float | None = None,
     faixas: int = 1,
     cache: "CacheDesenho | None" = None,
+    motor_visivel: bool | None = None,
 ) -> Corte:
+    if motor_visivel is not None and not isinstance(motor_visivel, bool):
+        raise ValueError(f"motor_visivel inválido: {motor_visivel!r} (esperado bool ou None)")
     _validar_profundidade_corte(profundidade_corte)
     if isinstance(faixas, bool) or not isinstance(faixas, int) or faixas < 1:
         raise ValueError(f"número de faixas inválido: {faixas!r}")
@@ -113,6 +116,8 @@ def gerar_corte(
         pedido["threads"] = threads
     if faixas != 1:
         pedido["faixas"] = faixas
+    if motor_visivel is not None:
+        pedido["motor_visivel"] = motor_visivel
 
     if cache is not None:
         ch = cache.chave(ifc, pedido)

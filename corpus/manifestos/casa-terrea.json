@@ -1,0 +1,32 @@
+{
+  "atribuicao": "OpenBIM Studio (AGPL-3.0-or-later)",
+  "cobre": [
+    "planta",
+    "aberturas"
+  ],
+  "contagens": {
+    "IfcBuildingStorey": 1,
+    "IfcDoor": 1,
+    "IfcOpeningElement": 3,
+    "IfcSlab": 1,
+    "IfcWall": 4,
+    "IfcWindow": 2
+  },
+  "data_acesso": "2026-11-15",
+  "esquema": "IFC4",
+  "licenca": "propria",
+  "nome": "casa-terrea",
+  "observacoes": "Casa terrea 10x6 m com 1 porta, 2 janelas e vaos.",
+  "origem": "scripts/gerar_modelos.py",
+  "pode_ir_no_git": "nao",
+  "programa_de_origem": "IfcOpenShell 0.9.0",
+  "sha256": "314d023942c0922e90a3edd96317c85fa1ddd4b548801cae005276cc6415c7c4",
+  "tamanho_bytes": 16676,
+  "valores_conhecidos": {
+    "area_piso_m2": 60.0,
+    "largura_m": 10.0,
+    "pe_direito_m": 2.8,
+    "profundidade_m": 6.0
+  },
+  "versao_ou_commit": "1.0.0"
+}

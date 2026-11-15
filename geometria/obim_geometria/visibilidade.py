@@ -28,7 +28,7 @@ from obim_geometria.visib_mapa import (
 
 
 def _visibilidade_hibrida(
-    P, Tw, a, b, ea, eb, tol_z: float, d_eps: float, min_len: float, prep=None
+    P, Tw, a, b, ea, eb, tol_z: float, d_eps: float, min_len: float, prep=None, memo=None
 ) -> np.ndarray:
     """Combina z-buffer conservador em grade adaptativa com recorte analitico exato em blocos."""
     A, gx, gy, nx_, ny_, cc_, tx0, tx1, ty0, ty1, tzmax, tv, area2 = (
@@ -43,19 +43,25 @@ def _visibilidade_hibrida(
     g = max(0.002, math.sqrt(dx_dom * dy_dom / 5_500_000.0), (dx_dom + dy_dom) / 2_900_000.0)
     while (math.ceil(dx_dom / g) + 2) * (math.ceil(dy_dom / g) + 2) > 6_000_000:
         g *= 1.05
-    z_full, W, H = _mapa_z_conservador(
-        A, gx, gy, nx_, ny_, cc_, tx0, tx1, ty0, ty1, mn_x, mn_y, mx_x, mx_y, g
-    )
-    tx0i, tx1i, ty0i, ty1i = _cel_caixa(tx0, tx1, ty0, ty1, mn_x, mn_y, g, W, H)
-    idx_s = np.nonzero((tx1i - tx0i + 1) * (ty1i - ty0i + 1) <= 25)[0]
-    tri_keep = np.ones(len(A), bool)
-    zf_flat = z_full.ravel()
-    tri_keep[idx_s] = False
-    for k0 in range(0, len(idx_s), 50_000):
-        sl = idx_s[k0:k0 + 50_000]
-        tobj, tcel = _expandir_celulas(tx0i[sl], tx1i[sl], ty0i[sl], ty1i[sl], W)
-        np.logical_or.at(tri_keep, sl[tobj], tzmax[sl[tobj]] >= zf_flat[tcel] - 1e-9)
-    kept_idx = np.nonzero(tri_keep)[0]
+    chave = (mn_x, mn_y, mx_x, mx_y, g)
+    if memo is not None and chave in memo:
+        z_full, zf_flat, W, H, kept_idx = memo[chave]
+    else:
+        z_full, W, H = _mapa_z_conservador(
+            A, gx, gy, nx_, ny_, cc_, tx0, tx1, ty0, ty1, mn_x, mn_y, mx_x, mx_y, g
+        )
+        tx0i, tx1i, ty0i, ty1i = _cel_caixa(tx0, tx1, ty0, ty1, mn_x, mn_y, g, W, H)
+        idx_s = np.nonzero((tx1i - tx0i + 1) * (ty1i - ty0i + 1) <= 25)[0]
+        tri_keep = np.ones(len(A), bool)
+        zf_flat = z_full.ravel()
+        tri_keep[idx_s] = False
+        for k0 in range(0, len(idx_s), 50_000):
+            sl = idx_s[k0:k0 + 50_000]
+            tobj, tcel = _expandir_celulas(tx0i[sl], tx1i[sl], ty0i[sl], ty1i[sl], W)
+            np.logical_or.at(tri_keep, sl[tobj], tzmax[sl[tobj]] >= zf_flat[tcel] - 1e-9)
+        kept_idx = np.nonzero(tri_keep)[0]
+        if memo is not None:
+            memo[chave] = (z_full, zf_flat, W, H, kept_idx)
     d = b - a
     step_g = 0.999 * g
     nsub_g = np.maximum(1, np.ceil(np.maximum(np.abs(d[:, 0]), np.abs(d[:, 1])) / step_g).astype(np.int64))
@@ -289,8 +295,9 @@ def linhas_visiveis_multi(
         return [[] for _ in pecas_l]
     Tw_comb = tw_oks[0] if len(tw_oks) == 1 else _dedup_triangulos(np.vstack(tw_oks))
     prep = _preparar_triangulos(P, Tw_comb)
+    memo = {}
     return [
-        [] if c is None else list(_visibilidade_hibrida(P, Tw_comb, *c, tol_z, -1e-6, min_len, prep=prep))
+        [] if c is None else list(_visibilidade_hibrida(P, Tw_comb, *c, tol_z, -1e-6, min_len, prep=prep, memo=memo))
         for c in cands
     ]
 

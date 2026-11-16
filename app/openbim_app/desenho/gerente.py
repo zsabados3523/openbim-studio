@@ -45,6 +45,8 @@ def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, 
                     pass
 
             opcoes["previa"] = _cb_previa
+    if tipo == "corte":
+        opcoes = {"motor_visivel": True, **opcoes}
     gerar = gerar_planta if tipo == "planta" else gerar_corte
     # cache exato (chave do pedido real, com elementos): leitura e gravacao aqui dentro
     r = gerar(ifc, vista_guid, cache=cache, cancelar=cancelar, **opcoes)

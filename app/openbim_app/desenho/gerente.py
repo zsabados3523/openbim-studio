@@ -14,15 +14,17 @@ import functools
 import inspect
 import itertools
 import threading
+import weakref
 
 from PySide6.QtCore import QObject, Qt, Signal, Slot
 
 from openbim_app.desenho.auxiliar import DesenhoCancelado
+from openbim_app.desenho.selecao import SessaoSelecao
 
 TIPOS = ("planta", "corte")
 
 
-def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, previa=None):
+def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, previa=None, sessao_selecao=None):
     from openbim_app.desenho.corte import gerar_corte
     from openbim_app.desenho.planta import gerar_planta
 
@@ -49,7 +51,8 @@ def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, 
         opcoes = {"motor_visivel": True, **opcoes}
     gerar = gerar_planta if tipo == "planta" else gerar_corte
     # cache exato (chave do pedido real, com elementos): leitura e gravacao aqui dentro
-    r = gerar(ifc, vista_guid, cache=cache, cancelar=cancelar, **opcoes)
+    kw_sessao = {"sessao_selecao": sessao_selecao} if sessao_selecao is not None else {}
+    r = gerar(ifc, vista_guid, cache=cache, cancelar=cancelar, **kw_sessao, **opcoes)
     dados = {
         "svg": r.svg,
         "n_paths": r.n_paths,
@@ -100,12 +103,14 @@ class GerenteDesenho(QObject):
         self._trava = threading.Lock()
         self._ativos: dict[str, _Pedido] = {}
         self._por_vista: dict[str, _Pedido] = {}
+        self._sessoes: dict[int, tuple[object, SessaoSelecao, object]] = {}
         self._evento.connect(self._tratar, Qt.ConnectionType.QueuedConnection)
 
-    def pedir(self, tipo, ifc, vista_guid, **opcoes) -> str:
+    def pedir(self, tipo, ifc, vista_guid, *, revisao=None, **opcoes) -> str:
         if tipo not in TIPOS:
             raise ValueError(f"tipo de desenho invalido: {tipo!r}")
         chave = self._chave_estado(tipo, ifc, vista_guid, opcoes)
+        sessao = self._obter_sessao(ifc, revisao) if revisao is not None else self._limpar_mortas()
         if chave in self._ativos:
             return chave
         antigo = self._por_vista.get(vista_guid)
@@ -120,11 +125,80 @@ class GerenteDesenho(QObject):
                 return chave
         self._ativos[chave] = self._por_vista[vista_guid] = ped
         ped.thread = threading.Thread(
-            target=self._rodar, args=(ped, tipo, ifc, vista_guid, dict(opcoes)), daemon=True)
+            target=self._rodar, args=(ped, tipo, ifc, vista_guid, dict(opcoes), sessao), daemon=True)
         with self._trava:
             self._threads.add(ped.thread)
         ped.thread.start()
         return chave
+
+    def _limpar_mortas_travado(self) -> None:
+        for k, (_, _, ref) in list(self._sessoes.items()):
+            if ref() is None:
+                self._sessoes.pop(k, None)
+
+    def _limpar_mortas(self) -> None:
+        with self._trava:
+            self._limpar_mortas_travado()
+
+    def _criar_ref(self, ifc, chave_ifc: int):
+        ref_gerente = weakref.ref(self)
+
+        def _ao_morrer(ref_morta):
+            g = ref_gerente()
+            if g is not None:
+                atual = g._sessoes.get(chave_ifc)
+                if atual is not None and atual[2] is ref_morta:
+                    g._sessoes.pop(chave_ifc, None)
+
+        try:
+            return weakref.ref(ifc, _ao_morrer)
+        except TypeError:
+            return lambda o=ifc: o
+
+    def _obter_sessao(self, ifc, revisao) -> SessaoSelecao:
+        with self._trava:
+            self._limpar_mortas_travado()
+            chave_ifc = id(ifc)
+            atual = self._sessoes.get(chave_ifc)
+            if atual is not None and atual[2]() is ifc and atual[0] == revisao:
+                return atual[1]
+            sessao = SessaoSelecao()
+            ref = atual[2] if atual is not None and atual[2]() is ifc else self._criar_ref(ifc, chave_ifc)
+            self._sessoes[chave_ifc] = (revisao, sessao, ref)
+            return sessao
+
+    @staticmethod
+    def _copiar_sessao_sem(sessao: SessaoSelecao, excluir) -> SessaoSelecao:
+        nova = SessaoSelecao()
+        nova._caixas = sessao._caixas.copy()
+        nova._erros = sessao._erros.copy()
+        nova.invalidar(excluir)
+        return nova
+
+    def invalidar(self, ifc=None, ids=None) -> None:
+        excluir = None if ids is None else tuple(int(i) for i in ids)
+        with self._trava:
+            self._limpar_mortas_travado()
+            if ifc is None:
+                if excluir is None:
+                    self._sessoes.clear()
+                    return
+                for chave_ifc, (rev, sessao, ref) in list(self._sessoes.items()):
+                    vivo = ref()
+                    if vivo is None:
+                        self._sessoes.pop(chave_ifc, None)
+                        continue
+                    self._sessoes[chave_ifc] = (rev, self._copiar_sessao_sem(sessao, excluir), ref)
+                    del vivo
+                return
+            chave_ifc = id(ifc)
+            atual = self._sessoes.get(chave_ifc)
+            if atual is None or atual[2]() is not ifc:
+                return
+            if excluir is None:
+                self._sessoes.pop(chave_ifc, None)
+            else:
+                self._sessoes[chave_ifc] = (atual[0], self._copiar_sessao_sem(atual[1], excluir), atual[2])
 
     def cancelar(self, chave) -> None:
         ped = self._ativos.pop(chave, None)
@@ -139,11 +213,12 @@ class GerenteDesenho(QObject):
         for ped in peds:
             self.cancelar(ped.chave)
         with self._trava:
+            self._sessoes.clear()
             vivas = list(self._threads)
         for t in vivas:
             t.join(timeout=10)
 
-    def _rodar(self, ped, tipo, ifc, vista_guid, opcoes):
+    def _rodar(self, ped, tipo, ifc, vista_guid, opcoes, sessao=None):
         # Thread de fundo: nada de Qt aqui alem de emitir o sinal interno (fila).
         try:
             extra = {}
@@ -151,9 +226,12 @@ class GerenteDesenho(QObject):
                 params = inspect.signature(self._motor).parameters.values()
             except (TypeError, ValueError):
                 params = ()
-            if "previa" in {p.name for p in params} or any(
-                    p.kind is inspect.Parameter.VAR_KEYWORD for p in params):
+            nomes = {p.name for p in params}
+            tem_kw = any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params)
+            if "previa" in nomes or tem_kw:
                 extra["previa"] = lambda d: self._evento.emit(ped, "previa", d)
+            if sessao is not None and ("sessao_selecao" in nomes or tem_kw):
+                extra["sessao_selecao"] = sessao
             dados = self._motor(
                 tipo, ifc, vista_guid, opcoes, cancelar=ped.cancelar,
                 progresso=lambda m: self._evento.emit(ped, "progresso", m), **extra)

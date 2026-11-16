@@ -65,7 +65,10 @@ def gerar_corte(
     faixas: int = 1,
     cache: "CacheDesenho | None" = None,
     motor_visivel: bool | None = None,
+    sessao_selecao: selecao.SessaoSelecao | None = None,
 ) -> Corte:
+    if sessao_selecao is not None and not isinstance(sessao_selecao, selecao.SessaoSelecao):
+        raise TypeError(f"sessao_selecao inválido: {sessao_selecao!r} (esperado SessaoSelecao ou None)")
     if motor_visivel is not None and not isinstance(motor_visivel, bool):
         raise ValueError(f"motor_visivel inválido: {motor_visivel!r} (esperado bool ou None)")
     _validar_profundidade_corte(profundidade_corte)
@@ -90,7 +93,8 @@ def gerar_corte(
         executor=executor,
         limite_s=limite_s,
         cancelar=cancelar,
-        caminho_ifc=caminho_efetivo,
+        sessao=sessao_selecao,
+        caminho_ifc=caminho_ifc,
         profundidade_corte=profundidade_corte,
     )
     if not sel.ids:

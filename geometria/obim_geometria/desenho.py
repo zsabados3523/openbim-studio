@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Motor de desenho de planta (modo pavimento do motor SVG, sem criar entidade no arquivo)."""
+import contextlib
 import math
 import os
 import re
@@ -1833,6 +1834,16 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
     return resp
 
 
+@contextlib.contextmanager
+def _sem_rastro(f):
+    """Executa mutacoes no modelo IFC dentro de transacao descartada ao sair."""
+    f.begin_transaction()
+    try:
+        yield
+    finally:
+        f.discard_transaction()
+
+
 def processar(pedido: dict, fase=None) -> dict:
     erro = _conferir_assinatura(pedido)
     if erro is not None:
@@ -1852,18 +1863,19 @@ def processar(pedido: dict, fase=None) -> dict:
         abrir_s = time.perf_counter() - t_a0
     except Exception as e:
         return {"ok": False, "erro": {"tipo": type(e).__name__, "mensagem": str(e), "rastro": traceback.format_exc()}}
-    erro = _conferir_elementos(pedido, f)
-    if erro is not None:
-        return erro
-    if eh_corte:
+    with _sem_rastro(f):
+        erro = _conferir_elementos(pedido, f)
+        if erro is not None:
+            return erro
+        if eh_corte:
+            return _processar_base(pedido, fase, f=f, abrir_s=abrir_s)
+        if pedido.get("faixa") is not None:
+            return _planta_recortada(pedido, fase, f=f, abrir_s=abrir_s)
+        if n_faixas is not None:
+            return _planta_em_faixas(pedido, fase, n_faixas, f=f, abrir_s=abrir_s)
+        if pedido.get("componentes"):
+            return _planta_por_componentes(pedido, fase, f=f, abrir_s=abrir_s)
         return _processar_base(pedido, fase, f=f, abrir_s=abrir_s)
-    if pedido.get("faixa") is not None:
-        return _planta_recortada(pedido, fase, f=f, abrir_s=abrir_s)
-    if n_faixas is not None:
-        return _planta_em_faixas(pedido, fase, n_faixas, f=f, abrir_s=abrir_s)
-    if pedido.get("componentes"):
-        return _planta_por_componentes(pedido, fase, f=f, abrir_s=abrir_s)
-    return _processar_base(pedido, fase, f=f, abrir_s=abrir_s)
 
 
 def processar_lote(pedido: dict, fase=None) -> dict:

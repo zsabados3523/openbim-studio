@@ -325,9 +325,12 @@ def test_invalidar_sem_sessao_nao_levanta(gerente_com):
 
 # ---------------------------------------------------------------- C) Historico.revisao
 
+_SEQ = __import__("itertools").count()  # id unico (o relogio do Windows repete valores)
+
+
 def _tx(s, ok=True):
     def fn(t):
-        t.lado.criar("viewports", f"vp{time.monotonic_ns()}", {})
+        t.lado.criar("viewports", f"vp{next(_SEQ)}", {})
         if not ok:
             raise ZeroDivisionError
     if ok:

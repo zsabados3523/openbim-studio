@@ -68,3 +68,6 @@ Várias margens são apertadas (1% a 4%) porque a forma mista e a forma em fatia
 - A forma 4C foi validada no protótipo (`tools/s04/fluxo_a/lote.py`), não no produto; a divisão em sub-lotes só foi medida no Linux em tela virtual.
 - Windows com desenho por software (WARP): destruir o dispositivo D3D11 trava raramente (1 em 300 voltas, mesmo com o limite de 5 s em `Motor::parar()` que evita congelar ao sair). A correção de fundo (um dispositivo D3D11 por processo) é trabalho futuro.
 - Windows com placa real: não medido.
+
+## Emenda 2026-11-16 (aprovada pelo PO): filho reutilizavel
+O filho de geometria deixa de ser descartavel por pedido: um processo por documento, com o IFC aberto, atende um pedido por vez e pode ser morto a qualquer momento sem perda (o pai refaz pelo caminho antigo). Morre ao salvar, ao cancelar, ao ficar ocioso, por limite de memoria e se o arquivo mudar no disco. Cada pedido nao deixa rastro no modelo do filho (transacao desfeita). A verdade do modelo continua so no app e no IFC salvo. Retry de arquivo divergente usa processo descartavel.

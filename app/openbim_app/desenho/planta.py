@@ -163,7 +163,14 @@ def gerar_planta(
 
     def _executar_planta(caminho_atual):
         with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_atual) as p:
-            return auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor, previa=previa, filho=filho)
+            return auxiliar.executar(
+                p,
+                limite_s=limite_s,
+                cancelar=cancelar,
+                executor=executor,
+                previa=previa,
+                filho=filho if caminho_atual is not None else None,
+            )
 
     def _executar_com_retry():
         try:

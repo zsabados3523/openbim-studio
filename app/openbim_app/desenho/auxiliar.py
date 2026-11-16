@@ -178,6 +178,7 @@ def _acrescentar_tempos(resposta: dict, preparado: Preparado, auxiliar_s: float)
 
 
 def executar(preparado: Preparado, *, limite_s: float = LIMITE_PADRAO_S, cancelar: threading.Event | None = None, executor=None, previa=None, filho=None) -> dict:
+    """Executa pedido no processo auxiliar (com `filho` persistente, `previa` parcial de componentes da planta nao e emitida)."""
     if preparado.pedido.get("protocolo") != PROTOCOLO:
         raise ProtocoloInvalido(f"Protocolo inválido: {preparado.pedido.get('protocolo')}")
     if executor is not None:

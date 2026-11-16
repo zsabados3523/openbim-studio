@@ -204,7 +204,8 @@ def gerar_corte(
             return _gerar_corte_uma_vez(
                 ifc, gid_vista, cats, scale, threads, limite_triangulos, limite_s,
                 cancelar, executor, caminho_atual, moveis_caixa2d, profundidade_corte,
-                faixas, cache, motor_visivel, sessao_selecao, filho,
+                faixas, cache, motor_visivel, sessao_selecao,
+                filho if caminho_atual is not None else None,
             )
         except auxiliar.Divergente:
             if idx + 1 >= len(tentativas):

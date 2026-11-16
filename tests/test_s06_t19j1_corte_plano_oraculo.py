@@ -259,6 +259,7 @@ def test_plano_na_face_de_baixo():
     assert np.all(vb[:, 2] <= TOL)
     assert area_3d(vb, tb) == pytest.approx(6.0, abs=TOL)
     assert area_proj_soma(vb, tb) == pytest.approx(6.0, abs=TOL)
+    assert seg.shape == (0, 4)  # face coplanar nao gera segmento; arestas das paredes nao tem triangulo abaixo estrito
 
 
 def test_plano_no_vertice_de_cima_nao_gera_secao():
@@ -278,17 +279,16 @@ def test_plano_no_vertice_de_baixo_nao_sobra_area():
 
 
 def test_octaedro_no_equador():
-    # z=0 passa pelos 4 vertices do equador: secao = quadrado de vertices (+-1,0),(0,+-1): perimetro 4*sqrt(2), 1 anel
-    # (cada face tem uma aresta no plano; a aresta e compartilhada por duas faces e aparece uma vez)
+    # z=0 passa pelos 4 vertices do equador. Cada aresta do equador e compartilhada por uma face com vertice estritamente
+    # abaixo e outra estritamente acima: 4 segmentos, 1 anel fechado, perimetro 4*sqrt(2), sem duplicata.
     # parte abaixo: 4 faces de baixo, area 3D = 4 * (sqrt(3)/2) (triangulo equilatero de lado sqrt(2))
     v, t = octaedro()
     vb, tb, seg = cortar_malha_no_plano(v, t, 0.0)
     assert area_3d(vb, tb) == pytest.approx(4 * np.sqrt(3) / 2, abs=TOL)
-    # secao nao gera duplicata; se emitir as arestas do equador, formam um unico anel fechado
-    if len(seg):
-        n, grau2, comp, dup = analisa_aneis(seg)
-        assert (n, grau2, dup) == (1, True, 0)
-        assert comp == pytest.approx(4 * np.sqrt(2), abs=TOL)
+    assert len(seg) == 4
+    n, grau2, comp, dup = analisa_aneis(seg)
+    assert (n, grau2, dup) == (1, True, 0)
+    assert comp == pytest.approx(4 * np.sqrt(2), abs=TOL)
 
 
 # ---------- toda abaixo / toda acima / vazia / coplanar ----------
@@ -348,3 +348,139 @@ def test_determinismo_e_entrada_intacta():
     r3 = cortar_malha_no_plano(v.copy(), t.copy(), 1.0)
     for a, b in zip(r1, r3):
         assert np.array_equal(a, b)
+
+
+# ---------- reforco (revisao Argon) ----------
+def normais_unitarias(v, t):
+    if len(t) == 0:
+        return np.zeros((0, 3))
+    n = np.cross(v[t[:, 1]] - v[t[:, 0]], v[t[:, 2]] - v[t[:, 0]])
+    m = np.linalg.norm(n, axis=1)
+    return n[m > 1e-12] / m[m > 1e-12, None]
+
+
+def confere_orientacao(v, t, vb, tb):
+    """Cada triangulo (nao degenerado) da saida tem a normal 3D da de algum triangulo original: produto escalar > 0 (na verdade ~1)."""
+    orig = normais_unitarias(v, t)
+    for n in normais_unitarias(vb, tb):
+        assert np.max(orig @ n) > 1 - 1e-9
+
+
+def tri_unico(a, b, c, rot):
+    v = np.array([a, b, c], float)
+    return v, np.roll(np.array([0, 1, 2]), -rot)[None, :]
+
+
+@pytest.mark.parametrize("rot", [0, 1, 2])
+def test_um_vertice_no_plano_dois_em_lados_opostos(rot):
+    # a=(0,0,1) no plano, b=(2,0,0) abaixo, c=(0,2,2) acima; z=1. Plano corta bc em (1,1,1): segmento (0,0)-(1,1).
+    # parte abaixo = triangulo a,b,(1,1,1): cross((2,0,-1),(1,1,0)) = (1,-1,2), area = sqrt(6)/2
+    v, t = tri_unico((0, 0, 1), (2, 0, 0), (0, 2, 2), rot)
+    vb, tb, seg = cortar_malha_no_plano(v, t, 1.0)
+    confere_forma(vb, tb, seg)
+    assert area_3d(vb, tb) == pytest.approx(np.sqrt(6) / 2, abs=TOL)
+    assert len(seg) == 1
+    assert {chave(seg[0][:2]), chave(seg[0][2:])} == {(0.0, 0.0), (1.0, 1.0)}
+    confere_orientacao(v, t, vb, tb)
+
+
+@pytest.mark.parametrize("rot", [0, 1, 2])
+def test_um_vertice_abaixo_dois_acima(rot):
+    # a=(0,0,0) abaixo; b=(2,0,2), c=(0,2,2) acima; z=1: cortes em (1,0,1) e (0,1,1). Abaixo = 1/4 do original (area 2*sqrt(3)) = sqrt(3)/2
+    v, t = tri_unico((0, 0, 0), (2, 0, 2), (0, 2, 2), rot)
+    vb, tb, seg = cortar_malha_no_plano(v, t, 1.0)
+    confere_forma(vb, tb, seg)
+    assert area_3d(vb, tb) == pytest.approx(np.sqrt(3) / 2, abs=TOL)
+    assert len(seg) == 1
+    assert {chave(seg[0][:2]), chave(seg[0][2:])} == {(1.0, 0.0), (0.0, 1.0)}
+    assert np.hypot(*(seg[0][:2] - seg[0][2:])) == pytest.approx(np.sqrt(2), abs=TOL)
+    confere_orientacao(v, t, vb, tb)
+
+
+@pytest.mark.parametrize("rot", [0, 1, 2])
+def test_dois_vertices_abaixo_um_acima(rot):
+    # a=(0,0,0), b=(2,0,0) abaixo; c=(0,2,2) acima; z=1: cortes em (0,1,1) e (1,1,1). Original: area 2*sqrt(2); topo cortado = 1/4 => abaixo = 3*sqrt(2)/2
+    v, t = tri_unico((0, 0, 0), (2, 0, 0), (0, 2, 2), rot)
+    vb, tb, seg = cortar_malha_no_plano(v, t, 1.0)
+    confere_forma(vb, tb, seg)
+    assert area_3d(vb, tb) == pytest.approx(3 * np.sqrt(2) / 2, abs=TOL)
+    assert len(seg) == 1
+    assert {chave(seg[0][:2]), chave(seg[0][2:])} == {(0.0, 1.0), (1.0, 1.0)}
+    confere_orientacao(v, t, vb, tb)
+
+
+@pytest.mark.parametrize("z", [0.5, 1.0, 3.5])
+def test_orientacao_preservada_em_solidos(z):
+    for v, t in (caixa(0, 0, 0, 3, 2, 4), anel_quadrado(4.0, 2.0, 0.0, 4.0), piramide(), prisma_regular(8, 1.0, 0.0, 4.0)):
+        vb, tb, _ = cortar_malha_no_plano(v, t, z)
+        confere_orientacao(v, t, vb, tb)
+
+
+def test_dedupe_aresta_compartilhada_parede_de_dois_triangulos():
+    # parede vertical 2x2 em y=0 com diagonal (0,2) compartilhada; z=1 corta a diagonal, uma lateral de cada triangulo: 3 vertices novos
+    # (diagonal em (1,0,1), (2,0,1) e (0,0,1)), nao 4; 2 segmentos; verts_abaixo = 2 originais + 3 novos
+    v = np.array([(0, 0, 0), (2, 0, 0), (2, 0, 2), (0, 0, 2)], float)
+    t = np.array([(0, 1, 2), (0, 2, 3)], int)
+    vb, tb, seg = cortar_malha_no_plano(v, t, 1.0)
+    assert int(np.sum(np.abs(vb[:, 2] - 1.0) <= TOL)) == 3
+    assert len(vb) == 5
+    assert len(seg) == 2
+    assert analisa_aneis(seg)[3] == 0
+    assert area_3d(vb, tb) == pytest.approx(2.0, abs=TOL)  # metade de baixo da parede 2x2 = 2x1
+    confere_orientacao(v, t, vb, tb)
+
+
+def test_dedupe_caixa_oito_vertices_novos_oito_segmentos():
+    # caixa fechada: 4 arestas verticais + 4 diagonais das paredes cruzam o plano -> 8 vertices novos e 8 segmentos
+    v, t = caixa(0, 0, 0, 3, 2, 4)
+    vb, tb, seg = cortar_malha_no_plano(v, t, 1.0)
+    assert int(np.sum(np.abs(vb[:, 2] - 1.0) <= TOL)) == 8
+    assert len(seg) == 8
+
+
+def test_quilha_aresta_so_por_cima_secao_vazia():
+    # prisma triangular fechado em z de 0 a 2 tocando z=0 so por uma aresta: nada abaixo, secao vazia (aresta no plano sem triangulo abaixo estrito)
+    v = np.array([(0, 0, 0), (0, 2, 0), (-1, 0, 2), (1, 0, 2), (-1, 2, 2), (1, 2, 2)], float)
+    t = np.array([(0, 3, 2), (1, 4, 5), (2, 3, 5), (2, 5, 4), (0, 1, 5), (0, 5, 3), (1, 0, 2), (1, 2, 4)], int)
+    vb, tb, seg = cortar_malha_no_plano(v, t, 0.0)
+    assert area_3d(vb, tb) == pytest.approx(0.0, abs=TOL)
+    assert seg.shape == (0, 4)
+
+
+def test_quilha_aresta_so_por_baixo_secao_vazia():
+    # o mesmo prisma de ponta cabeca (aresta em z=0, corpo abaixo): z=0 so toca por baixo: tudo abaixo, secao vazia
+    v = np.array([(0, 0, 0), (0, 2, 0), (-1, 0, -2), (1, 0, -2), (-1, 2, -2), (1, 2, -2)], float)
+    t = np.array([(0, 2, 3), (1, 5, 4), (2, 5, 3), (2, 4, 5), (0, 5, 1), (0, 3, 5), (1, 2, 0), (1, 4, 2)], int)
+    vb, tb, seg = cortar_malha_no_plano(v, t, 0.0)
+    assert coords_tris(vb, tb) == coords_tris(v, t)
+    assert seg.shape == (0, 4)
+
+
+def test_ruido_de_acumulo_em_1e3_nao_quebra_topo_coplanar():
+    # topo somado de 0,01 em 0,01 (150 passos) em ~1e3 m erra ~1e-12 do alvo 1001,5; um vertice do topo com ruido de sinal oposto
+    z_topo = 1000.0
+    for _ in range(150):
+        z_topo += 0.01
+    zc = 1001.5
+    v, t = caixa(1000.0, 2000.0, 1000.0, 1003.0, 2002.0, z_topo)
+    v[6, 2] = zc + (zc - z_topo)
+    vb, tb, seg = cortar_malha_no_plano(v, t, zc)
+    assert seg.shape == (0, 4)
+    assert len(tb) == 12  # nenhum vertice estritamente acima: tudo abaixo
+
+
+def test_ruido_de_alguns_ulp_em_1e3():
+    u = np.spacing(1000.0)
+    v, t = caixa(1000.0, 2000.0, 999.0, 1003.0, 2002.0, 1000.0)
+    v[4:, 2] = 1000.0 + u * np.array([-2, 0, 1, 3])
+    vb, tb, seg = cortar_malha_no_plano(v, t, 1000.0)
+    assert seg.shape == (0, 4)
+    assert len(tb) == 12
+
+
+def test_solido_so_tocando_por_cima_ou_por_baixo_secao_vazia():
+    # caixa [2,4] tocando z=2 pela base (por cima do plano) e caixa [0,2] tocando z=2 pelo topo (por baixo do plano)
+    for z0, z1 in ((2.0, 4.0), (0.0, 2.0)):
+        v, t = caixa(0, 0, z0, 3, 2, z1)
+        _, _, seg = cortar_malha_no_plano(v, t, 2.0)
+        assert seg.shape == (0, 4)

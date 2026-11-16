@@ -5,9 +5,6 @@ from __future__ import annotations
 
 import numpy as np
 
-_EPS = 1e-12
-
-
 def cortar_malha_no_plano(verts, tris, z):
     """Corta malha triangular (verts, tris) pelo semi-espaco z <= `z`.
 
@@ -17,6 +14,7 @@ def cortar_malha_no_plano(verts, tris, z):
     v = np.asarray(verts, dtype=float)
     t = np.asarray(tris, dtype=int)
     zf = float(z)
+    eps = 1e-12 * max(1.0, abs(zf))
 
     if len(v) == 0 or len(t) == 0:
         return (
@@ -26,9 +24,9 @@ def cortar_malha_no_plano(verts, tris, z):
         )
 
     dz = v[:, 2] - zf
-    if np.all(dz <= _EPS):
+    if np.all(dz <= eps):
         return v.copy(), t.copy(), np.zeros((0, 4), dtype=float)
-    if np.all(dz > _EPS):
+    if np.all(dz > eps):
         return (
             np.zeros((0, 3), dtype=float),
             np.zeros((0, 3), dtype=int),
@@ -37,8 +35,8 @@ def cortar_malha_no_plano(verts, tris, z):
 
     # -1 abaixo, 0 no plano, +1 acima
     classe = np.zeros(len(v), dtype=int)
-    classe[dz < -_EPS] = -1
-    classe[dz > _EPS] = 1
+    classe[dz < -eps] = -1
+    classe[dz > eps] = 1
 
     novos_verts: list[np.ndarray] = []
     vert_aresta: dict[tuple[int, int], int] = {}
@@ -62,6 +60,7 @@ def cortar_malha_no_plano(verts, tris, z):
     tris_out: list[tuple[int, int, int]] = []
     segs_vistos: set[tuple[int, int]] = set()
     segs_out: list[tuple[int, int]] = []
+    arestas_plano: dict[tuple[int, int], tuple[bool, bool]] = {}
 
     def add_seg(ia: int, ib: int) -> None:
         if ia == ib:
@@ -71,22 +70,34 @@ def cortar_malha_no_plano(verts, tris, z):
             segs_vistos.add(chave)
             segs_out.append((ia, ib))
 
+    def marca_aresta_plano(ia: int, ib: int, lado: int) -> None:
+        if ia == ib:
+            return
+        chave = (ia, ib) if ia < ib else (ib, ia)
+        abaixo, acima = arestas_plano.get(chave, (False, False))
+        if lado < 0:
+            abaixo = True
+        else:
+            acima = True
+        arestas_plano[chave] = (abaixo, acima)
+
     for tri in t:
         i0, i1, i2 = int(tri[0]), int(tri[1]), int(tri[2])
         c0, c1, c2 = int(classe[i0]), int(classe[i1]), int(classe[i2])
+        n_on = (c0 == 0) + (c1 == 0) + (c2 == 0)
+
+        if n_on == 2:
+            on_ids = [idx for idx, c in ((i0, c0), (i1, c1), (i2, c2)) if c == 0]
+            marca_aresta_plano(on_ids[0], on_ids[1], c0 + c1 + c2)
 
         if c0 <= 0 and c1 <= 0 and c2 <= 0:
             tris_out.append((i0, i1, i2))
             continue
 
         if c0 >= 0 and c1 >= 0 and c2 >= 0:
-            if (c0 == 0) + (c1 == 0) + (c2 == 0) == 2:
-                on_ids = [idx for idx, c in ((i0, c0), (i1, c1), (i2, c2)) if c == 0]
-                add_seg(on_ids[0], on_ids[1])
             continue
 
         n_ab = (c0 < 0) + (c1 < 0) + (c2 < 0)
-        n_on = (c0 == 0) + (c1 == 0) + (c2 == 0)
 
         if n_on == 1:
             if c1 < 0:
@@ -122,6 +133,10 @@ def cortar_malha_no_plano(verts, tris, z):
             tris_out.append((p0, i1, i2))
             tris_out.append((p0, i2, p1))
             add_seg(p0, p1)
+
+    for (ia, ib), (viu_abaixo, viu_acima) in arestas_plano.items():
+        if viu_abaixo and viu_acima:
+            add_seg(ia, ib)
 
     todos_verts = np.vstack([v, np.asarray(novos_verts, dtype=float)]) if novos_verts else v
 

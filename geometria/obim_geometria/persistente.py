@@ -31,6 +31,7 @@ def servir(tx, rx) -> None:
 
     f = None
     arq = None
+    sig_aberta: tuple[int, int] | None = None
     ultimo: int | None = None
 
     def _abrir_mantido(caminho, pavimento=None):
@@ -85,9 +86,16 @@ def servir(tx, rx) -> None:
             enviar({"tipo": "fase", "numero": _n, "fase": nome, "tempo": 0.0})
 
         try:
-            if f is None or arquivo != arq:
-                novo_f = ifcopenshell.open(arquivo)
-                f, arq = novo_f, arquivo
+            erro_sig = desenho._conferir_assinatura(pedido)
+            if erro_sig is not None:
+                responder(numero, erro_sig)
+                continue
+            st = os.stat(arquivo)
+            sig_atual = (int(st.st_size), int(st.st_mtime_ns))
+            if f is None or arquivo != arq or sig_atual != sig_aberta:
+                f = arq = sig_aberta = None
+                f = ifcopenshell.open(arquivo)
+                arq, sig_aberta = arquivo, sig_atual
             fase("aberto")
             with desenho._sem_rastro(f):
                 if op == "caixas":

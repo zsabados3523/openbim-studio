@@ -368,3 +368,124 @@ def test_mutante_e_derrubado(ctx, defeito, verif):
             chk_numero(fn, ctx)
         else:
             chk_abertura(fn, ctx)
+
+
+# ------------------------------------------------------------------ T19g4a (revisao): arquivo regravado no mesmo caminho
+def _regravar(c, abertos):
+    """Regrava `c.salvo` com os MESMOS ids/GlobalIds e conteudo diferente (desloca o 1o elemento de A); devolve a assinatura nova."""
+    f = ifcopenshell.open(c.salvo)
+    el = f.by_id(c.pedidos["A"]["elementos"][0][0])
+    pl = el.ObjectPlacement.RelativePlacement.Location
+    pl.Coordinates = (pl.Coordinates[0] + 0.7, pl.Coordinates[1] + 0.4, pl.Coordinates[2])
+    abertos.pop()  # a abertura do proprio teste nao conta
+    f.write(c.salvo)
+    st = os.stat(c.salvo)
+    os.utime(c.salvo, ns=(st.st_atime_ns, st.st_mtime_ns + 5_000_000_000))  # mtime diferente mesmo se o tamanho coincidir
+    st = os.stat(c.salvo)
+    return [int(st.st_size), int(st.st_mtime_ns)]
+
+
+@pytest.mark.parametrize("com_assinatura_nova", [False, True])
+def test_arquivo_regravado_no_mesmo_caminho_reabre(ctx, com_assinatura_nova):
+    abertos = _espiar(ctx.mp)
+    tx, rx = FakeTx(abertos), FakeRx([P(ctx, "A", 1)])
+    saida = []
+
+    class Rx2(FakeRx):
+        def recv_bytes(self):
+            if not self._q and not saida:
+                saida.append(1)
+                nova = _regravar(ctx, abertos)
+                ex = {"assinatura": nova} if com_assinatura_nova else {}
+                self._q.append(json.dumps(P(ctx, "A", 2, **ex)).encode())
+            return super().recv_bytes()
+
+    _real()(tx, Rx2([P(ctx, "A", 1)]))
+    rs = tx.respostas
+    assert [r["numero"] for r in rs] == [1, 2]
+    _igual("A", rs[0]["dados"], ctx)
+    n_abertos = len(abertos)
+    esperado = _entrada({**copy.deepcopy(ctx.pedidos["A"]), **({"assinatura": [int(os.stat(ctx.salvo).st_size), int(os.stat(ctx.salvo).st_mtime_ns)]} if com_assinatura_nova else {})})
+    assert esperado.get("ok") and esperado["svg"] != ctx.ref["A"]["svg"], "regravacao nao mudou o desenho: teste sem poder de deteccao"
+    assert rs[1]["dados"].get("ok") and rs[1]["dados"]["svg"] == esperado["svg"], "serviu o modelo velho depois de o arquivo ser regravado"
+    assert n_abertos == 2, f"nao reabriu o arquivo regravado: {n_abertos} aberturas"
+
+
+def test_assinatura_divergente_nao_paga_abertura(ctx):
+    abertos = _espiar(ctx.mp)
+    velha = [int(os.stat(ctx.salvo).st_size), int(os.stat(ctx.salvo).st_mtime_ns)]
+    saida = []
+
+    class Rx2(FakeRx):
+        def recv_bytes(self):
+            if not self._q and not saida:
+                saida.append(1)
+                _regravar(ctx, abertos)  # arquivo muda; o pedido 2 traz a assinatura ANTIGA (nao bate com o disco)
+                self._q.append(json.dumps(P(ctx, "A", 2, assinatura=velha)).encode())
+            return super().recv_bytes()
+
+    tx = FakeTx(abertos)
+    _real()(tx, Rx2([P(ctx, "A", 1)]))
+    rs = tx.respostas
+    assert not rs[1]["dados"].get("ok") and rs[1]["dados"]["erro"]["tipo"] == "Divergente"
+    assert len(abertos) == 1, f"pedido com assinatura divergente abriu o arquivo: {len(abertos)} aberturas"
+
+
+# ------------------------------------------------------------------ T19g4a (revisao): transacao aninhada
+@contextlib.contextmanager
+def _sem_rastro_antigo(f):
+    f.begin_transaction()
+    try:
+        yield
+    finally:
+        f.discard_transaction()
+
+
+def chk_aninhado(sem_rastro, c):
+    f = ifcopenshell.open(c.salvo)
+    antes = _est(f)
+    with sem_rastro(f):
+        with sem_rastro(f):
+            desenho._isolar_pavimento(f, f.by_type("IfcBuildingStorey")[0])
+            mutado = _est(f)
+            assert mutado != antes, "mutacao nao teve efeito: teste sem poder de deteccao"
+        assert _est(f) == mutado, "saida da camada interna desfez a mutacao (transacao externa perdida)"
+    assert _est(f) == antes, "saida da camada externa nao voltou ao original"
+
+
+def test_sem_rastro_reentrante(ctx):
+    chk_aninhado(desenho._sem_rastro, ctx)
+
+
+def test_mutante_sem_rastro_nao_reentrante_e_derrubado(ctx):
+    with pytest.raises(AssertionError):
+        chk_aninhado(_sem_rastro_antigo, ctx)
+
+
+def test_servir_aninhado_mutacao_e_falha_deixa_modelo_igual(ctx):
+    """servir -> processar (ambos em `_sem_rastro`): muta dentro do `processar` real e falha depois."""
+    abertos = _espiar(ctx.mp)
+    real = desenho._processar_base
+
+    def muta_e_falha(pedido, fase=None, f=None, abrir_s=None):
+        desenho._isolar_pavimento(f, f.by_type("IfcBuildingStorey")[0])
+        assert _est(f) != ctx.est0
+        raise RuntimeError("falha apos mutar")
+
+    ctx.mp.setattr(desenho, "_processar_base", muta_e_falha)
+    tx = FakeTx(abertos)
+    saida = []
+
+    class Rx2(FakeRx):
+        def recv_bytes(self):
+            if not self._q and not saida:
+                saida.append(1)
+                ctx.mp.setattr(desenho, "_processar_base", real)
+                self._q.append(json.dumps(P(ctx, "A", 2)).encode())
+            return super().recv_bytes()
+
+    _real()(tx, Rx2([P(ctx, "A", 1)]))
+    rs = tx.respostas
+    assert rs[0]["dados"]["erro"]["tipo"] == "RuntimeError"
+    _igual("A", rs[1]["dados"], ctx)
+    assert len(abertos) == 1 and _est(abertos[-1][1]) == ctx.est0

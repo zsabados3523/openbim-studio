@@ -151,3 +151,52 @@ def test_g_gerente_repassa_incompleta_e_faltantes(monkeypatch, faltantes):
     d = G._motor_padrao("planta", object(), "V", {}, cancelar=None, progresso=lambda *_: None, cache=None)
     assert d["incompleta"] is bool(faltantes) and list(d["faltantes"]) == list(faltantes)
     assert {"svg", "n_paths", "tempos", "caixas", "em_cache", "pesados"} <= set(d)
+
+
+def _espia_base(monkeypatch, ruins):
+    """Espia `_processar_base` em-processo: registra chamadas com id ruim e devolve falha simulada (refazer nunca pode cair aqui, sem limite de tempo)."""
+    chamadas, orig = [], D._processar_base
+
+    def espia(p, *a, **k):
+        if set(ruins) & {i for i, _ in p.get("elementos") or ()}:
+            chamadas.append(p)
+            return {"ok": False, "erro": {"tipo": "Simulado", "mensagem": "x", "rastro": ""}}
+        return orig(p, *a, **k)
+    monkeypatch.setattr(D, "_processar_base", espia)
+    return chamadas
+
+
+def _afirma_incompleta(r, ruins, ped):
+    assert r["ok"] and r["incompleta"] is True and sorted(r["faltantes"]) == sorted(ruins)
+    assert re.search(r'<svg\b[^>]*\bdata-obim-incompleta="%d"' % len(ruins), r["svg"])
+    gs = set(_guids(r["svg"]))
+    assert all(g in gs or i in r["faltantes"] for i, g in ped["elementos"])
+
+
+def test_h_refazer_com_filho_falhando_nunca_roda_em_processo(monkeypatch, tmp_path):
+    ped, ids, ruins = _cena3(tmp_path)
+    fk = Fake(monkeypatch, ruins, "item_none")
+    fk.refaz_falha = True  # rodar_filho avulso levanta para o grupo ruim; sem patchar _processar_base
+    chamadas = _espia_base(monkeypatch, ruins)
+    _afirma_incompleta(D.processar(copy.deepcopy(ped)), ruins, ped)
+    assert chamadas == [], "refazer caiu em _processar_base em-processo (sem limite de tempo)"
+
+
+def test_i_refazer_com_uma_so_faixa_nunca_roda_em_processo(monkeypatch, tmp_path):
+    ped, ids, ruins = _cena3(tmp_path)
+    Fake(monkeypatch, ruins, "item_none")  # filho avulso funcionaria, mas nao ha faixas
+    monkeypatch.setattr(F, "limites", lambda *a, **k: [(None, None)])
+    chamadas = _espia_base(monkeypatch, ruins)
+    _afirma_incompleta(D.processar(copy.deepcopy(ped)), ruins, ped)
+    assert chamadas == [], "grupo com <=1 faixa caiu em _processar_base em-processo"
+
+
+def test_j_controle_planta_em_faixas_normal_segue_usando_normal(monkeypatch, tmp_path):
+    ped, ids, _ = _cena3(tmp_path)
+    ped.pop("componentes")
+    ped["faixas"] = 4
+    monkeypatch.setattr(F, "limites", lambda *a, **k: [(None, None)])
+    chamadas = _espia_base(monkeypatch, ids)
+    r = D.processar(copy.deepcopy(ped))
+    assert chamadas, "pedido normal com faixas deve poder cair em normal() como hoje"
+    assert r["ok"] is False and r["erro"]["tipo"] == "Simulado"

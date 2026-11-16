@@ -145,7 +145,7 @@ def test_pedido_ao_auxiliar_e_chamada_unica_de_desenho():
     gv, chamadas = C.corte(f), []
     c = K_.gerar_corte(f, gv, threads=3, limite_triangulos=12345, executor=contador(chamadas))
     d = [p for p in chamadas if p["op"] == "desenho"]
-    assert len(d) == 1 and d[0]["vista"] == {"tipo": "CORTE", "guid": gv, "escala": 1.0} and d[0]["threads"] == 3 and d[0]["limite_triangulos"] == 12345
+    assert len(d) == 1 and {k: d[0]["vista"][k] for k in ("tipo", "guid", "escala")} == {"tipo": "CORTE", "guid": gv, "escala": 1.0} and {"matriz", "bloco", "nome"} <= set(d[0]["vista"]) and d[0]["threads"] == 3 and d[0]["limite_triangulos"] == 12345
     assert d[0]["elementos"] == [[i, f.by_id(i).GlobalId] for i in c.selecao.ids]
     ps = inspect.signature(K_.gerar_corte).parameters
     novos = {"categorias_ocultas": (), "threads": None, "limite_triangulos": None, "limite_s": K_.auxiliar.LIMITE_PADRAO_S, "cancelar": None, "executor": None}

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterable
 
 import ifcopenshell
+import ifcopenshell.util.placement
 import ifcopenshell.util.unit
 
 from openbim_app import vistas_ifc
@@ -33,6 +34,20 @@ class Corte:
     caixas: tuple[int, ...]
 
 
+def _bloco_de(ann: Any) -> Any | None:
+    """Retorna o IfcBlock da anotação de corte, se existir."""
+    rep_prod = getattr(ann, "Representation", None)
+    for rep in getattr(rep_prod, "Representations", ()) or ():
+        for it in getattr(rep, "Items", ()) or ():
+            if it.is_a("IfcCsgSolid"):
+                raiz = getattr(it, "TreeRootExpression", None)
+                if raiz is not None and raiz.is_a("IfcBlock"):
+                    return raiz
+            elif it.is_a("IfcBlock"):
+                return it
+    return None
+
+
 def gerar_corte(
     ifc: ifcopenshell.file,
     gid_vista: str,
@@ -45,12 +60,15 @@ def gerar_corte(
     cancelar=None,
     executor=None,
     caminho_ifc: str | Path | None = None,
+    modelo_limpo: bool = False,
     moveis_caixa2d: bool = False,
     profundidade_corte: float | None = None,
     faixas: int = 1,
     cache: "CacheDesenho | None" = None,
     motor_visivel: bool | None = None,
 ) -> Corte:
+    if not isinstance(modelo_limpo, bool):
+        raise TypeError(f"modelo_limpo inválido: {modelo_limpo!r} (esperado bool)")
     if motor_visivel is not None and not isinstance(motor_visivel, bool):
         raise ValueError(f"motor_visivel inválido: {motor_visivel!r} (esperado bool ou None)")
     _validar_profundidade_corte(profundidade_corte)
@@ -66,6 +84,7 @@ def gerar_corte(
     if info.get("tipo") != "CORTE":
         raise SelecaoInvalida(f"Vista {gid_vista} não é do tipo CORTE (tipo={info.get('tipo')})")
 
+    caminho_efetivo = caminho_ifc if modelo_limpo else None
     scale = float(ifcopenshell.util.unit.calculate_unit_scale(ifc))
     sel = selecao.selecionar(
         ifc,
@@ -74,7 +93,7 @@ def gerar_corte(
         executor=executor,
         limite_s=limite_s,
         cancelar=cancelar,
-        caminho_ifc=caminho_ifc,
+        caminho_ifc=caminho_efetivo,
         profundidade_corte=profundidade_corte,
     )
     if not sel.ids:
@@ -87,11 +106,28 @@ def gerar_corte(
             caixas=(),
         )
 
+    anotacao = ifc.by_guid(gid_vista)
+    bloco = _bloco_de(anotacao)
+    pos_bloco = getattr(bloco, "Position", None) if bloco is not None else None
+    loc_bloco = getattr(pos_bloco, "Location", None) if pos_bloco is not None else None
+    coords_bloco = getattr(loc_bloco, "Coordinates", None) if loc_bloco is not None else None
     vista_dict: dict[str, Any] = {
         "tipo": "CORTE",
         "guid": gid_vista,
         "escala": scale,
+        "matriz": [
+            [float(x) for x in linha]
+            for linha in ifcopenshell.util.placement.get_local_placement(anotacao.ObjectPlacement)
+        ],
+        "bloco": {
+            "XLength": float(bloco.XLength),
+            "YLength": float(bloco.YLength),
+            "ZLength": float(bloco.ZLength),
+            "Location": [float(x) for x in coords_bloco] if coords_bloco else [0.0, 0.0, 0.0],
+        },
     }
+    if getattr(anotacao, "Name", None) is not None:
+        vista_dict["nome"] = str(anotacao.Name)
     if profundidade_corte is not None:
         vista_dict["profundidade_corte"] = float(profundidade_corte)
 
@@ -123,11 +159,11 @@ def gerar_corte(
         ch = cache.chave(ifc, pedido)
         r = cache.obter(ch)
         if r is None:
-            with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc) as p:
+            with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_efetivo) as p:
                 r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor)
             cache.guardar(ch, r)
     else:
-        with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc) as p:
+        with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_efetivo) as p:
             r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor)
 
     return Corte(

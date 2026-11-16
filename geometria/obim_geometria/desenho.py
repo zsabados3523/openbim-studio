@@ -1446,10 +1446,12 @@ def _pesos_planta(pedido: dict, itens) -> dict | None:
     return pesos or None
 
 
-def _planta_em_faixas(pedido: dict, fase, n: int, f=None, abrir_s: float | None = None) -> dict:
+def _planta_em_faixas(pedido: dict, fase, n: int, f=None, abrir_s: float | None = None, sem_normal: bool = False) -> dict:
     base = {k: v for k, v in pedido.items() if k != "faixas"}
 
     def normal() -> dict:
+        if sem_normal:
+            return {"ok": False, "erro": {"tipo": "FaixasFalhou", "mensagem": "refazer em faixas falhou", "rastro": ""}}
         return _processar_base(base, fase, f=f, abrir_s=abrir_s)
 
     try:
@@ -1746,23 +1748,38 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
 
         resultados = [None] * len(grupos)
         for indices, resp_lote in zip(lotes_idx, lotes_resp):
+            if isinstance(resp_lote, dict) and not resp_lote.get("ok") and (resp_lote.get("erro") or {}).get("tipo") == "Divergente":
+                return resp_lote
             itens_r = resp_lote.get("resultados") if isinstance(resp_lote, dict) and resp_lote.get("ok") else None
             if isinstance(itens_r, list):
                 for pos, idx_g in enumerate(indices):
                     if pos < len(itens_r):
                         resultados[idx_g] = itens_r[pos]
 
-        ok_resultados, falhas_filhos = [], set()
+        ok_resultados, grupos_falhos = [], []
         for grupo, res in zip(grupos, resultados):
             if isinstance(res, dict) and not res.get("ok") and (res.get("erro") or {}).get("tipo") == "Divergente":
                 return res
             if isinstance(res, dict) and res.get("ok") and isinstance(res.get("svg"), str) and res.get("svg"):
                 ok_resultados.append(res)
             else:
-                falhas_filhos.update(i for i, _ in grupo)
+                grupos_falhos.append(grupo)
 
         if not ok_resultados:
             return fallback()
+
+        falhas_filhos = set()
+        for grupo in grupos_falhos:
+            q_refaz = {k: v for k, v in base.items() if k not in ("pesados", "limiar_pesado")}
+            q_refaz["elementos"] = [list(e) for e in grupo]
+            q_refaz["threads"] = total_threads
+            r_refaz = _planta_em_faixas(q_refaz, fase, 8, f=f, abrir_s=abrir_s, sem_normal=True)
+            if isinstance(r_refaz, dict) and not r_refaz.get("ok") and (r_refaz.get("erro") or {}).get("tipo") == "Divergente":
+                return r_refaz
+            if isinstance(r_refaz, dict) and r_refaz.get("ok") and isinstance(r_refaz.get("svg"), str) and r_refaz.get("svg"):
+                ok_resultados.append(r_refaz)
+            else:
+                falhas_filhos.update(i for i, _ in grupo)
 
         if falhas_filhos:
             try:
@@ -1771,6 +1788,7 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
                 falhas_filhos = {i for i in falhas_filhos if not _eh_abertura(f, i)}
             except Exception:
                 pass
+        faltantes = [i for i, _ in elementos if i in falhas_filhos]
 
         svgs_ok = [r["svg"] for r in ok_resultados]
         if any(faixas._PROJ.search(s) for s in svgs_ok):
@@ -1796,6 +1814,8 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
                 pos = m.end()
             partes.append(svg[pos:])
             svg = "".join(partes)
+        if faltantes:
+            svg = re.sub(r"<svg\b([^>]*?)(/?)>", rf'<svg\1 data-obim-incompleta="{len(faltantes)}"\2>', svg, count=1)
     except Exception:
         return fallback()
 
@@ -1831,6 +1851,9 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
     }
     if pedido.get("motor_visivel"):
         resp["motor_pecas"] = junta("motor_pecas")
+    if faltantes:
+        resp["incompleta"] = True
+        resp["faltantes"] = faltantes
     return resp
 
 

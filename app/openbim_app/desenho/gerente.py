@@ -66,6 +66,9 @@ def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, 
     }
     if tipo == "planta":
         dados["pesados"] = [dict(d) for d in (getattr(r, "pesados", ()) or ())]
+        faltantes = [int(x) for x in (getattr(r, "faltantes", ()) or ())]
+        dados["faltantes"] = faltantes
+        dados["incompleta"] = bool(getattr(r, "incompleta", False) or faltantes)
     if tipo == "planta" and dados["pesados"]:
         if previa is not None:
             previa(dados)

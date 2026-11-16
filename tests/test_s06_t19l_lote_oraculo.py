@@ -18,7 +18,7 @@ import pytest
 
 import obim_geometria.desenho as D
 import obim_geometria.processo as P
-from test_s06_t19h_componentes_oraculo import Espiao, _caixa, _cena, _prisma_ou
+from test_s06_t19h_componentes_oraculo import Espiao, _refaz_falha, _caixa, _cena, _prisma_ou
 
 
 def _pedidos(ped, ids, grupos):
@@ -113,8 +113,10 @@ def test_falha_de_um_item_so_marca_os_elementos_do_grupo(monkeypatch, tmp_path):
     ped, ids = _cena_grupos(tmp_path)
     ped.update({"componentes": True, "threads": 2})
     Espiao(monkeypatch, falha=lambda p: "raise" if ids[2] in {i for i, _ in p["elementos"]} else None)
+    _refaz_falha(monkeypatch, [ids[2]])
     r = D.processar(copy.deepcopy(ped))
     assert r["ok"] and r["falhas_geometria"] == [ids[2]] and r["grupos"] == 4
+    assert r["incompleta"] is True and r["faltantes"] == [ids[2]]
 
 
 def test_lote_que_morre_marca_todos_os_seus_grupos(monkeypatch, tmp_path):
@@ -127,7 +129,9 @@ def test_lote_que_morre_marca_todos_os_seus_grupos(monkeypatch, tmp_path):
             raise RuntimeError("lote morreu (simulado)")
         return {"ok": True, "resultados": [D.processar(copy.deepcopy(q)) for q in p["pedidos"]]}
     monkeypatch.setattr(F, "rodar_filho", morre_se_tem)
+    _refaz_falha(monkeypatch, [ids[1], ids[2], ids[3]])
     r = D.processar(copy.deepcopy(ped))
+    assert r["incompleta"] is True and set(r["faltantes"]) == {ids[1], ids[2], ids[3]}
     assert r["ok"] and set(r["falhas_geometria"]) == {ids[1], ids[2], ids[3]}, "o lote das 3 caixas morreu junto; o prisma (outro lote) fica"
 
 

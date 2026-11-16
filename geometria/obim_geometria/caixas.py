@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Cálculo de caixas envolventes (bbox) de produtos IFC em metros (mundo)."""
 import math
+import os
 import traceback
 from itertools import chain
 
@@ -229,6 +230,17 @@ def _caixa_face_set(el, fator, cache=None):
 
 def processar(pedido: dict) -> dict:
     try:
+        assinatura = pedido.get("assinatura")
+        tipo_div = "Divergente" if assinatura is not None else "ArquivoDivergente"
+        if assinatura is not None:
+            try:
+                st = os.stat(pedido.get("arquivo"))
+                atual = [int(st.st_size), int(st.st_mtime_ns)]
+            except (OSError, TypeError):
+                atual = None
+            esperado = list(assinatura) if isinstance(assinatura, (list, tuple)) else None
+            if atual is None or esperado != atual:
+                return {"ok": False, "erro": {"tipo": "Divergente", "mensagem": "Arquivo IFC salvo não confere com o modelo", "rastro": ""}}
         threads = nucleos.limitar_threads(pedido.get("threads"))
         f = ifcopenshell.open(pedido.get("arquivo"))
         elementos = pedido.get("elementos", [])
@@ -239,7 +251,7 @@ def processar(pedido: dict) -> dict:
             except Exception:
                 el = None
             if el is None or getattr(el, "GlobalId", None) != guid:
-                return {"ok": False, "erro": {"tipo": "ArquivoDivergente", "mensagem": f"ID {id_step} diverge do arquivo", "rastro": ""}}
+                return {"ok": False, "erro": {"tipo": tipo_div, "mensagem": f"ID {id_step} diverge do arquivo", "rastro": ""}}
             entidades[int(id_step)] = el
 
         if not elementos:

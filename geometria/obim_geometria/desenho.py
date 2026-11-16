@@ -927,6 +927,9 @@ def _corte_em_faixas(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -
         with ThreadPoolExecutor(max_workers=simultaneos) as ex:
             futuros = [ex.submit(faixas.rodar_filho, q) for q in pedidos]
             resultados = [fut.result() for fut in futuros]
+        for r in resultados:
+            if isinstance(r, dict) and not r.get("ok") and (r.get("erro") or {}).get("tipo") == "Divergente":
+                return r
         if any(not isinstance(r, dict) or not r.get("ok") or not r.get("svg") for r in resultados):
             return normal()
         svg = faixas.unir([r["svg"] for r in resultados])
@@ -1052,23 +1055,55 @@ def _motor_planta(
     return [peca_visivel._grupo_svg(el, pl)[0] for (el, _v, _t, _box), pl in zip(elegiveis, pols)], [el.id() for el, *_ in elegiveis], excluidas, geo_s, motor_s
 
 
-def _processar_base(pedido: dict, fase=None) -> dict:
+def _erro_divergencia(pedido: dict, msg: str) -> dict:
+    tipo = "Divergente" if pedido.get("assinatura") is not None else "ArquivoDivergente"
+    return {"ok": False, "erro": {"tipo": tipo, "mensagem": msg, "rastro": ""}}
+
+
+def _conferir_assinatura(pedido: dict) -> dict | None:
+    assinatura = pedido.get("assinatura")
+    if assinatura is None:
+        return None
     try:
-        t_a0 = time.perf_counter()
-        vista = pedido.get("vista")
-        pav_guid = vista.get("pavimento") if isinstance(vista, dict) else None
-        f = _abrir_ifc(pedido.get("arquivo"), pav_guid)
-        abrir_s = time.perf_counter() - t_a0
+        st = os.stat(pedido.get("arquivo"))
+        atual = [int(st.st_size), int(st.st_mtime_ns)]
+    except (OSError, TypeError):
+        atual = None
+    esperado = list(assinatura) if isinstance(assinatura, (list, tuple)) else None
+    if atual is None or esperado != atual:
+        return {"ok": False, "erro": {"tipo": "Divergente", "mensagem": "Arquivo IFC salvo não confere com o modelo", "rastro": ""}}
+    return None
+
+
+def _conferir_elementos(pedido: dict, f) -> dict | None:
+    for id_step, guid in pedido.get("elementos", []):
+        try:
+            el = f.by_id(id_step)
+        except Exception:
+            el = None
+        if el is None or getattr(el, "GlobalId", None) != guid:
+            return _erro_divergencia(pedido, f"ID {id_step} diverge do arquivo")
+    return None
+
+
+def _processar_base(pedido: dict, fase=None, f=None, abrir_s: float | None = None) -> dict:
+    try:
+        if f is None:
+            erro = _conferir_assinatura(pedido)
+            if erro is not None:
+                return erro
+            t_a0 = time.perf_counter()
+            vista = pedido.get("vista")
+            pav_guid = vista.get("pavimento") if isinstance(vista, dict) else None
+            f = _abrir_ifc(pedido.get("arquivo"), pav_guid)
+            abrir_s = time.perf_counter() - t_a0
+            erro = _conferir_elementos(pedido, f)
+            if erro is not None:
+                return erro
+        elif abrir_s is None:
+            abrir_s = 0.0
 
         elementos = pedido.get("elementos", [])
-        for id_step, guid in elementos:
-            try:
-                el = f.by_id(id_step)
-            except Exception:
-                el = None
-            if el is None or getattr(el, "GlobalId", None) != guid:
-                return {"ok": False, "erro": {"tipo": "ArquivoDivergente", "mensagem": f"ID {id_step} diverge do arquivo", "rastro": ""}}
-
         vista = pedido["vista"]
         if vista.get("tipo") == "CORTE":
             faixa = pedido.get("faixa")
@@ -1342,11 +1377,11 @@ def _processar_base(pedido: dict, fase=None) -> dict:
 _GRUPO_ELEM = re.compile(r'<g\b(?![^>]*IfcBuildingStorey)[^>]*\bifc:guid\s*=\s*["\']([^"\']*)["\'][^>]*?(?:/>|>.*?</g>)\s*', re.S)
 
 
-def _planta_recortada(pedido: dict, fase) -> dict:
+def _planta_recortada(pedido: dict, fase, f=None, abrir_s: float | None = None) -> dict:
     """Filho de planta em faixas: caminho normal e depois recorte da projeção na faixa e filtro dos donos."""
     faixa = pedido["faixa"]
     base = {k: v for k, v in pedido.items() if k not in ("faixa", "pesados", "limiar_pesado")}
-    r = _processar_base(base, fase)
+    r = _processar_base(base, fase, f=f, abrir_s=abrir_s)
     if not (r.get("ok") and r.get("svg")):
         return r
     try:
@@ -1410,11 +1445,11 @@ def _pesos_planta(pedido: dict, itens) -> dict | None:
     return pesos or None
 
 
-def _planta_em_faixas(pedido: dict, fase, n: int) -> dict:
+def _planta_em_faixas(pedido: dict, fase, n: int, f=None, abrir_s: float | None = None) -> dict:
     base = {k: v for k, v in pedido.items() if k != "faixas"}
 
     def normal() -> dict:
-        return _processar_base(base, fase)
+        return _processar_base(base, fase, f=f, abrir_s=abrir_s)
 
     try:
         if not pedido.get("elementos"):
@@ -1426,7 +1461,8 @@ def _planta_em_faixas(pedido: dict, fase, n: int) -> dict:
 
         pesados_svg, pesados_info, pesadas_ids, pesadas_excluidas = [], [], set(), set()
         if pedido.get("pesados") == "silhueta":
-            f = ifcopenshell.open(pedido.get("arquivo"))
+            if f is None:
+                f = _abrir_ifc(pedido.get("arquivo"))
             altura_corte_m = float((pedido.get("vista") or {}).get("altura_corte_m", float("inf")))
             pesados_svg, pesados_info, pesadas_ids, pesadas_excluidas = _pesadas_para_svg(f, pedido, pedido.get("elementos", []), altura_corte_m)
         fora = pesadas_ids | pesadas_excluidas
@@ -1455,6 +1491,9 @@ def _planta_em_faixas(pedido: dict, fase, n: int) -> dict:
         with ThreadPoolExecutor(max_workers=simultaneos) as ex:
             futuros = [ex.submit(faixas.rodar_filho, q) for q in pedidos]
             resultados = [fut.result() for fut in futuros]
+        for r in resultados:
+            if isinstance(r, dict) and not r.get("ok") and (r.get("erro") or {}).get("tipo") == "Divergente":
+                return r
         if any(not isinstance(r, dict) or not r.get("ok") or not r.get("svg") for r in resultados):
             return normal()
         svg = faixas.unir_planta([r["svg"] for r in resultados])
@@ -1603,12 +1642,11 @@ def _gravar_previa(pedido: dict, f, formas: dict, elementos, pesados_svg: list[s
         pass
 
 
-def _planta_por_componentes(pedido: dict, fase) -> dict:
+def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = None) -> dict:
     from obim_geometria import componentes
 
     base = {k: v for k, v in pedido.items() if k not in ("componentes", "previa_arquivo")}
     elementos = pedido.get("elementos") or []
-    f = None
     formas = {}
     pesados_svg, pesados_info, pesadas_ids, pesadas_excluidas = [], [], set(), set()
     pesadas_prontas = False
@@ -1616,14 +1654,14 @@ def _planta_por_componentes(pedido: dict, fase) -> dict:
 
     def fallback() -> dict:
         if not pesadas_prontas:
-            r = _processar_base(base, fase)
+            r = _processar_base(base, fase, f=f, abrir_s=abrir_s)
             if r.get("ok"):
                 r["grupos"] = 1 if elementos else 0
                 r["grupos_ids"] = [[i for i, _ in elementos]] if elementos else []
             return r
         q_rest = {k: v for k, v in base.items() if k not in ("pesados", "limiar_pesado")}
         q_rest["elementos"] = [list(e) for e in restantes]
-        r = _processar_base(q_rest, fase)
+        r = _processar_base(q_rest, fase, f=f, abrir_s=abrir_s)
         if not r.get("ok"):
             return r
         if pesados_svg:
@@ -1642,7 +1680,8 @@ def _planta_por_componentes(pedido: dict, fase) -> dict:
             return fallback()
 
         if pedido.get("pesados") == "silhueta":
-            f = _abrir_ifc(pedido.get("arquivo"))
+            if f is None:
+                f = _abrir_ifc(pedido.get("arquivo"))
             altura_corte_m = float((pedido.get("vista") or {}).get("altura_corte_m", float("inf")))
             pesados_svg, pesados_info, pesadas_ids, pesadas_excluidas = _pesadas_para_svg(
                 f, pedido, elementos, altura_corte_m, formas=formas
@@ -1714,6 +1753,8 @@ def _planta_por_componentes(pedido: dict, fase) -> dict:
 
         ok_resultados, falhas_filhos = [], set()
         for grupo, res in zip(grupos, resultados):
+            if isinstance(res, dict) and not res.get("ok") and (res.get("erro") or {}).get("tipo") == "Divergente":
+                return res
             if isinstance(res, dict) and res.get("ok") and isinstance(res.get("svg"), str) and res.get("svg"):
                 ok_resultados.append(res)
             else:
@@ -1793,20 +1834,36 @@ def _planta_por_componentes(pedido: dict, fase) -> dict:
 
 
 def processar(pedido: dict, fase=None) -> dict:
+    erro = _conferir_assinatura(pedido)
+    if erro is not None:
+        return erro
     vista = pedido.get("vista")
-    if isinstance(vista, dict) and vista.get("tipo") == "CORTE":
-        return _processar_base(pedido, fase)
-    if pedido.get("faixa") is not None:
-        return _planta_recortada(pedido, fase)
-    if "faixas" in pedido and not (type(pedido["faixas"]) is int and pedido["faixas"] == 1):
+    eh_corte = isinstance(vista, dict) and vista.get("tipo") == "CORTE"
+    n_faixas = None
+    if not eh_corte and pedido.get("faixa") is None and "faixas" in pedido and not (type(pedido["faixas"]) is int and pedido["faixas"] == 1):
         try:
-            n = faixas._validar_n(pedido["faixas"])
+            n_faixas = faixas._validar_n(pedido["faixas"])
         except faixas.FaixasInvalidas as e:
             return {"ok": False, "erro": {"tipo": "FaixasInvalidas", "mensagem": str(e), "rastro": ""}}
-        return _planta_em_faixas(pedido, fase, n)
+    try:
+        t_a0 = time.perf_counter()
+        pav_guid = vista.get("pavimento") if isinstance(vista, dict) else None
+        f = _abrir_ifc(pedido.get("arquivo"), pav_guid)
+        abrir_s = time.perf_counter() - t_a0
+    except Exception as e:
+        return {"ok": False, "erro": {"tipo": type(e).__name__, "mensagem": str(e), "rastro": traceback.format_exc()}}
+    erro = _conferir_elementos(pedido, f)
+    if erro is not None:
+        return erro
+    if eh_corte:
+        return _processar_base(pedido, fase, f=f, abrir_s=abrir_s)
+    if pedido.get("faixa") is not None:
+        return _planta_recortada(pedido, fase, f=f, abrir_s=abrir_s)
+    if n_faixas is not None:
+        return _planta_em_faixas(pedido, fase, n_faixas, f=f, abrir_s=abrir_s)
     if pedido.get("componentes"):
-        return _planta_por_componentes(pedido, fase)
-    return _processar_base(pedido, fase)
+        return _planta_por_componentes(pedido, fase, f=f, abrir_s=abrir_s)
+    return _processar_base(pedido, fase, f=f, abrir_s=abrir_s)
 
 
 def processar_lote(pedido: dict, fase=None) -> dict:

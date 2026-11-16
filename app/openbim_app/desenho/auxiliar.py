@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import logging
 import multiprocessing
+import os
 import shutil
+import stat
 import tempfile
 import threading
 import time
@@ -30,6 +32,7 @@ def threads_padrao() -> int:
 class ErroAuxiliar(RuntimeError): pass
 class DesenhoCancelado(ErroAuxiliar): pass
 class ArquivoDivergente(ErroAuxiliar): pass
+class Divergente(ArquivoDivergente): pass
 class ProtocoloInvalido(ErroAuxiliar): pass
 
 
@@ -93,17 +96,23 @@ def _limpar_pastas_antigas():
 def preparar(ifc, pedido: dict, *, caminho_ifc: str | Path | None = None) -> Preparado:
     if caminho_ifc is not None:
         c = Path(caminho_ifc).resolve()
-        if c.is_file():
+        try:
+            st = os.stat(c)
+        except OSError:
+            st = None
+        if st is not None and stat.S_ISREG(st.st_mode):
             _limpar_pastas_antigas()
             p = dict(pedido)
             p.setdefault("protocolo", PROTOCOLO)
             p.setdefault("threads", threads_padrao())
             p["arquivo"] = str(c)
+            p["assinatura"] = [int(st.st_size), int(st.st_mtime_ns)]
             pasta = Path(tempfile.mkdtemp(prefix="obim-desenho-", dir=tempfile.gettempdir())).resolve()
             return Preparado(p, pasta, copia_s=0.0)
 
     _limpar_pastas_antigas()
     p = dict(pedido)
+    p.pop("assinatura", None)
     p.setdefault("protocolo", PROTOCOLO)
     p.setdefault("threads", threads_padrao())
     pasta = Path(tempfile.mkdtemp(prefix="obim-desenho-", dir=tempfile.gettempdir())).resolve()
@@ -138,6 +147,8 @@ def _tratar_resposta(raw: dict) -> dict:
         return raw
     erro = raw.get("erro", {})
     tipo, msg, rastro = erro.get("tipo", "RuntimeError"), erro.get("mensagem", ""), erro.get("rastro", "")
+    if tipo == "Divergente":
+        raise Divergente(msg)
     if tipo == "ArquivoDivergente":
         raise ArquivoDivergente(msg)
     if tipo == "ProtocoloInvalido":

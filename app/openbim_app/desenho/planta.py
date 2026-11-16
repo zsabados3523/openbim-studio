@@ -159,16 +159,26 @@ def gerar_planta(
     if motor_visivel:
         pedido["motor_visivel"] = True
 
+    def _executar_planta(caminho_atual):
+        with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_atual) as p:
+            return auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor, previa=previa)
+
+    def _executar_com_retry():
+        try:
+            return _executar_planta(caminho_ifc)
+        except auxiliar.Divergente:
+            if caminho_ifc is None:
+                raise
+            return _executar_planta(None)
+
     if cache is not None:
         ch = cache.chave(ifc, pedido)
         r = cache.obter(ch)
         if r is None:
-            with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc) as p:
-                r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor, previa=previa)
+            r = _executar_com_retry()
             cache.guardar(ch, r)
     else:
-        with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc) as p:
-            r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor, previa=previa)
+        r = _executar_com_retry()
 
     return Planta(
         svg=r["svg"],

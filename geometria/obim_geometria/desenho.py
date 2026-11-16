@@ -1837,6 +1837,9 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
 @contextlib.contextmanager
 def _sem_rastro(f):
     """Executa mutacoes no modelo IFC dentro de transacao descartada ao sair."""
+    if f.transaction is not None:
+        yield
+        return
     f.begin_transaction()
     try:
         yield

@@ -177,7 +177,7 @@ def _acrescentar_tempos(resposta: dict, preparado: Preparado, auxiliar_s: float)
     return resposta
 
 
-def executar(preparado: Preparado, *, limite_s: float = LIMITE_PADRAO_S, cancelar: threading.Event | None = None, executor=None, previa=None) -> dict:
+def executar(preparado: Preparado, *, limite_s: float = LIMITE_PADRAO_S, cancelar: threading.Event | None = None, executor=None, previa=None, filho=None) -> dict:
     if preparado.pedido.get("protocolo") != PROTOCOLO:
         raise ProtocoloInvalido(f"Protocolo inválido: {preparado.pedido.get('protocolo')}")
     if executor is not None:
@@ -186,6 +186,16 @@ def executar(preparado: Preparado, *, limite_s: float = LIMITE_PADRAO_S, cancela
         t0 = time.perf_counter()
         resposta = _tratar_resposta(executor(preparado.pedido))
         return _acrescentar_tempos(resposta, preparado, time.perf_counter() - t0)
+
+    if filho is not None:
+        from openbim_app.desenho.filho import FilhoIndisponivel
+
+        t0 = time.perf_counter()
+        try:
+            resposta = filho.executar(preparado.pedido, cancelar=cancelar, limite_s=limite_s)
+            return _acrescentar_tempos(resposta, preparado, time.perf_counter() - t0)
+        except FilhoIndisponivel:
+            pass
 
     while not _TRAVA_FILHO.acquire(timeout=0.05):
         if cancelar is not None and cancelar.is_set():

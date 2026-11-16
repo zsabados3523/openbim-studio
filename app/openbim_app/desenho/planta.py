@@ -34,6 +34,11 @@ class Planta:
     em_cache: tuple[int, ...] = ()
     pesados: tuple = ()
     pedido: dict | None = None
+    faltantes: tuple[int, ...] = ()
+
+    @property
+    def incompleta(self) -> bool:
+        return bool(self.faltantes)
 
 
 def _altura_corte(ifc: ifcopenshell.file, anotacao) -> float:
@@ -200,4 +205,5 @@ def gerar_planta(
         em_cache=tuple(int(x) for x in r.get("em_cache") or ()),
         pesados=tuple(dict(d) for d in (r.get("pesados") or ())),
         pedido=pedido,
+        faltantes=tuple(int(x) for x in (r.get("faltantes") or ())),
     )

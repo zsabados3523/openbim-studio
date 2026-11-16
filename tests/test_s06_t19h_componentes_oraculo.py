@@ -124,6 +124,14 @@ def _cob_rapida(a, b):
     return float(cob / comp.sum())
 
 
+def _refaz_falha(monkeypatch, ruins):
+    """T19i1: o grupo que falha no filho e refeito em-processo (`_processar_base`); aqui o refazer tambem falha para os ids ruins (mesmo mecanismo do Fake de t19i1)."""
+    ruins, orig = set(ruins), D._processar_base
+    monkeypatch.setattr(D, "_processar_base", lambda p, *a, **k: (
+        {"ok": False, "erro": {"tipo": "Simulado", "mensagem": "x", "rastro": ""}}
+        if ruins & {i for i, _ in p.get("elementos") or ()} else orig(p, *a, **k)))
+
+
 class Espiao:
     """Substitui `faixas.rodar_filho`: grava o pedido e delega ao `desenho.processar` no mesmo processo (serializado). `falha(pedido) -> None | "raise" | "ok_false"`."""
 
@@ -206,9 +214,11 @@ def test_falha_de_um_grupo_nao_derruba_os_demais(monkeypatch, tmp_path):
     assert ref["ok"] and ref["pesados"]
     for modo in ("raise", "ok_false"):
         esp = Espiao(monkeypatch, falha=lambda p: modo if ids[1] in [i for i, _ in p["elementos"]] else None)
+        _refaz_falha(monkeypatch, [ids[1]])
         r = D.processar({**copy.deepcopy(ped), "componentes": True})
         assert r["ok"] and r["grupos"] == 3 and len(esp.chamadas) == 3, "o pesado não entra nos grupos dos filhos"
         assert r["falhas_geometria"] == [ids[1]] and [p["id"] for p in r["pesados"]] == [ids[3]]
+        assert r["incompleta"] is True and r["faltantes"] == [ids[1]]
         gs = set(_guids(r["svg"]))
         guid = {e[0]: e[1] for e in ped["elementos"]}
         assert {guid[ids[0]], guid[ids[2]], guid[ids[3]]} <= gs and guid[ids[1]] not in gs
@@ -266,6 +276,7 @@ def test_regra2_abertura_nunca_entra_em_falhas_geometria(monkeypatch, tmp_path):
     malhas = [_caixa(0, 0, 0, 3, 1, 1), _caixa(1, 0, 0, 2, 1, 1), _caixa(10, 0, 0, 11, 1, 1)]
     ped, ids = _cena(tmp_path, malhas, classes={1: "IfcOpeningElement"})
     Espiao(monkeypatch, falha=lambda p: "raise" if {ids[0], ids[1]} & {i for i, _ in p["elementos"]} else None)
+    _refaz_falha(monkeypatch, [ids[0], ids[1]])
     r = D.processar({**copy.deepcopy(ped), "componentes": True})
     assert r["ok"] and r["grupos"] >= 2 and r["falhas_geometria"] == [ids[0]], "o IfcOpeningElement não é peça desenhada: nunca em falhas_geometria"
 

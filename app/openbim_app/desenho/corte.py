@@ -48,44 +48,24 @@ def _bloco_de(ann: Any) -> Any | None:
     return None
 
 
-def gerar_corte(
+def _gerar_corte_uma_vez(
     ifc: ifcopenshell.file,
     gid_vista: str,
-    *,
-    categorias_ocultas: Iterable[str] = (),
-    ocultar_secundarias: bool = True,
-    threads: int | None = None,
-    limite_triangulos: int | None = None,
-    limite_s: float = auxiliar.LIMITE_PADRAO_S,
-    cancelar=None,
-    executor=None,
-    caminho_ifc: str | Path | None = None,
-    moveis_caixa2d: bool = False,
-    profundidade_corte: float | None = None,
-    faixas: int = 1,
-    cache: "CacheDesenho | None" = None,
-    motor_visivel: bool | None = None,
-    sessao_selecao: selecao.SessaoSelecao | None = None,
+    cats: tuple[str, ...],
+    scale: float,
+    threads: int | None,
+    limite_triangulos: int | None,
+    limite_s: float,
+    cancelar,
+    executor,
+    caminho_ifc: str | Path | None,
+    moveis_caixa2d: bool,
+    profundidade_corte: float | None,
+    faixas: int,
+    cache: "CacheDesenho | None",
+    motor_visivel: bool | None,
+    sessao_selecao: selecao.SessaoSelecao | None,
 ) -> Corte:
-    if sessao_selecao is not None and not isinstance(sessao_selecao, selecao.SessaoSelecao):
-        raise TypeError(f"sessao_selecao inválido: {sessao_selecao!r} (esperado SessaoSelecao ou None)")
-    if motor_visivel is not None and not isinstance(motor_visivel, bool):
-        raise ValueError(f"motor_visivel inválido: {motor_visivel!r} (esperado bool ou None)")
-    _validar_profundidade_corte(profundidade_corte)
-    if isinstance(faixas, bool) or not isinstance(faixas, int) or faixas < 1:
-        raise ValueError(f"número de faixas inválido: {faixas!r}")
-    if ocultar_secundarias:
-        cats = tuple(dict.fromkeys((*categorias_ocultas, *selecao.CATEGORIAS_PADRAO_PLANTA_OCULTAS)))
-    else:
-        cats = tuple(categorias_ocultas)
-    selecao._validar_categorias(ifc, cats)
-
-    info = vistas_ifc.ler_vista(ifc, gid_vista)
-    if info.get("tipo") != "CORTE":
-        raise SelecaoInvalida(f"Vista {gid_vista} não é do tipo CORTE (tipo={info.get('tipo')})")
-
-    caminho_efetivo = caminho_ifc  # quem passa o caminho garante que o arquivo bate com o modelo (T15e)
-    scale = float(ifcopenshell.util.unit.calculate_unit_scale(ifc))
     sel = selecao.selecionar(
         ifc,
         gid_vista,
@@ -160,11 +140,11 @@ def gerar_corte(
         ch = cache.chave(ifc, pedido)
         r = cache.obter(ch)
         if r is None:
-            with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_efetivo) as p:
+            with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc) as p:
                 r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor)
             cache.guardar(ch, r)
     else:
-        with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_efetivo) as p:
+        with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc) as p:
             r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor)
 
     return Corte(
@@ -175,3 +155,54 @@ def gerar_corte(
         unidade_escala=scale,
         caixas=tuple(int(x) for x in r.get("caixas") or ()),
     )
+
+
+def gerar_corte(
+    ifc: ifcopenshell.file,
+    gid_vista: str,
+    *,
+    categorias_ocultas: Iterable[str] = (),
+    ocultar_secundarias: bool = True,
+    threads: int | None = None,
+    limite_triangulos: int | None = None,
+    limite_s: float = auxiliar.LIMITE_PADRAO_S,
+    cancelar=None,
+    executor=None,
+    caminho_ifc: str | Path | None = None,
+    moveis_caixa2d: bool = False,
+    profundidade_corte: float | None = None,
+    faixas: int = 1,
+    cache: "CacheDesenho | None" = None,
+    motor_visivel: bool | None = None,
+    sessao_selecao: selecao.SessaoSelecao | None = None,
+) -> Corte:
+    if sessao_selecao is not None and not isinstance(sessao_selecao, selecao.SessaoSelecao):
+        raise TypeError(f"sessao_selecao inválido: {sessao_selecao!r} (esperado SessaoSelecao ou None)")
+    if motor_visivel is not None and not isinstance(motor_visivel, bool):
+        raise ValueError(f"motor_visivel inválido: {motor_visivel!r} (esperado bool ou None)")
+    _validar_profundidade_corte(profundidade_corte)
+    if isinstance(faixas, bool) or not isinstance(faixas, int) or faixas < 1:
+        raise ValueError(f"número de faixas inválido: {faixas!r}")
+    if ocultar_secundarias:
+        cats = tuple(dict.fromkeys((*categorias_ocultas, *selecao.CATEGORIAS_PADRAO_PLANTA_OCULTAS)))
+    else:
+        cats = tuple(categorias_ocultas)
+    selecao._validar_categorias(ifc, cats)
+
+    info = vistas_ifc.ler_vista(ifc, gid_vista)
+    if info.get("tipo") != "CORTE":
+        raise SelecaoInvalida(f"Vista {gid_vista} não é do tipo CORTE (tipo={info.get('tipo')})")
+
+    scale = float(ifcopenshell.util.unit.calculate_unit_scale(ifc))
+    tentativas = (caminho_ifc, None) if caminho_ifc is not None else (None,)
+    for idx, caminho_atual in enumerate(tentativas):
+        try:
+            return _gerar_corte_uma_vez(
+                ifc, gid_vista, cats, scale, threads, limite_triangulos, limite_s,
+                cancelar, executor, caminho_atual, moveis_caixa2d, profundidade_corte,
+                faixas, cache, motor_visivel, sessao_selecao,
+            )
+        except auxiliar.Divergente:
+            if idx + 1 >= len(tentativas):
+                raise
+    raise AssertionError("unreachable")

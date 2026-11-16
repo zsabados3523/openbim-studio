@@ -15,6 +15,7 @@ import inspect
 import itertools
 import threading
 import weakref
+from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, Signal, Slot
 
@@ -106,9 +107,16 @@ class GerenteDesenho(QObject):
         self._sessoes: dict[int, tuple[object, SessaoSelecao, object]] = {}
         self._evento.connect(self._tratar, Qt.ConnectionType.QueuedConnection)
 
-    def pedir(self, tipo, ifc, vista_guid, *, revisao=None, **opcoes) -> str:
+    def pedir(self, tipo, ifc, vista_guid, *, caminho_ifc=None, revisao_salva=None, revisao=None, **opcoes) -> str:
         if tipo not in TIPOS:
             raise ValueError(f"tipo de desenho invalido: {tipo!r}")
+        if caminho_ifc and revisao is not None and revisao == revisao_salva:
+            try:
+                existe = Path(caminho_ifc).is_file()
+            except OSError:
+                existe = False
+            if existe:
+                opcoes["caminho_ifc"] = caminho_ifc
         chave = self._chave_estado(tipo, ifc, vista_guid, opcoes)
         sessao = self._obter_sessao(ifc, revisao) if revisao is not None else self._limpar_mortas()
         if chave in self._ativos:

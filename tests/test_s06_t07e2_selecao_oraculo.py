@@ -138,4 +138,4 @@ def test_g_limite_s_cancelar_e_executor_seguem_ao_auxiliar(tmp_aux, monkeypatch)
     import threading
     ev, ex = threading.Event(), _fake({})
     S.selecionar(f, d["vc"], executor=ex, limite_s=7.5, cancelar=ev)
-    assert vistos == {"limite_s": 7.5, "cancelar": ev, "executor": ex}
+    assert {k: v for k, v in vistos.items() if k != "filho"} == {"limite_s": 7.5, "cancelar": ev, "executor": ex}  # `filho` (T19g4c) e extra permitido

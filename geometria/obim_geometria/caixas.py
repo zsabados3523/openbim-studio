@@ -228,7 +228,7 @@ def _caixa_face_set(el, fator, cache=None):
     return [float(v) for v in (*minimo, *maximo)]
 
 
-def processar(pedido: dict) -> dict:
+def processar(pedido: dict, f=None) -> dict:
     try:
         assinatura = pedido.get("assinatura")
         tipo_div = "Divergente" if assinatura is not None else "ArquivoDivergente"
@@ -242,7 +242,8 @@ def processar(pedido: dict) -> dict:
             if atual is None or esperado != atual:
                 return {"ok": False, "erro": {"tipo": "Divergente", "mensagem": "Arquivo IFC salvo não confere com o modelo", "rastro": ""}}
         threads = nucleos.limitar_threads(pedido.get("threads"))
-        f = ifcopenshell.open(pedido.get("arquivo"))
+        if f is None:
+            f = ifcopenshell.open(pedido.get("arquivo"))
         elementos = pedido.get("elementos", [])
         entidades = {}
         for id_step, guid in elementos:

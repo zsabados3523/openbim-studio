@@ -361,6 +361,16 @@ def test_filho_invalido_levanta_typeerror(cena, ruim):
 
 # ------------------------------------------------------------------ (c) ponta a ponta com processo real
 def _vivo(pid):
+    if sys.platform == "win32":  # os.kill(pid, 0) nao serve no Windows (WinError 87)
+        import ctypes
+        k = ctypes.windll.kernel32
+        h = k.OpenProcess(0x1000, 0, pid)
+        if not h:
+            return False
+        code = ctypes.c_ulong()
+        k.GetExitCodeProcess(h, ctypes.byref(code))
+        k.CloseHandle(h)
+        return code.value == 259
     try:
         os.kill(pid, 0)
     except ProcessLookupError:

@@ -73,7 +73,7 @@ def servir(tx, rx) -> None:
             continue
 
         op = pedido.get("op")
-        if op not in ("desenho", "caixas"):
+        if op not in ("desenho", "caixas", "abrir"):
             responder_erro(numero, "OperacaoDesconhecida", f"Operação desconhecida: {op}")
             continue
 
@@ -97,17 +97,20 @@ def servir(tx, rx) -> None:
                 f = ifcopenshell.open(arquivo)
                 arq, sig_aberta = arquivo, sig_atual
             fase("aberto")
-            with desenho._sem_rastro(f):
-                if op == "caixas":
-                    fase("geometria")
-                    dados = caixas.processar(pedido, f=f)
-                else:
-                    orig_abrir = desenho._abrir_ifc
-                    desenho._abrir_ifc = _abrir_mantido
-                    try:
-                        dados = desenho.processar(pedido, fase)
-                    finally:
-                        desenho._abrir_ifc = orig_abrir
+            if op == "abrir":
+                dados = {"aberto": True}
+            else:
+                with desenho._sem_rastro(f):
+                    if op == "caixas":
+                        fase("geometria")
+                        dados = caixas.processar(pedido, f=f)
+                    else:
+                        orig_abrir = desenho._abrir_ifc
+                        desenho._abrir_ifc = _abrir_mantido
+                        try:
+                            dados = desenho.processar(pedido, fase)
+                        finally:
+                            desenho._abrir_ifc = orig_abrir
         except Exception as e:
             responder_erro(numero, type(e).__name__, str(e), traceback.format_exc())
             continue

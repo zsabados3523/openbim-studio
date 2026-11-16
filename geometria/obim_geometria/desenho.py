@@ -9,7 +9,9 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 import ifcopenshell
+import ifcopenshell.api
 import ifcopenshell.geom
+import ifcopenshell.guid
 import ifcopenshell.ifcopenshell_wrapper as W
 import ifcopenshell.util.element
 import ifcopenshell.util.placement
@@ -322,8 +324,122 @@ def _injetar_motor_corte(svg: str, els: list, pols_linhas: list, pols_tampas: li
     return svg
 
 
+def _kw_ifc(f: ifcopenshell.file) -> dict:
+    if f.schema != "IFC2X3":
+        return {}
+    oh = f.by_type("IfcOwnerHistory")
+    if not oh:
+        raise ValueError("IFC2X3 sem IfcOwnerHistory: não dá para gravar vista")
+    return {"OwnerHistory": oh[0]}
+
+
+def _bloco_de(ann):
+    rep_prod = getattr(ann, "Representation", None)
+    for rep in getattr(rep_prod, "Representations", ()) or ():
+        for itm in getattr(rep, "Items", ()) or ():
+            if itm.is_a("IfcCsgSolid"):
+                cand = getattr(itm, "TreeRootExpression", None)
+                if cand is not None and cand.is_a("IfcBlock"):
+                    return cand
+            elif itm.is_a("IfcBlock"):
+                return itm
+    return None
+
+
+def _garantir_anotacao(f: ifcopenshell.file, vista: dict) -> None:
+    """Garante IfcAnnotation da vista no modelo em memória com matriz e bloco do pedido."""
+    gid = vista["guid"]
+    try:
+        ann = f.by_guid(gid)
+    except Exception:
+        ann = None
+    if "matriz" not in vista or "bloco" not in vista:
+        if ann is not None:
+            return
+        raise RuntimeError(f"Instance with GlobalId '{gid}' not found")
+
+    if ann is None:
+        kw = _kw_ifc(f)
+        nome = vista.get("nome") or "CORTE"
+        ann = f.create_entity("IfcAnnotation", GlobalId=gid, Name=nome, ObjectType="DRAWING", **kw)
+        if f.schema.startswith("IFC4X3"):
+            ann.PredefinedType = "USERDEFINED"
+        props = [
+            f.create_entity("IfcPropertySingleValue", Name=k, NominalValue=f.create_entity("IfcLabel", v))
+            for k, v in (("TargetView", "SECTION_VIEW"), ("Scale", "1/100"), ("HumanScale", "1:100"))
+        ]
+        ps = f.create_entity(
+            "IfcPropertySet",
+            GlobalId=ifcopenshell.guid.new(),
+            Name="EPset_Drawing",
+            HasProperties=props,
+            **kw,
+        )
+        f.create_entity(
+            "IfcRelDefinesByProperties",
+            GlobalId=ifcopenshell.guid.new(),
+            RelatedObjects=[ann],
+            RelatingPropertyDefinition=ps,
+            **kw,
+        )
+
+    elif vista.get("nome"):
+        ann.Name = str(vista["nome"])
+
+    m = np.array(vista["matriz"], dtype=float)
+    pt = f.create_entity("IfcCartesianPoint", Coordinates=tuple(float(x) for x in m[:3, 3]))
+    eixo = f.create_entity(
+        "IfcAxis2Placement3D",
+        Location=pt,
+        Axis=f.create_entity("IfcDirection", DirectionRatios=tuple(float(x) for x in m[:3, 2])),
+        RefDirection=f.create_entity("IfcDirection", DirectionRatios=tuple(float(x) for x in m[:3, 0])),
+    )
+    ann.ObjectPlacement = f.create_entity("IfcLocalPlacement", RelativePlacement=eixo)
+
+    bl = vista["bloco"]
+    loc = tuple(float(x) for x in bl["Location"])
+    bloco = _bloco_de(ann)
+    if bloco is None:
+        ctx = [c for c in f.by_type("IfcGeometricRepresentationContext") if c.ContextType == "Model"]
+        if not ctx:
+            ctx = [ifcopenshell.api.run("context.add_context", f, context_type="Model")]
+        pos_b = f.create_entity(
+            "IfcAxis2Placement3D",
+            Location=f.create_entity("IfcCartesianPoint", Coordinates=loc),
+        )
+        bloco = f.create_entity(
+            "IfcBlock",
+            Position=pos_b,
+            XLength=float(bl["XLength"]),
+            YLength=float(bl["YLength"]),
+            ZLength=float(bl["ZLength"]),
+        )
+        forma = f.create_entity(
+            "IfcShapeRepresentation",
+            ContextOfItems=ctx[0],
+            RepresentationIdentifier="Body",
+            RepresentationType="SolidModel",
+            Items=[f.create_entity("IfcCsgSolid", TreeRootExpression=bloco)],
+        )
+        ann.Representation = f.create_entity("IfcProductDefinitionShape", Representations=[forma])
+    else:
+        bloco.XLength = float(bl["XLength"])
+        bloco.YLength = float(bl["YLength"])
+        bloco.ZLength = float(bl["ZLength"])
+        cam_rel = getattr(getattr(ann, "ObjectPlacement", None), "RelativePlacement", None)
+        pos_b = getattr(bloco, "Position", None)
+        pt_b = f.create_entity("IfcCartesianPoint", Coordinates=loc)
+        if pos_b is None or pos_b == cam_rel:
+            bloco.Position = f.create_entity("IfcAxis2Placement3D", Location=pt_b)
+        else:
+            pos_b.Location = pt_b
+            pos_b.Axis = None
+            pos_b.RefDirection = None
+
+
 def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
     vista = pedido["vista"]
+    _garantir_anotacao(f, vista)
     ann = f.by_guid(vista["guid"])
     for rel in getattr(ann, "IsDefinedBy", ()) or ():
         ps = getattr(rel, "RelatingPropertyDefinition", None)
@@ -338,20 +454,7 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
     prof = vista.get("profundidade_corte")
     if prof is None:
         prof = pedido.get("profundidade_corte")
-    bloco = None
-    if ann.Representation and ann.Representation.Representations:
-        for rep in ann.Representation.Representations:
-            for itm in getattr(rep, "Items", ()) or ():
-                if itm.is_a("IfcCsgSolid"):
-                    cand_bloco = getattr(itm, "TreeRootExpression", None)
-                    if cand_bloco is not None and cand_bloco.is_a("IfcBlock"):
-                        bloco = cand_bloco
-                        break
-                elif itm.is_a("IfcBlock"):
-                    bloco = itm
-                    break
-            if bloco is not None:
-                break
+    bloco = _bloco_de(ann)
     if prof is not None and bloco is not None:
         prof_val = float(prof) / esc
         bloco.ZLength = prof_val
@@ -754,6 +857,7 @@ def _recortar_svg_faixa(svg: str, faixa: dict, donos_guids: set[str]) -> str:
 
 def _itens_das_faixas(f: ifcopenshell.file, pedido: dict):
     vista = pedido["vista"]
+    _garantir_anotacao(f, vista)
     ann = f.by_guid(vista["guid"])
     esc = float(vista["escala"])
     m = ifcopenshell.util.placement.get_local_placement(ann.ObjectPlacement)

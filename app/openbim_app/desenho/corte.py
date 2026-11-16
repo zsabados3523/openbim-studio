@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterable
 
 import ifcopenshell
+import ifcopenshell.util.placement
 import ifcopenshell.util.unit
 
 from openbim_app import vistas_ifc
@@ -31,6 +32,20 @@ class Corte:
     tempos: dict[str, float]
     unidade_escala: float
     caixas: tuple[int, ...]
+
+
+def _bloco_de(ann: Any) -> Any | None:
+    """Retorna o IfcBlock da anotação de corte, se existir."""
+    rep_prod = getattr(ann, "Representation", None)
+    for rep in getattr(rep_prod, "Representations", ()) or ():
+        for it in getattr(rep, "Items", ()) or ():
+            if it.is_a("IfcCsgSolid"):
+                raiz = getattr(it, "TreeRootExpression", None)
+                if raiz is not None and raiz.is_a("IfcBlock"):
+                    return raiz
+            elif it.is_a("IfcBlock"):
+                return it
+    return None
 
 
 def gerar_corte(
@@ -69,6 +84,7 @@ def gerar_corte(
     if info.get("tipo") != "CORTE":
         raise SelecaoInvalida(f"Vista {gid_vista} não é do tipo CORTE (tipo={info.get('tipo')})")
 
+    caminho_efetivo = caminho_ifc  # quem passa o caminho garante que o arquivo bate com o modelo (T15e)
     scale = float(ifcopenshell.util.unit.calculate_unit_scale(ifc))
     sel = selecao.selecionar(
         ifc,
@@ -91,11 +107,28 @@ def gerar_corte(
             caixas=(),
         )
 
+    anotacao = ifc.by_guid(gid_vista)
+    bloco = _bloco_de(anotacao)
+    pos_bloco = getattr(bloco, "Position", None) if bloco is not None else None
+    loc_bloco = getattr(pos_bloco, "Location", None) if pos_bloco is not None else None
+    coords_bloco = getattr(loc_bloco, "Coordinates", None) if loc_bloco is not None else None
     vista_dict: dict[str, Any] = {
         "tipo": "CORTE",
         "guid": gid_vista,
         "escala": scale,
+        "matriz": [
+            [float(x) for x in linha]
+            for linha in ifcopenshell.util.placement.get_local_placement(anotacao.ObjectPlacement)
+        ],
+        "bloco": {
+            "XLength": float(bloco.XLength),
+            "YLength": float(bloco.YLength),
+            "ZLength": float(bloco.ZLength),
+            "Location": [float(x) for x in coords_bloco] if coords_bloco else [0.0, 0.0, 0.0],
+        },
     }
+    if getattr(anotacao, "Name", None) is not None:
+        vista_dict["nome"] = str(anotacao.Name)
     if profundidade_corte is not None:
         vista_dict["profundidade_corte"] = float(profundidade_corte)
 
@@ -127,11 +160,11 @@ def gerar_corte(
         ch = cache.chave(ifc, pedido)
         r = cache.obter(ch)
         if r is None:
-            with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc) as p:
+            with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_efetivo) as p:
                 r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor)
             cache.guardar(ch, r)
     else:
-        with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc) as p:
+        with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_efetivo) as p:
             r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor)
 
     return Corte(

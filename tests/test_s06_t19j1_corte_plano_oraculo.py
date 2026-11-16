@@ -484,3 +484,59 @@ def test_solido_so_tocando_por_cima_ou_por_baixo_secao_vazia():
         v, t = caixa(0, 0, z0, 3, 2, z1)
         _, _, seg = cortar_malha_no_plano(v, t, 2.0)
         assert seg.shape == (0, 4)
+
+
+# ---------- mutantes (revisao Opus) ----------
+def junta(*malhas):
+    vs, ts, off = [], [], 0
+    for v, t in malhas:
+        vs.append(v)
+        ts.append(t + off)
+        off += len(v)
+    return np.vstack(vs), np.vstack(ts)
+
+
+@pytest.mark.parametrize("primeira", [(0, 0, 0, 1, 1, 2), (0, 0, 2, 1, 1, 4)])
+def test_duas_caixas_so_a_que_cruza_gera_secao(primeira):
+    # 1a caixa so toca z=2 (pelo topo, ou pela base): sem segmento. 2a [5,6]^2 x [0,4] cruza: secao 1x1,
+    # perimetro 4, 1 anel; 4 arestas verticais + 4 diagonais das paredes = 8 segmentos
+    v, t = junta(caixa(*primeira), caixa(5, 5, 0, 6, 6, 4))
+    vb, tb, seg = cortar_malha_no_plano(v, t, 2.0)
+    confere_forma(vb, tb, seg)
+    assert len(seg) == 8
+    n, grau2, comp, dup = analisa_aneis(seg)
+    assert (n, grau2, dup) == (1, True, 0)
+    assert comp == pytest.approx(4.0, abs=TOL)
+    assert seg.min() >= 5.0 - TOL and seg.max() <= 6.0 + TOL
+
+
+def test_triangulo_abaixo_no_plano_acima_sem_rotacao():
+    # a=(2,0,0) abaixo, b=(0,0,1) no plano, c=(0,2,2) acima; z=1: plano corta ac em (1,1,1); segmento (0,0)-(1,1)
+    # abaixo = triangulo a,b,(1,1,1): cross((-2,0,1),(-1,1,1)) = (-1,1,-2), area = sqrt(6)/2; normal original (-2,2,-4)
+    v = np.array([(2, 0, 0), (0, 0, 1), (0, 2, 2)], float)
+    t = np.array([(0, 1, 2)], int)
+    vb, tb, seg = cortar_malha_no_plano(v, t, 1.0)
+    assert area_3d(vb, tb) == pytest.approx(np.sqrt(6) / 2, abs=TOL)
+    assert len(seg) == 1
+    assert {chave(seg[0][:2]), chave(seg[0][2:])} == {(0.0, 0.0), (1.0, 1.0)}
+    confere_orientacao(v, t, vb, tb)
+    assert np.dot(normais_unitarias(vb, tb)[0], normais_unitarias(v, t)[0]) > 0
+
+
+def test_z_novo_exatamente_igual_ao_plano():
+    # aresta de z=-1,88 a z=4,49 cortada em 0,82: vertices novos com z == 0,82 exato (sem aproximacao)
+    v = np.array([(0, 0, -1.88), (1, 0, 4.49), (0, 1, 4.49)], float)
+    t = np.array([(0, 1, 2)], int)
+    vb, tb, seg = cortar_malha_no_plano(v, t, 0.82)
+    zs = vb[:, 2]
+    assert sorted(set(zs.tolist())) == [-1.88, 0.82]
+    assert int(np.sum(zs == 0.82)) == 2
+
+
+def test_topo_1e_10_acima_do_plano_em_z_1_nao_e_engolido():
+    # caixa unitaria de altura 1+1e-10, z=1: topo estritamente acima; secao 1x1 nao vazia: 8 segmentos, perimetro 4
+    v, t = caixa(0, 0, 0, 1, 1, 1 + 1e-10)
+    vb, tb, seg = cortar_malha_no_plano(v, t, 1.0)
+    assert len(seg) == 8
+    # pontos novos ficam a ~1e-10 dos cantos: chaves de 9 casas nao fecham o anel, entao mede-se so o comprimento (tolerancia 1e-8)
+    assert float(np.sum(np.hypot(seg[:, 2] - seg[:, 0], seg[:, 3] - seg[:, 1]))) == pytest.approx(4.0, abs=1e-8)

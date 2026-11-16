@@ -10,6 +10,14 @@ def cortar_malha_no_plano(verts, tris, z):
 
     Retorna (verts_abaixo, tris_abaixo, segmentos_secao) com shapes
     (n, 3) float, (m, 3) int e (k, 4) float.
+
+    Premissas e limites (revisao Opus, T19j1):
+    - A malha deve vir soldada (vertices compartilhados por indice); sem isso a
+      saida pode ter vertices novos duplicados na mesma posicao.
+    - Face horizontal exatamente no plano: nao gera segmento. Um solido com
+      degrau ou duas pecas empilhadas na altura exata do corte pode dar secao
+      aberta ou vazia. Quem usa (T19j2) deve mandar ao HLR a peca que tenha
+      face ou vertice no plano do corte.
     """
     v = np.asarray(verts, dtype=float)
     t = np.asarray(tris, dtype=int)

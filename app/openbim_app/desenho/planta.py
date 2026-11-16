@@ -76,7 +76,9 @@ def gerar_planta(
     motor_visivel: bool | None = None,
     previa=None,
     sessao_selecao: selecao.SessaoSelecao | None = None,
+    filho=None,
 ) -> Planta:
+    selecao._validar_filho(filho)
     if sessao_selecao is not None and not isinstance(sessao_selecao, selecao.SessaoSelecao):
         raise TypeError(f"sessao_selecao inválido: {sessao_selecao!r} (esperado SessaoSelecao ou None)")
     if pesados not in (None, "silhueta"):
@@ -104,7 +106,7 @@ def gerar_planta(
     h = _altura_corte(ifc, anotacao)
 
     scale = float(ifcopenshell.util.unit.calculate_unit_scale(ifc))
-    sel = selecao.selecionar(ifc, gid_vista, categorias_ocultas=cats, sessao=sessao_selecao)
+    sel = selecao.selecionar(ifc, gid_vista, categorias_ocultas=cats, sessao=sessao_selecao, filho=filho)
     pav = ifc.by_id(sel.pavimento)
     if getattr(pav, "Elevation", None) is None:
         raise SelecaoInvalida(f"Pavimento {pav.Name or pav.GlobalId} sem cota (Elevation); não é possível gerar a planta")
@@ -161,7 +163,7 @@ def gerar_planta(
 
     def _executar_planta(caminho_atual):
         with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_atual) as p:
-            return auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor, previa=previa)
+            return auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor, previa=previa, filho=filho)
 
     def _executar_com_retry():
         try:

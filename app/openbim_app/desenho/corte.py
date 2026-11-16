@@ -65,6 +65,7 @@ def _gerar_corte_uma_vez(
     cache: "CacheDesenho | None",
     motor_visivel: bool | None,
     sessao_selecao: selecao.SessaoSelecao | None,
+    filho=None,
 ) -> Corte:
     sel = selecao.selecionar(
         ifc,
@@ -76,6 +77,7 @@ def _gerar_corte_uma_vez(
         sessao=sessao_selecao,
         caminho_ifc=caminho_ifc,
         profundidade_corte=profundidade_corte,
+        filho=filho,
     )
     if not sel.ids:
         return Corte(
@@ -141,11 +143,11 @@ def _gerar_corte_uma_vez(
         r = cache.obter(ch)
         if r is None:
             with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc) as p:
-                r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor)
+                r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor, filho=filho)
             cache.guardar(ch, r)
     else:
         with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc) as p:
-            r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor)
+            r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor, filho=filho)
 
     return Corte(
         svg=r["svg"],
@@ -175,7 +177,9 @@ def gerar_corte(
     cache: "CacheDesenho | None" = None,
     motor_visivel: bool | None = None,
     sessao_selecao: selecao.SessaoSelecao | None = None,
+    filho=None,
 ) -> Corte:
+    selecao._validar_filho(filho)
     if sessao_selecao is not None and not isinstance(sessao_selecao, selecao.SessaoSelecao):
         raise TypeError(f"sessao_selecao inválido: {sessao_selecao!r} (esperado SessaoSelecao ou None)")
     if motor_visivel is not None and not isinstance(motor_visivel, bool):
@@ -200,7 +204,7 @@ def gerar_corte(
             return _gerar_corte_uma_vez(
                 ifc, gid_vista, cats, scale, threads, limite_triangulos, limite_s,
                 cancelar, executor, caminho_atual, moveis_caixa2d, profundidade_corte,
-                faixas, cache, motor_visivel, sessao_selecao,
+                faixas, cache, motor_visivel, sessao_selecao, filho,
             )
         except auxiliar.Divergente:
             if idx + 1 >= len(tentativas):

@@ -29,6 +29,11 @@ def _validar_profundidade_corte(profundidade_corte: Any) -> None:
         raise ValueError(f"profundidade_corte deve ser positivo e finito, recebido: {profundidade_corte!r}")
 
 
+def _validar_filho(filho: Any) -> None:
+    if filho is not None and not callable(getattr(filho, "executar", None)):
+        raise TypeError(f"filho inválido: {filho!r} (esperado objeto com executar chamável ou None)")
+
+
 CATEGORIAS_PADRAO_PLANTA_OCULTAS: tuple[str, ...] = (
     "IfcMember",
     "IfcPlate",
@@ -171,7 +176,9 @@ def selecionar(
     sessao: SessaoSelecao | None = None,
     caminho_ifc: str | Path | None = None,
     profundidade_corte: float | None = None,
+    filho=None,
 ) -> Selecao:
+    _validar_filho(filho)
     _validar_profundidade_corte(profundidade_corte)
     cats = tuple(categorias_ocultas)
     _validar_categorias(ifc, cats)
@@ -324,6 +331,7 @@ def selecionar(
                 limite_s=limite_s,
                 cancelar=cancelar,
                 executor=executor,
+                filho=filho,
             )
         finally:
             preparado.fechar()

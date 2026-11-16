@@ -1446,10 +1446,12 @@ def _pesos_planta(pedido: dict, itens) -> dict | None:
     return pesos or None
 
 
-def _planta_em_faixas(pedido: dict, fase, n: int, f=None, abrir_s: float | None = None) -> dict:
+def _planta_em_faixas(pedido: dict, fase, n: int, f=None, abrir_s: float | None = None, sem_normal: bool = False) -> dict:
     base = {k: v for k, v in pedido.items() if k != "faixas"}
 
     def normal() -> dict:
+        if sem_normal:
+            return {"ok": False, "erro": {"tipo": "FaixasFalhou", "mensagem": "refazer em faixas falhou", "rastro": ""}}
         return _processar_base(base, fase, f=f, abrir_s=abrir_s)
 
     try:
@@ -1771,7 +1773,7 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
             q_refaz = {k: v for k, v in base.items() if k not in ("pesados", "limiar_pesado")}
             q_refaz["elementos"] = [list(e) for e in grupo]
             q_refaz["threads"] = total_threads
-            r_refaz = _planta_em_faixas(q_refaz, fase, 8, f=f, abrir_s=abrir_s)
+            r_refaz = _planta_em_faixas(q_refaz, fase, 8, f=f, abrir_s=abrir_s, sem_normal=True)
             if isinstance(r_refaz, dict) and not r_refaz.get("ok") and (r_refaz.get("erro") or {}).get("tipo") == "Divergente":
                 return r_refaz
             if isinstance(r_refaz, dict) and r_refaz.get("ok") and isinstance(r_refaz.get("svg"), str) and r_refaz.get("svg"):

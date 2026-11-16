@@ -20,12 +20,13 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Qt, Signal, Slot
 
 from openbim_app.desenho.auxiliar import DesenhoCancelado
+from openbim_app.desenho.filho import FilhoPersistente
 from openbim_app.desenho.selecao import SessaoSelecao
 
 TIPOS = ("planta", "corte")
 
 
-def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, previa=None, sessao_selecao=None):
+def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, previa=None, sessao_selecao=None, filho=None):
     from openbim_app.desenho.corte import gerar_corte
     from openbim_app.desenho.planta import gerar_planta
 
@@ -53,6 +54,8 @@ def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, 
     gerar = gerar_planta if tipo == "planta" else gerar_corte
     # cache exato (chave do pedido real, com elementos): leitura e gravacao aqui dentro
     kw_sessao = {"sessao_selecao": sessao_selecao} if sessao_selecao is not None else {}
+    if filho is not None:
+        kw_sessao["filho"] = filho
     r = gerar(ifc, vista_guid, cache=cache, cancelar=cancelar, **kw_sessao, **opcoes)
     dados = {
         "svg": r.svg,
@@ -73,23 +76,31 @@ def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, 
 
 
 class _Pedido:
-    def __init__(self, chave, vista):
+    def __init__(self, chave, vista, filho=None, geracao=0):
         self.chave, self.vista = chave, vista
+        self.filho = filho
+        self.geracao = geracao
         self.cancelar = threading.Event()
         self.thread = None
 
 
 class GerenteDesenho(QObject):
+    """Gerencia pedidos de desenho em segundo plano.
+
+    Limitacao conhecida: com `filho_persistente=True`, a previa parcial de
+    componentes da planta nao e emitida.
+    """
     progresso = Signal(str, str)
     pronto = Signal(str, object)
     falhou = Signal(str, str)
     previa = Signal(str, object)
     _evento = Signal(object, str, object)  # (pedido, tipo do evento, carga); interno
 
-    def __init__(self, cache=None, *, motor=None, chave_estado=None, parent=None):
+    def __init__(self, cache=None, *, motor=None, chave_estado=None, filho_persistente: bool = False, parent=None):
         super().__init__(parent)
         self._cache = cache
         self._padrao = chave_estado is None
+        self._usar_filho = bool(filho_persistente)
         if motor is None:
             from openbim_app.desenho.cache import CacheDesenho
             motor = functools.partial(
@@ -102,29 +113,55 @@ class GerenteDesenho(QObject):
             self._cache = None  # cache fica no motor padrao
         self._threads: set = set()
         self._trava = threading.Lock()
+        self._geracao = 0
         self._ativos: dict[str, _Pedido] = {}
         self._por_vista: dict[str, _Pedido] = {}
         self._sessoes: dict[int, tuple[object, SessaoSelecao, object]] = {}
+        self._filhos_doc: dict[Path, FilhoPersistente] = {}
         self._evento.connect(self._tratar, Qt.ConnectionType.QueuedConnection)
 
     def pedir(self, tipo, ifc, vista_guid, *, caminho_ifc=None, revisao_salva=None, revisao=None, **opcoes) -> str:
         if tipo not in TIPOS:
             raise ValueError(f"tipo de desenho invalido: {tipo!r}")
+        aberto = False
+        caminho_resolvido = None
         if caminho_ifc and revisao is not None and revisao == revisao_salva:
             try:
-                existe = Path(caminho_ifc).is_file()
+                caminho_resolvido = Path(caminho_ifc).resolve()
+                aberto = caminho_resolvido.is_file()
             except OSError:
-                existe = False
-            if existe:
+                aberto = False
+            if aberto:
                 opcoes["caminho_ifc"] = caminho_ifc
+        filho = None
+        fechar_ociosos = []
+        with self._trava:
+            geracao = self._geracao
+            if self._usar_filho and aberto:
+                filho = self._filhos_doc.get(caminho_resolvido)
+                if filho is None:
+                    em_uso = {p.filho for p in list(self._ativos.values()) if p.filho is not None}
+                    for k, f_ant in list(self._filhos_doc.items()):
+                        if f_ant not in em_uso:
+                            self._filhos_doc.pop(k, None)
+                            fechar_ociosos.append(f_ant)
+                    filho = FilhoPersistente(caminho_resolvido)
+                    self._filhos_doc[caminho_resolvido] = filho
+            filhos_atuais = list(self._filhos_doc.values())
+        for f in fechar_ociosos:
+            f.fechar()
         chave = self._chave_estado(tipo, ifc, vista_guid, opcoes)
         sessao = self._obter_sessao(ifc, revisao) if revisao is not None else self._limpar_mortas()
         if chave in self._ativos:
+            for f in filhos_atuais:
+                f.podar()
             return chave
         antigo = self._por_vista.get(vista_guid)
         if antigo is not None:
             self.cancelar(antigo.chave)  # estado novo da mesma vista
-        ped = _Pedido(chave, vista_guid)
+        for f in filhos_atuais:
+            f.podar()
+        ped = _Pedido(chave, vista_guid, filho, geracao)
         if self._cache is not None:
             dados = self._cache.obter(chave)
             if dados is not None:
@@ -186,27 +223,37 @@ class GerenteDesenho(QObject):
     def invalidar(self, ifc=None, ids=None) -> None:
         excluir = None if ids is None else tuple(int(i) for i in ids)
         with self._trava:
+            self._geracao += 1
             self._limpar_mortas_travado()
+            filhos = list(self._filhos_doc.values())
             if ifc is None:
                 if excluir is None:
                     self._sessoes.clear()
-                    return
-                for chave_ifc, (rev, sessao, ref) in list(self._sessoes.items()):
-                    vivo = ref()
-                    if vivo is None:
-                        self._sessoes.pop(chave_ifc, None)
-                        continue
-                    self._sessoes[chave_ifc] = (rev, self._copiar_sessao_sem(sessao, excluir), ref)
-                    del vivo
-                return
-            chave_ifc = id(ifc)
-            atual = self._sessoes.get(chave_ifc)
-            if atual is None or atual[2]() is not ifc:
-                return
-            if excluir is None:
-                self._sessoes.pop(chave_ifc, None)
+                else:
+                    for chave_ifc, (rev, sessao, ref) in list(self._sessoes.items()):
+                        vivo = ref()
+                        if vivo is None:
+                            self._sessoes.pop(chave_ifc, None)
+                            continue
+                        self._sessoes[chave_ifc] = (rev, self._copiar_sessao_sem(sessao, excluir), ref)
+                        del vivo
             else:
-                self._sessoes[chave_ifc] = (atual[0], self._copiar_sessao_sem(atual[1], excluir), atual[2])
+                chave_ifc = id(ifc)
+                atual = self._sessoes.get(chave_ifc)
+                if atual is not None and atual[2]() is ifc:
+                    if excluir is None:
+                        self._sessoes.pop(chave_ifc, None)
+                    else:
+                        self._sessoes[chave_ifc] = (atual[0], self._copiar_sessao_sem(atual[1], excluir), atual[2])
+        for f in filhos:
+            f.invalidar()
+
+    def salvar(self) -> None:
+        with self._trava:
+            self._geracao += 1
+            filhos = list(self._filhos_doc.values())
+        for f in filhos:
+            f.salvar()
 
     def cancelar(self, chave) -> None:
         ped = self._ativos.pop(chave, None)
@@ -216,19 +263,31 @@ class GerenteDesenho(QObject):
         if self._por_vista.get(ped.vista) is ped:
             del self._por_vista[ped.vista]
 
-    def encerrar(self) -> None:
+    def fechar(self) -> None:
         peds = list(self._ativos.values())
         for ped in peds:
             self.cancelar(ped.chave)
         with self._trava:
             self._sessoes.clear()
             vivas = list(self._threads)
+            filhos = list(self._filhos_doc.values())
+            self._filhos_doc.clear()
         for t in vivas:
             t.join(timeout=10)
+        for f in filhos:
+            f.podar()
+            f.fechar()
+
+    encerrar = fechar
 
     def _rodar(self, ped, tipo, ifc, vista_guid, opcoes, sessao=None):
         # Thread de fundo: nada de Qt aqui alem de emitir o sinal interno (fila).
         try:
+            with self._trava:
+                mesma_geracao = ped.geracao == self._geracao
+            if not mesma_geracao:
+                opcoes = dict(opcoes)
+                opcoes.pop("caminho_ifc", None)
             extra = {}
             try:
                 params = inspect.signature(self._motor).parameters.values()
@@ -240,6 +299,9 @@ class GerenteDesenho(QObject):
                 extra["previa"] = lambda d: self._evento.emit(ped, "previa", d)
             if sessao is not None and ("sessao_selecao" in nomes or tem_kw):
                 extra["sessao_selecao"] = sessao
+            filho = getattr(ped, "filho", None) if mesma_geracao else None
+            if filho is not None and ("filho" in nomes or tem_kw):
+                extra["filho"] = filho
             dados = self._motor(
                 tipo, ifc, vista_guid, opcoes, cancelar=ped.cancelar,
                 progresso=lambda m: self._evento.emit(ped, "progresso", m), **extra)

@@ -75,7 +75,10 @@ def gerar_planta(
     componentes: bool | None = None,
     motor_visivel: bool | None = None,
     previa=None,
+    sessao_selecao: selecao.SessaoSelecao | None = None,
 ) -> Planta:
+    if sessao_selecao is not None and not isinstance(sessao_selecao, selecao.SessaoSelecao):
+        raise TypeError(f"sessao_selecao inválido: {sessao_selecao!r} (esperado SessaoSelecao ou None)")
     if pesados not in (None, "silhueta"):
         raise ValueError(f"pesados inválido: {pesados!r} (esperado None ou 'silhueta')")
     if limiar_pesado is not None and (
@@ -101,7 +104,7 @@ def gerar_planta(
     h = _altura_corte(ifc, anotacao)
 
     scale = float(ifcopenshell.util.unit.calculate_unit_scale(ifc))
-    sel = selecao.selecionar(ifc, gid_vista, categorias_ocultas=cats)
+    sel = selecao.selecionar(ifc, gid_vista, categorias_ocultas=cats, sessao=sessao_selecao)
     pav = ifc.by_id(sel.pavimento)
     if getattr(pav, "Elevation", None) is None:
         raise SelecaoInvalida(f"Pavimento {pav.Name or pav.GlobalId} sem cota (Elevation); não é possível gerar a planta")

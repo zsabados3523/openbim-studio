@@ -2,20 +2,18 @@
 """Oraculo F0-S06-T19g1: a vista viaja no pedido; o filho abre o IFC salvo (sem a vista) e reconstroi a anotacao. Nao editar nesta tarefa.
 
 CONTRATO
-1. `corte.gerar_corte(..., modelo_limpo=True, caminho_ifc=<arquivo salvo SEM a vista>)` produz SVG IDENTICO ao `gerar_corte` normal (IFC reduzido),
+1. `corte.gerar_corte(..., caminho_ifc=<arquivo salvo SEM a vista>)` produz SVG IDENTICO ao `gerar_corte` normal (IFC reduzido),
    em corte reto e em corte girado (direcao diagonal). O filho recebe `pedido["arquivo"] == caminho_ifc`.
 2. `pedido["vista"]` tem, alem de guid/escala: `matriz` (4x4, lista de listas, = get_local_placement da anotacao) e
    `bloco` (dict: XLength, YLength, ZLength e Location [x, y, z] do IfcBlock da vista).
-3. `modelo_limpo` ausente/False: `caminho_ifc` e IGNORADO (o filho recebe o reduzido, que contem a vista). `modelo_limpo` e keyword-only, default False,
-   bool validado (TypeError senao).
+3. `caminho_ifc` inexistente: cai no reduzido e produz o mesmo SVG.
 4. `obim_geometria.desenho._garantir_anotacao(f, vista)`, chamada no inicio de `_corte`: sem anotacao no arquivo, cria uma que `_corte` le (posicao pela matriz,
    bloco pelo `bloco`); com anotacao velha (deslocada), o pedido VENCE (sobrescreve posicao e bloco).
-Os mutantes (so translacao, sem sobrescrever, sem criar, modelo_limpo ignorado) sao implementados abaixo e precisam ser derrubados pelas mesmas checagens
+Os mutantes (so translacao, sem sobrescrever, sem criar, nome fixo) sao implementados abaixo e precisam ser derrubados pelas mesmas checagens
 que a referencia passa."""
 from __future__ import annotations
 
 import copy
-import inspect
 from pathlib import Path
 
 import ifcopenshell
@@ -169,7 +167,7 @@ def test_1_svg_pelo_arquivo_salvo_igual_ao_reduzido(tmp_path, girado):
     f, gid, salvo = _cena(tmp_path, girado)
     cbase, dbase = _base(f, gid)
     assert dbase["tem_vista"] and dbase["arquivo"] != str(salvo.resolve())
-    c, d = _gerar(f, gid, modelo_limpo=True, caminho_ifc=salvo)
+    c, d = _gerar(f, gid, caminho_ifc=salvo)
     assert d["arquivo"] == str(salvo.resolve()) and d["tem_vista"] is False, "o filho tem de abrir o arquivo salvo, que nao tem a vista"
     assert c.svg == cbase.svg and c.n_paths == cbase.n_paths and c.caixas == cbase.caixas
 
@@ -192,7 +190,7 @@ def test_1c_cena_girada_difere_da_reta(tmp_path):
 def test_2_pedido_leva_matriz_e_bloco(tmp_path, girado):
     f, gid, salvo = _cena(tmp_path, girado)
     esperado = _vista_de(f, gid)
-    for kw in ({}, {"modelo_limpo": True, "caminho_ifc": salvo}):
+    for kw in ({}, {"caminho_ifc": salvo}):
         _, d = _gerar(f, gid, **kw)
         v = d["pedido"]["vista"]
         assert v["nome"] == f.by_guid(gid).Name
@@ -214,25 +212,12 @@ def test_2b_pedido_e_serializavel_em_json(tmp_path):
     json.dumps(d["pedido"]["vista"])
 
 
-# ------------------------------------------------------------------ (3) modelo_limpo
-def test_3_sem_modelo_limpo_caminho_ifc_e_ignorado(tmp_path):
-    f, gid, salvo = _cena(tmp_path, False)
+# ------------------------------------------------------------------ (3) caminho_ifc inexistente
+def test_3_caminho_ifc_inexistente_cai_no_reduzido(tmp_path):
+    f, gid, _ = _cena(tmp_path, False)
     cbase, _ = _base(f, gid)
-    for kw in ({"caminho_ifc": salvo}, {"caminho_ifc": salvo, "modelo_limpo": False}):
-        c, d = _gerar(f, gid, **kw)
-        assert d["arquivo"] != str(salvo.resolve()) and d["tem_vista"] is True
-        assert c.svg == cbase.svg
-
-
-def test_3b_assinatura_e_validacao(tmp_path):
-    p = inspect.signature(corte.gerar_corte).parameters["modelo_limpo"]
-    assert p.kind is inspect.Parameter.KEYWORD_ONLY and p.default is False
-    f, gid, salvo = _cena(tmp_path, False)
-    for ruim in (1, 0, "sim", None, 1.0):
-        ex = Captura()
-        with pytest.raises(TypeError):
-            corte.gerar_corte(f, gid, executor=ex, modelo_limpo=ruim, caminho_ifc=salvo)
-        assert ex.desenhos == []
+    c, d = _gerar(f, gid, caminho_ifc=tmp_path / "nao_existe.ifc")
+    assert d["tem_vista"] is True and c.svg == cbase.svg
 
 
 # ------------------------------------------------------------------ (4) _garantir_anotacao no filho
@@ -294,22 +279,3 @@ def test_m1_mutante_cai(monkeypatch, tmp_path, variante, girado):
     monkeypatch.undo()
     with pytest.raises(Exception):
         _checa_cria_e_sobrescreve(monkeypatch, tmp_path, girado, garantir=_ref_garantir(variante))
-
-
-def test_m2_modelo_limpo_ignorado_cai(monkeypatch, tmp_path):
-    def checa(gerar):
-        f, gid, salvo = _cena(tmp_path, False)
-        _, d = _gerar(f, gid, gerar=gerar, caminho_ifc=salvo)
-        assert d["arquivo"] != str(salvo.resolve()) and d["tem_vista"] is True
-
-    checa(None)  # contrato real
-
-    orig = corte.gerar_corte
-
-    def ignora_flag(ifc, gid, **kw):
-        if kw.get("caminho_ifc") is not None:
-            kw["modelo_limpo"] = True
-        return orig(ifc, gid, **kw)
-
-    with pytest.raises(AssertionError):
-        checa(ignora_flag)

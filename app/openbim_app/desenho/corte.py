@@ -60,15 +60,12 @@ def gerar_corte(
     cancelar=None,
     executor=None,
     caminho_ifc: str | Path | None = None,
-    modelo_limpo: bool = False,
     moveis_caixa2d: bool = False,
     profundidade_corte: float | None = None,
     faixas: int = 1,
     cache: "CacheDesenho | None" = None,
     motor_visivel: bool | None = None,
 ) -> Corte:
-    if not isinstance(modelo_limpo, bool):
-        raise TypeError(f"modelo_limpo inválido: {modelo_limpo!r} (esperado bool)")
     if motor_visivel is not None and not isinstance(motor_visivel, bool):
         raise ValueError(f"motor_visivel inválido: {motor_visivel!r} (esperado bool ou None)")
     _validar_profundidade_corte(profundidade_corte)
@@ -84,7 +81,7 @@ def gerar_corte(
     if info.get("tipo") != "CORTE":
         raise SelecaoInvalida(f"Vista {gid_vista} não é do tipo CORTE (tipo={info.get('tipo')})")
 
-    caminho_efetivo = caminho_ifc if modelo_limpo else None
+    caminho_efetivo = caminho_ifc  # quem passa o caminho garante que o arquivo bate com o modelo (T15e)
     scale = float(ifcopenshell.util.unit.calculate_unit_scale(ifc))
     sel = selecao.selecionar(
         ifc,

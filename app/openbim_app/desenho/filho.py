@@ -247,9 +247,23 @@ class FilhoPersistente:
 
                 self._quedas_seguidas = 0
                 self._fim_ultimo = self._relogio()
+                if pedido.get("op") == "abrir" and isinstance(dados, dict) and dados.get("aberto") is True:
+                    return dados
                 return aux._tratar_resposta(dados)
         finally:
             self._trava.release()
+
+    def aquecer(
+        self,
+        cancelar: threading.Event | None = None,
+        limite_s: float = LIMITE_PADRAO_S,
+    ) -> dict:
+        """Pré-aquece o processo filho abrindo o IFC sem executar desenho."""
+        return self.executar(
+            {"op": "abrir", "protocolo": 1, "arquivo": self.arquivo},
+            cancelar=cancelar,
+            limite_s=limite_s,
+        )
 
     def salvar(self) -> None:
         with self._trava:

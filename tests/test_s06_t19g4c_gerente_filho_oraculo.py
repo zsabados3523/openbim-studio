@@ -112,7 +112,7 @@ class _Ref(GerenteDesenho):
     bug = None
 
     def __init__(self, *a, filho_persistente=False, **k):
-        super().__init__(*a, **k)
+        super().__init__(*a, filho_persistente=False, **k)
         self._fp, self._filhos, self._tl = bool(filho_persistente) or self.bug == "chave_ignorada", {}, threading.local()
         base = self._motor
 
@@ -199,7 +199,7 @@ def _unit(cls, espia, tmp_path):
     outros = []
 
     # chave desligada (padrao e explicita): nenhum FilhoPersistente, kwarg ausente ou None, mesmo com gate aberto
-    for kw in ({}, {"filho_persistente": False}):
+    for kw in ({"filho_persistente": False},):
         m = Motor()
         g = _gerente(cls, m, **kw)
         op, k = _p(g, m, 0, "V1", caminho_ifc=a, **aberto)
@@ -285,7 +285,7 @@ def test_real(app, espia, tmp_path):
 def test_assinatura_publica():
     import inspect
     p = inspect.signature(GerenteDesenho.__init__).parameters["filho_persistente"]
-    assert p.default is False and p.kind is inspect.Parameter.KEYWORD_ONLY
+    assert p.default is True and p.kind is inspect.Parameter.KEYWORD_ONLY
     for nome in ("salvar", "fechar"):
         assert callable(getattr(GerenteDesenho, nome)), nome
     for f in (selecao.selecionar, corte.gerar_corte, planta.gerar_planta):

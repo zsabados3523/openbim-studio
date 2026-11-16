@@ -19,8 +19,8 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, Signal, Slot
 
-from openbim_app.desenho.auxiliar import DesenhoCancelado
-from openbim_app.desenho.filho import FilhoPersistente
+from openbim_app.desenho.auxiliar import DesenhoCancelado, ErroAuxiliar
+from openbim_app.desenho.filho import FilhoIndisponivel, FilhoPersistente
 from openbim_app.desenho.selecao import SessaoSelecao
 
 TIPOS = ("planta", "corte")
@@ -75,6 +75,16 @@ def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, 
     return dados
 
 
+def _resolver_ifc_aberto(caminho_ifc, revisao, revisao_salva) -> Path | None:
+    if not (caminho_ifc and revisao is not None and revisao == revisao_salva):
+        return None
+    try:
+        caminho_resolvido = Path(caminho_ifc).resolve()
+        return caminho_resolvido if caminho_resolvido.is_file() else None
+    except OSError:
+        return None
+
+
 class _Pedido:
     def __init__(self, chave, vista, filho=None, geracao=0):
         self.chave, self.vista = chave, vista
@@ -96,7 +106,7 @@ class GerenteDesenho(QObject):
     previa = Signal(str, object)
     _evento = Signal(object, str, object)  # (pedido, tipo do evento, carga); interno
 
-    def __init__(self, cache=None, *, motor=None, chave_estado=None, filho_persistente: bool = False, parent=None):
+    def __init__(self, cache=None, *, motor=None, chave_estado=None, filho_persistente: bool = True, parent=None):
         super().__init__(parent)
         self._cache = cache
         self._padrao = chave_estado is None
@@ -112,6 +122,7 @@ class GerenteDesenho(QObject):
         if self._padrao:
             self._cache = None  # cache fica no motor padrao
         self._threads: set = set()
+        self._cancelamentos_aquecer: set[threading.Event] = set()
         self._trava = threading.Lock()
         self._geracao = 0
         self._ativos: dict[str, _Pedido] = {}
@@ -120,33 +131,66 @@ class GerenteDesenho(QObject):
         self._filhos_doc: dict[Path, FilhoPersistente] = {}
         self._evento.connect(self._tratar, Qt.ConnectionType.QueuedConnection)
 
+    def _obter_filho_travado(self, caminho_resolvido: Path) -> tuple[FilhoPersistente, list[FilhoPersistente]]:
+        filho = self._filhos_doc.get(caminho_resolvido)
+        if filho is not None:
+            return filho, []
+        fechar_ociosos = []
+        em_uso = {p.filho for p in list(self._ativos.values()) if p.filho is not None}
+        for k, f_ant in list(self._filhos_doc.items()):
+            if f_ant not in em_uso:
+                self._filhos_doc.pop(k, None)
+                fechar_ociosos.append(f_ant)
+        filho = FilhoPersistente(caminho_resolvido)
+        self._filhos_doc[caminho_resolvido] = filho
+        return filho, fechar_ociosos
+
+    def aquecer(self, caminho_ifc, *, revisao=None, revisao_salva=None) -> None:
+        """Pré-aquece o filho persistente do documento salvo em segundo plano."""
+        if not self._usar_filho:
+            return
+        caminho_resolvido = _resolver_ifc_aberto(caminho_ifc, revisao, revisao_salva)
+        if caminho_resolvido is None:
+            return
+        cancelar = threading.Event()
+        with self._trava:
+            geracao = self._geracao
+            filho, fechar_ociosos = self._obter_filho_travado(caminho_resolvido)
+            t = threading.Thread(
+                target=self._aquecer, args=(filho, geracao, cancelar), daemon=True
+            )
+            self._threads.add(t)
+            self._cancelamentos_aquecer.add(cancelar)
+        for f in fechar_ociosos:
+            f.fechar()
+        t.start()
+
+    def _aquecer(self, filho: FilhoPersistente, geracao: int, cancelar: threading.Event) -> None:
+        t = threading.current_thread()
+        try:
+            with self._trava:
+                if geracao != self._geracao or cancelar.is_set():
+                    return
+            filho.aquecer(cancelar=cancelar)
+        except (FilhoIndisponivel, ErroAuxiliar):
+            pass
+        finally:
+            with self._trava:
+                self._cancelamentos_aquecer.discard(cancelar)
+                self._threads.discard(t)
+
     def pedir(self, tipo, ifc, vista_guid, *, caminho_ifc=None, revisao_salva=None, revisao=None, **opcoes) -> str:
         if tipo not in TIPOS:
             raise ValueError(f"tipo de desenho invalido: {tipo!r}")
-        aberto = False
-        caminho_resolvido = None
-        if caminho_ifc and revisao is not None and revisao == revisao_salva:
-            try:
-                caminho_resolvido = Path(caminho_ifc).resolve()
-                aberto = caminho_resolvido.is_file()
-            except OSError:
-                aberto = False
-            if aberto:
-                opcoes["caminho_ifc"] = caminho_ifc
+        caminho_resolvido = _resolver_ifc_aberto(caminho_ifc, revisao, revisao_salva)
+        if caminho_resolvido is not None:
+            opcoes["caminho_ifc"] = caminho_ifc
         filho = None
         fechar_ociosos = []
         with self._trava:
             geracao = self._geracao
-            if self._usar_filho and aberto:
-                filho = self._filhos_doc.get(caminho_resolvido)
-                if filho is None:
-                    em_uso = {p.filho for p in list(self._ativos.values()) if p.filho is not None}
-                    for k, f_ant in list(self._filhos_doc.items()):
-                        if f_ant not in em_uso:
-                            self._filhos_doc.pop(k, None)
-                            fechar_ociosos.append(f_ant)
-                    filho = FilhoPersistente(caminho_resolvido)
-                    self._filhos_doc[caminho_resolvido] = filho
+            if self._usar_filho and caminho_resolvido is not None:
+                filho, fechar_ociosos = self._obter_filho_travado(caminho_resolvido)
             filhos_atuais = list(self._filhos_doc.values())
         for f in fechar_ociosos:
             f.fechar()
@@ -224,6 +268,8 @@ class GerenteDesenho(QObject):
         excluir = None if ids is None else tuple(int(i) for i in ids)
         with self._trava:
             self._geracao += 1
+            for ev in self._cancelamentos_aquecer:
+                ev.set()
             self._limpar_mortas_travado()
             filhos = list(self._filhos_doc.values())
             if ifc is None:
@@ -251,6 +297,8 @@ class GerenteDesenho(QObject):
     def salvar(self) -> None:
         with self._trava:
             self._geracao += 1
+            for ev in self._cancelamentos_aquecer:
+                ev.set()
             filhos = list(self._filhos_doc.values())
         for f in filhos:
             f.salvar()
@@ -268,6 +316,9 @@ class GerenteDesenho(QObject):
         for ped in peds:
             self.cancelar(ped.chave)
         with self._trava:
+            self._geracao += 1
+            for ev in self._cancelamentos_aquecer:
+                ev.set()
             self._sessoes.clear()
             vivas = list(self._threads)
             filhos = list(self._filhos_doc.values())

@@ -37,7 +37,24 @@ def _validar_entrada(verts, tris, z) -> tuple[np.ndarray, np.ndarray, float] | N
 
 
 def linhas_peca_cortada(verts, tris, z, aneis_oclusores=(), *, encolher=5e-4):
-    """Retorna polilinhas (K, 2) visiveis da peca cortada em `z` fora de `aneis_oclusores`, ou None."""
+    """Retorna polilinhas (K, 2) visiveis da peca cortada em `z` fora de `aneis_oclusores`, ou None.
+
+    Parametros:
+        verts, tris: malha triangular (N, 3) e (M, 3) inteira.
+        z: cota do plano horizontal de corte.
+        aneis_oclusores: lista de GRUPOS de aneis (ex.: um grupo por parede, unidos por uniao);
+            passar lista plana cai na regra par-impar e pode anular paredes sobrepostas.
+        encolher: recuo aplicado ao redor dos aneis oclusores e da propria secao para manter
+            contornos colineares visiveis.
+
+    Notas:
+        - No caso geral (malha cruza o plano), as linhas da parte abaixo sao recortadas fora
+          dos aneis fechados da propria secao (um unico grupo par-impar, mantendo furos abertos)
+          e depois fora de `aneis_oclusores`. Em prismas verticais, onde base e borda do corte
+          coincidem em planta, contorno duplicado e comportamento conhecido.
+        - `recortar_fora_dos_aneis` lanca `ValueError` se receber anel invalido em `aneis_oclusores`
+          ou na secao.
+    """
     validada = _validar_entrada(verts, tris, z)
     if validada is None:
         return None
@@ -60,5 +77,5 @@ def linhas_peca_cortada(verts, tris, z, aneis_oclusores=(), *, encolher=5e-4):
         return None
 
     linhas = linhas_visiveis(verts_ab, tris_ab) if len(tris_ab) > 0 else []
-    contornos = [np.vstack([r, r[:1]]) for r in fechados]
-    return recortar_fora_dos_aneis(linhas + contornos, aneis_oclusores, encolher=encolher)
+    linhas = recortar_fora_dos_aneis(linhas, fechados, encolher=encolher)
+    return recortar_fora_dos_aneis(linhas, aneis_oclusores, encolher=encolher)

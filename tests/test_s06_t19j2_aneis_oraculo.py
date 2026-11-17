@@ -9,6 +9,7 @@ Suposições de formato: anel pode repetir ou não o primeiro ponto no fim (o te
 (o teste ordena pela área); trechos de saída na ordem de percurso das polilinhas.
 Todo valor esperado vem de conta à mão, nunca da função."""
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -16,9 +17,14 @@ import numpy as np
 GEOMETRIA = Path(__file__).resolve().parent.parent / "geometria"
 if str(GEOMETRIA) not in sys.path:
     sys.path.insert(0, str(GEOMETRIA))
-from obim_geometria.aneis import aneis_de_segmentos, recortar_fora_dos_aneis  # noqa: E402
+from obim_geometria.aneis import aneis_de_segmentos  # noqa: E402
 
 TOL = 1e-9
+RET = [(0, 0), (4, 0), (4, 2), (0, 2)]          # área 8, anti-horário
+RET10 = [(0, 0), (10, 0), (10, 10), (0, 10)]    # área 100
+FURO = [(4, 4), (6, 4), (6, 6), (4, 6)]         # área 4 (dado anti-horário; esperado sai horário)
+L = [(0, 0), (2, 0), (2, 1), (1, 1), (1, 2), (0, 2)]  # área 3
+
 
 
 def _abre(p):
@@ -38,19 +44,20 @@ def segs_de(pts, fecha=True):
     return [(*pts[i], *pts[(i + 1) % len(pts)]) for i in range(n)]
 
 
-RET = [(0, 0), (4, 0), (4, 2), (0, 2)]          # área 8, anti-horário
-RET10 = [(0, 0), (10, 0), (10, 10), (0, 10)]    # área 100
-FURO = [(4, 4), (6, 4), (6, 6), (4, 6)]         # área 4 (dado anti-horário; esperado sai horário)
-L = [(0, 0), (2, 0), (2, 1), (1, 1), (1, 2), (0, 2)]  # área 3
-
-
 def trechos_iguais(res, esperado):
     assert len(res) == len(esperado), (len(res), esperado)
     for r, e in zip(res, esperado):
         np.testing.assert_allclose(np.asarray(r, float), np.asarray(e, float), atol=TOL, rtol=0)
 
 
-# ---------- anéis ----------
+def anel(pts):
+    return np.array(pts, float)
+
+
+def rect(x0, y0, x1, y1):
+    return [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]  # anti-horário
+
+
 def test_retangulo_area_e_orientacao():
     f, a = aneis_de_segmentos(np.array(segs_de(RET), float))
     assert len(f) == 1 and len(a) == 0
@@ -138,74 +145,58 @@ def test_aneis_nao_muta_entrada():
     np.testing.assert_array_equal(s, c)
 
 
-# ---------- recorte ----------
-def anel(pts):
-    return np.array(pts, float)
+def test_no_na_fronteira_de_celula():
+    e = 4 + 0.49999e-6, 4 + 0.50001e-6  # a 2e-11 um do outro, lados opostos de 4.0000005
+    segs = [(0, 0, e[0], 0), (e[1], 0, e[1], 2), (e[0], 2, 0, 2), (0, 2, 0, 0)]
+    f, a = aneis_de_segmentos(np.array(segs, float), tol=1e-6)
+    assert len(f) == 1 and len(a) == 0 and abs(area(f[0]) - 8.0) < 1e-5
 
 
-def test_atravessa_retangulo_dois_trechos_pontos_exatos():
-    lin = [np.array([(-1, 1), (5, 1)], float)]
-    trechos_iguais(recortar_fora_dos_aneis(lin, [anel(RET)], encolher=0.0),
-                   [[(-1, 1), (0, 1)], [(4, 1), (5, 1)]])
+def test_ilha_dentro_de_furo_dentro_de_externo():
+    pts = [rect(0, 0, 10, 10), rect(2, 2, 8, 8), rect(4, 4, 6, 6)]
+    f, a = aneis_de_segmentos(np.array(sum((segs_de(r) for r in pts), []), float))
+    assert len(f) == 3 and len(a) == 0
+    for x, y in zip(sorted(area(r) for r in f), [-36.0, 4.0, 100.0]):
+        assert abs(x - y) < TOL
 
 
-def test_encolher_5e4_move_os_cortes():
-    lin = [np.array([(-1, 1), (5, 1)], float)]
-    esperado = [[(-1, 1), (5e-4, 1)], [(4 - 5e-4, 1), (5, 1)]]
-    trechos_iguais(recortar_fora_dos_aneis(lin, [anel(RET)], encolher=5e-4), esperado)
-    trechos_iguais(recortar_fora_dos_aneis(lin, [anel(RET)]), esperado)  # padrão = 5e-4
+def test_ponto_inicial_lexicografico_minimo_nos_dois_sentidos():
+    for pts in ([(4, 2), (0, 2), (0, 0), (4, 0)], [(4, 0), (0, 0), (0, 2), (4, 2)], [(0, 2), (0, 0), (4, 0), (4, 2)]):
+        f, _ = aneis_de_segmentos(np.array(segs_de(pts), float))
+        np.testing.assert_allclose(_abre(f[0]), RET, atol=TOL, rtol=0)  # (0,0) primeiro, anti-horário
 
 
-def test_toda_dentro_vazia():
-    lin = [np.array([(1, 1), (3, 1)], float)]
-    assert recortar_fora_dos_aneis(lin, [anel(RET)], encolher=0.0) == []
+def test_aneis_ordenados_pelo_ponto_inicial():
+    segs = segs_de(rect(10, 10, 11, 11)) + segs_de(rect(0, 0, 1, 1))
+    f, _ = aneis_de_segmentos(np.array(segs, float))
+    assert len(f) == 2
+    np.testing.assert_allclose(_abre(f[0])[0], (0, 0), atol=TOL)
+    np.testing.assert_allclose(_abre(f[1])[0], (10, 10), atol=TOL)
 
 
-def test_toda_fora_igual():
-    lin = [np.array([(-3, 5), (8, 5)], float)]
-    trechos_iguais(recortar_fora_dos_aneis(lin, [anel(RET)]), [[(-3, 5), (8, 5)]])
+def test_cadeia_aberta_mesmo_resultado_nos_dois_sentidos():
+    c = [(0, 0), (1, 0), (2, 1)]
+    _, a1 = aneis_de_segmentos(np.array(segs_de(c, fecha=False), float))
+    _, a2 = aneis_de_segmentos(np.array(segs_de(c[::-1], fecha=False), float))
+    assert len(a1) == len(a2) == 1
+    np.testing.assert_allclose(a1[0], a2[0], atol=TOL, rtol=0)
 
 
-def test_dentro_do_furo_mantida():
-    lin = [np.array([(1, 5), (9, 5)], float)]
-    aneis = [anel(RET10), anel(FURO[::-1])]  # furo horário
-    trechos_iguais(recortar_fora_dos_aneis(lin, aneis, encolher=0.0), [[(4, 5), (6, 5)]])
+def test_segmento_duplicado_ab_ba_vai_para_abertos():
+    f, a = aneis_de_segmentos(np.array([(0, 0, 1, 0), (1, 0, 0, 0)], float))
+    assert len(f) == 0 and len(a) == 1
 
 
-def test_colinear_com_borda_mantida():
-    lin = [np.array([(-1, 0), (5, 0)], float)]
-    trechos_iguais(recortar_fora_dos_aneis(lin, [anel(RET)], encolher=5e-4), [[(-1, 0), (5, 0)]])
+def test_saida_independe_da_entrada():
+    segs = np.array(segs_de(RET), float)
+    f, _ = aneis_de_segmentos(segs)
+    f[0][:] = 99.0
+    np.testing.assert_array_equal(segs, np.array(segs_de(RET), float))
 
 
-def test_vertice_exatamente_na_borda():
-    toca = [np.array([(-1, 1), (0, 1), (-1, 2)], float)]  # só encosta no vértice (0,1)
-    trechos_iguais(recortar_fora_dos_aneis(toca, [anel(RET)], encolher=5e-4),
-                   [[(-1, 1), (0, 1), (-1, 2)]])
-    entra = [np.array([(-1, 1), (0, 1), (2, 1)], float)]  # vértice na borda e segue para dentro
-    trechos_iguais(recortar_fora_dos_aneis(entra, [anel(RET)], encolher=0.0), [[(-1, 1), (0, 1)]])
-
-
-def test_polilinha_varios_vertices():
-    lin = [np.array([(-1, 1), (2, 1), (2, 3), (6, 3)], float)]  # entra em (0,1), sai em (2,2)
-    trechos_iguais(recortar_fora_dos_aneis(lin, [anel(RET)], encolher=0.0),
-                   [[(-1, 1), (0, 1)], [(2, 2), (2, 3), (6, 3)]])
-
-
-def test_varias_polilinhas_em_ordem():
-    lins = [np.array([(-1, 1), (5, 1)], float), np.array([(1, 1), (3, 1)], float),
-            np.array([(-1, 5), (5, 5)], float)]
-    trechos_iguais(recortar_fora_dos_aneis(lins, [anel(RET)], encolher=0.0),
-                   [[(-1, 1), (0, 1)], [(4, 1), (5, 1)], [(-1, 5), (5, 5)]])
-
-
-def test_recorte_nao_muta_e_e_deterministico():
-    lins = [np.array([(-1, 1), (2, 1), (2, 3), (6, 3)], float)]
-    aneis = [anel(RET)]
-    c_l, c_a = [x.copy() for x in lins], [x.copy() for x in aneis]
-    r1 = recortar_fora_dos_aneis(lins, aneis)
-    r2 = recortar_fora_dos_aneis(lins, aneis)
-    for x, y in zip(lins + aneis, c_l + c_a):
-        np.testing.assert_array_equal(x, y)
-    assert len(r1) == len(r2)
-    for x, y in zip(r1, r2):
-        np.testing.assert_array_equal(x, y)
+def test_desempenho_aneis():
+    quad = [(float(3 * (i % 50)), float(3 * (i // 50))) for i in range(1250)]
+    segs = np.array([s for x, y in quad for s in segs_de(rect(x, y, x + 1, y + 1))], float)
+    t = time.perf_counter()
+    f, a = aneis_de_segmentos(segs)
+    assert time.perf_counter() - t < 1.0 and len(f) == 1250 and len(a) == 0

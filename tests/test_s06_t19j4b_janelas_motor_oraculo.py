@@ -194,3 +194,99 @@ def test_anel_concavo_em_U_com_pontos_no_miolo_dos_dois_bracos_nao_e_none():
     # um bloco no miolo de cada braço, acima do zmin da janela: tudo cabe na seção; o vão entre os braços não pode ser testado
     r = oclusores_da_peca((0.9, 1.2, 2.1, 1.8, 0.85), [_juntar(corpo, _quad(.4, 1.3, .6, 1.7, .2, 1.2), _quad(2.4, 1.3, 2.6, 1.7, .2, 1.2))], 1.5)
     assert r is not None and len(r) == 1
+
+
+# ---------- rodada 2 (Opus): plano na borda, soleira baixa, comprimento zero, pré-filtro, falha isolada ----------
+@pytest.mark.parametrize("corte", [0.9, 1.9])
+def test_none_da_j4a_corte_em_z0_ou_z1_da_janela_vai_ao_hlr(tmp_path, corte):
+    f, g, gid = cena()
+    p = pedido(f, gid, tmp_path / "p")
+    p["vista"]["altura_corte_m"] = corte  # janela z 0,9..1,9: o plano passa pela face dela (None do j3, nunca [])
+    base, com = roda(p), roda(p, motor_janelas=True)
+    assert not pelo_motor(f, g, com, "jan0")
+    assert B.grupo(com["svg"], g["jan0"]) == B.grupo(base["svg"], g["jan0"])
+
+
+def test_none_da_j3_so_da_janela_vai_ao_hlr(tmp_path, monkeypatch):
+    from obim_geometria import peca_cortada
+    orig = peca_cortada.linhas_peca_cortada
+
+    def none_na_janela(verts, tris, z, grupos=(), **k):
+        return None if abs(np.asarray(verts)[:, 0].min() - 3.0) < 1e-3 else orig(verts, tris, z, grupos, **k)  # janela x 3..4
+    monkeypatch.setattr(peca_cortada, "linhas_peca_cortada", none_na_janela)
+    f, g, gid = cena()
+    p = pedido(f, gid, tmp_path / "p")
+    base, com = roda(p), roda(p, motor_janelas=True)
+    assert not pelo_motor(f, g, com, "jan0") and pelo_motor(f, g, com, "porta0")  # None vira HLR, nunca []
+    assert B.grupo(com["svg"], g["jan0"]) == B.grupo(base["svg"], g["jan0"])
+
+
+def test_soleira_comum_na_caixa_de_janela_saliente_nao_entra_no_motor(tmp_path):
+    def extra(f, pav, g):
+        j = X.caixa(f, "IfcWindow", "sal", 2.2, -0.1, 0.9, 0.6, 0.35, 1.0)  # janela saliente: y -0,1..0,25 (a parede é y 0..0,25)
+        s = X.caixa(f, "IfcBuildingElementProxy", "sol", 2.3, -0.1, 0.0, 0.4, 0.08, 0.3)  # z 0..0,3, y -0,1..-0,02: na caixa da janela, fora da parede
+        g["sal"], g["sol"] = j.GlobalId, s.GlobalId
+        X.conter(f, pav, j, s)
+    f, g, gid = cena(extra)
+    p = pedido(f, gid, tmp_path / "p")
+    base, com = roda(p), roda(p, motor_janelas=True)
+    assert not pelo_motor(f, g, base, "sol") and not pelo_motor(f, g, com, "sol")  # a caixa da janela segue em inel_boxes
+    assert B.grupo(com["svg"], g["sol"]) == B.grupo(base["svg"], g["sol"])
+
+
+def test_polilinha_de_comprimento_zero_nao_vai_ao_svg(tmp_path, monkeypatch):
+    from obim_geometria import peca_cortada
+    orig, chamadas = peca_cortada.linhas_peca_cortada, []
+
+    def com_ponto(*a, **k):
+        r = orig(*a, **k)
+        chamadas.append(r)
+        return r if not r else r + [np.array([r[0][0], r[0][0]])]  # [[x,y],[x,y]]
+    monkeypatch.setattr(peca_cortada, "linhas_peca_cortada", com_ponto)
+    f, g, gid = cena()
+    r = roda(pedido(f, gid, tmp_path / "p"), motor_janelas=True)
+    assert chamadas and pelo_motor(f, g, r, "jan0")
+    for nome in ("jan0", "porta0"):
+        for pl in linhas(r, g[nome]):
+            assert len(pl) >= 2 and not np.all(pl == pl[0]), "polilinha de comprimento zero no SVG"
+
+
+def test_parede_longe_da_janela_nao_entra_em_outras(tmp_path, monkeypatch):
+    from obim_geometria import oclusores
+    orig, vistas = oclusores.oclusores_da_peca, []
+
+    def espia(caixa, outras, z, **k):
+        outras = list(outras)
+        vistas.append((tuple(caixa), [(v[:, :2].min(0), v[:, :2].max(0)) for v, _t in outras]))
+        return orig(caixa, outras, z, **k)
+    monkeypatch.setattr(oclusores, "oclusores_da_peca", espia)
+
+    def extra(f, pav, g):
+        X.conter(f, pav, X.caixa(f, "IfcWall", "PL", 0.0, 2.0, 0.0, 5.0, 0.25, 3.0))  # y 2..2,25: >1 mm de folga da janela (y 0..0,25)
+    f, g, gid = cena(extra)
+    r = roda(pedido(f, gid, tmp_path / "p"), motor_janelas=True)
+    assert pelo_motor(f, g, r, "jan0")
+    cx = [v for v in vistas if abs(v[0][0] - 3.0) < 1e-3 and abs(v[0][2] - 4.0) < 1e-3]
+    assert cx, "oclusores_da_peca não foi chamado para a janela"
+    for caixa, caixas_outras in cx:
+        assert caixas_outras, "a parede da própria janela tem de entrar"
+        for lo, hi in caixas_outras:  # toda peça de `outras` cruza a caixa XY da janela + 1 mm
+            assert hi[0] >= caixa[0] - 1e-3 and lo[0] <= caixa[2] + 1e-3 and hi[1] >= caixa[1] - 1e-3 and lo[1] <= caixa[3] + 1e-3
+
+
+def test_falha_em_uma_janela_so_leva_essa_janela_ao_hlr(tmp_path, monkeypatch):
+    from obim_geometria import peca_cortada
+    orig = peca_cortada.linhas_peca_cortada
+
+    def falha_na_janela(verts, tris, z, grupos=(), **k):
+        if abs(np.asarray(verts)[:, 0].min() - 3.0) < 1e-3:  # a janela (x 3..4)
+            raise RuntimeError("falha simulada")
+        return orig(verts, tris, z, grupos, **k)
+    monkeypatch.setattr(peca_cortada, "linhas_peca_cortada", falha_na_janela)
+    f, g, gid = cena()
+    p = pedido(f, gid, tmp_path / "p")
+    base, com = roda(p), roda(p, motor_janelas=True)
+    assert not pelo_motor(f, g, com, "jan0")  # só ela cai no HLR
+    assert pelo_motor(f, g, com, "porta0")  # a porta segue pelo motor (a parede P0, z1 > corte, nunca é elegível ao motor)
+    assert com["motor_janelas_diag"]["erro"] == 1
+    assert B.grupo(com["svg"], g["jan0"]) == B.grupo(base["svg"], g["jan0"])

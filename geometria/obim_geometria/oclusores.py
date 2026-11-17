@@ -115,11 +115,16 @@ def _degrau_coberto(
         on_zlim = np.abs(v_ab[:, 2] - z_lim) <= _EPS_PLANO
         if np.any(on_zlim) and np.any(on_zlim[t_ab].all(axis=1)):
             return False
+    td = mxy + _EPS_DIST
+    bx0, by0, bx1, by1 = caixa_xy[0] - td, caixa_xy[1] - td, caixa_xy[2] + td, caixa_xy[3] + td
+    # a fatia de um triangulo fica dentro da caixa XY dele: so cortar os que cruzam a caixa da peca
+    if len(t_ab):
+        a_xy = v_ab[t_ab][:, :, :2]
+        lo, hi = a_xy.min(axis=1), a_xy.max(axis=1)
+        t_ab = t_ab[(hi[:, 0] >= bx0) & (lo[:, 0] <= bx1) & (hi[:, 1] >= by0) & (lo[:, 1] <= by1)]
     v_fat, t_fat, _ = cortar_malha_no_plano(v_ab * np.array((1.0, 1.0, -1.0)), t_ab, -z_lim)
     if len(v_fat) == 0 or len(t_fat) == 0:
         return True
-    td = mxy + _EPS_DIST
-    bx0, by0, bx1, by1 = caixa_xy[0] - td, caixa_xy[1] - td, caixa_xy[2] + td, caixa_xy[3] + td
     v_xy = v_fat[:, :2]
     tri_xy = v_xy[t_fat]
     tri_min, tri_max = tri_xy.min(axis=1), tri_xy.max(axis=1)

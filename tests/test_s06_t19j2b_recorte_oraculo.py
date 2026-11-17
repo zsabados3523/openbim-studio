@@ -1,18 +1,16 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo T19j2b: recortar_fora_dos_aneis(polilinhas, aneis, encolher=5e-4).
-`recortar_fora_dos_aneis(polilinhas, aneis, encolher=5e-4) -> list[ndarray (n,2)]`.
-Contrato (cartão F0-S06-T19j2): anéis (n,2) costurados dos segmentos (k,4); externos anti-horários (área > 0), furos
-horários (área < 0); pontos dentro de `tol` são o mesmo nó; cadeia que não fecha vai em `abertos`; recorte remove
-os trechos dentro da região (anéis encolhidos em `encolher`, par-ímpar), corta nas interseções exatas, mantém
-colinear com a borda; sem mutar a entrada; determinístico.
-Suposições de formato: anel pode repetir ou não o primeiro ponto no fim (o teste normaliza); ordem dos anéis livre
-(o teste ordena pela área); trechos de saída na ordem de percurso das polilinhas.
+"""Oráculo T19j2b: `recortar_fora_dos_aneis(polilinhas, aneis, encolher=5e-4) -> list[ndarray (n,2)]`.
+Contrato (cartão F0-S06-T19j2): remove os trechos dentro da região (anéis encolhidos em `encolher`, par-ímpar; furo
+cresce `encolher`), corta nas interseções exatas, mantém colinear com a borda; `aneis` = lista plana (um grupo) ou lista
+de grupos (união dos grupos, par-ímpar só dentro de cada grupo); aceita anéis como listas de tuplas; sem mutar a entrada.
+Suposições de formato: trechos de saída na ordem de percurso das polilinhas.
 Todo valor esperado vem de conta à mão, nunca da função."""
 import sys
 import time
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 GEOMETRIA = Path(__file__).resolve().parent.parent / "geometria"
 if str(GEOMETRIA) not in sys.path:
@@ -183,3 +181,33 @@ def test_ilha_dentro_de_furo_dentro_de_externo_recorte():
     aneis = [anel(pts[0]), anel(pts[1][::-1]), anel(pts[2])]  # par-ímpar: dentro = borda externa menos furo mais ilha
     trechos_iguais(recortar_fora_dos_aneis([np.array([(-1, 5), (11, 5)], float)], aneis, encolher=0.0),
                    [[(-1, 5), (0, 5)], [(2, 5), (4, 5)], [(6, 5), (8, 5)], [(10, 5), (11, 5)]])
+
+
+def test_L_arco_no_vertice_reentrante():
+    # y = 1-3e-4: dentro da região só se dist ao quadrante x>1,y>1 > 5e-4: (1-x)^2 > 25e-8 - 9e-8 -> x < 1-4e-4
+    lin = [np.array([(0.5, 1 - 3e-4), (1.5, 1 - 3e-4)], float)]
+    trechos_iguais(recortar_fora_dos_aneis(lin, [anel(L)], encolher=5e-4), [[(1 - 4e-4, 1 - 3e-4), (1.5, 1 - 3e-4)]])
+
+
+def test_anel_externo_horario():
+    lin = [np.array([(-1, 1), (5, 1)], float)]
+    trechos_iguais(recortar_fora_dos_aneis(lin, [anel(rect(0, 0, 4, 2)[::-1])], encolher=5e-4),
+                   [[(-1, 1), (5e-4, 1)], [(4 - 5e-4, 1), (5, 1)]])
+
+
+def test_polilinha_colinear_com_vertices_extras_atravessa():
+    lin = [np.array([(-1, 1), (2, 1), (4, 1), (5, 1)], float)]
+    trechos_iguais(recortar_fora_dos_aneis(lin, [anel(RET)], encolher=0.0), [[(-1, 1), (0, 1)], [(4, 1), (5, 1)]])
+
+
+def test_aneis_como_listas_puras_de_tuplas():
+    lin = [np.array([(-1, 1), (5, 1)], float)]
+    esperado = [[(-1, 1), (0, 1)], [(4, 1), (5, 1)]]
+    trechos_iguais(recortar_fora_dos_aneis(lin, [rect(0, 0, 4, 2)], 0.0), esperado)      # lista plana
+    trechos_iguais(recortar_fora_dos_aneis(lin, [[rect(0, 0, 4, 2)]], 0.0), esperado)    # lista de grupos
+
+
+@pytest.mark.parametrize("ruim", [[(0, 0), (1, 1)], [(0, 0, 0), (1, 1, 1), (2, 2, 2)], [(0, 0), (1,), (2, 2)]])
+def test_anel_invalido_levanta_valueerror(ruim):
+    with pytest.raises(ValueError):
+        recortar_fora_dos_aneis([np.array([(-1, 1), (5, 1)], float)], [ruim], 0.0)

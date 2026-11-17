@@ -9,10 +9,7 @@ import numpy as np
 
 from obim_geometria.aneis import _EPS, _ponto_no_anel_arr
 
-_GrupoPrep = namedtuple(
-    "_GrupoPrep",
-    "bbox rings cx cy ex_pt ey_pt ex ey el2 e_len nx ny emin_x emax_x emin_y emax_y vx vy",
-)
+_GrupoPrep = namedtuple("_GrupoPrep", "bbox rings cx cy ex_pt ey_pt ex ey el2 e_len nx ny emin_x emax_x emin_y emax_y vx vy")
 
 
 def _sobrepoe(bb: tuple[float, float, float, float], x0: float, y0: float, x1: float, y1: float) -> bool:
@@ -23,12 +20,13 @@ def _preparar_grupo(grupo) -> _GrupoPrep | None:
     rings_data = []
     for a in grupo:
         p = np.asarray(a, dtype=float)
-        if p.ndim != 2 or len(p) < 3:
-            continue
+        if p.ndim != 2 or p.shape[1] != 2 or len(p) < 3:
+            raise ValueError(f"Anel invalido: shape {p.shape}")
         if np.allclose(p[0], p[-1], atol=_EPS, rtol=0.0):
             p = p[:-1]
-        if len(p) < 3:
-            continue
+        d0 = (len(p) >= 3) and (np.max(np.abs(p - p[0]), axis=1) > _EPS)
+        if not np.any(d0) or not np.any(d0 & (np.max(np.abs(p - p[np.argmax(d0)]), axis=1) > _EPS)):
+            raise ValueError("Anel invalido: menos de 3 pontos distintos")
         rx1, ry1 = p[:, 0].copy(), p[:, 1].copy()
         rx2, ry2 = np.roll(rx1, -1), np.roll(ry1, -1)
         rings_data.append(((float(rx1.min()), float(ry1.min()), float(rx1.max()), float(ry1.max())), rx1, ry1, rx2, ry2))
@@ -49,11 +47,8 @@ def _preparar_grupo(grupo) -> _GrupoPrep | None:
     e_len = np.sqrt(el2)
     g_bbox = (float(vx.min()), float(vy.min()), float(vx.max()), float(vy.max()))
     return _GrupoPrep(
-        g_bbox, rings_data, cx, cy, ex_pt, ey_pt, ex, ey, el2, e_len,
-        -ey / e_len, ex / e_len,
-        np.minimum(cx, ex_pt), np.maximum(cx, ex_pt),
-        np.minimum(cy, ey_pt), np.maximum(cy, ey_pt),
-        vx, vy,
+        g_bbox, rings_data, cx, cy, ex_pt, ey_pt, ex, ey, el2, e_len, -ey / e_len, ex / e_len,
+        np.minimum(cx, ex_pt), np.maximum(cx, ex_pt), np.minimum(cy, ey_pt), np.maximum(cy, ey_pt), vx, vy,
     )
 
 
@@ -145,10 +140,19 @@ def _dentro_grupo(px: float, py: float, g: _GrupoPrep, encolher: float) -> bool:
     return d2 > _EPS * _EPS if encolher <= 0.0 else math.sqrt(d2) >= encolher - _EPS
 
 
+def _eh_lista_plana(aneis_list: list) -> bool:
+    p0 = aneis_list[0] if aneis_list else None
+    if isinstance(p0, np.ndarray):
+        return p0.ndim == 2
+    pt = p0[0] if isinstance(p0, (list, tuple)) and p0 else None
+    return (isinstance(pt, (list, tuple, np.ndarray)) and getattr(pt, "ndim", 1) == 1 and len(pt) == 2
+            and all(isinstance(v, (int, float, np.number)) and not isinstance(v, bool) for v in pt))
+
+
 def recortar_fora_dos_aneis(polilinhas, aneis, encolher: float = 5e-4):
     """Remove trechos dentro da uniao dos grupos (par-impar dentro de cada grupo, encolhida)."""
     aneis_list = list(aneis)
-    grupos_raw = [aneis_list] if aneis_list and isinstance(aneis_list[0], np.ndarray) and aneis_list[0].ndim == 2 else aneis_list
+    grupos_raw = [aneis_list] if _eh_lista_plana(aneis_list) else aneis_list
     grupos = [gp for g in grupos_raw if (gp := _preparar_grupo(g)) is not None]
     pad = max(0.0, encolher) + 1e-5
 

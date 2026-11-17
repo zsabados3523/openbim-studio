@@ -59,7 +59,11 @@ def _agrupar_aneis(fechados: list[np.ndarray]) -> list[list[np.ndarray]] | None:
 
 
 def oclusores_da_peca(caixa_peca, outras, z, *, tol_z=1e-3, margem_xy=1e-3):
-    """Retorna grupos de aneis fechados de `outras` que podem ocultar a peca em `z`, ou None."""
+    """Retorna grupos de aneis fechados de `outras` que podem ocultar a peca em `z`, ou None.
+
+    Limite: a parte abaixo do plano de uma peca que cruza o corte (degrau, viga inclinada)
+    nao e conferida aqui; a regra vem na T19j4a2. A j4b depende das duas fatias.
+    """
     try:
         xmin_p, ymin_p, xmax_p, ymax_p, zmin_p = (float(c) for c in caixa_peca)
         zf, tz, mxy = float(z), float(tol_z), float(margem_xy)

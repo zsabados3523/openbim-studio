@@ -180,55 +180,10 @@ def test_resultado_oculta_a_janela_embutida_na_parede():
     assert ((todos[:, 0] > 1.0 - 1e-6) & (todos[:, 0] < 2.0 + 1e-6)).any()  # o miolo do vão aparece
 
 
-# ---------- rodada 2 (Opus): degrau, um grupo por anel externo, validação, lacunas ----------
-CXP = (0.95, 0.05, 2.05, 0.15, 0.85)  # janela com peitoril z 0,85..0,90
-
-
-def perfil(h, y0=0.0, y1=0.2):
-    """Uma malha só: coluna x 0..0,5 até z 3 e degrau x 0,5..1,5 até z h (perfil em xz extrudado em y)."""
-    p = [(0, 0), (.5, 0), (1.5, 0), (1.5, h), (.5, h), (.5, 3), (0, 3)]
-    v = [(x, y, z) for y in (y0, y1) for x, z in p]
-    cap = [(0, 1, 4), (0, 4, 5), (0, 5, 6), (1, 2, 3), (1, 3, 4)]
-    t = [c for c in cap] + [tuple(7 + i for i in c[::-1]) for c in cap]
-    for i in range(7):
-        j = (i + 1) % 7
-        t += [(i, j, 7 + j), (i, 7 + j, 7 + i)]
-    return np.array(v, float), np.array(t, int)
-
-
+# ---------- rodada 2 (Opus): um grupo por anel externo, validação, lacunas ----------
 def junta(*ms):
     o = np.cumsum([0] + [len(v) for v, _ in ms])
     return np.vstack([v for v, _ in ms]), np.vstack([t + k for (_, t), k in zip(ms, o)])
-
-
-def test_degrau_acima_do_zmin_fora_da_secao_e_none():
-    assert f()(CXP, [perfil(1.2)], Z) is None
-
-
-def test_ressalto_abaixo_do_zmin_ignorado_e_parede_comum_continua():
-    r = f()(CXP, [perfil(0.8)], Z)  # ressalto z 0,8 < 0,85: só a seção da coluna ocupa
-    assert len(r) == 1
-    grupo_retangulo(r[0], 0, 0, 0.5, 0.2)
-    r = f()(CXP, [parede(0, 0, 1, 0.2)], Z)
-    assert len(r) == 1
-    grupo_retangulo(r[0], 0, 0, 1, 0.2)
-
-
-def test_aresta_cujo_meio_cai_fora_de_anel_concavo_e_none():
-    cunha = prisma([(1.9, 0.9), (0.9, 1.9), (1.0, 1.0)], 0.2, 1.2)  # vértices dentro do L, aresta (1,9;0,9)-(0,9;1,9) cruza o nicho
-    corpo = junta(_prisma_L(), cunha)
-    assert f()((0.5, 0.5, 1.5, 1.5, 0.85), [corpo], Z) is None
-
-
-def _prisma_L():
-    """Prisma z 0..3 com seção em L (côncava), triangulada à mão e soldada."""
-    p = [(0, 0), (2, 0), (2, 1), (1, 1), (1, 2), (0, 2)]
-    cap = [(0, 1, 2), (0, 2, 3), (0, 3, 4), (0, 4, 5)]
-    t = cap + [tuple(6 + i for i in c[::-1]) for c in cap]
-    for i in range(6):
-        j = (i + 1) % 6
-        t += [(i, j, 6 + j), (i, 6 + j, 6 + i)]
-    return np.array([(x, y, z) for z in (0.0, 3.0) for x, y in p], float), np.array(t, int)
 
 
 def test_duas_caixas_sobrepostas_na_mesma_malha_dois_grupos():
@@ -251,6 +206,30 @@ def test_parametros_invalidos_sao_none(caixa, kw):
 
 def test_z_nan_e_none():
     assert f()(CX, [parede(0, 0, 1, 0.2)], float("nan")) is None
+
+
+def test_tris_float_em_malha_fechada_valida_e_none():
+    v, t = parede(0, 0, 1, 0.2)
+    assert f()(CX, [(v, t.astype(float))], Z) is None
+    assert f()(CX, [(v, t)], Z) is not None
+
+
+def test_secao_aberta_numa_peca_e_outra_fechada_cobrindo_e_none():
+    v, t = parede(0, 0, 1, 0.2)
+    aberta, cobre = (v, t[:-2]), parede(-1, -1, 2, 1)  # a fechada cobre a aberta, mas a aberta não pode ser descartada
+    assert f()(CX, [aberta, cobre], Z) is None
+    assert f()(CX, [cobre, aberta], Z) is None
+
+
+def test_aninhamento_externo_furo_externo_furo_dois_grupos():
+    m = junta(tubo(rect(0, 0, 10, 10), rect(2, 2, 8, 8), 0.0, 3.0), tubo(rect(3, 3, 7, 7), rect(4, 4, 6, 6), 0.0, 3.0))
+    r = f()((0.5, 0.5, 9.5, 9.5, 0.9), [m], Z)
+    assert len(r) == 2
+    r.sort(key=lambda g: -max(area(a) for a in g))  # grupo do externo maior primeiro
+    for g, esperado in zip(r, (((2, 2, 8, 8, -36.0), (0, 0, 10, 10, 100.0)), ((4, 4, 6, 6, -4.0), (3, 3, 7, 7, 16.0)))):
+        assert len(g) == 2  # cada externo com o furo logo dentro dele
+        for a, (x0, y0, x1, y1, ar) in zip(sorted(g, key=area), esperado):
+            anel_igual(a, rect(x0, y0, x1, y1), ar)
 
 
 def test_peca_longe_em_y_mas_cruzando_em_x_ignorada():

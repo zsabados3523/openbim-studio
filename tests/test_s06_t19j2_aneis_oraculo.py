@@ -1,18 +1,16 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Oráculo T19j2: `aneis_de_segmentos(segs, tol=1e-6) -> (fechados, abertos)` e
-`recortar_fora_dos_aneis(polilinhas, aneis, encolher=5e-4) -> list[ndarray (n,2)]`.
+"""Oráculo T19j2: `aneis_de_segmentos(segs, tol=1e-6) -> (fechados, abertos)`.
 Contrato (cartão F0-S06-T19j2): anéis (n,2) costurados dos segmentos (k,4); externos anti-horários (área > 0), furos
-horários (área < 0); pontos dentro de `tol` são o mesmo nó; cadeia que não fecha vai em `abertos`; recorte remove
-os trechos dentro da região (anéis encolhidos em `encolher`, par-ímpar), corta nas interseções exatas, mantém
-colinear com a borda; sem mutar a entrada; determinístico.
-Suposições de formato: anel pode repetir ou não o primeiro ponto no fim (o teste normaliza); ordem dos anéis livre
-(o teste ordena pela área); trechos de saída na ordem de percurso das polilinhas.
-Todo valor esperado vem de conta à mão, nunca da função."""
+horários (área < 0); ponto inicial = vértice (x,y) lexicográfico mínimo; nós a menos de `tol` são o mesmo nó (distância
+real, não célula de arredondamento); cadeia que não fecha vai em `abertos`; sem mutar a entrada; determinístico.
+Suposições de formato: anel pode repetir ou não o primeiro ponto no fim (o teste normaliza); ordem dos anéis pelo
+ponto inicial crescente. Todo valor esperado vem de conta à mão, nunca da função."""
 import sys
 import time
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 GEOMETRIA = Path(__file__).resolve().parent.parent / "geometria"
 if str(GEOMETRIA) not in sys.path:
@@ -200,3 +198,29 @@ def test_desempenho_aneis():
     t = time.perf_counter()
     f, a = aneis_de_segmentos(segs)
     assert time.perf_counter() - t < 1.0 and len(f) == 1250 and len(a) == 0
+
+
+@pytest.mark.parametrize("p,q", [((1 - 1e-8, 1), (1 + 1e-8, 1)),                  # leste
+                                 ((1, 1 - 1e-8), (1, 1 + 1e-8)),                  # norte
+                                 ((1 - 1e-8, 1 + 1e-8), (1 + 1e-8, 1 - 1e-8))])  # sudeste: células 999999/1000000 em x e y
+def test_nos_a_1e8_em_celulas_vizinhas_se_unem(p, q):
+    segs = [(0, 0, 1, 0), (1, 0, *p), (*q, 0, 1), (0, 1, 0, 0)]
+    f, a = aneis_de_segmentos(np.array(segs, float), tol=1e-6)
+    assert len(f) == 1 and len(a) == 0 and abs(area(f[0]) - 1.0) < 1e-6
+
+
+def test_determinismo_tres_figuras_num_canto_com_no_deslocado():
+    figs = [rect(0, 0, 1, 1), rect(1, 1, 2, 2), [(1, 1), (0.2, 1.5), (0.6, 2.0)]]
+    base = np.array([s for g in figs for s in segs_de(g)], float)
+    base[4, :2] += (4e-7, 0)
+    base[7, 2:] += (4e-7, 0)
+    rng = np.random.default_rng(1234)
+    ref = aneis_de_segmentos(base, tol=1e-6)
+    for _ in range(40):
+        m = base[rng.permutation(len(base))].copy()
+        inv = rng.random(len(m)) < 0.5
+        m[inv] = m[inv][:, [2, 3, 0, 1]]
+        f, a = aneis_de_segmentos(m, tol=1e-6)
+        assert len(f) == len(ref[0]) and len(a) == len(ref[1])
+        for x, y in zip(list(f) + list(a), list(ref[0]) + list(ref[1])):
+            np.testing.assert_array_equal(x, y)

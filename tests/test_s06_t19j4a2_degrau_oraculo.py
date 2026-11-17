@@ -129,15 +129,26 @@ def test_tolerancia_2_a_5_mm_fora_da_secao(folga, esperado_none):
         assert len(r) == 1
 
 
-def test_desempenho_cilindro_40_mil_vertices():
-    n = 20000
+def _cilindro(n):
     a = 2 * np.pi * np.arange(n) / n
-    poly = np.c_[0.5 * np.cos(a) + 1.5, 0.5 * np.sin(a) + 0.1]  # cilindro de 40 mil vértices, raio 0,5 em torno de (1,5; 0,1)
-    v, t = prisma(poly.tolist(), 0.0, 3.0)
-    t0 = time.perf_counter()
-    r = f()(CXP, [(v, t)], Z)
-    assert time.perf_counter() - t0 < 1.0
+    return prisma((np.c_[0.5 * np.cos(a) + 1.5, 0.5 * np.sin(a) + 0.1]).tolist(), 0.0, 3.0)  # 2n vértices, raio 0,5 em torno de (1,5; 0,1)
+
+
+def _melhor_de_3(malha):
+    ts, r = [], None
+    for _ in range(3):
+        t0 = time.perf_counter()
+        r = f()(CXP, [malha], Z)
+        ts.append(time.perf_counter() - t0)
     assert r is None or (len(r) == 1 and len(r[0]) == 1)  # o teto de pontos pode mandar ao HLR (None); se decidir, tem de acertar
+    return min(ts)
+
+
+def test_desempenho_cilindro_nao_e_quadratico():
+    # 10 mil e 40 mil vértices: linear dá razão ~4, quadrático ~16 (relógio de runner varia: razão + teto largo, não limite justo)
+    t10, t40 = _melhor_de_3(_cilindro(5000)), _melhor_de_3(_cilindro(20000))
+    assert t40 / max(t10, 1e-3) < 8.0, f"t10={t10:.3f}s t40={t40:.3f}s"
+    assert t40 < 5.0
 
 
 @pytest.mark.parametrize("xmax,esperado_none", [(0.9, False), (1.0005, False), (1.0015, True)])

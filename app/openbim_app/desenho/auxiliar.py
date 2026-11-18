@@ -204,7 +204,16 @@ def executar(preparado: Preparado, *, limite_s: float = LIMITE_PADRAO_S, cancela
             resposta = filho.executar(preparado.pedido, cancelar=cancelar, limite_s=limite_s)
             return _acrescentar_tempos(resposta, preparado, time.perf_counter() - t0)
         except FilhoIndisponivel:
-            pass
+            parar.set()
+            if vigia is not None:
+                vigia.join(timeout=5.0)
+                vigia = None
+            try:
+                (preparado.pasta / "previa.svg").unlink()
+            except OSError:
+                pass
+            preparado.pedido.pop("previa_arquivo", None)
+            previa = None
         finally:
             parar.set()
             if vigia is not None:
@@ -235,6 +244,8 @@ def _vigiar_previa(caminho: Path, previa, parar: threading.Event) -> None:
         except OSError:
             texto = None
         if texto is not None:
+            if parar.is_set():
+                return
             try:
                 previa(texto)
             except Exception:

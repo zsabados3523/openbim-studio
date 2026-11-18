@@ -1804,37 +1804,24 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
         if not elementos:
             return fallback()
 
-        if pedido.get("pesados") == "silhueta":
-            t_p0 = time.perf_counter()
-            if f is None:
-                f = _abrir_ifc(pedido.get("arquivo"))
-            altura_corte_m = float((pedido.get("vista") or {}).get("altura_corte_m", float("inf")))
-            pesados_svg, pesados_info, pesadas_ids, pesadas_excluidas = _pesadas_para_svg(
-                f, pedido, elementos, altura_corte_m, formas=formas
-            )
-            pesados_s = time.perf_counter() - t_p0
-        pesadas_prontas = True
+        if f is None:
+            f = _abrir_ifc(pedido.get("arquivo"))
 
-        restantes = [e for e in elementos if e[0] not in (pesadas_ids | pesadas_excluidas)]
-        if not restantes:
-            return fallback()
-
-        faltam = [id_step for id_step, _ in restantes if id_step not in formas]
-        if faltam:
-            t_fm0 = time.perf_counter()
-            if f is None:
-                f = _abrir_ifc(pedido.get("arquivo"))
-            incl = []
-            for id_step in dict.fromkeys(faltam):
-                try:
-                    el = f.by_id(id_step)
-                    if el is not None and not el.is_a("IfcOpeningElement"):
-                        incl.append(el)
-                except Exception:
-                    pass
-            if incl:
-                formas.update(silhueta.formas_do_mundo(f, incl, threads=pedido.get("threads")))
-            formas_s = time.perf_counter() - t_fm0
+        t_fm0 = time.perf_counter()
+        incl, vistos = [], set()
+        for id_step, _ in elementos:
+            if id_step in formas or id_step in vistos:
+                continue
+            vistos.add(id_step)
+            try:
+                el = f.by_id(id_step)
+            except Exception:
+                el = None
+            if el is not None and not el.is_a("IfcOpeningElement"):
+                incl.append(el)
+        if incl:
+            formas.update(silhueta.formas_do_mundo(f, incl, threads=pedido.get("threads")))
+        formas_s = time.perf_counter() - t_fm0
 
         if pedido.get("previa_arquivo"):
             try:
@@ -1863,6 +1850,19 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
                 )
             except Exception:
                 pass
+
+        if pedido.get("pesados") == "silhueta":
+            t_p0 = time.perf_counter()
+            altura_corte_m = float((pedido.get("vista") or {}).get("altura_corte_m", float("inf")))
+            pesados_svg, pesados_info, pesadas_ids, pesadas_excluidas = _pesadas_para_svg(
+                f, pedido, elementos, altura_corte_m, formas=formas
+            )
+            pesados_s = time.perf_counter() - t_p0
+        pesadas_prontas = True
+
+        restantes = [e for e in elementos if e[0] not in (pesadas_ids | pesadas_excluidas)]
+        if not restantes:
+            return fallback()
 
         t_ag0 = time.perf_counter()
         grupos = componentes.dividir_elementos(

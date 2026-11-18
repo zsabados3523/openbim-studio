@@ -1568,41 +1568,76 @@ def _pesos_planta(pedido: dict, itens) -> dict | None:
     return pesos or None
 
 
+def _eh_timeout_resp(resp) -> bool:
+    return isinstance(resp, dict) and not resp.get("ok") and "tempo" in str((resp.get("erro") or {}).get("tipo", "")).lower()
+
+
+def _aplicar_tempos_relogio(
+    tempos: dict, *, pesados_s: float = 0.0, formas_s: float = 0.0, agrupar_s: float = 0.0,
+    max_lote_s: float = 0.0, refaz_faixas_s: float = 0.0, n_timeouts: int = 0,
+    n_grupos: int = 0, maior_grupo: int = 0,
+) -> dict:
+    tempos.update({
+        "pesados_s": float(pesados_s), "formas_s": float(formas_s), "agrupar_s": float(agrupar_s),
+        "max_lote_s": float(max_lote_s), "refaz_faixas_s": float(refaz_faixas_s),
+        "n_timeouts": int(n_timeouts), "n_grupos": int(n_grupos), "maior_grupo": int(maior_grupo),
+    })
+    return tempos
+
+
 def _planta_em_faixas(pedido: dict, fase, n: int, f=None, abrir_s: float | None = None, sem_normal: bool = False) -> dict:
     base = {k: v for k, v in pedido.items() if k != "faixas"}
+    pesados_s = 0.0
+    formas_s = 0.0
+    agrupar_s = 0.0
+    max_lote_s = 0.0
+    n_timeouts = 0
+    pedidos = []
 
     def normal() -> dict:
         if sem_normal:
             return {"ok": False, "erro": {"tipo": "FaixasFalhou", "mensagem": "refazer em faixas falhou", "rastro": ""}}
-        return _processar_base(base, fase, f=f, abrir_s=abrir_s)
+        r = _processar_base(base, fase, f=f, abrir_s=abrir_s)
+        if r.get("ok") and isinstance(r.get("tempos"), dict):
+            elems = pedido.get("elementos") or ()
+            _aplicar_tempos_relogio(r["tempos"], pesados_s=pesados_s, formas_s=formas_s, agrupar_s=agrupar_s, max_lote_s=max_lote_s,
+                                    n_timeouts=n_timeouts, n_grupos=1 if elems else 0, maior_grupo=len(elems))
+        return r
 
     try:
         if not pedido.get("elementos"):
             return normal()
         total_threads = nucleos.limitar_threads(pedido.get("threads"))
+        t_fm0 = time.perf_counter()
         itens = _itens_planta(pedido, total_threads)
+        formas_s = time.perf_counter() - t_fm0
         if not itens:
             return normal()
 
         pesados_svg, pesados_info, pesadas_ids, pesadas_excluidas = [], [], set(), set()
         if pedido.get("pesados") == "silhueta":
+            t_p0 = time.perf_counter()
             if f is None:
                 f = _abrir_ifc(pedido.get("arquivo"))
             altura_corte_m = float((pedido.get("vista") or {}).get("altura_corte_m", float("inf")))
             pesados_svg, pesados_info, pesadas_ids, pesadas_excluidas = _pesadas_para_svg(f, pedido, pedido.get("elementos", []), altura_corte_m)
+            pesados_s = time.perf_counter() - t_p0
         fora = pesadas_ids | pesadas_excluidas
         itens = [it for it in itens if it[0] not in fora]
         if not itens:
             return normal()
 
+        t_ag0 = time.perf_counter()
         pesos = _pesos_planta(pedido, itens)
         lims = faixas.limites(itens, n, pesos=pesos)
         if len(lims) <= 1:
+            agrupar_s = time.perf_counter() - t_ag0
             return normal()
         divisao = faixas.dividir(itens, n, pesos=pesos)
+        agrupar_s = time.perf_counter() - t_ag0
         simultaneos = max(1, min(len(lims), total_threads))
         threads_filho = max(1, total_threads // simultaneos)
-        pedidos, donos_de = [], []
+        donos_de = []
         for k, (a, b) in enumerate(lims):
             donos = [i for i, _g, u0, u1 in itens if (a is None or (u0 + u1) / 2.0 >= a) and (b is None or (u0 + u1) / 2.0 < b)]
             q = dict(base)
@@ -1613,9 +1648,18 @@ def _planta_em_faixas(pedido: dict, fase, n: int, f=None, abrir_s: float | None 
             q["threads"] = threads_filho
             pedidos.append(q)
             donos_de.append(set(donos))
+
+        def _exec_faixa(q):
+            t0 = time.perf_counter()
+            r = faixas.rodar_filho(q)
+            return r, time.perf_counter() - t0
+
         with ThreadPoolExecutor(max_workers=simultaneos) as ex:
-            futuros = [ex.submit(faixas.rodar_filho, q) for q in pedidos]
-            resultados = [fut.result() for fut in futuros]
+            futuros = [ex.submit(_exec_faixa, q) for q in pedidos]
+            pares = [fut.result() for fut in futuros]
+        resultados = [p[0] for p in pares]
+        max_lote_s = max((p[1] for p in pares), default=0.0)
+        n_timeouts = sum(1 for r in resultados if _eh_timeout_resp(r))
         for r in resultados:
             if isinstance(r, dict) and not r.get("ok") and (r.get("erro") or {}).get("tipo") == "Divergente":
                 return r
@@ -1639,6 +1683,10 @@ def _planta_em_faixas(pedido: dict, fase, n: int, f=None, abrir_s: float | None 
     enviados = list(dict.fromkeys(enviados))
     falhas = sorted({i for r, d in zip(resultados, donos_de) for i in (r.get("falhas_geometria") or ()) if i in d})
     tempos = {"abrir_s": 0.0, **{k: float(sum(float((r.get("tempos") or {}).get(k, 0.0)) for r in resultados)) for k in ("geo_s", "write_s", "finalize_s")}}
+    _aplicar_tempos_relogio(
+        tempos, pesados_s=pesados_s, formas_s=formas_s, agrupar_s=agrupar_s, max_lote_s=max_lote_s,
+        n_timeouts=n_timeouts, n_grupos=len(pedidos), maior_grupo=max((len(p["elementos"]) for p in pedidos), default=0),
+    )
     return {"ok": True, "svg": svg, "n_paths": len(re.findall(r"<path\b", svg)), "enviados": enviados, "caixas": junta("caixas"),
             "em_cache": junta("em_cache"), "pesados": pesados_info, "falhas_geometria": falhas, "tempos": tempos}
 
@@ -1776,13 +1824,24 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
     pesados_svg, pesados_info, pesadas_ids, pesadas_excluidas = [], [], set(), set()
     pesadas_prontas = False
     restantes = list(elementos)
+    grupos = []
+    pesados_s = 0.0
+    formas_s = 0.0
+    agrupar_s = 0.0
+    max_lote_s = 0.0
+    refaz_faixas_s = 0.0
+    n_timeouts = 0
 
     def fallback() -> dict:
         if not pesadas_prontas:
             r = _processar_base(base, fase, f=f, abrir_s=abrir_s)
             if r.get("ok"):
-                r["grupos"] = 1 if elementos else 0
+                n_g = 1 if elementos else 0
+                r["grupos"] = n_g
                 r["grupos_ids"] = [[i for i, _ in elementos]] if elementos else []
+                if isinstance(r.get("tempos"), dict):
+                    _aplicar_tempos_relogio(r["tempos"], pesados_s=pesados_s, formas_s=formas_s, agrupar_s=agrupar_s, max_lote_s=max_lote_s,
+                                            refaz_faixas_s=refaz_faixas_s, n_timeouts=n_timeouts, n_grupos=n_g, maior_grupo=len(elementos))
             return r
         q_rest = {k: v for k, v in base.items() if k not in ("pesados", "limiar_pesado")}
         q_rest["elementos"] = [list(e) for e in restantes]
@@ -1796,8 +1855,13 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
         env.extend(info["id"] for info in pesados_info)
         r["enviados"] = list(dict.fromkeys(env))
         r["pesados"] = list(pesados_info)
-        r["grupos"] = 1 if restantes else 0
+        n_g = 1 if restantes else 0
+        r["grupos"] = n_g
         r["grupos_ids"] = [[i for i, _ in restantes]] if restantes else []
+        if isinstance(r.get("tempos"), dict):
+            _aplicar_tempos_relogio(r["tempos"], pesados_s=pesados_s, formas_s=formas_s, agrupar_s=agrupar_s, max_lote_s=max_lote_s,
+                                    refaz_faixas_s=refaz_faixas_s, n_timeouts=n_timeouts, n_grupos=n_g,
+                                    maior_grupo=max((len(g) for g in grupos), default=len(restantes)))
         return r
 
     try:
@@ -1805,12 +1869,14 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
             return fallback()
 
         if pedido.get("pesados") == "silhueta":
+            t_p0 = time.perf_counter()
             if f is None:
                 f = _abrir_ifc(pedido.get("arquivo"))
             altura_corte_m = float((pedido.get("vista") or {}).get("altura_corte_m", float("inf")))
             pesados_svg, pesados_info, pesadas_ids, pesadas_excluidas = _pesadas_para_svg(
                 f, pedido, elementos, altura_corte_m, formas=formas
             )
+            pesados_s = time.perf_counter() - t_p0
         pesadas_prontas = True
 
         restantes = [e for e in elementos if e[0] not in (pesadas_ids | pesadas_excluidas)]
@@ -1819,6 +1885,7 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
 
         faltam = [id_step for id_step, _ in restantes if id_step not in formas]
         if faltam:
+            t_fm0 = time.perf_counter()
             if f is None:
                 f = _abrir_ifc(pedido.get("arquivo"))
             incl = []
@@ -1831,10 +1898,13 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
                     pass
             if incl:
                 formas.update(silhueta.formas_do_mundo(f, incl, threads=pedido.get("threads")))
+            formas_s = time.perf_counter() - t_fm0
 
+        t_ag0 = time.perf_counter()
         grupos = componentes.dividir_elementos(
             pedido.get("arquivo"), restantes, threads=pedido.get("threads"), formas=formas, f=f
         )
+        agrupar_s = time.perf_counter() - t_ag0
         if len(grupos) <= 1:
             return fallback()
         if pedido.get("previa_arquivo"):
@@ -1856,27 +1926,33 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
                 itens_q.append(q)
             lotes_req.append({**base, "op": "desenho_lote", "pedidos": itens_q})
 
+        def _exec_lote(lote):
+            t0 = time.perf_counter()
+            try:
+                resp = faixas.rodar_filho(lote, limite_s=300.0 * len(lote["pedidos"]))
+            except Exception:
+                resp = None
+            return resp, time.perf_counter() - t0
+
         with ThreadPoolExecutor(max_workers=n_lotes) as ex:
-            futuros = [
-                ex.submit(faixas.rodar_filho, lote, limite_s=300.0 * len(lote["pedidos"]))
-                for lote in lotes_req
-            ]
-            lotes_resp = []
-            for fut in futuros:
-                try:
-                    lotes_resp.append(fut.result())
-                except Exception:
-                    lotes_resp.append(None)
+            futuros = [ex.submit(_exec_lote, lote) for lote in lotes_req]
+            lotes_pares = [fut.result() for fut in futuros]
+        lotes_resp = [p[0] for p in lotes_pares]
+        max_lote_s = max((p[1] for p in lotes_pares), default=0.0)
 
         resultados = [None] * len(grupos)
         for indices, resp_lote in zip(lotes_idx, lotes_resp):
             if isinstance(resp_lote, dict) and not resp_lote.get("ok") and (resp_lote.get("erro") or {}).get("tipo") == "Divergente":
                 return resp_lote
+            if _eh_timeout_resp(resp_lote):
+                n_timeouts += 1
             itens_r = resp_lote.get("resultados") if isinstance(resp_lote, dict) and resp_lote.get("ok") else None
             if isinstance(itens_r, list):
                 for pos, idx_g in enumerate(indices):
                     if pos < len(itens_r):
                         resultados[idx_g] = itens_r[pos]
+                        if _eh_timeout_resp(itens_r[pos]):
+                            n_timeouts += 1
 
         ok_resultados, grupos_falhos = [], []
         for grupo, res in zip(grupos, resultados):
@@ -1891,17 +1967,23 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
             return fallback()
 
         falhas_filhos = set()
-        for grupo in grupos_falhos:
-            q_refaz = {k: v for k, v in base.items() if k not in ("pesados", "limiar_pesado")}
-            q_refaz["elementos"] = [list(e) for e in grupo]
-            q_refaz["threads"] = total_threads
-            r_refaz = _planta_em_faixas(q_refaz, fase, 8, f=f, abrir_s=abrir_s, sem_normal=True)
-            if isinstance(r_refaz, dict) and not r_refaz.get("ok") and (r_refaz.get("erro") or {}).get("tipo") == "Divergente":
-                return r_refaz
-            if isinstance(r_refaz, dict) and r_refaz.get("ok") and isinstance(r_refaz.get("svg"), str) and r_refaz.get("svg"):
-                ok_resultados.append(r_refaz)
-            else:
-                falhas_filhos.update(i for i, _ in grupo)
+        if grupos_falhos:
+            t_rf0 = time.perf_counter()
+            for grupo in grupos_falhos:
+                q_refaz = {k: v for k, v in base.items() if k not in ("pesados", "limiar_pesado")}
+                q_refaz["elementos"] = [list(e) for e in grupo]
+                q_refaz["threads"] = total_threads
+                r_refaz = _planta_em_faixas(q_refaz, fase, 8, f=f, abrir_s=abrir_s, sem_normal=True)
+                if isinstance(r_refaz, dict) and not r_refaz.get("ok") and (r_refaz.get("erro") or {}).get("tipo") == "Divergente":
+                    return r_refaz
+                if isinstance(r_refaz, dict) and r_refaz.get("ok") and isinstance(r_refaz.get("svg"), str) and r_refaz.get("svg"):
+                    ok_resultados.append(r_refaz)
+                    n_timeouts += int((r_refaz.get("tempos") or {}).get("n_timeouts", 0))
+                else:
+                    if _eh_timeout_resp(r_refaz):
+                        n_timeouts += 1
+                    falhas_filhos.update(i for i, _ in grupo)
+            refaz_faixas_s = time.perf_counter() - t_rf0
 
         if falhas_filhos:
             try:
@@ -1958,6 +2040,10 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
     }
     if pedido.get("motor_visivel"):
         tempos["motor_s"] = float(sum(float((r.get("tempos") or {}).get("motor_s", 0.0)) for r in ok_resultados))
+    _aplicar_tempos_relogio(
+        tempos, pesados_s=pesados_s, formas_s=formas_s, agrupar_s=agrupar_s, max_lote_s=max_lote_s,
+        refaz_faixas_s=refaz_faixas_s, n_timeouts=n_timeouts, n_grupos=len(grupos), maior_grupo=max((len(g) for g in grupos), default=0),
+    )
     resp = {
         "ok": True,
         "svg": svg,

@@ -34,7 +34,7 @@ def test_previa_chega_antes_da_resposta_e_uma_vez(tmp_path):
     assert r["ok"] if "ok" in r else r["svg"]
     assert len(recebidas) == 1
     quando, svg = recebidas[0]
-    assert isinstance(svg, str) and "<svg" in svg and 'data-silhueta="1"' in svg
+    assert isinstance(svg, str) and "<svg" in svg and 'data-obim-previa="1"' in svg
     assert total - quando >= 0.2, "a prévia veio colada no fim: não chegou enquanto o auxiliar rodava"
 
 

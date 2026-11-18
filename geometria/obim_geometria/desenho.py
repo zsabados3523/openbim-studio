@@ -1745,78 +1745,6 @@ def _normalizar_svg_vazio(svg: str) -> str:
     return svg
 
 
-def _esqueleto_svg() -> str:
-    """Gera o esqueleto SVG padrão do motor sem reabrir o arquivo IFC."""
-    f0 = ifcopenshell.file(schema="IFC4")
-    st = ifcopenshell.geom.settings(ELEMENT_HIERARCHY=True)
-    st.set("dimensionality", W.SURFACES_AND_SOLIDS)
-    st.set("iterator-output", W.NATIVE)
-    st.set("apply-default-materials", True)
-    st.set("svg-write-poly", True)
-    st.set("svg-xmlns", True)
-    st.set("svg-poly", True)
-    st.set("door-arcs", True)
-    st.set("section-height-from-storeys", True)
-    st.set("svg-project", True)
-    st.set("section-height", 0.5)
-    buf = ifcopenshell.geom.serializers.buffer()
-    sr = ifcopenshell.geom.serializers.svg(buf, st)
-    sr.setFile(f0)
-    sr.finalize()
-    return _normalizar_svg_vazio(buf.get_value())
-
-
-def _gravar_previa(pedido: dict, f, formas: dict, elementos, pesados_svg: list[str]) -> None:
-    try:
-        destino = pedido.get("previa_arquivo")
-        if not destino:
-            return
-        if f is None:
-            f = _abrir_ifc(pedido.get("arquivo"))
-        altura_corte_m = float((pedido.get("vista") or {}).get("altura_corte_m", float("inf")))
-        moveis_como_caixa = bool(pedido.get("moveis_como_caixa", False))
-        guids_pesados = set()
-        for g in pesados_svg:
-            m = re.search(r'\bifc:guid="([^"]+)"', g)
-            if m:
-                guids_pesados.add(m.group(1))
-        candidatos = []
-        for id_step, guid in elementos:
-            if guid in guids_pesados:
-                continue
-            try:
-                el = f.by_id(id_step)
-            except Exception:
-                el = None
-            if el is None or el.is_a("IfcOpeningElement") or not _candidata_silhueta(el, moveis_como_caixa):
-                continue
-            forma = formas.get(id_step)
-            alvo = _FormaId(el.id(), forma) if hasattr(forma, "geometry") else el
-            candidatos.append((el, alvo))
-
-        def _uma_silhueta(alvo):
-            try:
-                return silhueta.faces_e_silhueta(alvo, 1, z_corte=altura_corte_m)[1]
-            except Exception:
-                return None
-
-        with ThreadPoolExecutor(max_workers=nucleos.limitar_threads(pedido.get("threads"))) as ex_sil:
-            aneis_lista = list(ex_sil.map(_uma_silhueta, (alvo for _, alvo in candidatos)))
-        novos = []
-        for (el, _), aneis in zip(candidatos, aneis_lista):
-            if aneis:
-                grupo = _grupo_silhueta(el, aneis)
-                if grupo is not None:
-                    novos.append(grupo)
-        svg = _injetar_silhuetas(_esqueleto_svg(), list(pesados_svg) + novos)
-        tmp = f"{destino}.tmp"
-        with open(tmp, "w", encoding="utf-8") as fp:
-            fp.write(svg)
-        os.replace(tmp, destino)
-    except Exception:
-        pass
-
-
 LIMIAR_MEGAGRUPO_FRACAO = 0.5
 LIMIAR_MEGAGRUPO_PECAS = 200
 
@@ -1908,6 +1836,34 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
                 formas.update(silhueta.formas_do_mundo(f, incl, threads=pedido.get("threads")))
             formas_s = time.perf_counter() - t_fm0
 
+        if pedido.get("previa_arquivo"):
+            try:
+                from obim_geometria import previa_planta
+                pecas_previa = []
+                for id_step, guid in elementos:
+                    try:
+                        el = f.by_id(id_step) if f is not None else None
+                    except Exception:
+                        el = None
+                    malha = _malha_caixa(formas.get(id_step))
+                    pecas_previa.append({
+                        "guid": guid,
+                        "classe": el.is_a() if el is not None else "",
+                        "verts": malha[0] if malha is not None else None,
+                        "tris": malha[1] if malha is not None else None,
+                        "movel": bool(el is not None and (
+                            el.is_a("IfcFurnishingElement") or el.is_a("IfcSystemFurnitureElement"))),
+                    })
+                previa_planta.gerar_previa_planta(
+                    pecas_previa,
+                    float((pedido.get("vista") or {}).get("altura_corte_m")),
+                    pedido.get("previa_arquivo"),
+                    moveis_como_caixa=bool(pedido.get("moveis_como_caixa")),
+                    ao_fase=fase,
+                )
+            except Exception:
+                pass
+
         t_ag0 = time.perf_counter()
         grupos = componentes.dividir_elementos(
             pedido.get("arquivo"), restantes, threads=pedido.get("threads"), formas=formas, f=f
@@ -1915,8 +1871,6 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
         agrupar_s = time.perf_counter() - t_ag0
         if len(grupos) <= 1:
             return fallback()
-        if pedido.get("previa_arquivo"):
-            _gravar_previa(pedido, f, formas, elementos, pesados_svg)
 
         total_threads = nucleos.limitar_threads(pedido.get("threads"))
         limiar_fracao = LIMIAR_MEGAGRUPO_FRACAO

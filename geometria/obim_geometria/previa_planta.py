@@ -255,7 +255,7 @@ def gerar_previa_planta(
 
     corpo = "\n".join(grupos_svg)
     svg = (
-        f'<svg xmlns="{_NS_SVG}" xmlns:ifc="{_NS_IFC}" viewBox="{view_box}">'
+        f'<svg xmlns="{_NS_SVG}" xmlns:ifc="{_NS_IFC}" data-obim-previa="1" viewBox="{view_box}">'
         + (f"\n{corpo}\n" if corpo else "")
         + "</svg>"
     )

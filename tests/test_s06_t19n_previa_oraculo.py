@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Oráculo F0-S06-T19n: prévia gravada pelo pai antes dos filhos (T3). Cartão: docs/state/cards/F0-S06/F0-S06-T19n-previa-do-pai.md. Não editar nesta tarefa.
 CONTRATO (`desenho.processar` com `componentes: True` e `previa_arquivo: <caminho>`):
-1. Antes do 1º `faixas.rodar_filho`, o arquivo existe e é um SVG (`<svg` ... `</svg>`) com um grupo `data-silhueta="1"` por peça (atributo `ifc:guid`), com `<path d=...>` não vazio.
+1. Antes do 1º `faixas.rodar_filho`, o arquivo existe e é um SVG (`<svg` ... `</svg>`) com a marca `data-obim-previa="1"` na raiz (T20d2: a prévia nova substitui a de silhueta) e um grupo por peça (atributo `ifc:guid`), com `<path d=...>` não vazio.
 2. Nenhum pedido de filho contém `previa_arquivo`.
 3. O resultado final é idêntico (svg, enviados, grupos) com e sem `previa_arquivo`.
 4. Caminho que não pode ser gravado: resultado ok igual ao de sem a chave (melhor esforço).
@@ -15,7 +15,8 @@ import re
 import obim_geometria.desenho as D
 from test_s06_t19h_componentes_oraculo import Espiao, _caixa, _cena
 
-GRUPO = re.compile(r'<g\b[^>]*data-silhueta="1"[^>]*>')
+GRUPO = re.compile(r'<g\b[^>]*\bifc:guid="[^"]+"[^>]*>')
+MARCA = re.compile(r'<svg\b[^>]*\bdata-obim-previa="1"')
 
 
 def _ped(tmp_path):
@@ -41,9 +42,9 @@ def test_previa_existe_antes_do_primeiro_filho_e_cobre_as_pecas(monkeypatch, tmp
     assert svg.lstrip().startswith("<") and "<svg" in svg and svg.rstrip().endswith("</svg>")
     guids = [g for _i, g in ped["elementos"]]
     for g in guids:
-        m = re.search(r'<g\b[^>]*ifc:guid="%s"[^>]*data-silhueta="1"[^>]*>\s*<path\b[^>]*\bd="[^"]+"' % re.escape(g), svg)
-        assert m, f"sem silhueta na prévia para {g}"
-    assert len(GRUPO.findall(svg)) == 3
+        m = re.search(r'<g\b[^>]*ifc:guid="%s"[^>]*>\s*<path\b[^>]*\bd="[^"]+"' % re.escape(g), svg)
+        assert m, f"sem grupo na prévia para {g}"
+    assert MARCA.search(svg) and len(GRUPO.findall(svg)) == 3
 
 
 def test_filhos_nao_recebem_a_chave_e_resultado_e_igual(monkeypatch, tmp_path):

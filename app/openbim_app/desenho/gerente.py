@@ -98,11 +98,7 @@ class _Pedido:
 
 
 class GerenteDesenho(QObject):
-    """Gerencia pedidos de desenho em segundo plano.
-
-    Limitacao conhecida: com `filho_persistente=True`, a previa parcial de
-    componentes da planta nao e emitida.
-    """
+    """Gerencia pedidos de desenho em segundo plano."""
     progresso = Signal(str, str)
     pronto = Signal(str, object)
     falhou = Signal(str, str)
@@ -297,7 +293,7 @@ class GerenteDesenho(QObject):
         for f in filhos:
             f.invalidar()
 
-    def salvar(self) -> None:
+    def salvar(self, caminho_ifc=None, *, revisao=None, revisao_salva=None) -> None:
         with self._trava:
             self._geracao += 1
             for ev in self._cancelamentos_aquecer:
@@ -305,6 +301,8 @@ class GerenteDesenho(QObject):
             filhos = list(self._filhos_doc.values())
         for f in filhos:
             f.salvar()
+        if caminho_ifc is not None:
+            self.aquecer(caminho_ifc, revisao=revisao, revisao_salva=revisao_salva)
 
     def cancelar(self, chave) -> None:
         ped = self._ativos.pop(chave, None)

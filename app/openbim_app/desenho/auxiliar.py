@@ -178,7 +178,7 @@ def _acrescentar_tempos(resposta: dict, preparado: Preparado, auxiliar_s: float)
 
 
 def executar(preparado: Preparado, *, limite_s: float = LIMITE_PADRAO_S, cancelar: threading.Event | None = None, executor=None, previa=None, filho=None) -> dict:
-    """Executa pedido no processo auxiliar (com `filho` persistente, `previa` parcial de componentes da planta nao e emitida)."""
+    """Executa pedido no processo auxiliar; com `filho` persistente, entrega a `previa` por arquivo enquanto ele trabalha."""
     if preparado.pedido.get("protocolo") != PROTOCOLO:
         raise ProtocoloInvalido(f"Protocolo inválido: {preparado.pedido.get('protocolo')}")
     if executor is not None:
@@ -191,12 +191,24 @@ def executar(preparado: Preparado, *, limite_s: float = LIMITE_PADRAO_S, cancela
     if filho is not None:
         from openbim_app.desenho.filho import FilhoIndisponivel
 
+        parar, vigia = threading.Event(), None
+        if callable(previa) and preparado.pedido.get("componentes"):
+            previa_caminho = preparado.pasta / "previa.svg"
+            preparado.pedido["previa_arquivo"] = str(previa_caminho)
+            vigia = threading.Thread(
+                target=_vigiar_previa, args=(previa_caminho, previa, parar), daemon=True
+            )
+            vigia.start()
         t0 = time.perf_counter()
         try:
             resposta = filho.executar(preparado.pedido, cancelar=cancelar, limite_s=limite_s)
             return _acrescentar_tempos(resposta, preparado, time.perf_counter() - t0)
         except FilhoIndisponivel:
             pass
+        finally:
+            parar.set()
+            if vigia is not None:
+                vigia.join(timeout=5.0)
 
     while not _TRAVA_FILHO.acquire(timeout=0.05):
         if cancelar is not None and cancelar.is_set():
@@ -213,6 +225,22 @@ def executar(preparado: Preparado, *, limite_s: float = LIMITE_PADRAO_S, cancela
         return _acrescentar_tempos(resposta, preparado, time.perf_counter() - t0)
     finally:
         _TRAVA_FILHO.release()
+
+
+def _vigiar_previa(caminho: Path, previa, parar: threading.Event) -> None:
+    """Le o arquivo de previa enquanto o filho trabalha e entrega o texto UMA vez."""
+    while not parar.is_set():
+        try:
+            texto = caminho.read_text(encoding="utf-8")
+        except OSError:
+            texto = None
+        if texto is not None:
+            try:
+                previa(texto)
+            except Exception:
+                pass
+            return
+        parar.wait(0.05)
 
 
 def _executar_filho(

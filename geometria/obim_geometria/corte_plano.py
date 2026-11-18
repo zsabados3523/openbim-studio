@@ -45,6 +45,8 @@ def cortar_malha_no_plano(verts, tris, z):
     classe = np.zeros(len(v), dtype=int)
     classe[dz < -eps] = -1
     classe[dz > eps] = 1
+    classe = classe.tolist()  # listas python: indexar numpy escalar a cada passo e lento
+    vl = v.tolist()
 
     novos_verts: list[np.ndarray] = []
     vert_aresta: dict[tuple[int, int], int] = {}
@@ -56,10 +58,9 @@ def cortar_malha_no_plano(verts, tris, z):
         if idx is not None:
             return idx
         i0, i1 = chave
-        p0, p1 = v[i0], v[i1]
+        p0, p1 = vl[i0], vl[i1]
         frac = (zf - p0[2]) / (p1[2] - p0[2])
-        p = p0 + frac * (p1 - p0)
-        p[2] = zf
+        p = [p0[0] + frac * (p1[0] - p0[0]), p0[1] + frac * (p1[1] - p0[1]), zf]
         idx = n_orig + len(novos_verts)
         novos_verts.append(p)
         vert_aresta[chave] = idx
@@ -89,9 +90,8 @@ def cortar_malha_no_plano(verts, tris, z):
             acima = True
         arestas_plano[chave] = (abaixo, acima)
 
-    for tri in t:
-        i0, i1, i2 = int(tri[0]), int(tri[1]), int(tri[2])
-        c0, c1, c2 = int(classe[i0]), int(classe[i1]), int(classe[i2])
+    for i0, i1, i2 in t.tolist():
+        c0, c1, c2 = classe[i0], classe[i1], classe[i2]
         n_on = (c0 == 0) + (c1 == 0) + (c2 == 0)
 
         if n_on == 2:

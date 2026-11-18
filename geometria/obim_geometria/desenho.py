@@ -1575,13 +1575,15 @@ def _eh_timeout_resp(resp) -> bool:
 def _aplicar_tempos_relogio(
     tempos: dict, *, pesados_s: float = 0.0, formas_s: float = 0.0, agrupar_s: float = 0.0,
     max_lote_s: float = 0.0, refaz_faixas_s: float = 0.0, n_timeouts: int = 0,
-    n_grupos: int = 0, maior_grupo: int = 0,
+    n_grupos: int = 0, maior_grupo: int = 0, megagrupo_direto: bool | None = None,
 ) -> dict:
     tempos.update({
         "pesados_s": float(pesados_s), "formas_s": float(formas_s), "agrupar_s": float(agrupar_s),
         "max_lote_s": float(max_lote_s), "refaz_faixas_s": float(refaz_faixas_s),
         "n_timeouts": int(n_timeouts), "n_grupos": int(n_grupos), "maior_grupo": int(maior_grupo),
     })
+    if megagrupo_direto is not None:
+        tempos["megagrupo_direto"] = bool(megagrupo_direto)
     return tempos
 
 
@@ -1815,6 +1817,10 @@ def _gravar_previa(pedido: dict, f, formas: dict, elementos, pesados_svg: list[s
         pass
 
 
+LIMIAR_MEGAGRUPO_FRACAO = 0.5
+LIMIAR_MEGAGRUPO_PECAS = 200
+
+
 def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = None) -> dict:
     from obim_geometria import componentes
 
@@ -1841,7 +1847,8 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
                 r["grupos_ids"] = [[i for i, _ in elementos]] if elementos else []
                 if isinstance(r.get("tempos"), dict):
                     _aplicar_tempos_relogio(r["tempos"], pesados_s=pesados_s, formas_s=formas_s, agrupar_s=agrupar_s, max_lote_s=max_lote_s,
-                                            refaz_faixas_s=refaz_faixas_s, n_timeouts=n_timeouts, n_grupos=n_g, maior_grupo=len(elementos))
+                                            refaz_faixas_s=refaz_faixas_s, n_timeouts=n_timeouts, n_grupos=n_g, maior_grupo=len(elementos),
+                                            megagrupo_direto=False)
             return r
         q_rest = {k: v for k, v in base.items() if k not in ("pesados", "limiar_pesado")}
         q_rest["elementos"] = [list(e) for e in restantes]
@@ -1861,7 +1868,8 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
         if isinstance(r.get("tempos"), dict):
             _aplicar_tempos_relogio(r["tempos"], pesados_s=pesados_s, formas_s=formas_s, agrupar_s=agrupar_s, max_lote_s=max_lote_s,
                                     refaz_faixas_s=refaz_faixas_s, n_timeouts=n_timeouts, n_grupos=n_g,
-                                    maior_grupo=max((len(g) for g in grupos), default=len(restantes)))
+                                    maior_grupo=max((len(g) for g in grupos), default=len(restantes)),
+                                    megagrupo_direto=False)
         return r
 
     try:
@@ -1911,9 +1919,20 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
             _gravar_previa(pedido, f, formas, elementos, pesados_svg)
 
         total_threads = nucleos.limitar_threads(pedido.get("threads"))
-        n_lotes = max(1, min(len(grupos), total_threads))
-        threads_filho = max(1, total_threads // n_lotes)
-        lotes_idx = _repartir_lotes(grupos, formas, n_lotes)
+        limiar_fracao = LIMIAR_MEGAGRUPO_FRACAO
+        limiar_pecas = LIMIAR_MEGAGRUPO_PECAS
+        n_total = sum(len(g) for g in grupos)
+        megagrupos, grupos_pequenos = [], []
+        for g in grupos:
+            if (n_total > 0 and (len(g) / n_total) > limiar_fracao) or len(g) > limiar_pecas:
+                megagrupos.append(g)
+            else:
+                grupos_pequenos.append(g)
+
+        ok_resultados, grupos_falhos = [], []
+        n_lotes = min(len(grupos_pequenos), total_threads)
+        threads_filho = max(1, total_threads // max(1, n_lotes))
+        lotes_idx = _repartir_lotes(grupos_pequenos, formas, n_lotes) if n_lotes else []
         lotes_req = []
         for indices in lotes_idx:
             itens_q = []
@@ -1921,7 +1940,7 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
                 q = dict(base)
                 q.pop("pesados", None)
                 q.pop("limiar_pesado", None)
-                q["elementos"] = [list(e) for e in grupos[idx_g]]
+                q["elementos"] = [list(e) for e in grupos_pequenos[idx_g]]
                 q["threads"] = threads_filho
                 itens_q.append(q)
             lotes_req.append({**base, "op": "desenho_lote", "pedidos": itens_q})
@@ -1934,13 +1953,15 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
                 resp = None
             return resp, time.perf_counter() - t0
 
-        with ThreadPoolExecutor(max_workers=n_lotes) as ex:
-            futuros = [ex.submit(_exec_lote, lote) for lote in lotes_req]
-            lotes_pares = [fut.result() for fut in futuros]
+        lotes_pares = []
+        if lotes_req:
+            with ThreadPoolExecutor(max_workers=n_lotes) as ex:
+                futuros = [ex.submit(_exec_lote, lote) for lote in lotes_req]
+                lotes_pares = [fut.result() for fut in futuros]
         lotes_resp = [p[0] for p in lotes_pares]
         max_lote_s = max((p[1] for p in lotes_pares), default=0.0)
 
-        resultados = [None] * len(grupos)
+        resultados = [None] * len(grupos_pequenos)
         for indices, resp_lote in zip(lotes_idx, lotes_resp):
             if isinstance(resp_lote, dict) and not resp_lote.get("ok") and (resp_lote.get("erro") or {}).get("tipo") == "Divergente":
                 return resp_lote
@@ -1954,8 +1975,7 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
                         if _eh_timeout_resp(itens_r[pos]):
                             n_timeouts += 1
 
-        ok_resultados, grupos_falhos = [], []
-        for grupo, res in zip(grupos, resultados):
+        for grupo, res in zip(grupos_pequenos, resultados):
             if isinstance(res, dict) and not res.get("ok") and (res.get("erro") or {}).get("tipo") == "Divergente":
                 return res
             if isinstance(res, dict) and res.get("ok") and isinstance(res.get("svg"), str) and res.get("svg"):
@@ -1963,27 +1983,43 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
             else:
                 grupos_falhos.append(grupo)
 
-        if not ok_resultados:
+        if not megagrupos and not ok_resultados:
             return fallback()
 
         falhas_filhos = set()
+
+        def _rodar_grupo_faixas(grupo):
+            nonlocal n_timeouts
+            q_faixas = {k: v for k, v in base.items() if k not in ("pesados", "limiar_pesado")}
+            q_faixas["elementos"] = [list(e) for e in grupo]
+            q_faixas["threads"] = total_threads
+            r_faixas = _planta_em_faixas(q_faixas, fase, 8, f=f, abrir_s=abrir_s, sem_normal=True)
+            if isinstance(r_faixas, dict) and not r_faixas.get("ok") and (r_faixas.get("erro") or {}).get("tipo") == "Divergente":
+                return r_faixas
+            if isinstance(r_faixas, dict) and r_faixas.get("ok") and isinstance(r_faixas.get("svg"), str) and r_faixas.get("svg"):
+                ok_resultados.append(r_faixas)
+                n_timeouts += int((r_faixas.get("tempos") or {}).get("n_timeouts", 0))
+            else:
+                if _eh_timeout_resp(r_faixas):
+                    n_timeouts += 1
+                falhas_filhos.update(i for i, _ in grupo)
+            return None
+
+        for grupo in megagrupos:
+            erro_div = _rodar_grupo_faixas(grupo)
+            if erro_div is not None:
+                return erro_div
+
         if grupos_falhos:
             t_rf0 = time.perf_counter()
             for grupo in grupos_falhos:
-                q_refaz = {k: v for k, v in base.items() if k not in ("pesados", "limiar_pesado")}
-                q_refaz["elementos"] = [list(e) for e in grupo]
-                q_refaz["threads"] = total_threads
-                r_refaz = _planta_em_faixas(q_refaz, fase, 8, f=f, abrir_s=abrir_s, sem_normal=True)
-                if isinstance(r_refaz, dict) and not r_refaz.get("ok") and (r_refaz.get("erro") or {}).get("tipo") == "Divergente":
-                    return r_refaz
-                if isinstance(r_refaz, dict) and r_refaz.get("ok") and isinstance(r_refaz.get("svg"), str) and r_refaz.get("svg"):
-                    ok_resultados.append(r_refaz)
-                    n_timeouts += int((r_refaz.get("tempos") or {}).get("n_timeouts", 0))
-                else:
-                    if _eh_timeout_resp(r_refaz):
-                        n_timeouts += 1
-                    falhas_filhos.update(i for i, _ in grupo)
+                erro_div = _rodar_grupo_faixas(grupo)
+                if erro_div is not None:
+                    return erro_div
             refaz_faixas_s = time.perf_counter() - t_rf0
+
+        if not ok_resultados:
+            return fallback()
 
         if falhas_filhos:
             try:
@@ -2043,6 +2079,7 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
     _aplicar_tempos_relogio(
         tempos, pesados_s=pesados_s, formas_s=formas_s, agrupar_s=agrupar_s, max_lote_s=max_lote_s,
         refaz_faixas_s=refaz_faixas_s, n_timeouts=n_timeouts, n_grupos=len(grupos), maior_grupo=max((len(g) for g in grupos), default=0),
+        megagrupo_direto=bool(megagrupos),
     )
     resp = {
         "ok": True,

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Motor de desenho de planta (modo pavimento do motor SVG, sem criar entidade no arquivo)."""
 import contextlib
+import functools
 import math
 import os
 import re
@@ -17,7 +18,8 @@ import ifcopenshell.ifcopenshell_wrapper as W
 import ifcopenshell.util.element
 import ifcopenshell.util.placement
 import numpy as np
-from obim_geometria import faixas, nucleos, oclusores, peca_cortada, peca_visivel, silhueta, visibilidade
+import shapely
+from obim_geometria import aneis, corte_plano, faixas, nucleos, oclusores, peca_cortada, peca_visivel, silhueta, visibilidade
 
 
 def caixa_valida(c) -> list[float] | None:
@@ -1000,6 +1002,45 @@ def _cruza_xy(a: tuple[float, float, float, float], b: tuple[float, float, float
     return a[2] + margem >= b[0] and a[0] - margem <= b[2] and a[3] + margem >= b[1] and a[1] - margem <= b[3]
 
 
+def _extrair_aneis_geom(geom) -> list[np.ndarray]:
+    """Extrai aneis exteriores e interiores de poligonos (ou colecoes) com area util."""
+    if geom is None or geom.is_empty:
+        return []
+    if geom.geom_type == "Polygon":
+        if geom.area <= 1e-12:
+            return []
+        rings = [np.asarray(geom.exterior.coords, dtype=np.float64)[:, :2]]
+        rings.extend(np.asarray(it.coords, dtype=np.float64)[:, :2] for it in geom.interiors)
+        return rings
+    sub = getattr(geom, "geoms", None)
+    if sub is not None:
+        out = []
+        for g in sub:
+            out.extend(_extrair_aneis_geom(g))
+        return out
+    return []
+
+
+def _aneis_secao_visiveis(fechados: list[np.ndarray], grupos: list[list[np.ndarray]]) -> list[np.ndarray]:
+    """Remove dos aneis fechados da secao apenas trechos cobertos pelos oclusores."""
+    if not fechados or not grupos:
+        return fechados
+    sec_polys = [shapely.make_valid(shapely.Polygon(a)) for a in fechados if len(a) >= 3]
+    if not sec_polys:
+        return []
+    sec_geom = sec_polys[0] if len(sec_polys) == 1 else functools.reduce(shapely.symmetric_difference, sec_polys)
+    if sec_geom.is_empty or sec_geom.area <= 1e-12:
+        return []
+    ocl_polys = [shapely.make_valid(shapely.Polygon(g[0], g[1:])) for g in grupos if g and len(g[0]) >= 3]
+    if not ocl_polys:
+        return fechados
+    ocl_geom = ocl_polys[0] if len(ocl_polys) == 1 else shapely.union_all(ocl_polys)
+    inter = shapely.intersection(sec_geom, ocl_geom)
+    if inter.is_empty or float(inter.area) <= 1e-9:
+        return fechados
+    return _extrair_aneis_geom(shapely.difference(sec_geom, ocl_geom))
+
+
 def _janela_pelo_motor(
     el, verts: np.ndarray, tris: np.ndarray, box_xy: tuple[float, float, float, float], z0: float,
     malhas_hlr: list, pm_boxes: list, altura_corte_m: float,
@@ -1017,6 +1058,10 @@ def _janela_pelo_motor(
         pols = peca_cortada.linhas_peca_cortada(verts, tris, altura_corte_m, grupos)
         if pols is None:
             return None
+        _va, _ta, segs = corte_plano.cortar_malha_no_plano(verts, tris, altura_corte_m)
+        fechados, abertos = aneis.aneis_de_segmentos(segs)
+        if abertos:
+            return None
         pols_validas = []
         for pl in pols:
             pts = np.asarray(pl, dtype=np.float64)
@@ -1024,7 +1069,12 @@ def _janela_pelo_motor(
                 d = np.diff(pts[:, :2], axis=0)
                 if float(np.hypot(d[:, 0], d[:, 1]).sum()) > 1e-9:
                     pols_validas.append(pts)
-        return peca_visivel._grupo_svg(el, pols_validas)[0]
+        grupo, _ = peca_visivel._grupo_svg(el, pols_validas)
+        aneis_visiveis = _aneis_secao_visiveis(fechados, grupos)
+        subcaminhos = [d for a in aneis_visiveis if (d := _anel_d(a, 0.0, 0.0))]
+        if subcaminhos:
+            grupo = grupo[:-4] + f'<path d="{" ".join(subcaminhos)}"/></g>'
+        return grupo
     except Exception:
         if diag is not None:
             diag["erro"] = diag.get("erro", 0) + 1

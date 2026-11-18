@@ -324,3 +324,94 @@ def test_m_gerente_salvar_com_caminho_aquece_depois_de_matar_os_filhos(monkeypat
     finally:
         g._filhos_doc.clear()
         g.fechar()
+
+
+# ---------------------------------------------------------------- revisao Argon: pesados="silhueta", corrida da vigia, fallback
+def _cena_pesados(tmp_path, classes, n=2):
+    """n caixas separadas; `limiar_pesado=1` torna pesada (silhueta) toda candidata; `IfcFurniture` + moveis_como_caixa nao e candidata."""
+    ped, ids = _cena(tmp_path, [_caixa(3 * k, 0, 0, 3 * k + 1, 1, 1) for k in range(n)], corte=0.5, classes=classes)
+    ped.update({"componentes": True, "threads": 1, "pesados": "silhueta", "limiar_pesado": 1, "moveis_como_caixa": True,
+                "previa_arquivo": str(tmp_path / "previa.svg")})
+    return ped, ids
+
+
+def _espia_pesadas(monkeypatch, previa):
+    ordem, orig = [], D._pesadas_para_svg
+
+    def esp(*a, **k):
+        ordem.append(os.path.exists(previa) and bool(MARCA.search(Path(previa).read_text(encoding="utf-8"))))
+        return orig(*a, **k)
+    monkeypatch.setattr(D, "_pesadas_para_svg", esp)
+    return ordem
+
+
+def test_n_pesados_previa_cobre_todos_uma_carga_e_antes_das_pesadas(monkeypatch, tmp_path):
+    ped, ids = _cena_pesados(tmp_path, {1: "IfcFurniture"})  # peca 0 pesada (candidata); peca 1 movel como caixa (nao candidata)
+    esp = Espioes(monkeypatch, ped["previa_arquivo"])
+    ordem = _espia_pesadas(monkeypatch, ped["previa_arquivo"])
+    fases = []
+    r = _roda(ped, fases)
+    assert r["ok"] and [p["id"] for p in r["pesados"]] == [ids[0]], "premissa: so a peca 0 virou silhueta"
+    guids = [g for _, g in ped["elementos"]]
+    texto = Path(ped["previa_arquivo"]).read_text(encoding="utf-8")
+    assert MARCA.search(texto) and sorted(_guids(texto)) == sorted(guids), "previa cobre TODOS os GUIDs pedidos, pesados inclusive"
+    assert [p["guid"] for p in esp.chamadas_previa[0]["pecas"]] == guids
+    assert esp.formas == [sorted(ids)], "UMA carga de formas_do_mundo, com todos os elementos pedidos"
+    assert ordem == [True], "previa gravada ANTES de _pesadas_para_svg"
+    assert fases.count("previa") == 1
+
+
+def test_o_pesados_todas_pesadas_previa_ainda_e_gerada(monkeypatch, tmp_path):
+    ped, ids = _cena_pesados(tmp_path, {})  # as duas viram silhueta: `restantes` vazio (hoje cai no fallback sem previa)
+    esp = Espioes(monkeypatch, ped["previa_arquivo"])
+    fases = []
+    _roda(ped, fases)
+    guids = [g for _, g in ped["elementos"]]
+    assert len(esp.chamadas_previa) == 1 and fases.count("previa") == 1, "previa gerada uma vez mesmo sem restantes"
+    texto = Path(ped["previa_arquivo"]).read_text(encoding="utf-8")
+    assert MARCA.search(texto) and sorted(_guids(texto)) == sorted(guids)
+    assert esp.formas == [sorted(ids)]
+
+
+def test_p_leitura_lenta_nunca_entrega_depois_de_filho_executar_voltar(monkeypatch, tmp_path):
+    cb = Cb()
+    orig = Path.read_text
+
+    def lento(self, *a, **k):
+        t = orig(self, *a, **k)
+        if self.name == "previa.svg":
+            time.sleep(0.4)  # leitura em andamento quando o filho termina
+        return t
+    monkeypatch.setattr(Path, "read_text", lento)
+
+    def roteiro(filho, pedido):
+        _escreve_previa(pedido)
+        time.sleep(0.2)  # o vigia (poll 0,05 s) ja comecou a ler; o filho volta antes de a leitura acabar
+        return _final()
+    filho = FakeFilho(roteiro)
+    with _preparar(tmp_path) as p:
+        auxiliar.executar(p, previa=cb, filho=filho)
+        time.sleep(0.6)
+    assert all(q <= filho.fim for q in cb.quando), "previa entregue DEPOIS de filho.executar voltar"
+    assert cb.textos == [], "previa que so ficou pronta depois do final deve ser descartada"
+
+
+def test_q_fallback_apos_filho_indisponivel_nao_duplica_previa_e_remove_residuo(monkeypatch, tmp_path):
+    cb, no_fallback = Cb(), []
+
+    def roteiro(filho, pedido):
+        _escreve_previa(pedido)
+        assert cb.visto.wait(3.0)
+        raise auxiliar_filho.FilhoIndisponivel("indisponivel")
+
+    def descartavel(preparado, limite_s, cancelar, previa=None, previa_caminho=None):
+        no_fallback.append(previa_caminho is not None and previa_caminho.exists())
+        if callable(previa) and previa_caminho is not None and previa_caminho.exists():  # o real entrega o que achar no arquivo
+            previa(previa_caminho.read_text(encoding="utf-8"))
+        return _final()
+    from openbim_app.desenho import filho as auxiliar_filho
+    monkeypatch.setattr(auxiliar, "_executar_filho", descartavel)
+    with _preparar(tmp_path) as p:
+        r = auxiliar.executar(p, previa=cb, filho=FakeFilho(roteiro))
+    assert r["ok"] and no_fallback == [False], "arquivo residual da previa do filho tem de sumir antes do fallback"
+    assert cb.textos == [SVG_PREVIA], "previa entregue uma vez so no total"

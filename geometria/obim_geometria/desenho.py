@@ -17,7 +17,7 @@ import ifcopenshell.ifcopenshell_wrapper as W
 import ifcopenshell.util.element
 import ifcopenshell.util.placement
 import numpy as np
-from obim_geometria import faixas, nucleos, peca_visivel, silhueta, visibilidade
+from obim_geometria import faixas, nucleos, oclusores, peca_cortada, peca_visivel, silhueta, visibilidade
 
 
 def caixa_valida(c) -> list[float] | None:
@@ -995,9 +995,46 @@ def _malha_caixa(sh):
     return verts, tris, (float(mn[0]), float(mn[1]), float(mx[0]), float(mx[1])), float(mn[2]), float(mx[2])
 
 
+def _cruza_xy(a: tuple[float, float, float, float], b: tuple[float, float, float, float], margem: float = 0.001) -> bool:
+    """Retorna True se as caixas XY `a` e `b` se cruzam com folga `margem`."""
+    return a[2] + margem >= b[0] and a[0] - margem <= b[2] and a[3] + margem >= b[1] and a[1] - margem <= b[3]
+
+
+def _janela_pelo_motor(
+    el, verts: np.ndarray, tris: np.ndarray, box_xy: tuple[float, float, float, float], z0: float,
+    malhas_hlr: list, pm_boxes: list, altura_corte_m: float,
+    diag: dict | None = None,
+) -> str | None:
+    """Calcula grupo SVG da abertura pelo motor de peca cortada + oclusores, ou None para HLR."""
+    try:
+        if any(_cruza_xy(pm, box_xy) for pm in pm_boxes):
+            return None
+        outras = [(ov, ot) for oid, ov, ot, obox in malhas_hlr if oid != el.id() and _cruza_xy(obox, box_xy)]
+        caixa_peca = (box_xy[0], box_xy[1], box_xy[2], box_xy[3], z0)
+        grupos = oclusores.oclusores_da_peca(caixa_peca, outras, altura_corte_m)
+        if grupos is None:
+            return None
+        pols = peca_cortada.linhas_peca_cortada(verts, tris, altura_corte_m, grupos)
+        if pols is None:
+            return None
+        pols_validas = []
+        for pl in pols:
+            pts = np.asarray(pl, dtype=np.float64)
+            if pts.ndim == 2 and pts.shape[0] >= 2 and pts.shape[1] >= 2:
+                d = np.diff(pts[:, :2], axis=0)
+                if float(np.hypot(d[:, 0], d[:, 1]).sum()) > 1e-9:
+                    pols_validas.append(pts)
+        return peca_visivel._grupo_svg(el, pols_validas)[0]
+    except Exception:
+        if diag is not None:
+            diag["erro"] = diag.get("erro", 0) + 1
+        return None
+
+
 def _motor_planta(
     f, hlr_cands: list, pesadas: dict, moveis_elems: list, caixas_coords: dict,
-    altura_corte_m: float, num_threads: int,
+    altura_corte_m: float, num_threads: int, motor_janelas: bool = False,
+    diag_janelas: dict | None = None,
 ) -> tuple[list[str], list[int], set[int], float, float]:
     """Seleciona peças elegíveis e gera grupos SVG pelo motor de visibilidade."""
     t_g0 = time.perf_counter()
@@ -1012,7 +1049,7 @@ def _motor_planta(
     formas = silhueta.formas_do_mundo(f, para_formas, threads=num_threads) if para_formas else {}
     geo_s = time.perf_counter() - t_g0
 
-    candidatas, excluidas, inel_boxes = [], set(), []
+    candidatas, janelas_cands, malhas_hlr, excluidas, inel_boxes = [], [], [], set(), []
     for el in hlr_cands:
         if (dados := _malha_caixa(formas.get(el.id()))) is None:
             continue
@@ -1020,23 +1057,32 @@ def _motor_planta(
         if z0 > altura_corte_m:
             excluidas.add(el.id())
             continue
-        if not el.is_a("IfcDoor") and not el.is_a("IfcWindow") and not getattr(el, "HasOpenings", None) and z1 <= altura_corte_m:
+        if motor_janelas:
+            malhas_hlr.append((el.id(), verts, tris, box_xy))
+        eh_abertura_el = el.is_a("IfcDoor") or el.is_a("IfcWindow")
+        if not eh_abertura_el and not getattr(el, "HasOpenings", None) and z1 <= altura_corte_m:
             candidatas.append((el, verts, tris, box_xy))
         else:
             inel_boxes.append(box_xy)
-    if not candidatas:
+            if motor_janelas and eh_abertura_el and z0 <= altura_corte_m < z1:
+                janelas_cands.append((el, verts, tris, box_xy, z0))
+    if not candidatas and not janelas_cands:
+        if diag_janelas is not None:
+            diag_janelas.update({"aceitas": 0, "hlr": 0, "erro": 0})
         return [], [], excluidas, geo_s, 0.0
 
+    pm_boxes = []
     for _el, _nf, aneis in pesadas.values():
         if aneis and (pts := [pt for anel in aneis for pt in anel]):
             arr = np.asarray(pts, dtype=np.float64)
-            inel_boxes.append((float(arr[:, 0].min()), float(arr[:, 1].min()), float(arr[:, 0].max()), float(arr[:, 1].max())))
+            pm_boxes.append((float(arr[:, 0].min()), float(arr[:, 1].min()), float(arr[:, 0].max()), float(arr[:, 1].max())))
     for el in moveis_elems:
         c = moveis_caixas.get(el.id())
         if c is not None and min(c[2], c[5]) <= altura_corte_m:
-            inel_boxes.append((min(c[0], c[3]), min(c[1], c[4]), max(c[0], c[3]), max(c[1], c[4])))
+            pm_boxes.append((min(c[0], c[3]), min(c[1], c[4]), max(c[0], c[3]), max(c[1], c[4])))
         elif c is None and (dados := _malha_caixa(formas.get(el.id()))) is not None and dados[3] <= altura_corte_m:
-            inel_boxes.append(dados[2])
+            pm_boxes.append(dados[2])
+    inel_boxes.extend(pm_boxes)
 
     if inel_boxes:
         ib = np.asarray(inel_boxes, dtype=np.float64)
@@ -1047,13 +1093,32 @@ def _motor_planta(
         ]
     else:
         elegiveis = candidatas
-    if not elegiveis:
+    if not elegiveis and not janelas_cands:
+        if diag_janelas is not None:
+            diag_janelas.update({"aceitas": 0, "hlr": 0, "erro": 0})
         return [], [], excluidas, geo_s, 0.0
 
+    grupos_svg, ids_motor = [], []
     t_m0 = time.perf_counter()
-    pols = visibilidade.linhas_visiveis_multi([(v, t) for _el, v, t, _box in elegiveis])
+    if elegiveis:
+        pols = visibilidade.linhas_visiveis_multi([(v, t) for _el, v, t, _box in elegiveis])
+        grupos_svg.extend(peca_visivel._grupo_svg(el, pl)[0] for (el, _v, _t, _box), pl in zip(elegiveis, pols))
+        ids_motor.extend(el.id() for el, *_ in elegiveis)
+    aceitas, hlr_j, erro_diag = 0, 0, {"erro": 0}
+    for el, verts, tris, box_xy, z0 in janelas_cands:
+        grupo = _janela_pelo_motor(
+            el, verts, tris, box_xy, z0, malhas_hlr, pm_boxes, altura_corte_m, diag=erro_diag,
+        )
+        if grupo is None:
+            hlr_j += 1
+            continue
+        grupos_svg.append(grupo)
+        ids_motor.append(el.id())
+        aceitas += 1
     motor_s = time.perf_counter() - t_m0
-    return [peca_visivel._grupo_svg(el, pl)[0] for (el, _v, _t, _box), pl in zip(elegiveis, pols)], [el.id() for el, *_ in elegiveis], excluidas, geo_s, motor_s
+    if diag_janelas is not None:
+        diag_janelas.update({"aceitas": aceitas, "hlr": hlr_j, "erro": erro_diag["erro"]})
+    return grupos_svg, ids_motor, excluidas, geo_s, motor_s
 
 
 def _erro_divergencia(pedido: dict, msg: str) -> dict:
@@ -1170,17 +1235,22 @@ def _processar_base(pedido: dict, fase=None, f=None, abrir_s: float | None = Non
                 hlr_cands.append(el)
 
         motor_visivel = bool(pedido.get("motor_visivel"))
+        motor_janelas = motor_visivel and bool(pedido.get("motor_janelas"))
         motor_svg, motor_ids, motor_excluidas, motor_geo_s, motor_s = [], [], set(), 0.0, 0.0
+        janelas_diag = {"aceitas": 0, "hlr": 0, "erro": 0} if motor_janelas else None
         if motor_visivel and hlr_cands:
             try:
                 motor_svg, motor_ids, motor_excluidas, motor_geo_s, motor_s = _motor_planta(
-                    f, hlr_cands, pesadas, moveis_elems, caixas_coords, altura_corte_m, num_threads
+                    f, hlr_cands, pesadas, moveis_elems, caixas_coords, altura_corte_m, num_threads,
+                    motor_janelas=motor_janelas, diag_janelas=janelas_diag,
                 )
                 fora_hlr = set(motor_ids) | motor_excluidas
                 if fora_hlr:
                     hlr_cands = [el for el in hlr_cands if el.id() not in fora_hlr]
             except Exception:
                 motor_svg, motor_ids, motor_excluidas, motor_geo_s, motor_s = [], [], set(), 0.0, 0.0
+                if motor_janelas:
+                    janelas_diag = {"aceitas": 0, "hlr": 0, "erro": 0}
 
         for el in hlr_cands:
             if cache_tipo:
@@ -1370,6 +1440,8 @@ def _processar_base(pedido: dict, fase=None, f=None, abrir_s: float | None = Non
         }
         if motor_visivel:
             resp["motor_pecas"] = motor_ids
+            if janelas_diag is not None:
+                resp["motor_janelas_diag"] = janelas_diag
         return resp
     except Exception as e:
         return {"ok": False, "erro": {"tipo": type(e).__name__, "mensagem": str(e), "rastro": traceback.format_exc()}}

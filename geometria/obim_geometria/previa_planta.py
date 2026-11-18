@@ -31,7 +31,7 @@ def _area_anel(pts) -> float:
     return 0.5 * abs(float(np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y)))
 
 
-def _validar_malha(verts, tris) -> tuple[np.ndarray, np.ndarray] | None:
+def _validar_malha(verts, tris) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
     if verts is None or tris is None:
         return None
     try:
@@ -48,9 +48,12 @@ def _validar_malha(verts, tris) -> tuple[np.ndarray, np.ndarray] | None:
     t = t_raw.astype(np.int64, copy=False)
     if int(t.min()) < 0 or int(t.max()) >= len(v):
         return None
-    if not np.isfinite(v).all():
+    usados = np.zeros(len(v), dtype=bool)
+    usados[t] = True
+    v_usados = v[usados]
+    if len(v_usados) == 0 or not np.isfinite(v_usados).all():
         return None
-    return v, t
+    return v, t, v_usados
 
 
 def _anel_caixa(caixa) -> list[list[tuple[float, float]]]:
@@ -73,33 +76,50 @@ def _anel_caixa(caixa) -> list[list[tuple[float, float]]]:
     return [[(x0, y0), (x1, y0), (x1, y1), (x0, y1)]]
 
 
-def _caixa_xy_malha(verts: np.ndarray) -> list[list[tuple[float, float]]]:
-    x0, y0 = float(verts[:, 0].min()), float(verts[:, 1].min())
-    x1, y1 = float(verts[:, 0].max()), float(verts[:, 1].max())
+def _caixa_xy_malha(verts_usados: np.ndarray) -> list[list[tuple[float, float]]]:
+    x0, y0 = float(verts_usados[:, 0].min()), float(verts_usados[:, 1].min())
+    x1, y1 = float(verts_usados[:, 0].max()), float(verts_usados[:, 1].max())
     return _anel_caixa((x0, y0, x1, y1))
 
 
-def _casco_convexo_xy(verts: np.ndarray, tris: np.ndarray) -> list[list[tuple[float, float]]]:
-    pts = verts[np.unique(tris), :2]
+def _falha_aneis(item: dict, verts_usados: np.ndarray | None = None) -> list:
+    aneis = _anel_caixa(item.get("caixa"))
+    if aneis or verts_usados is None:
+        return aneis
+    return _caixa_xy_malha(verts_usados)
+
+
+def _casco_convexo_xy(verts_usados: np.ndarray) -> list[list[tuple[float, float]]]:
+    pts = verts_usados[:, :2]
     if len(pts) < 3:
         return []
-    hull = shapely.convex_hull(shapely.multipoints(pts))
+    hull = shapely.convex_hull(shapely.linestrings(pts))
     if hull.is_empty or hull.geom_type != "Polygon" or hull.area <= _AREA_MIN:
         return []
     coords = list(hull.exterior.coords)[:-1]
     return [coords] if len(coords) >= 3 else []
 
 
-def _secao_cortada(verts: np.ndarray, tris: np.ndarray, zf: float, zmax: float) -> list:
-    # Jitter para cima evita vertice exatamente no plano e corta pecas com zmin == z_corte.
-    passo = min(_JITTER_Z, 0.5 * (zmax - zf))
-    z_plano = zf + passo
-    _, _, segs = cortar_malha_no_plano(verts, tris, z_plano)
+def _secao_cortada(
+    verts: np.ndarray,
+    tris: np.ndarray,
+    zf: float,
+    zmin: float,
+    zmax: float,
+) -> list:
+    # Jitter para cima evita vertice exatamente no plano e corta pecas com zmin ~= z_corte.
+    z_base = max(zf, zmin)
+    passo = min(_JITTER_Z, 0.5 * (zmax - z_base))
+    z_plano = z_base + passo
+    dz_tris = (verts[:, 2] - z_plano)[tris]
+    eps_cp = 1e-12 * max(1.0, abs(z_plano))
+    cruzam = (dz_tris.min(axis=1) <= eps_cp) & (dz_tris.max(axis=1) >= -eps_cp)
+    tris_corte = tris[cruzam]
+    if len(tris_corte) == 0:
+        return []
+    _, _, segs = cortar_malha_no_plano(verts, tris_corte, z_plano)
     fechados, abertos = aneis_de_segmentos(segs)
     if abertos or not fechados:
-        return []
-    area_total = sum(_area_anel(anel) for anel in fechados)
-    if area_total <= _AREA_MIN:
         return []
     return fechados
 
@@ -158,37 +178,38 @@ def _escrever_atomico(destino, svg: str) -> None:
 def _classificar_peca(
     item: dict,
     zf: float,
+    eps: float,
     moveis_como_caixa: bool,
     limiar_tris: int,
 ) -> tuple[str, str, list]:
     """Retorna (categoria_auditoria, papel_svg, aneis) para uma peca."""
     malha = _validar_malha(item.get("verts"), item.get("tris"))
     if malha is None:
-        return "falha", "projection", _anel_caixa(item.get("caixa"))
+        return "falha", "projection", _falha_aneis(item)
 
-    verts, tris = malha
-    zmin = float(verts[:, 2].min())
-    zmax = float(verts[:, 2].max())
+    verts, tris, verts_usados = malha
+    zmin = float(verts_usados[:, 2].min())
+    zmax = float(verts_usados[:, 2].max())
 
-    if zmin > zf:
+    if zmin > zf + eps:
         return "acima", "", []
 
-    if zmin <= zf < zmax:
-        aneis = _secao_cortada(verts, tris, zf, zmax)
+    if zmax > zf + eps:
+        aneis = _secao_cortada(verts, tris, zf, zmin, zmax)
         if _aneis_validos(aneis):
             return "cortada", "cut", aneis
-        return "falha", "projection", _anel_caixa(item.get("caixa"))
+        return "falha", "projection", _falha_aneis(item, verts_usados)
 
     if bool(item.get("movel", False)) and moveis_como_caixa:
-        aneis = _caixa_xy_malha(verts)
+        aneis = _caixa_xy_malha(verts_usados)
     elif len(tris) <= limiar_tris:
         aneis = silhueta_xy(verts, tris)
     else:
-        aneis = _casco_convexo_xy(verts, tris)
+        aneis = _casco_convexo_xy(verts_usados)
 
-    if _aneis_validos(aneis):
+    if aneis:
         return "vista", "projection", aneis
-    return "falha", "projection", _anel_caixa(item.get("caixa"))
+    return "falha", "projection", _falha_aneis(item, verts_usados)
 
 
 def gerar_previa_planta(
@@ -204,6 +225,7 @@ def gerar_previa_planta(
     zf = float(z_corte)
     if not math.isfinite(zf):
         raise ValueError(f"z_corte invalido: {z_corte!r}")
+    eps = 1e-9 * max(1.0, abs(zf))
 
     if ao_fase is not None:
         ao_fase("previa")
@@ -215,7 +237,7 @@ def gerar_previa_planta(
     for item in pecas:
         guid = str(item["guid"])
         classe = str(item["classe"])
-        categoria, papel, aneis = _classificar_peca(item, zf, moveis_como_caixa, limiar_tris)
+        categoria, papel, aneis = _classificar_peca(item, zf, eps, moveis_como_caixa, limiar_tris)
         auditoria[categoria].add(guid)
         if categoria == "acima":
             continue

@@ -1595,15 +1595,22 @@ def _planta_em_faixas(pedido: dict, fase, n: int, f=None, abrir_s: float | None 
     max_lote_s = 0.0
     n_timeouts = 0
     pedidos = []
+    stats_faixas = None
 
     def normal() -> dict:
         if sem_normal:
-            return {"ok": False, "erro": {"tipo": "FaixasFalhou", "mensagem": "refazer em faixas falhou", "rastro": ""}}
+            r = {"ok": False, "erro": {"tipo": "FaixasFalhou", "mensagem": "refazer em faixas falhou", "rastro": ""},
+                 "n_timeouts": int(n_timeouts)}
+            if stats_faixas:
+                r.update(stats_faixas)
+            return r
         r = _processar_base(base, fase, f=f, abrir_s=abrir_s)
         if r.get("ok") and isinstance(r.get("tempos"), dict):
             elems = pedido.get("elementos") or ()
             _aplicar_tempos_relogio(r["tempos"], pesados_s=pesados_s, formas_s=formas_s, agrupar_s=agrupar_s, max_lote_s=max_lote_s,
                                     n_timeouts=n_timeouts, n_grupos=1 if elems else 0, maior_grupo=len(elems))
+            if stats_faixas:
+                r["tempos"].update(stats_faixas)
         return r
 
     try:
@@ -1656,12 +1663,19 @@ def _planta_em_faixas(pedido: dict, fase, n: int, f=None, abrir_s: float | None 
             r = faixas.rodar_filho(q)
             return r, time.perf_counter() - t0
 
+        t_bl0 = time.perf_counter()
         with ThreadPoolExecutor(max_workers=simultaneos) as ex:
             futuros = [ex.submit(_exec_faixa, q) for q in pedidos]
             pares = [fut.result() for fut in futuros]
         resultados = [p[0] for p in pares]
         max_lote_s = max((p[1] for p in pares), default=0.0)
         n_timeouts = sum(1 for r in resultados if _eh_timeout_resp(r))
+        stats_faixas = {
+            "n_faixas": len(pedidos),
+            "faixas_s": [float(p[1]) for p in pares],
+            "faixas_abrir_s": [float(((r.get("tempos") or {}).get("abrir_s", 0.0) or 0.0)) if isinstance(r, dict) else 0.0 for r in resultados],
+            "faixas_total_s": float(time.perf_counter() - t_bl0),
+        }
         for r in resultados:
             if isinstance(r, dict) and not r.get("ok") and (r.get("erro") or {}).get("tipo") == "Divergente":
                 return r
@@ -1689,6 +1703,8 @@ def _planta_em_faixas(pedido: dict, fase, n: int, f=None, abrir_s: float | None 
         tempos, pesados_s=pesados_s, formas_s=formas_s, agrupar_s=agrupar_s, max_lote_s=max_lote_s,
         n_timeouts=n_timeouts, n_grupos=len(pedidos), maior_grupo=max((len(p["elementos"]) for p in pedidos), default=0),
     )
+    if stats_faixas:
+        tempos.update(stats_faixas)
     return {"ok": True, "svg": svg, "n_paths": len(re.findall(r"<path\b", svg)), "enviados": enviados, "caixas": junta("caixas"),
             "em_cache": junta("em_cache"), "pesados": pesados_info, "falhas_geometria": falhas, "tempos": tempos}
 
@@ -1837,6 +1853,7 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
     max_lote_s = 0.0
     refaz_faixas_s = 0.0
     n_timeouts = 0
+    faixas_execs = []
 
     def fallback() -> dict:
         if not pesadas_prontas:
@@ -1998,10 +2015,17 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
                 return r_faixas
             if isinstance(r_faixas, dict) and r_faixas.get("ok") and isinstance(r_faixas.get("svg"), str) and r_faixas.get("svg"):
                 ok_resultados.append(r_faixas)
-                n_timeouts += int((r_faixas.get("tempos") or {}).get("n_timeouts", 0))
+                t_faixas = r_faixas.get("tempos") or {}
+                n_timeouts += int(t_faixas.get("n_timeouts", 0))
+                if "n_faixas" in t_faixas:
+                    faixas_execs.append(t_faixas)
             else:
                 if _eh_timeout_resp(r_faixas):
                     n_timeouts += 1
+                if isinstance(r_faixas, dict):
+                    n_timeouts += int(r_faixas.get("n_timeouts", 0))
+                    if "n_faixas" in r_faixas:
+                        faixas_execs.append(r_faixas)
                 falhas_filhos.update(i for i, _ in grupo)
             return None
 
@@ -2081,6 +2105,11 @@ def _planta_por_componentes(pedido: dict, fase, f=None, abrir_s: float | None = 
         refaz_faixas_s=refaz_faixas_s, n_timeouts=n_timeouts, n_grupos=len(grupos), maior_grupo=max((len(g) for g in grupos), default=0),
         megagrupo_direto=bool(megagrupos),
     )
+    if faixas_execs:
+        tempos["n_faixas"] = sum(int(s.get("n_faixas", 0)) for s in faixas_execs)
+        tempos["faixas_s"] = [float(x) for s in faixas_execs for x in (s.get("faixas_s") or ())]
+        tempos["faixas_abrir_s"] = [float(x) for s in faixas_execs for x in (s.get("faixas_abrir_s") or ())]
+        tempos["faixas_total_s"] = float(sum(float(s.get("faixas_total_s", 0.0)) for s in faixas_execs))
     resp = {
         "ok": True,
         "svg": svg,

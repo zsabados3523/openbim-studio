@@ -10,7 +10,7 @@ cd "$(dirname "$0")"
 [ "${CLEAN:-}" = 1 ] && rm -rf "$B" "$OUT/obimcore"
 mkdir -p "$OUT/obimcore"
 # No Windows, o gerador do Visual Studio (MSVC, mesmo compilador do conda-forge); o c++ do MinGW do runner não serve.
-if [ "${RUNNER_OS:-}" = "Windows" ]; then GEN=(-A x64); else GEN=(-G Ninja); fi
+if [ "${RUNNER_OS:-}" = "Windows" ]; then GEN=(-A x64 -T version=14.51); else GEN=(-G Ninja); fi
 # Pacote Python: o __init__ importa o ifcopenshell ANTES do módulo (esquemas registrados) e, no Windows, mostra ao carregador
 # onde estão as DLLs do ambiente (o PATH não vale para extensões a partir do Python 3.8).
 cat > "$OUT/obimcore/__init__.py" <<'PY'

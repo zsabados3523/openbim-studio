@@ -460,3 +460,151 @@ def test_15_fronteira_de_zmax_exatamente_1e3_nao_conta_e_1_0001e3_conta():
 def test_15b_fronteira_de_area_descoberta_1e4(sobra, oculta):
     r, a = rodar([laje("L", 0, 0, 1, 1), viga("V", 0.2, 0.0, 1.0 + sobra, 1.0)])  # descoberta = sobra x 1 m
     assert a["oculta"] == ({"V"} if oculta else set())
+
+
+# ================================================================ T20d3a rodada 3 (Argon: clip_by_rect em oclusor concavo / furo diagonal)
+# Contrato: a classificacao oculta/vista e a da DIFERENCA DIRETA de poligonos (sem recorte por retangulo):
+#   oculta <=> desc <= 1e-4 e (area - desc) >= 0,5 * area, com desc = area(pegada - uniao(pegadas dos oclusores)). Nenhuma geometria invalida pode decidir o resultado.
+V_POLI = [(0, 0), (10, 0), (10, 10), (5, 2), (0, 10)]  # laje em V: entalhe triangular vazio (0,10)-(5,2)-(10,10)
+V_CAPS = [(0, 3, 4), (0, 1, 3), (1, 2, 3)]
+
+
+def V(z0=0.5, z1=0.7, guid="OCL_V"):
+    return peca(guid, "IfcSlab", prisma(V_POLI, z0, z1, V_CAPS))
+
+
+def malha_de_poligono(poli, z0, z1):
+    """Malha (tampa inferior e superior) de um Polygon shapely com furos, por triangulacao de Delaunay restrita."""
+    tri = shapely.constrained_delaunay_triangles(poli)
+    v, ix, t = [], {}, []
+    for g in tri.geoms:
+        cs = list(g.exterior.coords)[:3]
+        ids = []
+        for c in cs:
+            if c not in ix:
+                ix[c] = len(v)
+                v.append(c)
+            ids.append(ix[c])
+        t.append(ids)
+    n = len(v)
+    t = np.array(t, int)
+    verts = np.array([(x, y, z0) for x, y in v] + [(x, y, z1) for x, y in v], float)
+    return verts, np.vstack([t, t + n])
+
+
+def esperado_oculta(pegada, oclusores):
+    """Regra do contrato, por diferenca direta (sem clip_by_rect)."""
+    if not oclusores:
+        return False
+    desc = pegada.difference(shapely.union_all(oclusores)).area
+    return desc <= 1e-4 and pegada.area - desc >= 0.5 * pegada.area
+
+
+def test_16_a_peca_triangular_no_entalhe_do_V_tem_cobertura_zero_e_fica_vista():
+    no_vazio = peca("NO_VAZIO", "IfcBeam", prisma([(0, 10), (5, 2), (10, 10)], 0.0, 0.3, [(0, 1, 2)]))  # area 40, so encosta nas arestas diagonais
+    r, a = rodar([V(), no_vazio])
+    assert a["vista"] == {"OCL_V", "NO_VAZIO"} and not a["oculta"]
+    assert 'ifc:guid="NO_VAZIO"' in r["svg"]
+
+
+def test_16b_peca_triangular_dentro_do_furo_em_losango_fica_vista():
+    laje_losango = shapely.Polygon([(0, 0), (10, 0), (10, 10), (0, 10)], [[(5, 2), (8, 5), (5, 8), (2, 5)]])
+    furada = peca("L", "IfcSlab", malha_de_poligono(laje_losango, 0.5, 0.7))
+    dentro = peca("T", "IfcBeam", prisma([(2, 5), (5, 2), (8, 5)], 0.0, 0.3, [(0, 1, 2)]))  # bounds (2,2,8,5) tangenciam vertices do furo
+    r, a = rodar([furada, dentro])
+    assert a["vista"] == {"L", "T"} and not a["oculta"]
+    sob_aro = peca("A", "IfcBeam", caixa(0.5, 0.5, 0.0, 1.5, 1.5, 0.3))
+    assert rodar([furada, sob_aro])[1]["oculta"] == {"A"}, "contraste: sob o aro continua oculta"
+
+
+def test_16c_duas_ilhas_nas_abas_cheias_do_V_com_sobra_1e5_ficam_ocultas():
+    ilhas = peca("I", "IfcBeam", junta(caixa(0, 2, 0.0, 1, 3, 0.3), caixa(9, 2, 0.0, 10 + 1.25e-5, 3, 0.3)))  # sobra = 1,25e-5 x 0,8 = 1e-5; bounds (0,2,...) tangenciam (5,2)
+    r, a = rodar([V(), ilhas])
+    assert a["oculta"] == {"I"} and a["vista"] == {"OCL_V"}
+    mais_sobra = peca("J", "IfcBeam", junta(caixa(0, 2, 0.0, 1, 3, 0.3), caixa(9, 2, 0.0, 10 + 1.4e-4, 3, 0.3)))  # sobra 1,1e-4 > 1e-4
+    assert rodar([V(), mais_sobra])[1]["vista"] == {"OCL_V", "J"}
+
+
+BOXES_V = [(1, 2, 9, 4), (0, 2, 10, 3), (2, 2, 8, 10), (4, 2, 6, 6), (0, 0, 10, 2), (0.2, 2, 1.0, 5), (4.9, 2, 5.1, 2.5), (3, 5, 7, 9), (0, 0, 10, 10)]
+
+
+@pytest.mark.parametrize("box", BOXES_V)
+def test_16d_bounds_tangentes_ao_vertice_do_V_batem_com_a_diferenca_direta(monkeypatch, box):
+    invalidas = []
+    real = shapely.clip_by_rect
+    monkeypatch.setattr(shapely, "clip_by_rect", lambda g, *a, **k: (lambda o: (invalidas.append(o) if not o.is_valid else None, o)[1])(real(g, *a, **k)))
+    x0, y0, x1, y1 = box
+    r, a = rodar([V(), viga("P", x0, y0, x1, y1)])
+    esp = esperado_oculta(shapely.box(x0, y0, x1, y1), [shapely.Polygon(V_POLI)])
+    assert ("P" in a["oculta"]) == esp, f"{box}: esperado oculta={esp} (diferenca direta)"
+    assert ("P" in a["vista"]) == (not esp) and not invalidas, "geometria invalida usada na decisao"
+
+
+def _poligono_aleatorio(rng, cx, cy, r, tipo):
+    if tipo == "convexo":
+        pts = np.c_[cx + rng.uniform(-r, r, 9), cy + rng.uniform(-r, r, 9)]
+        return shapely.convex_hull(shapely.multipoints(pts))
+    n = int(rng.integers(5, 10))
+    ang = np.sort(rng.uniform(0, 2 * np.pi, n))
+    rad = rng.uniform(0.35 * r, r, n)
+    p = shapely.Polygon(np.c_[cx + rad * np.cos(ang), cy + rad * np.sin(ang)])
+    if not p.is_valid or p.area < 1e-3:
+        return None
+    if tipo == "furo":
+        furo = shapely.Polygon(np.c_[cx + 0.3 * r * np.cos(np.linspace(0, 2 * np.pi, 6, endpoint=False)), cy + 0.3 * r * np.sin(np.linspace(0, 2 * np.pi, 6, endpoint=False))])
+        if p.contains(furo):
+            p = shapely.Polygon(p.exterior.coords, [furo.exterior.coords])
+    return p
+
+
+def test_17_propriedade_200_pecas_poligonais_aleatorias_batem_com_a_diferenca_direta():
+    rng = np.random.default_rng(20241119)
+    polis, zs = [], []
+    while len(polis) < 200:
+        grande = len(polis) < 40
+        tipo = ["convexo", "concavo", "furo"][len(polis) % 3] if grande else ["convexo", "concavo"][len(polis) % 2]
+        p = _poligono_aleatorio(rng, rng.uniform(0, 40), rng.uniform(0, 40), rng.uniform(6, 12) if grande else rng.uniform(0.8, 3.0), tipo)
+        if p is None or p.geom_type != "Polygon" or p.area < 0.05:
+            continue
+        polis.append(p)
+        zs.append(float(rng.choice([0.6, 0.9, 1.1]) if grande else rng.choice([0.2, 0.3, 0.5])))
+    ps = [peca(f"G{i}", "IfcSlab", malha_de_poligono(p, z - 0.1, z)) for i, (p, z) in enumerate(zip(polis, zs))]
+    r, a = rodar(ps)
+    confere(r, a, [p["guid"] for p in ps])
+    esp = set()
+    for i, p in enumerate(polis):
+        ocl = [q for j, q in enumerate(polis) if j != i and zs[j] > zs[i] + 1e-3]
+        if esperado_oculta(p, ocl):
+            esp.add(f"G{i}")
+    assert 15 <= len(esp) <= 185, f"cena sem variedade ({len(esp)} ocultas)"
+    assert a["oculta"] == esp, f"diferem: so previa {sorted(a['oculta'] - esp)}; so direta {sorted(esp - a['oculta'])}"
+    assert a["vista"] == {f"G{i}" for i in range(200)} - esp
+
+
+def test_17b_propriedade_pecas_triangulares_com_vertices_nos_vertices_do_oclusor():
+    """Pecas cujos bounds tangenciam vertices concavos e de furos dos oclusores (caso que enganava o recorte por retangulo)."""
+    rng = np.random.default_rng(7)
+    ocl, k = [], 0
+    while len(ocl) < 12:
+        p = _poligono_aleatorio(rng, 15.0, 15.0, rng.uniform(6, 12), ["concavo", "furo"][k % 2])
+        k += 1
+        if p is not None and p.geom_type == "Polygon":
+            ocl.append(p)
+    ocl.append(shapely.Polygon(V_POLI))
+    ocl.append(shapely.Polygon([(0, 0), (10, 0), (10, 10), (0, 10)], [[(5, 2), (8, 5), (5, 8), (2, 5)]]))
+    pecas_, tris, esp_pol = [], [], []
+    for i, p in enumerate(ocl):
+        pecas_.append(peca(f"O{i}", "IfcSlab", malha_de_poligono(p, 0.7, 0.9)))
+        pts = [c for anel in [p.exterior, *p.interiors] for c in list(anel.coords)[:-1]]
+        for j in range(6):
+            a, b, c = (pts[int(x)] for x in rng.choice(len(pts), 3, replace=False))
+            t = shapely.Polygon([a, b, c])
+            if t.is_valid and t.area > 1e-3:
+                tris.append(t)
+                pecas_.append(peca(f"T{len(tris) - 1}", "IfcBeam", malha_de_poligono(t, 0.0, 0.2)))
+    r, a = rodar(pecas_)
+    confere(r, a, [p["guid"] for p in pecas_])
+    esp = {f"T{i}" for i, t in enumerate(tris) if esperado_oculta(t, ocl)}
+    obtido = {g for g in a["oculta"] if g.startswith("T")}
+    assert 5 <= len(esp) < len(tris) - 5, f"cena sem variedade: {len(esp)} de {len(tris)}"
+    assert obtido == esp, f"so previa {sorted(obtido - esp)}; so direta {sorted(esp - obtido)}"

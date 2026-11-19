@@ -335,12 +335,11 @@ def _aplicar_oclusao(classificados: list[dict]) -> None:
                 reg["categoria"] = "oculta"
                 continue
 
-            x0, y0, x1, y1 = pegada.bounds
             recortadas = []
             for g in candidatas:
                 if not shapely.intersects(g, pegada):
                     continue
-                rec = _so_poligonal(shapely.clip_by_rect(g, x0, y0, x1, y1))
+                rec = _so_poligonal(pegada.intersection(g))
                 if rec is not None:
                     recortadas.append(rec)
             if not recortadas:

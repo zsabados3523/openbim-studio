@@ -11,12 +11,17 @@ MUTANTES que os testes matam: casco como oclusor; caixa como oclusor; so contorn
 ocultar cortada; auditoria sem `oculta`; oclusor por pegada inteira da cortada (em vez da secao); ocluir por oclusor unico (sem uniao); falha/acima como oclusores."""
 from __future__ import annotations
 
+import re
 import time
+
+from shapely.errors import GEOSException
 
 import numpy as np
 import pytest
+import shapely
 
-from test_s06_t20d1_previa_oraculo import QUAD, L_CAPS, L_POLI, Z, caixa, grupos, moldura, peca, prisma, repete
+from test_s06_t20d1_previa_oraculo import QUAD, L_CAPS, L_POLI, Z, area_pintada, caixa, grupos, moldura, peca, prisma, repete
+import obim_geometria.previa_planta as PP
 from obim_geometria.previa_planta import gerar_previa_planta
 
 CHAVES = {"cortada", "vista", "oculta", "acima", "falha"}
@@ -224,10 +229,40 @@ def test_7b_resultado_estavel_entre_chamadas_e_independente_da_ordem_de_entrada(
     assert a3 == a1, "a classificacao nao depende da ordem"
 
 
-def test_7c_guid_duplicado_nao_quebra_e_nao_perde_guid():
-    ps = [laje("L", 0, 0, 10, 10), viga("X", 2, 2, 3, 3), viga("X", 15, 2, 16, 3)]
+def test_7c_guid_duplicado_particao_completa_e_um_grupo_por_guid():
+    ps = [laje("L", 0, 0, 10, 10), viga("X", 12, 2, 13, 3), viga("X", 15, 2, 16, 3)]
     r, a = rodar(ps)
-    assert set().union(*a.values()) == {"L", "X"} and a["vista"] >= {"L"}
+    confere(r, a, ["L", "X"])
+    assert a["vista"] == {"L", "X"}
+    gs = [g for g in grupos(r["svg"]) if g[1] == "X"]
+    assert len(gs) == 1, "um <g> por GUID"
+    assert sum(len(sub) for path in gs[0][2] for sub in [path]) >= 2 and sum(1 for path in gs[0][2] for _ in path) == 2, "aneis das duas partes unidos no mesmo grupo"
+
+
+@pytest.mark.parametrize("partes, esperado", [
+    (("cortada", "vista"), "cortada"), (("vista", "oculta"), "vista"), (("oculta", "falha"), "oculta"), (("falha", "acima"), "falha"),
+    (("cortada", "oculta"), "cortada"), (("vista", "falha"), "vista"), (("oculta", "acima"), "oculta"),
+])
+def test_7d_prioridade_cortada_vista_oculta_falha_acima_para_guid_repetido(partes, esperado):
+    pos = {"cortada": peca("X", "IfcWall", caixa(30, 0, 0.0, 31, 1, 3.0)), "vista": viga("X", 20, 0, 21, 1),
+           "oculta": viga("X", 2, 2, 3, 3), "falha": peca("X", "IfcWall", None, caixa=(40, 0, 41, 1)), "acima": peca("X", "IfcBeam", caixa(50, 0, 2.0, 51, 1, 3.0))}
+    ps = [laje("L", 0, 0, 10, 10)] + [pos[k] for k in partes]
+    r, a = rodar(ps)
+    confere(r, a, ["L", "X"])
+    assert "X" in a[esperado], (partes, a)
+    assert ('ifc:guid="X"' in r["svg"]) == (esperado not in ("oculta", "acima"))
+    assert r["svg"].count('ifc:guid="X"') <= 1
+
+
+def test_7e_partes_do_mesmo_guid_nao_se_ocluem():
+    ps = [peca("X", "IfcSlab", caixa(0, 0, 0.5, 10, 10, 0.7)), peca("X", "IfcBeam", caixa(2, 2, 0.0, 3, 8, 0.3))]
+    r, a = rodar(ps)
+    confere(r, a, ["X"])
+    assert a["vista"] == {"X"}
+    (g,) = [g for g in grupos(r["svg"]) if g[1] == "X"]
+    assert sum(len(sub) for sub in g[2]) == 2, "as duas partes ficam desenhadas (o mesmo GUID nao se oculta)"
+    rr, aa = rodar([peca("X", "IfcSlab", caixa(0, 0, 0.5, 10, 10, 0.7)), peca("Y", "IfcBeam", caixa(2, 2, 0.0, 3, 8, 0.3))])
+    assert aa["oculta"] == {"Y"}, "contraste: GUID diferente oculta"
 
 
 # ---------------------------------------------------------------- 8. destino, fase e desempenho
@@ -248,3 +283,180 @@ def test_9_desempenho_400_pecas_sob_1_5_s():
     dt = time.perf_counter() - t0
     assert a["oculta"] == {f"V{i}" for i in range(200)} and len(a["vista"]) == 200
     assert dt < 1.5, f"400 pecas levaram {dt:.2f} s"
+
+
+# ================================================================ T20d3a rodada 2 (revisao Argon)
+# Contrato acrescentado:
+#  A. Pegada = evenodd de TODOS os aneis (ilhas disjuntas, furo e ilha dentro do furo): cada anel alterna dentro/fora.
+#  B. Oculta SO se area_coberta >= 0,5 * area da pegada E area_descoberta <= 1e-4 m2. Peca pequena (<= 1e-4) fora do oclusor, so tocando borda/vertice, e vista.
+#  C. GUID repetido: particao por prioridade cortada > vista > oculta > falha > acima (o GUID vai ao conjunto de maior prioridade entre as partes); UM <g ifc:guid> por GUID,
+#     com os aneis das partes NAO ocultas/acima unidos; partes do mesmo GUID nunca se ocluem.
+#  D. GEOSException em symmetric_difference / union_all / difference: a previa nao cai; a peca afetada fica vista (nunca oculta); particao intacta.
+#     Area liquida evenodd <= 1e-12 (casca dupla): categoria "falha" com aneis de falha (mesma regra de _aneis_validos).
+#  E. Oclusor oculto continua ocluindo. viewBox so inclui o que e desenhado (nem oculta, nem acima). Fronteiras: zmax_outra == zmax + 1e-3 NAO conta (`>` estrito).
+
+
+def _caixa_area(g):
+    xs = [p for path in g[2] for sub in path for p in sub]
+    return xs
+
+
+# ---- (1) ilhas e aneis aninhados
+def test_10_peca_de_2_ilhas_so_com_a_primeira_coberta_fica_vista():
+    duas = peca("D", "IfcBeam", junta(caixa(0, 0, 0.0, 2, 2, 0.3), caixa(6, 0, 0.0, 8, 2, 0.3)))
+    r, a = rodar([duas, laje("A", -1, -1, 3, 3)])
+    assert a["vista"] == {"D", "A"} and not a["oculta"], "2a ilha descoberta: peca visivel"
+    r, a = rodar([duas, laje("A", -1, -1, 3, 3), laje("B", 5, -1, 9, 3)])
+    assert a["oculta"] == {"D"} and a["vista"] == {"A", "B"}, "as duas ilhas cobertas"
+
+
+def test_10b_viga_sob_a_ilha_interna_oculta_e_no_furo_fica_vista():
+    anel_com_ilha = peca("S", "IfcSlab", junta(moldura(0, 0, 10, 10, 2, 0.5, 0.7), caixa(4, 4, 0.5, 6, 6, 0.7)))  # externo + furo (2..8) + ilha (4..6)
+    r, a = rodar([anel_com_ilha, viga("ILHA", 4.5, 4.5, 5.5, 5.5), viga("FURO", 2.5, 2.5, 3.5, 3.5), viga("ARO", 0.5, 0.5, 1.5, 1.5)])
+    assert a["oculta"] == {"ILHA", "ARO"} and a["vista"] == {"S", "FURO"}
+    confere(r, a, ["S", "ILHA", "FURO", "ARO"])
+
+
+# ---- (2) cobertura real minima de 50%
+@pytest.mark.parametrize("nome, rect", [("toca_borda", (10.0, 0.0, 10.01, 0.008)), ("toca_vertice", (10.0, 10.0, 10.01, 10.008)), ("toca_borda_do_furo_fora", (10.0, 5.0, 10.01, 5.008))])
+def test_11_peca_minuscula_fora_do_oclusor_so_tocando_fica_vista(nome, rect):
+    r, a = rodar([laje("L", 0, 0, 10, 10), viga("P", *rect)])  # area 8e-5 <= 1e-4, cobertura real 0
+    assert a["vista"] == {"L", "P"} and not a["oculta"], nome
+
+
+@pytest.mark.parametrize("dentro, oculta", [(0.01, True), (0.006, True), (0.004, False), (0.0, False)])
+def test_11b_peca_minuscula_precisa_de_pelo_menos_metade_coberta(dentro, oculta):
+    r, a = rodar([laje("L", 0, 0, 10, 10), viga("P", 10.0 - dentro, 4.0, 10.01 - dentro, 4.008)])  # area 8e-5; fracao dentro = dentro / 0,01
+    assert a["oculta"] == ({"P"} if oculta else set()), f"fracao coberta {dentro / 0.01:.0%}"
+
+
+# ---- (3) GUID duplicado: ver 7c, 7d, 7e acima
+
+# ---- (4) desempenho com 3000 pecas
+def laje_com_furos(guid, x0, y0, z, nx=31, ny=21):
+    """Laje de celulas 1 x 1 em grade nx x ny com 150 furos (celulas impares isoladas): so a face superior (flat, z constante), ~1000 tris (<= limiar)."""
+    v, t = [], []
+    for i in range(nx):
+        for j in range(ny):
+            if i % 2 == 1 and j % 2 == 1:
+                continue
+            k = len(v)
+            v += [(x0 + i, y0 + j, z), (x0 + i + 1, y0 + j, z), (x0 + i + 1, y0 + j + 1, z), (x0 + i, y0 + j + 1, z)]
+            t += [(k, k + 1, k + 2), (k, k + 2, k + 3)]
+    return peca(guid, "IfcSlab", (np.array(v, float), np.array(t, int)))
+
+
+def pilar(guid, cx, cy):
+    ang = np.linspace(0, 2 * np.pi, 32, endpoint=False)
+    v = [(cx + 0.3 * np.cos(a), cy + 0.3 * np.sin(a), z) for z in (0.0, 1.0) for a in ang] + [(cx, cy, 0.0), (cx, cy, 1.0)]
+    t = []
+    for k in range(32):
+        a, b = k, (k + 1) % 32
+        t += [(64, b, a), (65, 32 + a, 32 + b), (a, b, 32 + b), (a, 32 + b, 32 + a)]  # 128 tris
+    return peca(guid, "IfcColumn", (np.array(v, float), np.array(t, int)))
+
+
+def test_12_desempenho_3000_pecas_sob_5_s():
+    ps, esp_ocultas = [], set()
+    for s in range(5):  # 5 lajes 31 x 21, 150 furos cada
+        ps.append(laje_com_furos(f"S{s}", 0.0, s * 30.0, 0.8))
+    for s in range(5):  # vigas sob as lajes, em celulas cheias (i, j pares): 2000 -> ocultas
+        for k in range(400):
+            i, j = (k % 15) * 2, (k // 15) * 2 % 20
+            ps.append(viga(f"V{s}_{k}", i + 0.2, s * 30.0 + j + 0.2, i + 0.7, s * 30.0 + j + 0.7))
+            esp_ocultas.add(f"V{s}_{k}")
+    for k in range(995):  # pilares vistos (128 tris) longe das lajes
+        ps.append(pilar(f"P{k}", 100.0 + (k % 40) * 2, (k // 40) * 2.0))
+    assert len(ps) == 3000
+    t0 = time.perf_counter()
+    r, a = rodar(ps)
+    dt = time.perf_counter() - t0
+    assert dt < 5.0, f"3000 pecas levaram {dt:.2f} s"
+    assert a["oculta"] == esp_ocultas and len(a["vista"]) == 5 + 995
+    confere(r, a, [p["guid"] for p in ps])
+
+
+def test_12b_previa_nao_abre_um_pool_de_threads_por_peca(monkeypatch):
+    """Pilares de 128 tris passavam do limite (64 tris) que abre ThreadPoolExecutor dentro de `uniao_triangulos_xy`: 1 pool por peca custa ~3 s por 1000 pecas.
+    A previa roda peca a peca (ja e a fase barata): deve pedir `threads=1` (zero pools)."""
+    from obim_geometria import silhueta as SIL
+    criados = []
+
+    class Pool(SIL.ThreadPoolExecutor):
+        def __init__(self, *a, **k):
+            criados.append(1)
+            super().__init__(*a, **k)
+
+    monkeypatch.setattr(SIL, "ThreadPoolExecutor", Pool)
+    ps = [pilar(f"P{k}", (k % 20) * 2.0, (k // 20) * 2.0) for k in range(200)]
+    r, a = rodar(ps)
+    assert len(a["vista"]) == 200 and not criados, f"{len(criados)} pools de threads criados"
+
+
+# ---- (5) GEOSException e casca dupla
+def _estoura(monkeypatch, nome):
+    def f(*a, **k):
+        raise GEOSException("simulado")
+    monkeypatch.setattr(shapely, nome, f)
+
+
+@pytest.mark.parametrize("op, afetada", [("difference", "SLIVER"), ("union_all", "SOB_AB"), ("symmetric_difference", "SOB_F")])
+def test_13_geos_exception_nao_derruba_e_a_peca_fica_vista(monkeypatch, op, afetada):
+    furada = peca("F", "IfcSlab", moldura(0, 0, 10, 10, 3.5, 0.5, 0.7))
+    ps = [furada, laje("A", 20, 0, 25, 10), laje("B", 25, 0, 30, 10), viga("SOB_AB", 24, 2, 26, 8), viga("SOB_F", 0.5, 0.5, 3.0, 9.5),
+          viga("SLIVER", 21, 2, 25.00005, 3)]  # SLIVER: so a diferenca (5e-5 m2 fora de A) decide
+    r0, a0 = rodar(ps)
+    assert a0["oculta"] == {"SOB_AB", "SOB_F", "SLIVER"}, a0
+    _estoura(monkeypatch, op)
+    r, a = rodar(ps)
+    confere(r, a, [p["guid"] for p in ps])
+    assert afetada in a["vista"] and afetada not in a["oculta"], f"{op}: {afetada} deve ficar vista (nunca oculta por erro)"
+    assert f'ifc:guid="{afetada}"' in r["svg"]
+
+
+def test_13b_casca_dupla_area_liquida_zero_vira_falha_com_aneis_de_falha(monkeypatch):
+    anel = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
+    real = PP.silhueta_xy
+    monkeypatch.setattr(PP, "silhueta_xy", lambda v, t, *a, **k: [anel, anel] if float(np.min(v[:, 0])) == 0.0 and float(np.max(v[:, 0])) == 1.0 else real(v, t, *a, **k))
+    ps = [peca("D", "IfcSlab", caixa(0, 0, 0.0, 1, 1, 0.2), caixa=(0, 0, 1, 1)), viga("V", 5, 5, 6, 6)]
+    r, a = rodar(ps)
+    confere(r, a, ["D", "V"])
+    assert a["falha"] == {"D"} and a["vista"] == {"V"}
+    (g,) = [g for g in grupos(r["svg"]) if g[1] == "D"]
+    assert g[0] == ["IfcSlab", "projection"] and abs(area_pintada(g) - 1.0) <= 0.02, "desenhada como caixa de falha (1 x 1), nao como casca dupla (area 0 evenodd)"
+
+
+# ---- (6) cadeia, viewBox e fronteiras
+def _rect(guid, x1, z1, y1=10.0):
+    return peca(guid, "IfcSlab", caixa(0, 0, z1 - 0.1, x1, y1, z1))
+
+
+def test_14_oclusor_oculto_continua_ocluindo():
+    topo, meio, baixa = _rect("TOPO", 10.0, 0.9), _rect("MEIO", 10.000008, 0.5), _rect("BAIXA", 10.000015, 0.2)  # sobras 8e-5 / (7e-5 sob MEIO, 1,5e-4 sob TOPO)
+    r, a = rodar([topo, meio, baixa])
+    assert a["oculta"] == {"MEIO", "BAIXA"} and a["vista"] == {"TOPO"}, "BAIXA so e coberta por MEIO, que esta oculta"
+    r2, a2 = rodar([topo, baixa])
+    assert a2["vista"] == {"TOPO", "BAIXA"}, "sem o MEIO, a sobra de 1,5e-4 deixa BAIXA vista"
+
+
+def test_14b_viewbox_nao_inclui_oculta_nem_acima():
+    topo, meio, baixa = _rect("TOPO", 10.0, 0.9), _rect("MEIO", 10.000008, 0.5), _rect("BAIXA", 10.000015, 0.2)
+    longe = peca("ACIMA", "IfcBeam", caixa(100, 0, 2.0, 101, 1, 3.0))
+    r, a = rodar([topo, meio, baixa, longe])
+    assert a["oculta"] == {"MEIO", "BAIXA"} and a["acima"] == {"ACIMA"}
+    x, y, w, h = map(float, re.search(r'viewBox="([^"]+)"', r["svg"]).group(1).split())
+    assert abs(w - 10.0) < 1e-6 and abs(h - 10.0) < 1e-6, f"viewBox {w} x {h}: so a TOPO (10 x 10) esta desenhada"
+
+
+def test_15_fronteira_de_zmax_exatamente_1e3_nao_conta_e_1_0001e3_conta():
+    base = viga("V", 2, 2, 3, 8, 0.0, 0.5)
+    r, a = rodar([base, laje("T", 0, 0, 10, 10, 0.1, 0.5 + 1e-3)])
+    assert a["vista"] == {"V", "T"}, "zmax_outra == zmax + 1e-3: `>` estrito, nao conta"
+    r, a = rodar([base, laje("T", 0, 0, 10, 10, 0.1, 0.5 + 1.0001e-3)])
+    assert a["oculta"] == {"V"}
+
+
+@pytest.mark.parametrize("sobra, oculta", [(9.9e-5, True), (1.01e-4, False)])
+def test_15b_fronteira_de_area_descoberta_1e4(sobra, oculta):
+    r, a = rodar([laje("L", 0, 0, 1, 1), viga("V", 0.2, 0.0, 1.0 + sobra, 1.0)])  # descoberta = sobra x 1 m
+    assert a["oculta"] == ({"V"} if oculta else set())

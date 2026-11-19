@@ -2,6 +2,7 @@
 """Previa provisoria da planta sem HLR (secao exata, silhueta/casco e caixas de falha)."""
 from __future__ import annotations
 
+from functools import reduce
 from html import escape
 import math
 import os
@@ -15,6 +16,9 @@ from obim_geometria.silhueta import silhueta_xy
 
 _JITTER_Z = 1e-7
 _AREA_MIN = 1e-12
+_TOL_Z_OCLUSAO = 1e-3
+_TOL_AREA_OCLUSAO = 1e-4
+_PRIORIDADE_AUDITORIA = {"cortada": 0, "vista": 1, "falha": 2, "oculta": 3, "acima": 4}
 _NS_SVG = "http://www.w3.org/2000/svg"
 _NS_IFC = "http://www.ifcopenshell.org/ns"
 
@@ -175,41 +179,128 @@ def _escrever_atomico(destino, svg: str) -> None:
         raise
 
 
+def _so_poligonal(geom):
+    if geom is None or geom.is_empty:
+        return None
+    if geom.geom_type in ("Polygon", "MultiPolygon"):
+        return geom if geom.area > _AREA_MIN else None
+    if hasattr(geom, "geoms"):
+        partes = [
+            g
+            for g in geom.geoms
+            if g.geom_type in ("Polygon", "MultiPolygon") and not g.is_empty and g.area > _AREA_MIN
+        ]
+        if not partes:
+            return None
+        return partes[0] if len(partes) == 1 else shapely.union_all(partes)
+    return None
+
+
+def _pegada_de_aneis(aneis: list):
+    """Constroi geometria Shapely da pegada via regra evenodd dos aneis."""
+    if not aneis:
+        return None
+    if len(aneis) == 1:
+        anel = aneis[0]
+        if len(anel) < 3:
+            return None
+        p = shapely.Polygon(anel)
+        if not p.is_valid:
+            p = shapely.make_valid(p)
+        return _so_poligonal(p)
+
+    polis = []
+    for anel in aneis:
+        if len(anel) < 3:
+            continue
+        p = shapely.Polygon(anel)
+        if not p.is_valid:
+            p = shapely.make_valid(p)
+        p = _so_poligonal(p)
+        if p is not None:
+            polis.append(p)
+    if not polis:
+        return None
+    if len(polis) == 1:
+        return polis[0]
+    return _so_poligonal(reduce(shapely.symmetric_difference, polis))
+
+
 def _classificar_peca(
     item: dict,
     zf: float,
     eps: float,
     moveis_como_caixa: bool,
     limiar_tris: int,
-) -> tuple[str, str, list]:
-    """Retorna (categoria_auditoria, papel_svg, aneis) para uma peca."""
+) -> tuple[str, str, list, float | None, bool]:
+    """Retorna (categoria_auditoria, papel_svg, aneis, zmax, exata) para uma peca."""
     malha = _validar_malha(item.get("verts"), item.get("tris"))
     if malha is None:
-        return "falha", "projection", _falha_aneis(item)
+        return "falha", "projection", _falha_aneis(item), None, False
 
     verts, tris, verts_usados = malha
     zmin = float(verts_usados[:, 2].min())
     zmax = float(verts_usados[:, 2].max())
 
     if zmin > zf + eps:
-        return "acima", "", []
+        return "acima", "", [], zmax, False
 
     if zmax > zf + eps:
         aneis = _secao_cortada(verts, tris, zf, zmin, zmax)
         if _aneis_validos(aneis):
-            return "cortada", "cut", aneis
-        return "falha", "projection", _falha_aneis(item, verts_usados)
+            return "cortada", "cut", aneis, zmax, True
+        return "falha", "projection", _falha_aneis(item, verts_usados), zmax, False
 
     if bool(item.get("movel", False)) and moveis_como_caixa:
         aneis = _caixa_xy_malha(verts_usados)
+        exata = False
     elif len(tris) <= limiar_tris:
         aneis = silhueta_xy(verts, tris)
+        exata = True
     else:
         aneis = _casco_convexo_xy(verts_usados)
+        exata = False
 
-    if aneis:
-        return "vista", "projection", aneis
-    return "falha", "projection", _falha_aneis(item, verts_usados)
+    if _aneis_validos(aneis):
+        return "vista", "projection", aneis, zmax, exata
+    return "falha", "projection", _falha_aneis(item, verts_usados), zmax, False
+
+
+def _aplicar_oclusao(classificados: list[dict]) -> None:
+    """Marca como 'oculta' pecas 'vista' cobertas por oclusores exatos mais altos."""
+    ocl_geoms = []
+    ocl_zmax = []
+    ocl_idx = []
+    for idx, reg in enumerate(classificados):
+        if reg["exata"] and reg["pegada"] is not None and reg["zmax"] is not None:
+            ocl_geoms.append(reg["pegada"])
+            ocl_zmax.append(reg["zmax"])
+            ocl_idx.append(idx)
+
+    if not ocl_geoms:
+        return
+
+    arvore = shapely.STRtree(ocl_geoms)
+    for idx, reg in enumerate(classificados):
+        if reg["categoria"] != "vista":
+            continue
+        pegada = reg["pegada"]
+        zmax = reg["zmax"]
+        if pegada is None or zmax is None:
+            continue
+
+        z_min_ocl = zmax + _TOL_Z_OCLUSAO
+        candidatas = [
+            ocl_geoms[k]
+            for k in arvore.query(pegada, predicate="intersects")
+            if ocl_idx[k] != idx and ocl_zmax[k] > z_min_ocl
+        ]
+        if not candidatas:
+            continue
+
+        uniao = candidatas[0] if len(candidatas) == 1 else shapely.union_all(candidatas)
+        if pegada.difference(uniao).area <= _TOL_AREA_OCLUSAO:
+            reg["categoria"] = "oculta"
 
 
 def gerar_previa_planta(
@@ -230,20 +321,46 @@ def gerar_previa_planta(
     if ao_fase is not None:
         ao_fase("previa")
 
-    auditoria = {"cortada": set(), "vista": set(), "acima": set(), "falha": set()}
-    grupos_svg: list[str] = []
-    limites = [math.inf, math.inf, -math.inf, -math.inf]
-
+    classificados: list[dict] = []
     for item in pecas:
         guid = str(item["guid"])
         classe = str(item["classe"])
-        categoria, papel, aneis = _classificar_peca(item, zf, eps, moveis_como_caixa, limiar_tris)
-        auditoria[categoria].add(guid)
-        if categoria == "acima":
+        categoria, papel, aneis, zmax, exata = _classificar_peca(item, zf, eps, moveis_como_caixa, limiar_tris)
+        pegada = _pegada_de_aneis(aneis) if (categoria == "vista" or exata) else None
+        classificados.append(
+            {
+                "guid": guid,
+                "classe": classe,
+                "categoria": categoria,
+                "papel": papel,
+                "aneis": aneis,
+                "zmax": zmax,
+                "exata": exata,
+                "pegada": pegada,
+            }
+        )
+
+    _aplicar_oclusao(classificados)
+
+    auditoria = {"cortada": set(), "vista": set(), "oculta": set(), "acima": set(), "falha": set()}
+    cat_por_guid: dict[str, str] = {}
+    grupos_svg: list[str] = []
+    limites = [math.inf, math.inf, -math.inf, -math.inf]
+
+    for reg in classificados:
+        guid = reg["guid"]
+        cat = reg["categoria"]
+        ant = cat_por_guid.get(guid)
+        if ant is None or _PRIORIDADE_AUDITORIA[cat] < _PRIORIDADE_AUDITORIA[ant]:
+            cat_por_guid[guid] = cat
+        if cat in ("acima", "oculta"):
             continue
-        grupo = _grupo_svg(classe, guid, papel, aneis, limites)
+        grupo = _grupo_svg(reg["classe"], guid, reg["papel"], reg["aneis"], limites)
         if grupo is not None:
             grupos_svg.append(grupo)
+
+    for guid, cat in cat_por_guid.items():
+        auditoria[cat].add(guid)
 
     if math.isfinite(limites[0]):
         vx, vy = limites[0], limites[1]

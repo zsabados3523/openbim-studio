@@ -179,8 +179,8 @@ def res(tmp_path_factory):
 # ---------- casos ----------
 def test_auditoria_uniao_exata_e_disjunta(res):
     aud = res[0]["auditoria"]
-    assert set(aud) == {"cortada", "vista", "acima", "falha"}
-    assert {k: set(v) for k, v in aud.items()} == {"cortada": CORTADA, "vista": VISTA, "acima": ACIMA, "falha": FALHA}
+    assert set(aud) == {"cortada", "vista", "oculta", "acima", "falha"}  # T20d3a: 5a chave `oculta` (vazia nesta cena, sem sobreposicao)
+    assert {k: set(v) for k, v in aud.items()} == {"cortada": CORTADA, "vista": VISTA, "oculta": set(), "acima": ACIMA, "falha": FALHA}
     todos = [g for v in aud.values() for g in v]
     assert len(todos) == len(set(todos)) == len(pecas()), "GUID duplicado ou omitido"
 

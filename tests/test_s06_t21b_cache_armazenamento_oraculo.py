@@ -24,13 +24,22 @@ API pública mínima (contrato):
   as mais antigas até `tamanho_bytes() <= teto_bytes`; devolve quantas formas saíram.
 - `chave_da_forma(elemento, tesselacao=None) -> str` (sha256 hex de 64 caracteres): hash do conteúdo, por valor, sem ids
   STEP nem GlobalId nem posição: representação do corpo (MappedItem resolvido por conteúdo), unidade do projeto,
-  aberturas (HasOpenings, com representação e posição relativa à peça), versão do motor, do ifcopenshell e `tesselacao`.
+  aberturas (HasOpenings, com representação e posição relativa à peça, ordem das aberturas irrelevante), versão do
+  motor, do ifcopenshell e `tesselacao`. Decisões do reforço (revisão Argon): `tesselacao` None == {}, -0.0 == 0.0,
+  chaves de tipos mistos aceitas (também no cabeçalho); IfcTypeProduct entra pelo RepresentationMaps; memoização por
+  entidade (DAG compartilhado nunca é percorrido em tempo exponencial); `pavimento` pode ser None; matriz/caixa
+  complexas = ValueError; se o banco não puder ser apagado, abrir_cache não levanta e nunca serve dado antigo.
 """
 import dataclasses
 import inspect
+import os
+import pathlib
+import sqlite3
+import time
 
 import ifcopenshell
 import ifcopenshell.api
+import ifcopenshell.util.element
 import numpy as np
 import pytest
 
@@ -492,3 +501,335 @@ def test_tesselacao_e_versoes_entram_na_chave(monkeypatch):
 
 def test_plataforma_e_texto():
     assert isinstance(C.cabecalho_atual()["plataforma"], str) and C.cabecalho_atual()["plataforma"]
+
+
+# ================================================================ reforço (revisão Argon, PR 211)
+class _Con(sqlite3.Connection):
+    """Conexão rastreada: sabe se foi fechada e pode simular 'SQLite já desfez a transação'."""
+    fechada = False
+    falhar_insert = False
+
+    def close(self):
+        self.fechada = True
+        return super().close()
+
+    def _gatilho(self, sql):
+        if self.falhar_insert and str(sql).lstrip().upper().startswith("INSERT"):
+            self.falhar_insert = False
+            super().execute("ROLLBACK")  # o SQLite desfaz sozinho (disco cheio, corrupção)
+            raise sqlite3.OperationalError("database or disk is full")
+
+    def execute(self, sql, *a):
+        self._gatilho(sql)
+        return super().execute(sql, *a)
+
+    def executemany(self, sql, *a):
+        self._gatilho(sql)
+        return super().executemany(sql, *a)
+
+
+@pytest.fixture
+def conexoes(monkeypatch):
+    abertas = []
+    original = sqlite3.connect
+
+    def conectar(*a, **kw):
+        kw["factory"] = _Con
+        con = original(*a, **kw)
+        abertas.append(con)
+        return con
+
+    monkeypatch.setattr(sqlite3, "connect", conectar)
+    return abertas
+
+
+def _sem_apagar(monkeypatch):
+    def nega(*a, **kw):
+        raise PermissionError(13, "arquivo em uso (simulado)")
+    monkeypatch.setattr(pathlib.Path, "unlink", nega)
+    monkeypatch.setattr(os, "remove", nega)
+    monkeypatch.setattr(os, "unlink", nega)
+
+
+def _sem_vazar(conexoes, cache):
+    """No máximo a conexão do próprio cache devolvido pode ficar aberta."""
+    abertas = [c for c in conexoes if not c.fechada]
+    assert len(abertas) <= 1
+    cache.fechar()
+    assert all(c.fechada for c in conexoes)
+
+
+# ---- (1) memoização em DAG compartilhado
+def _cadeia(f, parede, n):
+    rep = parede.Representation.Representations[0]
+    atual = rep.Items[0]
+    for _ in range(n):
+        atual = f.createIfcBooleanResult("DIFFERENCE", atual, atual)  # os dois operandos são a mesma entidade
+    rep.Items = (atual,)
+
+
+def _arvore(f, folha, n):
+    if n == 0:
+        return ifcopenshell.util.element.copy_deep(f, folha)
+    return f.createIfcBooleanResult("DIFFERENCE", _arvore(f, folha, n - 1), _arvore(f, folha, n - 1))
+
+
+def test_dag_compartilhado_nao_explode():
+    f, corpo = _novo()
+    w = _parede(f, corpo)
+    _cadeia(f, w, 15)  # 2**15 caminhos; com memoização são 20 entidades
+    t0 = time.perf_counter()
+    k = _k(w)
+    assert time.perf_counter() - t0 < 1.0 and len(k) == 64
+    assert _k(w) == k
+
+
+def test_chave_nao_depende_de_compartilhar_subentidades():
+    f, corpo = _novo()
+    a = _parede(f, corpo)
+    _cadeia(f, a, 6)
+    g, corpo_g = _novo()
+    b = _parede(g, corpo_g)
+    rep = b.Representation.Representations[0]
+    rep.Items = (_arvore(g, rep.Items[0], 6),)  # mesma árvore por valor, sem nenhum compartilhamento
+    assert _k(a) == _k(b)
+
+
+def test_chave_igual_com_entidade_compartilhada_em_profundidades_diferentes():
+    """A mesma subentidade aparece na raiz e dentro de uma cadeia: o resultado não pode depender da ordem de visita."""
+    chaves = []
+    for inverter in (False, True):
+        f, corpo = _novo()
+        w = _parede(f, corpo)
+        rep = w.Representation.Representations[0]
+        base = rep.Items[0]
+        fundo = f.createIfcBooleanResult("UNION", f.createIfcBooleanResult("UNION", base, base), base)
+        rep.Items = (fundo, base) if not inverter else (base, fundo)
+        chaves.append(_k(w))
+    assert chaves[0] != chaves[1]  # a ordem dos itens da representação é conteúdo; mas ...
+    f, corpo = _novo()
+    w = _parede(f, corpo)
+    rep = w.Representation.Representations[0]
+    base = rep.Items[0]
+    rep.Items = (f.createIfcBooleanResult("UNION", f.createIfcBooleanResult("UNION", base, base), base), base)
+    assert _k(w) == chaves[0]  # ... e não varia entre construções idênticas
+
+
+# ---- (2) abrir_cache nunca levanta quando não consegue apagar o banco
+def test_abrir_com_lixo_e_sem_poder_apagar(pasta, monkeypatch, conexoes):
+    pasta.mkdir()
+    _caminho(pasta).write_bytes(b"isto nao e sqlite " * 500)
+    _sem_apagar(monkeypatch)
+    c = C.abrir_cache(pasta)
+    assert c.ler_forma("k") is None and c.ler_ocorrencia("2abc") is None and c.ocorrencias_do_pavimento("P1") == []
+    _sem_vazar(conexoes, c)
+
+
+def test_cabecalho_diferente_e_sem_poder_apagar_nao_serve_dado_antigo(pasta, monkeypatch, conexoes):
+    v, t = _forma()
+    with C.abrir_cache(pasta) as c:
+        c.gravar_forma("k", v, t)
+        c.gravar_ocorrencia(_oc())
+    _sem_apagar(monkeypatch)
+    c = C.abrir_cache(pasta, C.cabecalho_atual(versao_motor="outro"))
+    assert c.ler_forma("k") is None and c.ler_ocorrencia("2abc") is None
+    _sem_vazar(conexoes, c)
+
+
+def test_caminho_do_banco_e_uma_pasta(pasta, conexoes):
+    (pasta / C.NOME_BANCO).mkdir(parents=True)
+    c = C.abrir_cache(pasta)
+    assert c.ler_forma("k") is None and c.ocorrencias_do_pavimento("P1") == []
+    _sem_vazar(conexoes, c)
+
+
+# ---- (4) esquema errado com cabeçalho válido
+@pytest.mark.parametrize("tabela", ["formas", "ocorrencias", "meta"])
+def test_tabela_com_colunas_erradas_refaz_sem_excecao(pasta, tabela):
+    v, t = _forma()
+    with C.abrir_cache(pasta) as c:
+        c.gravar_forma("k", v, t)
+    con = sqlite3.connect(str(_caminho(pasta)))
+    if tabela == "meta":
+        cab = con.execute("SELECT valor FROM meta").fetchone()[0]
+    con.execute(f"DROP TABLE {tabela}")
+    con.execute(f"CREATE TABLE {tabela} (x INTEGER)")
+    if tabela == "meta":  # cabeçalho válido, mas fora do esquema esperado
+        con.execute("INSERT INTO meta VALUES (?)", (cab,))
+    con.commit()
+    con.close()
+    with C.abrir_cache(pasta) as c:
+        assert c.ler_forma("k") is None
+        c.gravar_forma("novo", v, t)  # o banco refeito é gravável
+        c.gravar_ocorrencia(_oc())
+        assert c.ler_forma("novo")[0].tobytes() == v.tobytes() and c.ler_ocorrencia("2abc") is not None
+
+
+# ---- (3) abertura em coordenadas georreferenciadas e giradas
+def _rot(ang, dx=0.0, dy=0.0, dz=0.0):
+    c, s = np.cos(np.radians(ang)), np.sin(np.radians(ang))
+    m = np.eye(4)
+    m[:2, :2] = ((c, -s), (s, c))
+    m[:3, 3] = (dx, dy, dz)
+    return m
+
+
+def _abertura_rel(f, corpo, parede, loc=(1.0, 0.0, 0.0), ang=0.0, larg=1.0):
+    """Abertura com a posição relativa gravada direto (PlacementRelTo = parede), sem conta de matrizes grandes."""
+    o = _abertura(f, corpo, parede, _mat(), larg=larg)
+    c, s = float(np.cos(np.radians(ang))), float(np.sin(np.radians(ang)))
+    eixo = f.createIfcAxis2Placement3D(f.createIfcCartesianPoint(loc), f.createIfcDirection((0.0, 0.0, 1.0)),
+                                       f.createIfcDirection((c, s, 0.0)))
+    o.ObjectPlacement = f.createIfcLocalPlacement(parede.ObjectPlacement, eixo)
+    return o
+
+
+@pytest.mark.parametrize("mat,prefixo", [(_rot(45.0, 3.0, 4.0, 0.0), None), (_rot(45.0, 5e5, 7.5e6, 3.0), None),
+                                       (_rot(33.0, 1e7, 2e7, 0.0), "MILLI")])
+def test_abertura_estavel_em_coordenadas_georreferenciadas_giradas(mat, prefixo):
+    chaves = []
+    for m in (_mat(), mat):  # a mesma peça na origem e no mundo
+        f, corpo = _novo()
+        w = _parede(f, corpo, mat=m)
+        _abertura_rel(f, corpo, w, loc=(1.0, 0.0, 0.0), ang=20.0)
+        if prefixo:
+            next(u for u in f.by_type("IfcSIUnit") if u.UnitType == "LENGTHUNIT").Prefix = prefixo
+        chaves.append(_k(w))
+    assert chaves[0] == chaves[1]
+
+
+def test_abertura_girada_relativa_muda_a_chave():
+    ks = []
+    for ang in (0.0, 30.0):
+        f, corpo = _novo()
+        w = _parede(f, corpo)
+        _abertura_rel(f, corpo, w, ang=ang)
+        ks.append(_k(w))
+    assert ks[0] != ks[1]
+
+
+def test_ordem_das_aberturas_nao_muda_a_chave():
+    ks = []
+    for ordem in ((1.0, 2.5), (2.5, 1.0)):
+        f, corpo = _novo()
+        w = _parede(f, corpo)
+        for x in ordem:
+            _abertura_rel(f, corpo, w, loc=(x, 0.0, 0.0), larg=x)  # tamanhos diferentes: não são intercambiáveis
+        ks.append(_k(w))
+    assert ks[0] == ks[1]
+
+
+# ---- (5) IfcTypeProduct
+def _tipo(comp, alt, esp):
+    f, corpo = _novo()
+    t = _run(f, "root.create_entity", ifc_class="IfcWallType", name="T")
+    r = _run(f, "geometry.add_wall_representation", context=corpo, length=comp, height=alt, thickness=esp)
+    _run(f, "geometry.assign_representation", product=t, representation=r)
+    return f, t  # o arquivo precisa continuar vivo enquanto a entidade for usada
+
+
+def test_tipos_com_geometrias_distintas_tem_chaves_distintas():
+    (fa, a), (fb, b), (fc, c) = _tipo(4.0, 3.0, 0.2), _tipo(9.0, 5.0, 0.5), _tipo(4.0, 3.0, 0.2)
+    assert _k(a) != _k(b)
+    assert _k(a) == _k(c)
+
+
+# ---- (6) ROLLBACK não mascara o erro original
+def test_erro_original_nao_e_mascarado_quando_o_sqlite_ja_desfez(pasta, conexoes):
+    v, t = _forma()
+    with C.abrir_cache(pasta) as c:
+        conexoes[-1].falhar_insert = True
+        with pytest.raises(Exception) as e:
+            c.gravar_forma("k", v, t)
+        assert "full" in str(e.value) and "rollback" not in str(e.value).lower()
+        assert c.ler_forma("k") is None
+        c.gravar_forma("k", v, t)  # continua utilizável
+        assert c.ler_forma("k") is not None
+
+
+# ---- (7) tesselação e ocorrência
+def test_tesselacao_none_igual_a_vazio():
+    f, corpo = _novo()
+    w = _parede(f, corpo)
+    assert _k(w, tesselacao=None) == _k(w, tesselacao={})  # contrato: ausente == vazio (o cabeçalho usa {})
+
+
+def test_tesselacao_menos_zero_igual_a_zero():
+    f, corpo = _novo()
+    w = _parede(f, corpo)
+    assert _k(w, tesselacao={"d": -0.0, "l": [-0.0]}) == _k(w, tesselacao={"d": 0.0, "l": [0.0]})
+
+
+def test_tesselacao_ordem_e_valores():
+    f, corpo = _novo()
+    w = _parede(f, corpo)
+    assert _k(w, tesselacao={"a": 1, "b": 2}) == _k(w, tesselacao={"b": 2, "a": 1})
+    assert _k(w, tesselacao={"d": 0.5}) != _k(w, tesselacao={"d": 0.25})
+
+
+def test_tesselacao_com_chaves_de_tipos_mistos():
+    f, corpo = _novo()
+    w = _parede(f, corpo)
+    mista = {1: "a", "b": 2, 2.5: [1, {"x": 1, 3: 2}]}
+    assert _k(w, tesselacao=mista) == _k(w, tesselacao=dict(reversed(list(mista.items()))))
+
+
+def test_cabecalho_com_chaves_de_tipos_mistos_nao_levanta(pasta):
+    cab = C.cabecalho_atual(tesselacao={1: "a", "b": 2})
+    with C.abrir_cache(pasta, cab) as c:
+        c.gravar_forma("k", *_forma())
+    with C.abrir_cache(pasta, cab) as c:
+        assert c.ler_forma("k") is not None
+
+
+@pytest.mark.parametrize("campo", ["matriz", "caixa"])
+def test_ocorrencia_complexa_e_invalida(pasta, campo):
+    oc = _oc()
+    setattr(oc, campo, getattr(oc, campo).astype(np.complex128))
+    with C.abrir_cache(pasta) as c:
+        with pytest.raises(ValueError):
+            c.gravar_ocorrencia(oc)
+        assert c.ler_ocorrencia(oc.global_id) is None
+
+
+# ---- (8) lacunas M1 a M6
+def test_ocorrencias_sem_pavimento(pasta):
+    with C.abrir_cache(pasta) as c:
+        c.gravar_ocorrencia(_oc("a", pav=None))
+        c.gravar_ocorrencia(_oc("b", pav="P1"))
+        assert [o.global_id for o in c.ocorrencias_do_pavimento(None)] == ["a"]
+        assert c.ler_ocorrencia("a").pavimento is None
+
+
+def test_limpar_idade_e_teto_juntos(pasta):
+    t_ = [0.0]
+    with C.abrir_cache(pasta, relogio=lambda: t_[0]) as c:
+        for k, quando in (("a", 0.0), ("b", 25 * _DIA), ("c", 31 * _DIA), ("d", 31 * _DIA)):
+            t_[0] = quando
+            c.gravar_forma(k, *_forma(100, semente=len(k) + ord(k)))
+        um = c.tamanho_bytes() // 4
+        assert c.limpar(idade_max_s=30 * _DIA, teto_bytes=int(2.5 * um)) == 2  # a pela idade, b pelo teto
+        assert [c.ler_forma(k) is not None for k in "abcd"] == [False, False, True, True]
+
+
+def test_lote_com_ocorrencia_invalida_nao_grava_nada(pasta):
+    v, t = _forma()
+    ruim = _oc("g2", "a")
+    ruim.matriz = np.eye(3)
+    with C.abrir_cache(pasta) as c:
+        with pytest.raises(ValueError):
+            c.gravar_lote({"a": (v, t)}, [_oc("g1", "a"), ruim])
+        assert c.ler_forma("a") is None and c.ler_ocorrencia("g1") is None and c.tamanho_bytes() == 0
+
+
+@pytest.mark.parametrize("sufixo", ["-wal", "-shm", "-journal"])
+def test_sidecars_velhos_nao_sobrevivem_ao_refazer(pasta, sufixo):
+    pasta.mkdir()
+    _caminho(pasta).write_bytes(b"isto nao e sqlite " * 500)
+    velho = pasta / (C.NOME_BANCO + sufixo)
+    marca = b"SIDECAR-VELHO" * 100
+    velho.write_bytes(marca)
+    with C.abrir_cache(pasta) as c:
+        c.gravar_forma("k", *_forma())
+        assert c.ler_forma("k") is not None
+    assert not velho.exists() or velho.read_bytes() != marca

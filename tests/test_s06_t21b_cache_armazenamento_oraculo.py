@@ -259,6 +259,44 @@ def test_bytes_alterados_no_meio_nunca_levantam(pasta):
         assert r is None or (r[0].tobytes() == v.tobytes() and r[1].tobytes() == t.tobytes())
 
 
+def _adultera(pasta, tabela, coluna, chave_col, chave):
+    """UPDATE direto: o sqlite continua válido, só um byte do blob muda (mesmo tamanho)."""
+    import sqlite3
+    con = sqlite3.connect(str(_caminho(pasta)))
+    try:
+        b = bytearray(con.execute(f"SELECT {coluna} FROM {tabela} WHERE {chave_col}=?", (chave,)).fetchone()[0])
+        b[len(b) // 2] ^= 0x01
+        con.execute(f"UPDATE {tabela} SET {coluna}=? WHERE {chave_col}=?", (bytes(b), chave))
+        con.commit()
+    finally:
+        con.close()
+
+
+@pytest.mark.parametrize("coluna", ["vertices", "triangulos"])
+def test_blob_adulterado_com_banco_valido_vira_nao_achei(pasta, coluna):
+    va, ta = _forma(30, semente=1)
+    vb, tb = _forma(30, semente=2)
+    with C.abrir_cache(pasta) as c:
+        c.gravar_forma("ruim", va, ta)
+        c.gravar_forma("boa", vb, tb)
+    _adultera(pasta, "formas", coluna, "chave", "ruim")
+    with C.abrir_cache(pasta) as c:
+        assert c.ler_forma("ruim") is None  # checksum não bate
+        r = c.ler_forma("boa")  # vizinha intacta continua legível
+        assert r is not None and r[0].tobytes() == vb.tobytes() and r[1].tobytes() == tb.tobytes()
+
+
+@pytest.mark.parametrize("coluna", ["matriz", "caixa"])
+def test_ocorrencia_adulterada_vira_nao_achei(pasta, coluna):
+    with C.abrir_cache(pasta) as c:
+        c.gravar_ocorrencia(_oc("ruim"))
+        c.gravar_ocorrencia(_oc("boa"))
+    _adultera(pasta, "ocorrencias", coluna, "global_id", "ruim")
+    with C.abrir_cache(pasta) as c:
+        assert c.ler_ocorrencia("ruim") is None
+        assert c.ler_ocorrencia("boa") is not None
+
+
 # ---------------------------------------------------------------- transação
 def test_lote_invalido_nao_deixa_forma_pela_metade(pasta):
     v, t = _forma()

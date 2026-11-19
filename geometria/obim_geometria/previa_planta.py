@@ -350,7 +350,7 @@ def _aplicar_oclusao(classificados: list[dict]) -> None:
                 continue
 
             area_total = pegada.area
-            area_desc = pegada.difference(uniao).area
+            area_desc = shapely.difference(pegada, uniao).area  # funcao do modulo (nao o metodo): mesma operacao, vale em qualquer versao do shapely
             area_cob = area_total - area_desc
             if area_desc <= _TOL_AREA_OCLUSAO and area_cob >= 0.5 * area_total:
                 reg["categoria"] = "oculta"

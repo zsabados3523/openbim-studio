@@ -27,6 +27,30 @@ from obim_geometria.visib_mapa import (
 )
 
 
+def _cull_tris(kept, ea_, eb_, tx0, tx1, ty0, ty1, mn_x, mn_y, dx_dom, dy_dom, n=512):
+    """Mantem triangulos cuja caixa toca celula coberta pela caixa de alguma aresta (superconjunto)."""
+    c = max(dx_dom, dy_dom, 1e-9) / n
+    W = int(dx_dom / c) + 3
+    H = int(dy_dom / c) + 3
+    def ij(x, y):
+        return (np.clip(np.floor((x - mn_x) / c).astype(np.int64) , 0, W - 1),
+                np.clip(np.floor((y - mn_y) / c).astype(np.int64) , 0, H - 1))
+    ex0, ey0 = ij(np.minimum(ea_[:, 0], eb_[:, 0]), np.minimum(ea_[:, 1], eb_[:, 1]))
+    ex1, ey1 = ij(np.maximum(ea_[:, 0], eb_[:, 0]), np.maximum(ea_[:, 1], eb_[:, 1]))
+    ex0 = np.maximum(ex0 - 1, 0); ey0 = np.maximum(ey0 - 1, 0)
+    ex1 = np.minimum(ex1 + 1, W - 1); ey1 = np.minimum(ey1 + 1, H - 1)
+    dif = np.zeros((H + 1, W + 1), np.int64)
+    np.add.at(dif, (ey0, ex0), 1); np.add.at(dif, (ey0, ex1 + 1), -1)
+    np.add.at(dif, (ey1 + 1, ex0), -1); np.add.at(dif, (ey1 + 1, ex1 + 1), 1)
+    occ = (dif.cumsum(0).cumsum(1)[:H, :W] > 0).astype(np.int64)
+    sat = np.zeros((H + 1, W + 1), np.int64)
+    sat[1:, 1:] = occ.cumsum(0).cumsum(1)
+    qx0, qy0 = ij(tx0[kept], ty0[kept])
+    qx1, qy1 = ij(tx1[kept], ty1[kept])
+    tot = sat[qy1 + 1, qx1 + 1] - sat[qy0, qx1 + 1] - sat[qy1 + 1, qx0] + sat[qy0, qx0]
+    return kept[tot > 0]
+
+
 def _visibilidade_hibrida(
     P, Tw, a, b, ea, eb, tol_z: float, d_eps: float, min_len: float, prep=None, memo=None
 ) -> np.ndarray:
@@ -85,6 +109,9 @@ def _visibilidade_hibrida(
             ends[:-1] &= (~hid[1:]) | (s_id[:-1] != s_id[1:])
             H_l.append((s_id[starts], t0_s[starts], t1_s[ends]))
     ek_idx = np.nonzero(ek_mask)[0]
+    n_ref = len(kept_idx)
+    if len(ek_idx) and len(kept_idx):
+        kept_idx = _cull_tris(kept_idx, a[ek_idx], b[ek_idx], tx0, tx1, ty0, ty1, mn_x, mn_y, dx_dom, dy_dom)
     ex0 = np.minimum(a[:, 0], b[:, 0])
     ex1 = np.maximum(a[:, 0], b[:, 0])
     ey0 = np.minimum(a[:, 1], b[:, 1])
@@ -98,7 +125,7 @@ def _visibilidade_hibrida(
         Wc = int(math.ceil(dx_dom / cg)) + 2
         Hc = int(math.ceil(dy_dom / cg)) + 2
         ncel = Wc * Hc
-        lim_c = min(400, max(50, 3_000_000 // len(rem_t)))
+        lim_c = min(400, max(50, 3_000_000 // max(len(rem_t), n_ref)))
         if ncel <= lim_c:
             cand_m = np.ones(len(rem_t), bool)
         else:
@@ -137,27 +164,37 @@ def _visibilidade_hibrida(
                         tcel = tcel[ok_tc]
                     if not len(tobj):
                         continue
+                    t_iy, t_ix = tcel // Wc, tcel % Wc
+                    bx0, by0 = int(t_ix.min()), int(t_iy.min())
+                    Wl = int(t_ix.max()) - bx0 + 1
+                    Hl = int(t_iy.max()) - by0 + 1
+                    ncel_l = Wl * Hl
+                    tcel = (t_iy - by0) * Wl + (t_ix - bx0)
                     ord_t = np.argsort(tcel, kind="stable")
                     tri_por_cel = tobj[ord_t]
                     cel_ord = tcel[ord_t]
-                    cont = np.bincount(cel_ord, minlength=ncel)
+                    cont = np.bincount(cel_ord, minlength=ncel_l)
                     ini_cel = np.cumsum(cont) - cont
-                    cell_tzmax = np.full(ncel, -np.inf)
+                    cell_tzmax = np.full(ncel_l, -np.inf)
                     np.maximum.at(cell_tzmax, cel_ord, tzmax[tri_por_cel])
                     for e0, e1 in _fatias(nsub_c, 400_000):
                         ec = ek_idx[e0:e1]
                         s_l, _, _, sa, sb, sx0, sx1, sy0, sy1 = _subseg_cels(
                             a[ec], d[ec], nsub_c[e0:e1], mn_x, mn_y, cg, Wc, Hc
                         )
-                        sobj, scel = _expandir_celulas(sx0, sx1, sy0, sy1, Wc)
+                        sx0 = np.maximum(sx0, bx0); sx1 = np.minimum(sx1, bx0 + Wl - 1)
+                        sy0 = np.maximum(sy0, by0); sy1 = np.minimum(sy1, by0 + Hl - 1)
+                        okb = (sx1 >= sx0) & (sy1 >= sy0)
+                        s_l, sa, sb = s_l[okb], sa[okb], sb[okb]
+                        sobj, scel = _expandir_celulas(sx0[okb] - bx0, sx1[okb] - bx0, sy0[okb] - by0, sy1[okb] - by0, Wl)
                         ok_sc = cell_tzmax[scel] > np.minimum(sa[:, 2], sb[:, 2])[sobj] + tol_z
                         eobj = ec[s_l[sobj[ok_sc]]]
                         ecel = scel[ok_sc]
                         if not len(eobj):
                             continue
-                        ch_ec = np.unique(eobj.astype(np.int64) * ncel + ecel)
-                        eobj = ch_ec // ncel
-                        ecel = ch_ec % ncel
+                        ch_ec = np.unique(eobj.astype(np.int64) * ncel_l + ecel)
+                        eobj = ch_ec // ncel_l
+                        ecel = ch_ec % ncel_l
                         ntri_par = cont[ecel]
                         nz = ntri_par > 0
                         eobj = eobj[nz]
@@ -166,7 +203,7 @@ def _visibilidade_hibrida(
                         # shortcut: pares por celula tem custo ~N^2 por ancora comum (vertice muito usado);
                         # limite pratico ~1000 arestas no mesmo vertice
                         # (cone 4096 lados = 17 s; max IFC real = 128).
-                        for p0, p1 in _fatias(ntri_par, 2_000_000):
+                        for p0, p1 in _fatias(ntri_par, 50_000):
                             g3, kk = _rle_idx(ntri_par[p0:p1])
                             pe = eobj[p0:p1][g3]
                             pt = tri_por_cel[ini_cel[ecel[p0:p1]][g3] + kk]

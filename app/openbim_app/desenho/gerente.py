@@ -74,7 +74,14 @@ def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, 
             previa(dados)
         from openbim_app.desenho import refino
         dados = refino.refinar_pesados(
-            ifc, r.pedido, dados, cache=cache, cancelar=cancelar, progresso=progresso)
+            ifc,
+            r.pedido,
+            dados,
+            cache=cache,
+            cancelar=cancelar,
+            progresso=progresso,
+            caminho_ifc=opcoes.get("caminho_ifc"),
+        )
     return dados
 
 

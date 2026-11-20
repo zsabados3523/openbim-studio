@@ -140,8 +140,11 @@ def _gerar_corte_uma_vez(
         pedido["motor_visivel"] = motor_visivel
 
     if cache is not None:
+        from openbim_app.desenho.cache import arquivo_resolvido
+        arq_cache = arquivo_resolvido(caminho_ifc)
+        kw_chave = {"arquivo": arq_cache} if arq_cache is not None else {}
         try:
-            ch = cache.chave(ifc, pedido, cancelar=cancelar)
+            ch = cache.chave(ifc, pedido, cancelar=cancelar, **kw_chave)
         except CacheCancelado as exc:
             raise auxiliar.DesenhoCancelado("Operação cancelada no cálculo da chave do cache") from exc
         r = cache.obter(ch)

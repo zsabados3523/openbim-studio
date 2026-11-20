@@ -194,6 +194,27 @@ def _assinatura_contexto(ifc, pedido, ctrl: _ControleChave | None = None):
     return ctx
 
 
+def arquivo_resolvido(caminho) -> Path | None:
+    """Resolve um caminho IFC existente em disco; devolve None se ausente ou invalido."""
+    if not caminho:
+        return None
+    try:
+        resolvido = Path(caminho).resolve()
+        return resolvido if resolvido.is_file() else None
+    except OSError:
+        return None
+
+
+def _resolver_arquivo(arquivo) -> tuple[Path, os.stat_result] | None:
+    resolvido = arquivo_resolvido(arquivo)
+    if resolvido is None:
+        return None
+    try:
+        return resolvido, resolvido.stat()
+    except OSError:
+        return None
+
+
 class CacheDesenho:
     def __init__(self, pasta=None, *, idade_max_s: float = _IDADE_PADRAO_S):
         self.pasta = Path(pasta) if pasta is not None else pasta_padrao()
@@ -202,11 +223,17 @@ class CacheDesenho:
     def _arquivo(self, chave: str) -> Path:
         return self.pasta / f"{chave}.json"
 
-    def chave(self, ifc, pedido: dict, cancelar: threading.Event | None = None) -> str:
+    def chave(
+        self,
+        ifc,
+        pedido: dict,
+        cancelar: threading.Event | None = None,
+        *,
+        arquivo=None,
+    ) -> str:
         ctrl = _ControleChave(cancelar)
         ctrl.checar()
         pedido = pedido or {}
-        limpo = {k: v for k, v in pedido.items() if k not in ("threads", "elementos")}
         h = hashlib.sha256()
 
         def _default(o):
@@ -225,6 +252,24 @@ class CacheDesenho:
             h.update(f"{len(dados)}:".encode("ascii"))
             h.update(dados)
 
+        info_arq = _resolver_arquivo(arquivo)
+        if info_arq is not None:
+            resolvido, st = info_arq
+            pedido_arq = {k: v for k, v in pedido.items() if k != "threads"}
+            _atualizar(
+                {
+                    "modo": "arquivo",
+                    "versao": VERSAO_MODULO,
+                    "arquivo": str(resolvido),
+                    "tamanho": st.st_size,
+                    "mtime_ns": st.st_mtime_ns,
+                    "pedido": pedido_arq,
+                }
+            )
+            ctrl.checar()
+            return h.hexdigest()
+
+        limpo = {k: v for k, v in pedido.items() if k not in ("threads", "elementos")}
         _atualizar(
             {
                 "versao": VERSAO_MODULO,

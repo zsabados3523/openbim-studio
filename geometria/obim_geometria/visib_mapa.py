@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import numpy as np
 
-from obim_geometria.visib_base import _aplicar_corte, _fatias, _rle_idx, _varredura_x
+from obim_geometria.visib_base import _aplicar_corte, _dedup_int64, _fatias, _rle_idx, _varredura_x
 
 
 def _mapa_z_conservador(A, gx, gy, nx_, ny_, cc_, tx0, tx1, ty0, ty1, mn_x, mn_y, mx_x, mx_y, res_c):
@@ -123,7 +123,12 @@ def _filtrar_e_recortar(
     pe, pt, a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
     tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin, nt_all, tol_z, d_eps, H_l,
 ):
-    """Aplica filtros de caixa/leque, deduplica pares e executa o recorte analitico."""
+    """Deduplica pares antes dos gathers, aplica filtros e executa o recorte analitico."""
+    if not len(pe):
+        return
+    ch = _dedup_int64(pe.astype(np.int64) * nt_all + pt)
+    pe = ch // nt_all
+    pt = ch % nt_all
     m = (
         (tzmax[pt] > ezmin[pe] + tol_z) & (tx1[pt] >= ex0[pe]) & (tx0[pt] <= ex1[pe])
         & (ty1[pt] >= ey0[pe]) & (ty0[pt] <= ey1[pe])
@@ -136,20 +141,24 @@ def _filtrar_e_recortar(
     a_sh = (ea[pe] == tv_p[:, 0]) | (ea[pe] == tv_p[:, 1]) | (ea[pe] == tv_p[:, 2])
     b_sh = (eb[pe] == tv_p[:, 0]) | (eb[pe] == tv_p[:, 1]) | (eb[pe] == tv_p[:, 2])
     if np.any(a_sh | b_sh):
-        z_a = A[pt, 2] + gx[pt] * (a[pe, 0] - A[pt, 0]) + gy[pt] * (a[pe, 1] - A[pt, 1])
-        z_b = A[pt, 2] + gx[pt] * (b[pe, 0] - A[pt, 0]) + gy[pt] * (b[pe, 1] - A[pt, 1])
-        skip = (a_sh & (b[pe, 2] >= z_b - tol_z)) | (b_sh & (a[pe, 2] >= z_a - tol_z))
+        skip = np.zeros(len(pe), dtype=bool)
+        if np.any(a_sh):
+            pa, qa = pe[a_sh], pt[a_sh]
+            z_b = A[qa, 2] + gx[qa] * (b[pa, 0] - A[qa, 0]) + gy[qa] * (b[pa, 1] - A[qa, 1])
+            skip[a_sh] = b[pa, 2] >= z_b - tol_z
+        if np.any(b_sh):
+            pb, qb = pe[b_sh], pt[b_sh]
+            z_a = A[qb, 2] + gx[qb] * (a[pb, 0] - A[qb, 0]) + gy[qb] * (a[pb, 1] - A[qb, 1])
+            skip[b_sh] |= a[pb, 2] >= z_a - tol_z
         pe = pe[~skip]
         pt = pt[~skip]
     if not len(pe):
         return
-    ch = np.unique(pe.astype(np.int64) * nt_all + pt)
-    pe = ch // nt_all
-    pt = ch % nt_all
     p0x = a[pe, 0]
     p0y = a[pe, 1]
     dx = d[pe, 0]
     dy = d[pe, 1]
+    len2d = np.hypot(dx, dy)
     lo = np.zeros(len(pe))
     hi = np.ones(len(pe))
     eps = abs(d_eps)
@@ -157,13 +166,27 @@ def _filtrar_e_recortar(
     lo, hi = _aplicar_corte(-dx, p0x - tx1[pt] - eps, lo, hi, -1.0)
     lo, hi = _aplicar_corte(dy, ty0[pt] - eps - p0y, lo, hi, -1.0)
     lo, hi = _aplicar_corte(-dy, p0y - ty1[pt] - eps, lo, hi, -1.0)
+    ok = (hi - lo) * len2d > 1e-5
+    if not np.any(ok):
+        return
+    if not ok.all():
+        pe, pt, p0x, p0y, dx, dy, len2d, lo, hi = (
+            x[ok] for x in (pe, pt, p0x, p0y, dx, dy, len2d, lo, hi)
+        )
     for ii in range(3):
         s_i = nx_[pt, ii] * dx + ny_[pt, ii] * dy
         r_i = d_eps - (nx_[pt, ii] * p0x + ny_[pt, ii] * p0y + cc_[pt, ii])
         lo, hi = _aplicar_corte(s_i, r_i, lo, hi, -1.0)
+    ok = (hi - lo) * len2d > 1e-5
+    if not np.any(ok):
+        return
+    if not ok.all():
+        pe, pt, p0x, p0y, dx, dy, len2d, lo, hi = (
+            x[ok] for x in (pe, pt, p0x, p0y, dx, dy, len2d, lo, hi)
+        )
     G0 = A[pt, 2] + gx[pt] * (p0x - A[pt, 0]) + gy[pt] * (p0y - A[pt, 1]) - a[pe, 2] - tol_z
     lo, hi = _aplicar_corte(gx[pt] * dx + gy[pt] * dy - d[pe, 2], -G0, lo, hi, -1.0, eq_fail=True)
-    v = (hi - lo) * np.hypot(dx, dy) > 1e-5
+    v = (hi - lo) * len2d > 1e-5
     if np.any(v):
         H_l.append(_unir_intervalos(pe[v], lo[v], hi[v]))
         if len(H_l) > 1 and sum(len(x[0]) for x in H_l[1:]) >= max(1_500_000, len(H_l[0][0])):

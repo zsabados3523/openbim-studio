@@ -9,6 +9,7 @@ import numpy as np
 from obim_geometria.visib_base import (
     _arestas_candidatas,
     _cel_caixa,
+    _dedup_int64,
     _expandir_celulas,
     _fatias,
     _ler_quadro,
@@ -192,7 +193,7 @@ def _visibilidade_hibrida(
                         ecel = scel[ok_sc]
                         if not len(eobj):
                             continue
-                        ch_ec = np.unique(eobj.astype(np.int64) * ncel_l + ecel)
+                        ch_ec = _dedup_int64(eobj.astype(np.int64) * ncel_l + ecel)
                         eobj = ch_ec // ncel_l
                         ecel = ch_ec % ncel_l
                         ntri_par = cont[ecel]
@@ -203,7 +204,7 @@ def _visibilidade_hibrida(
                         # shortcut: pares por celula tem custo ~N^2 por ancora comum (vertice muito usado);
                         # limite pratico ~1000 arestas no mesmo vertice
                         # (cone 4096 lados = 17 s; max IFC real = 128).
-                        for p0, p1 in _fatias(ntri_par, 50_000):
+                        for p0, p1 in _fatias(ntri_par, 200_000, chaves=eobj):
                             g3, kk = _rle_idx(ntri_par[p0:p1])
                             pe = eobj[p0:p1][g3]
                             pt = tri_por_cel[ini_cel[ecel[p0:p1]][g3] + kk]

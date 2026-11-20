@@ -20,6 +20,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Qt, Signal, Slot
 
 from openbim_app.desenho.auxiliar import DesenhoCancelado, ErroAuxiliar
+from openbim_app.desenho.cache import arquivo_resolvido, assinatura_arquivo
 from openbim_app.desenho.filho import FilhoIndisponivel, FilhoPersistente
 from openbim_app.desenho.selecao import SessaoSelecao
 
@@ -56,6 +57,8 @@ def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, 
     kw_sessao = {"sessao_selecao": sessao_selecao} if sessao_selecao is not None else {}
     if filho is not None:
         kw_sessao["filho"] = filho
+    caminho_refino = opcoes.get("caminho_ifc")
+    sig_inicio = assinatura_arquivo(caminho_refino) if (tipo == "planta" and caminho_refino is not None) else None
     r = gerar(ifc, vista_guid, cache=cache, cancelar=cancelar, **kw_sessao, **opcoes)
     dados = {
         "svg": r.svg,
@@ -73,6 +76,12 @@ def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, 
         if previa is not None:
             previa(dados)
         from openbim_app.desenho import refino
+        if (
+            getattr(r, "divergente", False)
+            or sig_inicio is None
+            or assinatura_arquivo(caminho_refino) != sig_inicio
+        ):
+            caminho_refino = None
         dados = refino.refinar_pesados(
             ifc,
             r.pedido,
@@ -80,7 +89,7 @@ def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, 
             cache=cache,
             cancelar=cancelar,
             progresso=progresso,
-            caminho_ifc=opcoes.get("caminho_ifc"),
+            caminho_ifc=caminho_refino,
         )
     return dados
 
@@ -88,11 +97,7 @@ def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, 
 def _resolver_ifc_aberto(caminho_ifc, revisao, revisao_salva) -> Path | None:
     if not (caminho_ifc and revisao is not None and revisao == revisao_salva):
         return None
-    try:
-        caminho_resolvido = Path(caminho_ifc).resolve()
-        return caminho_resolvido if caminho_resolvido.is_file() else None
-    except OSError:
-        return None
+    return arquivo_resolvido(caminho_ifc)
 
 
 class _Pedido:
@@ -190,7 +195,7 @@ class GerenteDesenho(QObject):
             raise ValueError(f"tipo de desenho invalido: {tipo!r}")
         caminho_resolvido = _resolver_ifc_aberto(caminho_ifc, revisao, revisao_salva)
         if caminho_resolvido is not None:
-            opcoes["caminho_ifc"] = caminho_ifc
+            opcoes["caminho_ifc"] = caminho_resolvido
         filho = None
         fechar_ociosos = []
         with self._trava:

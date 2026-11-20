@@ -5,7 +5,7 @@ from __future__ import annotations
 import obim_geometria.pecas as pecas
 
 from openbim_app.desenho import auxiliar
-from openbim_app.desenho.cache import CacheCancelado, arquivo_resolvido
+from openbim_app.desenho.cache import CacheCancelado, arquivo_resolvido, assinatura_arquivo
 
 _VERSAO_REFINO = "visibilidade-v1"
 
@@ -79,6 +79,9 @@ def refinar_pesados(
         return out
 
     arquivo_cache = arquivo_resolvido(caminho_ifc)
+    sig_inicial = assinatura_arquivo(arquivo_cache) if arquivo_cache is not None else None
+    if sig_inicial is None:
+        arquivo_cache = None
     svg = resultado.get("svg") or ""
     refinadas: list[str] = []
     em_cache: list[str] = []
@@ -93,6 +96,9 @@ def refinar_pesados(
             raise auxiliar.DesenhoCancelado("Operação cancelada antes de refinar a peça")
         guid, ident = peca["guid"], peca["id"]
         pedido_peca = pecas.pedido_peca(pedido, ident)
+        if arquivo_cache is not None and assinatura_arquivo(arquivo_cache) != sig_inicial:
+            arquivo_cache = None
+        usou_arquivo = arquivo_cache is not None
         chave = _chave_cache(cache, ifc, pedido_peca, cancelar=cancelar, arquivo=arquivo_cache)
         dados = cache.obter(chave) if chave is not None else None
         grupo = None
@@ -128,10 +134,11 @@ def refinar_pesados(
             if cache is not None and chave is not None:
                 if cancelar is not None and cancelar.is_set():
                     raise auxiliar.DesenhoCancelado("Operação cancelada antes de gravar no cache")
-                entrada_cache = {"svg": grupo, "grupo": grupo, "motor": motor_usado}
-                if motivo_hlr is not None:
-                    entrada_cache["motivo_hlr"] = motivo_hlr
-                cache.guardar(chave, entrada_cache)
+                if not usou_arquivo or assinatura_arquivo(arquivo_cache) == sig_inicial:
+                    entrada_cache = {"svg": grupo, "grupo": grupo, "motor": motor_usado}
+                    if motivo_hlr is not None:
+                        entrada_cache["motivo_hlr"] = motivo_hlr
+                    cache.guardar(chave, entrada_cache)
         svg = pecas.mesclar_pesado(svg, guid, grupo)
         refinadas.append(guid)
         motores[guid] = motor_usado

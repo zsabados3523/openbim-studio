@@ -95,12 +95,13 @@ def _limpar_pastas_antigas():
 
 def preparar(ifc, pedido: dict, *, caminho_ifc: str | Path | None = None) -> Preparado:
     if caminho_ifc is not None:
-        c = Path(caminho_ifc).resolve()
         try:
+            c = Path(caminho_ifc).resolve()
             st = os.stat(c)
-        except OSError:
+        except (OSError, RuntimeError, ValueError, TypeError):
+            c = None
             st = None
-        if st is not None and stat.S_ISREG(st.st_mode):
+        if c is not None and st is not None and stat.S_ISREG(st.st_mode):
             _limpar_pastas_antigas()
             p = dict(pedido)
             p.setdefault("protocolo", PROTOCOLO)

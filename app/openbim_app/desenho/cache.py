@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 import sys
 import tempfile
 import threading
@@ -194,25 +195,30 @@ def _assinatura_contexto(ifc, pedido, ctrl: _ControleChave | None = None):
     return ctx
 
 
+def _resolver_arquivo(arquivo) -> tuple[Path, os.stat_result] | None:
+    if not arquivo:
+        return None
+    try:
+        resolvido = Path(arquivo).resolve()
+        st = resolvido.stat()
+        return (resolvido, st) if stat.S_ISREG(st.st_mode) else None
+    except (OSError, RuntimeError, ValueError, TypeError):
+        return None
+
+
 def arquivo_resolvido(caminho) -> Path | None:
     """Resolve um caminho IFC existente em disco; devolve None se ausente ou invalido."""
-    if not caminho:
-        return None
-    try:
-        resolvido = Path(caminho).resolve()
-        return resolvido if resolvido.is_file() else None
-    except OSError:
-        return None
+    info = _resolver_arquivo(caminho)
+    return info[0] if info is not None else None
 
 
-def _resolver_arquivo(arquivo) -> tuple[Path, os.stat_result] | None:
-    resolvido = arquivo_resolvido(arquivo)
-    if resolvido is None:
+def assinatura_arquivo(caminho) -> tuple[int, int] | None:
+    """Retorna (tamanho, mtime_ns) do arquivo regular resolvido, ou None se indisponivel."""
+    info = _resolver_arquivo(caminho)
+    if info is None:
         return None
-    try:
-        return resolvido, resolvido.stat()
-    except OSError:
-        return None
+    st = info[1]
+    return int(st.st_size), int(st.st_mtime_ns)
 
 
 class CacheDesenho:

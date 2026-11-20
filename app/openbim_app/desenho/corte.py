@@ -12,7 +12,7 @@ import ifcopenshell.util.unit
 
 from openbim_app import vistas_ifc
 from openbim_app.desenho import auxiliar, selecao
-from openbim_app.desenho.cache import CacheCancelado
+from openbim_app.desenho.cache import CacheCancelado, arquivo_resolvido, assinatura_arquivo
 from openbim_app.desenho.selecao import (
     Selecao,
     SelecaoInvalida,
@@ -140,8 +140,10 @@ def _gerar_corte_uma_vez(
         pedido["motor_visivel"] = motor_visivel
 
     if cache is not None:
-        from openbim_app.desenho.cache import arquivo_resolvido
         arq_cache = arquivo_resolvido(caminho_ifc)
+        sig_chave = assinatura_arquivo(arq_cache) if arq_cache is not None else None
+        if sig_chave is None:
+            arq_cache = None
         kw_chave = {"arquivo": arq_cache} if arq_cache is not None else {}
         try:
             ch = cache.chave(ifc, pedido, cancelar=cancelar, **kw_chave)
@@ -150,10 +152,14 @@ def _gerar_corte_uma_vez(
         r = cache.obter(ch)
         if r is None:
             with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc) as p:
+                sig_prep = p.pedido.get("assinatura")
                 r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor, filho=filho)
             if cancelar is not None and cancelar.is_set():
                 raise auxiliar.DesenhoCancelado("Operação cancelada antes de gravar no cache")
-            cache.guardar(ch, r)
+            if arq_cache is None or (
+                sig_prep == list(sig_chave) and assinatura_arquivo(arq_cache) == sig_chave
+            ):
+                cache.guardar(ch, r)
     else:
         with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc) as p:
             r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor, filho=filho)

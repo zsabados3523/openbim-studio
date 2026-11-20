@@ -14,7 +14,7 @@ import ifcopenshell.util.unit
 
 from openbim_app import vistas_ifc
 from openbim_app.desenho import auxiliar, selecao
-from openbim_app.desenho.cache import CacheCancelado
+from openbim_app.desenho.cache import CacheCancelado, arquivo_resolvido, assinatura_arquivo
 from openbim_app.desenho.selecao import Selecao, SelecaoInvalida
 
 if TYPE_CHECKING:
@@ -36,6 +36,7 @@ class Planta:
     pesados: tuple = ()
     pedido: dict | None = None
     faltantes: tuple[int, ...] = ()
+    divergente: bool = False
 
     @property
     def incompleta(self) -> bool:
@@ -169,26 +170,35 @@ def gerar_planta(
 
     def _executar_planta(caminho_atual):
         with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_atual) as p:
-            return auxiliar.executar(
-                p,
-                limite_s=limite_s,
-                cancelar=cancelar,
-                executor=executor,
-                previa=previa,
-                filho=filho if caminho_atual is not None else None,
+            sig_prep = p.pedido.get("assinatura")
+            return (
+                auxiliar.executar(
+                    p,
+                    limite_s=limite_s,
+                    cancelar=cancelar,
+                    executor=executor,
+                    previa=previa,
+                    filho=filho if caminho_atual is not None else None,
+                ),
+                sig_prep,
             )
 
     def _executar_com_retry():
         try:
-            return _executar_planta(caminho_ifc)
+            r_exec, sig_prep = _executar_planta(caminho_ifc)
+            return r_exec, sig_prep, False
         except auxiliar.Divergente:
             if caminho_ifc is None:
                 raise
-            return _executar_planta(None)
+            r_exec, _ = _executar_planta(None)
+            return r_exec, None, True
 
+    divergente = False
     if cache is not None:
-        from openbim_app.desenho.cache import arquivo_resolvido
         arq_cache = arquivo_resolvido(caminho_ifc)
+        sig_chave = assinatura_arquivo(arq_cache) if arq_cache is not None else None
+        if sig_chave is None:
+            arq_cache = None
         kw_chave = {"arquivo": arq_cache} if arq_cache is not None else {}
         try:
             ch = cache.chave(ifc, pedido, cancelar=cancelar, **kw_chave)
@@ -196,12 +206,21 @@ def gerar_planta(
             raise auxiliar.DesenhoCancelado("Operação cancelada no cálculo da chave do cache") from exc
         r = cache.obter(ch)
         if r is None:
-            r = _executar_com_retry()
+            r, sig_prep, divergente = _executar_com_retry()
             if cancelar is not None and cancelar.is_set():
                 raise auxiliar.DesenhoCancelado("Operação cancelada antes de gravar no cache")
-            cache.guardar(ch, r)
+            if divergente:
+                try:
+                    ch_grafo = cache.chave(ifc, pedido, cancelar=cancelar)
+                except CacheCancelado as exc:
+                    raise auxiliar.DesenhoCancelado("Operação cancelada no cálculo da chave do cache") from exc
+                cache.guardar(ch_grafo, r)
+            elif arq_cache is None or (
+                sig_prep == list(sig_chave) and assinatura_arquivo(arq_cache) == sig_chave
+            ):
+                cache.guardar(ch, r)
     else:
-        r = _executar_com_retry()
+        r, _, divergente = _executar_com_retry()
 
     return Planta(
         svg=r["svg"],
@@ -215,4 +234,5 @@ def gerar_planta(
         pesados=tuple(dict(d) for d in (r.get("pesados") or ())),
         pedido=pedido,
         faltantes=tuple(int(x) for x in (r.get("faltantes") or ())),
+        divergente=divergente,
     )

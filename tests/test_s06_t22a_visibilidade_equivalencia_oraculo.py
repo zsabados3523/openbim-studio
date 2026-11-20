@@ -150,10 +150,40 @@ def _fita_na_borda():
     return p
 
 
+def _caixa_xy(x0, x1, y0, y1, z0, z1):
+    return caixa(np.array([(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2]), [x1 - x0, y1 - y0, z1 - z0])
+
+
+def _gira(pecas, th):
+    return [(v @ _rz(th).T, t) for v, t in pecas]
+
+
+def _matar_m5(var=0):
+    """Oclusor estreito (dx < g, > 25 células) cuja linha de folga de cima é podada por uma placa alta em z_full; aresta baixa
+    na última linha da subgrade local. Cobre o clamp de borda da subgrade (sx0/sx1/sy0/sy1) quando girada em 90 graus."""
+    x = [(0.0015, 0.0025), (0.0005, 0.0015), (0.0011, 0.0019)][var % 3]
+    p = [_caixa_xy(*x, 0, 0.2018, 0, 5), _caixa_xy(-1, 2, 0.2019, 1.5, 9.5, 10), _caixa_xy(-0.5, 0.5, 0.1, 0.2010, 0, 0.5)]
+    return _gira(p, (var // 3) * np.pi / 2)
+
+
+def _roteamento_faixas_lim_c():
+    """Mais de 200 triângulos longos/finos alinhados (rota de faixas) misturados com triângulos pequenos e grandes (lim_c)."""
+    p = [tiras(0, 0, 30, 0.02, 150, 0.0, 0.0, 0.01), tiras(1, 0.5, 25, 0.015, 120, 0.0, 0.4, 0.0), terreno(14, 12, 0.4, 0.2, 0.3)]
+    p += [caixa(np.array([3.0 + 2.1 * i, 1.0 + 0.7 * (i % 4), 0.3]), [0.05 + 0.1 * (i % 3), 1.0, 0.6], 0.1 * i) for i in range(8)]
+    return p
+
+
+def _cull_45_graus():
+    """Fitas e caixas nas bordas do domínio, giradas 45 graus: caixas de aresta e de triângulo diagonais no corte."""
+    return _gira(_fita_na_borda(), np.pi / 4)
+
+
 def todas():
     c = {f"a{k:02d}": (lambda k=k: _aleatoria(k)) for k in range(40)}
     c.update({f"d{k}": (lambda k=k: _dificil(k)) for k in range(6)})
-    c.update(degenerada=_degenerada, bordas=_bordas, fita_na_borda=_fita_na_borda, tol_celula=_tol_celula, grande=_grande, georref=_georref)
+    c.update(degenerada=_degenerada, bordas=_bordas, fita_na_borda=_fita_na_borda,
+             roteamento_faixas_lim_c=_roteamento_faixas_lim_c, cull_45_graus=_cull_45_graus, tol_celula=_tol_celula, grande=_grande, georref=_georref)
+    c.update({f"matar_m5_{k}": (lambda k=k: _matar_m5(k)) for k in range(12)})  # 3 posições x 4 giros de 90 graus (subgrade nos 4 lados)
     return c
 
 

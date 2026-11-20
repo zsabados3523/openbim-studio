@@ -9,6 +9,7 @@ import json
 import multiprocessing
 import os
 import sqlite3
+import sys
 import threading
 import time
 
@@ -36,13 +37,15 @@ class Banco:
         self.c.eventos.append(("gravar", list(ids)))
     def fechar(self):
         self.c.eventos.append(("fechar",))
+        if self.c.fechar_erro:
+            raise OSError("fechar falhou")
 
 
 class Falso:
-    def __init__(self, fila, dorme=LOTE_S, rss=123.5, ret=(3, 1, 0), falhar=None, antes=None, em_memoria=False):
+    def __init__(self, fila, dorme=LOTE_S, rss=123.5, ret=(3, 1, 0), falhar=None, antes=None, em_memoria=False, prior_erro=False, fechar_erro=False):
         self.fila, self.dorme, self.rss, self.ret, self.falhar, self.antes = list(fila), dorme, rss, ret, falhar, antes
         self.eventos, self.memo_lido, self.pastas, self.abertos, self.lotes = [], [], [], [], []
-        self.em_memoria, self.banco = em_memoria, Banco(self)
+        self.em_memoria, self.prior_erro, self.fechar_erro, self.banco = em_memoria, prior_erro, fechar_erro, Banco(self)
 
     def abrir_banco(self, pasta):
         self.pastas.append(pasta)
@@ -58,6 +61,8 @@ class Falso:
 
     def priorizar(self, fila, primeiro):
         self.eventos.append(("prior", list(primeiro)))
+        if self.prior_erro:
+            raise RuntimeError("priorizar falhou")
         p = set(primeiro)
         return [i for i in fila if i in p] + [i for i in fila if i not in p]
 
@@ -83,10 +88,23 @@ class Falso:
         return [i for e in self.eventos if e[0] == "gravar" for i in e[1]]
 
 
+class Espia:  # conta `poll` da ponta de leitura do laco (D)
+    def __init__(self, r):
+        self.r, self.polls = r, 0
+
+    def poll(self, *a):
+        self.polls += 1
+        return self.r.poll(*a)
+
+    def __getattr__(self, nome):
+        return getattr(self.r, nome)
+
+
 class Filho:
     def __init__(self, ctor, mp):
         self.ctor, self.n, self.saida, self.erro, self.enviados, self.ultimo_t = ctor, 0, None, None, set(), 0.0
         r1, self.w1 = multiprocessing.Pipe(False)
+        self.rx = r1 = Espia(r1)
         self.r2, w2 = multiprocessing.Pipe(False)
 
         mp.setattr(os, "_exit", lambda c: (_ for _ in ()).throw(_Saiu(c)))
@@ -185,6 +203,9 @@ def test_construir_responde_antes_do_primeiro_lote_e_passa_parametros(cena, novo
     fi = novo(ctor)
     d = fi.pedir("construir", arquivo=str(salvo), pasta_cache=str(tmp_path), lote_max=4, limite_mb=1000.0, threads=3, t=3)
     assert d == {"aceito": True, "pendentes": 200}, "resposta so depois de um lote (ou da fila)"
+    outro = str(tmp_path / "outro.ifc")
+    open(outro, "wb").write(open(salvo, "rb").read())
+    assert estado(fi, outro)["ativo"] is False and estado(fi, str(salvo))["ativo"] is True  # C: estado de outro arquivo
     esperar(lambda: ctor.lotes)
     l0 = ctor.lotes[0]
     assert ctor.pastas == [str(tmp_path)] and len(ctor.abertos) == 1 and ctor.abertos[0].__class__.__name__ == "file"
@@ -231,8 +252,8 @@ def test_desenho_passa_a_frente_do_lote(cena, novo, tmp_path):  # mutantes 1 e 3
     assert len(ctor.lotes) < antes + 6 and all(intacto), "modelo alterado quando o lote roda (lote fica fora de _sem_rastro)"
 
 
-def _memoria(cena, novo, tmp_path, rss, limite_kw):
-    salvo, ctor = cena[0], Falso(range(24), dorme=0.02, rss=rss)
+def _memoria(cena, novo, tmp_path, rss, limite_kw, **kw):
+    salvo, ctor = cena[0], Falso(range(24), dorme=0.02, rss=rss, **kw)
     fi = novo(ctor)
     fi.pedir("construir", arquivo=str(salvo), pasta_cache=str(tmp_path), lote_max=4, **limite_kw)
     return ctor, fi, salvo
@@ -251,7 +272,7 @@ def test_memoria_estourada_sai_86_depois_do_lote(cena, novo, tmp_path):  # mutan
 
 
 def test_memoria_limite_padrao_6000_e_abaixo_do_limite_nao_sai(cena, novo, tmp_path):
-    ctor, fi, _ = _memoria(cena, novo, tmp_path, 7000.0, {})
+    ctor, fi, _ = _memoria(cena, novo, tmp_path, 7000.0, {}, fechar_erro=True)  # G: fechar() com excecao ainda sai com 86
     esperar(lambda: fi.saida is not None)
     assert fi.saida == 86 and len(ctor.lotes) == 1 and ctor.eventos[-1] == ("fechar",)
     ctor2, fi2, salvo = _memoria(cena, novo, tmp_path, 900.0, {"limite_mb": 1000.0})
@@ -305,7 +326,7 @@ def _banco_ocupado(n, reg):
 
 def test_banco_ocupado_uma_vez_repete_o_lote_sem_perder_pecas(cena, novo, tmp_path):  # mutante 6
     salvo, _ = cena
-    ctor = Falso(range(12), dorme=0.02, falhar=lambda n, reg: _banco_ocupado(n, reg) if n == 2 else None)
+    ctor = Falso(range(12), dorme=0.02, falhar=lambda n, reg: _banco_ocupado(n, reg) if n in (2, 4, 6) else None)  # A: nao seguidos, contador zera
     fi = novo(ctor)
     fi.pedir("construir", arquivo=str(salvo), pasta_cache=str(tmp_path), lote_max=3)
     esperar(lambda: len(ctor.lotes) >= 3)
@@ -349,6 +370,10 @@ def test_filho_nao_manda_mensagem_sem_pedido(cena, novo, tmp_path):  # mutante 8
     fi.pedir("construir", arquivo=str(salvo), pasta_cache=str(tmp_path), lote_max=2)
     fi.silencio(1.0)  # a construcao inteira (10 lotes, 0,5 s) roda sem o pai ler nada; nada e empurrado
     assert estado(fi, str(salvo))["pendentes"] == 0
+    time.sleep(0.2)
+    n = fi.rx.polls
+    time.sleep(1.0)  # D: fila vazia = recv bloqueante, sem girar
+    assert fi.rx.polls - n <= 3, f"laco gira com a fila vazia: {fi.rx.polls - n} polls em 1 s"
 
 
 def test_regra_do_numero_vale_para_as_ops_novas(cena, novo, tmp_path):  # mutante 9
@@ -394,6 +419,77 @@ def test_estado_falhas_e_lote_max_padrao_64(cena, novo, tmp_path):  # mutante 10
     assert [len(x["ids"]) for x in ctor.lotes] == [64, 64, 2]
 
 
+def test_pedido_corta_a_espera_do_banco_ocupado(cena, novo, tmp_path):  # B: poll(1.0), nao sleep(1.0)
+    salvo, _ = cena
+    ctor = Falso(range(12), dorme=0.05, falhar=lambda n, reg: _banco_ocupado(n, reg) if n == 1 else None)
+    fi = novo(ctor)
+    fi.pedir("construir", arquivo=str(salvo), pasta_cache=str(tmp_path), lote_max=3)
+    esperar(lambda: ctor.lotes)
+    time.sleep(0.15)  # dentro da espera de 1 s
+    fi.pedir("abrir", arquivo=str(salvo))
+    assert fi.ultimo_t <= 0.4, f"pedido esperou o banco ocupado: {fi.ultimo_t:.2f}s"
+
+
+@pytest.mark.parametrize("msg", ["cache fechado", "disk I/O error"])
+def test_operational_error_que_nao_e_banco_ocupado_vira_erro(cena, novo, tmp_path, msg):  # E
+    def falha(n, reg):
+        raise sqlite3.OperationalError(msg)
+
+    salvo, _ = cena
+    ctor = Falso(range(12), dorme=0.01, falhar=falha)
+    fi = novo(ctor)
+    fi.pedir("construir", arquivo=str(salvo), pasta_cache=str(tmp_path), lote_max=3)
+    time.sleep(0.5)  # sem espera de 1 s nem repeticao
+    e = estado(fi, str(salvo))
+    assert e["parado"] == "erro" and msg in e["erro"] and len(ctor.lotes) == 1, (e, len(ctor.lotes))
+
+
+def test_priorizar_com_excecao_nao_derruba_o_laco(cena, novo, tmp_path):  # F1
+    salvo, pedidos = cena
+    ctor = Falso(range(40), dorme=0.05, prior_erro=True)
+    fi = novo(ctor)
+    fi.pedir("construir", arquivo=str(salvo), pasta_cache=str(tmp_path), lote_max=2)
+    assert fi.pedir("desenho", **{k: v for k, v in pedidos["A"].items() if k not in ("op", "protocolo")}).get("ok")
+    assert any(e[0] == "prior" for e in ctor.eventos)
+    assert fi.pedir("abrir", arquivo=str(salvo))["aberto"] is True
+    terminar(fi, str(salvo))
+    assert sorted(ctor.gravados()) == list(range(40)), "fila perdida depois da excecao em priorizar"
+
+
+def test_construtor_que_nao_importa_responde_erro_e_o_laco_segue(cena, novo, tmp_path, monkeypatch):  # F2: {"aceito": False, "motivo": "erro"}
+    salvo, _ = cena
+    monkeypatch.setitem(sys.modules, "obim_geometria.construtor", None)  # import_module levanta ImportError
+    fi = novo(None)
+    d = fi.pedir("construir", arquivo=str(salvo), pasta_cache=str(tmp_path))
+    assert d.get("aceito") is False and d.get("motivo") == "erro", d
+    assert fi.pedir("abrir", arquivo=str(salvo))["aberto"] is True
+
+
+def test_rss_com_excecao_vira_parado_erro(cena, novo, tmp_path):  # F3
+    def rss(c):
+        if c.gravados():
+            raise OSError("rss indisponivel")
+        return 10.0
+
+    salvo = cena[0]
+    fi = novo(Falso(range(12), dorme=0.01, rss=rss))
+    fi.pedir("construir", arquivo=str(salvo), pasta_cache=str(tmp_path), lote_max=3)
+    esperar(lambda: estado(fi, str(salvo)).get("parado") == "erro")
+    assert fi.pedir("abrir", arquivo=str(salvo))["aberto"] is True
+
+
+@pytest.mark.parametrize("lote_max", [0, -3])
+def test_lote_max_invalido_nao_gira_em_vazio(cena, novo, tmp_path, lote_max):  # H: lote >= 1, fila avanca
+    salvo, _ = cena
+    ctor = Falso(range(6), dorme=0.01)
+    fi = novo(ctor)
+    fi.pedir("construir", arquivo=str(salvo), pasta_cache=str(tmp_path), lote_max=lote_max)
+    terminar(fi, str(salvo), 5)
+    assert sorted(ctor.gravados()) == list(range(6)) and all(len(x["ids"]) >= 1 for x in ctor.lotes)
+
+
 # MUTANTES: 1 e 3 test_desenho_passa_a_frente_do_lote; 2 test_construir_responde_antes...; 4 test_memoria_*; 5 test_arquivo_reaberto_zera_*;
+# A-H (revisao Opus): A test_banco_ocupado_uma_vez, B test_pedido_corta_a_espera, C test_construir_responde_antes, D test_filho_nao_manda, E test_operational_error_*,
+# test_priorizar_com_excecao, test_construtor_que_nao_importa, test_rss_com_excecao, test_memoria_limite_padrao (G), test_lote_max_invalido
 # 6 test_banco_ocupado_*, test_outra_excecao_*; 7 test_construir_repetido_*; 8 test_filho_nao_manda_*;
 # 9 test_regra_do_numero_*; 10 test_estado_contagens, test_estado_falhas_*  (`Filho.ler` tambem rejeita mensagem sem pedido)

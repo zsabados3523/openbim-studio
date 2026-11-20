@@ -322,6 +322,82 @@ def test_oclusores_longe_nao_alteram_e_sao_rapidos():
     assert len(r) == 1 and len(r[0]) == len(ref[0]) and all(np.array_equal(p, q) for p, q in zip(r[0], ref[0]))
 
 
+# ---- Rodada 3 (revisao Opus): casos acrescentados ----
+def _bit(r0, r1):
+    return len(r0) == len(r1) and all(
+        len(x) == len(y) and all(p.dtype == q.dtype and np.array_equal(p, q) for p, q in zip(x, y)) for x, y in zip(r0, r1)
+    )
+
+
+# (1) dominio inflado: extra a 500 km nao pode custar caro nem mudar nada
+def _grade(n):
+    return [caixa(np.array([3.0 * i, 3.0 * j, 0.5]), [1.0, 1.0, 1.0]) for i in range(n) for j in range(n)]
+
+
+def _melhor(f, n=3):
+    import time
+
+    m, r = 1e9, None
+    for _ in range(n):
+        t0 = time.perf_counter()
+        r = f()
+        m = min(m, time.perf_counter() - t0)
+    return m, r
+
+
+def test_extra_a_500km_nao_infla_o_dominio_nem_o_tempo():
+    p = _grade(20)  # 400 caixas; o Opus mediu +64% com 900 (grade 30x30); em 400 o motor atual da ~+27%
+    ex = [tampa(5e5, 5e5 + 1, 2.0, 5e5, 5e5 + 1)]
+    t0, r0 = _melhor(lambda: linhas_visiveis_multi(p))
+    t1, r1 = _melhor(lambda: linhas_visiveis_multi(p, oclusores_extra=ex))
+    assert _bit(r0, r1)
+    assert t1 <= 1.2 * t0, f"com extra {t1:.2f} s contra {t0:.2f} s sem extra ({t1 / t0:.2f}x)"
+
+
+@pytest.mark.parametrize("ex", [
+    tampa(5e5, 5e5 + 1, 2.0, 0.0, 1.0),  # longe so em X
+    tampa(0.0, 1.0, 2.0, 5e5, 5e5 + 1),  # longe so em Y
+    tampa(-1, 5, 1e9),  # z muito alto, cobrindo a viga em XY: oculta (nao e longe em XY)
+])
+def test_extras_distantes_em_x_ou_y_nao_mudam_e_z_extremo_oculta(ex):
+    pecas = [viga(), longe()]
+    r = run(pecas, [ex])
+    if ex[0, 0, 2] > 1e6:
+        assert comp(r[0]) <= TOL and iguais(r[1], base(pecas)[1])
+    else:
+        assert _bit(r, base(pecas))
+
+
+def test_extra_muito_abaixo_nao_muda():
+    assert _bit(run([viga()], [tampa(-1, 5, -1e9)]), base([viga()]))
+
+
+# (2) o extra vale mesmo havendo peca mais alta em outro lugar
+def test_tampa_baixa_oculta_mesmo_com_caixa_alta_em_outro_lugar():
+    alta = caixa(np.array([50.0, 50.0, 5.0]), [2.0, 2.0, 10.0])
+    r = run([viga(), alta], [tampa(-1, 5, 1.5)])
+    assert comp(r[0]) <= TOL and iguais(r[1], base([viga(), alta])[1])
+
+
+# (3) threads: pecas ocultas fora do indice 0, algumas ocultas e outras nao; igual ao sequencial bit a bit
+@pytest.mark.parametrize("trab", [2, 3])
+def test_threads_com_pecas_ocultas_fora_do_indice_0(trab):
+    pecas = [longe(), viga(), caixa(np.array([202.0, 0.5, 0.5]), [4.0, 1.0, 1.0]),
+             caixa(np.array([302.0, 0.5, 0.5]), [4.0, 1.0, 1.0]), caixa(np.array([402.0, 0.5, 0.5]), [4.0, 1.0, 1.0])]
+    oc = [tampa(-1, 5, 2.0), tampa(298, 306, 2.0)]  # cobrem as pecas 1 e 3; 0, 2 e 4 ficam visiveis
+    seq = run(pecas, oc, trabalhadores=1)
+    assert comp(seq[1]) <= TOL and comp(seq[3]) <= TOL and comp(seq[0]) > 1 and comp(seq[2]) > 1 and comp(seq[4]) > 1
+    assert _bit(seq, run(pecas, oc, trabalhadores=trab))
+    assert _bit(seq, run(pecas, oc))
+
+
+# (4) borda: tampa que so encosta na aresta x=4 do topo
+def test_tampa_que_so_encosta_na_aresta_x4_oculta_so_essa_aresta():
+    r = run([viga()], [tampa(4, 6, 2.0)])[0]
+    assert comp(r) == pytest.approx(9.0, abs=TOL)  # 10 m menos a aresta x=4 (1 m); y=0 e y=1 continuam com 4 m cada
+    assert pts(r)[:, 0].min() == pytest.approx(0.0, abs=TOL) and pts(r)[:, 0].max() == pytest.approx(4.0, abs=TOL)
+
+
 # MUTANTES para o lider rodar contra a implementacao (cada um deve fazer pelo menos 1 teste falhar):
 #  M1 oclusores_extra ignorado (nunca entra em Tw_comb/prep).                      -> (1)(2)(8)
 #  M2 oclusor tambem gera linhas de saida (arestas candidatas dele entram em cands).-> (7)

@@ -343,6 +343,38 @@ def test_lote_invalido_nao_grava_memo(pasta, cache):
     assert _contagens(pasta) == [0, 0, 0]
 
 
+# ---------------------------------------------------------------- casos da revisão Opus
+def test_pavimento_none_isolado_por_documento(cache):
+    cache.gravar_ocorrencia(_oc("a", pav=None), documento="A")
+    cache.gravar_ocorrencia(_oc("b", pav=None), documento="B")
+    cache.gravar_ocorrencia(_oc("c", pav=None), documento="")
+    for d, esperado in (("A", ["a"]), ("B", ["b"]), ("", ["c"])):
+        assert [o.global_id for o in cache.ocorrencias_do_pavimento(None, documento=d)] == esperado
+    assert cache.ocorrencias_do_pavimento(None, documento="Z") == []
+
+
+def test_memo_vazio_com_assinatura_nova_limpa_o_documento(pasta, cache):
+    cache.gravar_lote({}, [], documento="A", memo=("velha", {1: "x"}))
+    cache.gravar_lote({}, [], documento="A", memo=("nova", {}))
+    assert cache.memo_ler("A", "velha") == {} and cache.memo_ler("A", "nova") == {}
+    assert _sql(pasta, "SELECT COUNT(*) FROM memo WHERE documento='A'") == [(0,)]
+
+
+def test_documento_de_usa_normcase(tmp_path, monkeypatch):
+    monkeypatch.setattr(os.path, "normcase", lambda p: p.lower())
+    p = tmp_path / "Sub" / "CASA.ifc"
+    esperado = hashlib.sha256(str(p.resolve()).lower().encode("utf-8")).hexdigest()
+    assert C.documento_de(p) == esperado
+
+
+def test_gravar_lote_documento_none_e_valueerror(pasta, cache):
+    with pytest.raises(ValueError):
+        cache.gravar_lote({}, [], documento=None)
+    with pytest.raises(ValueError):
+        cache.gravar_lote({}, [_oc("a")], documento=None, memo=("s", {1: "x"}))
+    assert _contagens(pasta) == [0, 0, 0]
+
+
 # Mutantes cobertos:
 #  1. ocorrência sem documento na chave (mesmo GlobalId em 2 documentos se mistura): test_mesmo_global_id_*,
 #     test_gravar_lote_com_documento, test_padrao_sem_documento_*, test_esquema_novo_chaves_e_indice.

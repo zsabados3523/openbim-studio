@@ -93,7 +93,23 @@ def _limpar_pastas_antigas():
         pass
 
 
-def preparar(ifc, pedido: dict, *, caminho_ifc: str | Path | None = None) -> Preparado:
+def preparar(
+    ifc,
+    pedido: dict,
+    *,
+    caminho_ifc: str | Path | None = None,
+    assinatura: tuple[int, int] | list[int] | None = None,
+) -> Preparado:
+    if caminho_ifc is not None and assinatura is not None:
+        _limpar_pastas_antigas()
+        p = dict(pedido)
+        p.setdefault("protocolo", PROTOCOLO)
+        p.setdefault("threads", threads_padrao())
+        p["arquivo"] = str(Path(caminho_ifc).resolve())
+        p["assinatura"] = [int(assinatura[0]), int(assinatura[1])]
+        pasta = Path(tempfile.mkdtemp(prefix="obim-desenho-", dir=tempfile.gettempdir())).resolve()
+        return Preparado(p, pasta, copia_s=0.0)
+
     if caminho_ifc is not None:
         try:
             c = Path(caminho_ifc).resolve()

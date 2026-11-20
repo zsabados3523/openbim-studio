@@ -14,7 +14,7 @@ import ifcopenshell.util.unit
 
 from openbim_app import vistas_ifc
 from openbim_app.desenho import auxiliar, selecao
-from openbim_app.desenho.cache import CacheCancelado, arquivo_resolvido, assinatura_arquivo
+from openbim_app.desenho.cache import CacheCancelado, assinatura_arquivo, resolver_assinatura
 from openbim_app.desenho.selecao import Selecao, SelecaoInvalida
 
 if TYPE_CHECKING:
@@ -75,6 +75,7 @@ def gerar_planta(
     cancelar=None,
     executor=None,
     caminho_ifc: str | Path | None = None,
+    assinatura_ifc: tuple[int, int] | None = None,
     cache: "CacheDesenho | None" = None,
     faixas: int | None = None,
     pesados: str | None = None,
@@ -168,8 +169,20 @@ def gerar_planta(
     if motor_visivel:
         pedido["motor_visivel"] = True
 
-    def _executar_planta(caminho_atual):
-        with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_atual) as p:
+    if caminho_ifc is None:
+        arq_cache, sig_chave = None, None
+    elif assinatura_ifc is not None:
+        arq_cache, sig_chave = Path(caminho_ifc), tuple(int(x) for x in assinatura_ifc)
+    else:
+        arq_cache, sig_chave = resolver_assinatura(caminho_ifc)
+
+    def _executar_planta(caminho_atual, sig_atual):
+        kw_prep = (
+            {"caminho_ifc": caminho_atual, "assinatura": sig_atual}
+            if (caminho_atual is not None and sig_atual is not None)
+            else {}
+        )
+        with auxiliar.preparar(ifc, pedido, **kw_prep) as p:
             sig_prep = p.pedido.get("assinatura")
             return (
                 auxiliar.executar(
@@ -185,21 +198,21 @@ def gerar_planta(
 
     def _executar_com_retry():
         try:
-            r_exec, sig_prep = _executar_planta(caminho_ifc)
+            r_exec, sig_prep = _executar_planta(arq_cache, sig_chave)
             return r_exec, sig_prep, False
         except auxiliar.Divergente:
-            if caminho_ifc is None:
+            if arq_cache is None:
                 raise
-            r_exec, _ = _executar_planta(None)
+            r_exec, _ = _executar_planta(None, None)
             return r_exec, None, True
 
     divergente = False
     if cache is not None:
-        arq_cache = arquivo_resolvido(caminho_ifc)
-        sig_chave = assinatura_arquivo(arq_cache) if arq_cache is not None else None
-        if sig_chave is None:
-            arq_cache = None
-        kw_chave = {"arquivo": arq_cache} if arq_cache is not None else {}
+        kw_chave = (
+            {"arquivo": arq_cache, "assinatura": sig_chave}
+            if (arq_cache is not None and sig_chave is not None)
+            else {}
+        )
         try:
             ch = cache.chave(ifc, pedido, cancelar=cancelar, **kw_chave)
         except CacheCancelado as exc:

@@ -221,6 +221,15 @@ def assinatura_arquivo(caminho) -> tuple[int, int] | None:
     return int(st.st_size), int(st.st_mtime_ns)
 
 
+def resolver_assinatura(caminho) -> tuple[Path | None, tuple[int, int] | None]:
+    """Resolve o caminho regular em disco e devolve (path_resolvido, (tamanho, mtime_ns))."""
+    info = _resolver_arquivo(caminho)
+    if info is None:
+        return None, None
+    st = info[1]
+    return info[0], (int(st.st_size), int(st.st_mtime_ns))
+
+
 class CacheDesenho:
     def __init__(self, pasta=None, *, idade_max_s: float = _IDADE_PADRAO_S):
         self.pasta = Path(pasta) if pasta is not None else pasta_padrao()
@@ -236,6 +245,7 @@ class CacheDesenho:
         cancelar: threading.Event | None = None,
         *,
         arquivo=None,
+        assinatura=None,
     ) -> str:
         ctrl = _ControleChave(cancelar)
         ctrl.checar()
@@ -258,22 +268,31 @@ class CacheDesenho:
             h.update(f"{len(dados)}:".encode("ascii"))
             h.update(dados)
 
-        info_arq = _resolver_arquivo(arquivo)
-        if info_arq is not None:
-            resolvido, st = info_arq
-            pedido_arq = {k: v for k, v in pedido.items() if k != "threads"}
-            _atualizar(
-                {
-                    "modo": "arquivo",
-                    "versao": VERSAO_MODULO,
-                    "arquivo": str(resolvido),
-                    "tamanho": st.st_size,
-                    "mtime_ns": st.st_mtime_ns,
-                    "pedido": pedido_arq,
-                }
-            )
-            ctrl.checar()
-            return h.hexdigest()
+        if arquivo:
+            arq_chave = None
+            if assinatura is not None:
+                arq_chave = str(arquivo)
+                tam, mtime_ns = int(assinatura[0]), int(assinatura[1])
+            else:
+                info = _resolver_arquivo(arquivo)
+                if info is not None:
+                    arq_resolvido, st = info
+                    arq_chave = str(arq_resolvido)
+                    tam, mtime_ns = int(st.st_size), int(st.st_mtime_ns)
+            if arq_chave is not None:
+                pedido_arq = {k: v for k, v in pedido.items() if k != "threads"}
+                _atualizar(
+                    {
+                        "modo": "arquivo",
+                        "versao": VERSAO_MODULO,
+                        "arquivo": arq_chave,
+                        "tamanho": tam,
+                        "mtime_ns": mtime_ns,
+                        "pedido": pedido_arq,
+                    }
+                )
+                ctrl.checar()
+                return h.hexdigest()
 
         limpo = {k: v for k, v in pedido.items() if k not in ("threads", "elementos")}
         _atualizar(

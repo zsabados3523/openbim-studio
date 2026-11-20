@@ -2,10 +2,12 @@
 """Refino das peças pesadas de um desenho, uma a uma (ADR-004: sem geometria no app)."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import obim_geometria.pecas as pecas
 
 from openbim_app.desenho import auxiliar
-from openbim_app.desenho.cache import CacheCancelado, arquivo_resolvido, assinatura_arquivo
+from openbim_app.desenho.cache import CacheCancelado, assinatura_arquivo, resolver_assinatura
 
 _VERSAO_REFINO = "visibilidade-v1"
 
@@ -16,10 +18,10 @@ def _erro(exc: Exception) -> str:
     return f"{type(exc).__name__}: {exc}"
 
 
-def _chave_cache(cache, ifc, pedido_peca: dict, cancelar=None, *, arquivo=None) -> str | None:
+def _chave_cache(cache, ifc, pedido_peca: dict, cancelar=None, *, arquivo=None, assinatura=None) -> str | None:
     if cache is None:
         return None
-    kw_chave = {"arquivo": arquivo} if arquivo is not None else {}
+    kw_chave = {"arquivo": arquivo, "assinatura": assinatura} if (arquivo is not None and assinatura is not None) else {}
     try:
         return cache.chave(
             ifc,
@@ -71,6 +73,7 @@ def refinar_pesados(
     ao_refinar=None,
     limite_s: float = 3600.0,
     caminho_ifc=None,
+    assinatura_ifc: tuple[int, int] | None = None,
 ) -> dict:
     """Troca as silhuetas das peças pesadas pelo exato, na ordem crescente de faces."""
     out = dict(resultado)
@@ -78,10 +81,12 @@ def refinar_pesados(
     if not pesados:
         return out
 
-    arquivo_cache = arquivo_resolvido(caminho_ifc)
-    sig_inicial = assinatura_arquivo(arquivo_cache) if arquivo_cache is not None else None
-    if sig_inicial is None:
-        arquivo_cache = None
+    if caminho_ifc is None:
+        arquivo_cache, sig_inicial = None, None
+    elif assinatura_ifc is not None:
+        arquivo_cache, sig_inicial = Path(caminho_ifc), tuple(int(x) for x in assinatura_ifc)
+    else:
+        arquivo_cache, sig_inicial = resolver_assinatura(caminho_ifc)
     svg = resultado.get("svg") or ""
     refinadas: list[str] = []
     em_cache: list[str] = []
@@ -96,10 +101,15 @@ def refinar_pesados(
             raise auxiliar.DesenhoCancelado("Operação cancelada antes de refinar a peça")
         guid, ident = peca["guid"], peca["id"]
         pedido_peca = pecas.pedido_peca(pedido, ident)
-        if arquivo_cache is not None and assinatura_arquivo(arquivo_cache) != sig_inicial:
-            arquivo_cache = None
-        usou_arquivo = arquivo_cache is not None
-        chave = _chave_cache(cache, ifc, pedido_peca, cancelar=cancelar, arquivo=arquivo_cache)
+        usou_arquivo = arquivo_cache is not None and sig_inicial is not None
+        chave = _chave_cache(
+            cache,
+            ifc,
+            pedido_peca,
+            cancelar=cancelar,
+            arquivo=arquivo_cache if usou_arquivo else None,
+            assinatura=sig_inicial if usou_arquivo else None,
+        )
         dados = cache.obter(chave) if chave is not None else None
         grupo = None
         motor_usado = None

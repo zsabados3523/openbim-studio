@@ -12,7 +12,7 @@ import ifcopenshell.util.unit
 
 from openbim_app import vistas_ifc
 from openbim_app.desenho import auxiliar, selecao
-from openbim_app.desenho.cache import CacheCancelado, arquivo_resolvido, assinatura_arquivo
+from openbim_app.desenho.cache import CacheCancelado, assinatura_arquivo, resolver_assinatura
 from openbim_app.desenho.selecao import (
     Selecao,
     SelecaoInvalida,
@@ -60,6 +60,7 @@ def _gerar_corte_uma_vez(
     cancelar,
     executor,
     caminho_ifc: str | Path | None,
+    assinatura_ifc: tuple[int, int] | None,
     moveis_caixa2d: bool,
     profundidade_corte: float | None,
     faixas: int,
@@ -140,28 +141,38 @@ def _gerar_corte_uma_vez(
         pedido["motor_visivel"] = motor_visivel
 
     if cache is not None:
-        arq_cache = arquivo_resolvido(caminho_ifc)
-        sig_chave = assinatura_arquivo(arq_cache) if arq_cache is not None else None
-        if sig_chave is None:
-            arq_cache = None
-        kw_chave = {"arquivo": arq_cache} if arq_cache is not None else {}
+        kw_chave = (
+            {"arquivo": caminho_ifc, "assinatura": assinatura_ifc}
+            if (caminho_ifc is not None and assinatura_ifc is not None)
+            else {}
+        )
         try:
             ch = cache.chave(ifc, pedido, cancelar=cancelar, **kw_chave)
         except CacheCancelado as exc:
             raise auxiliar.DesenhoCancelado("Operação cancelada no cálculo da chave do cache") from exc
         r = cache.obter(ch)
         if r is None:
-            with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc) as p:
+            kw_prep = (
+                {"caminho_ifc": caminho_ifc, "assinatura": assinatura_ifc}
+                if (caminho_ifc is not None and assinatura_ifc is not None)
+                else {}
+            )
+            with auxiliar.preparar(ifc, pedido, **kw_prep) as p:
                 sig_prep = p.pedido.get("assinatura")
                 r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor, filho=filho)
             if cancelar is not None and cancelar.is_set():
                 raise auxiliar.DesenhoCancelado("Operação cancelada antes de gravar no cache")
-            if arq_cache is None or (
-                sig_prep == list(sig_chave) and assinatura_arquivo(arq_cache) == sig_chave
+            if caminho_ifc is None or (
+                sig_prep == list(assinatura_ifc) and assinatura_arquivo(caminho_ifc) == assinatura_ifc
             ):
                 cache.guardar(ch, r)
     else:
-        with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc) as p:
+        kw_prep = (
+            {"caminho_ifc": caminho_ifc, "assinatura": assinatura_ifc}
+            if (caminho_ifc is not None and assinatura_ifc is not None)
+            else {}
+        )
+        with auxiliar.preparar(ifc, pedido, **kw_prep) as p:
             r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor, filho=filho)
 
     return Corte(
@@ -186,6 +197,7 @@ def gerar_corte(
     cancelar=None,
     executor=None,
     caminho_ifc: str | Path | None = None,
+    assinatura_ifc: tuple[int, int] | None = None,
     moveis_caixa2d: bool = False,
     profundidade_corte: float | None = None,
     faixas: int = 1,
@@ -213,12 +225,23 @@ def gerar_corte(
         raise SelecaoInvalida(f"Vista {gid_vista} não é do tipo CORTE (tipo={info.get('tipo')})")
 
     scale = float(ifcopenshell.util.unit.calculate_unit_scale(ifc))
-    tentativas = (caminho_ifc, None) if caminho_ifc is not None else (None,)
-    for idx, caminho_atual in enumerate(tentativas):
+    if caminho_ifc is None:
+        arq_cache, sig_chave = None, None
+    elif assinatura_ifc is not None:
+        arq_cache, sig_chave = Path(caminho_ifc), tuple(int(x) for x in assinatura_ifc)
+    else:
+        arq_cache, sig_chave = resolver_assinatura(caminho_ifc)
+
+    tentativas = (
+        ((arq_cache, sig_chave), (None, None))
+        if (arq_cache is not None and sig_chave is not None)
+        else ((None, None),)
+    )
+    for idx, (caminho_atual, sig_atual) in enumerate(tentativas):
         try:
             return _gerar_corte_uma_vez(
                 ifc, gid_vista, cats, scale, threads, limite_triangulos, limite_s,
-                cancelar, executor, caminho_atual, moveis_caixa2d, profundidade_corte,
+                cancelar, executor, caminho_atual, sig_atual, moveis_caixa2d, profundidade_corte,
                 faixas, cache, motor_visivel, sessao_selecao,
                 filho if caminho_atual is not None else None,
             )

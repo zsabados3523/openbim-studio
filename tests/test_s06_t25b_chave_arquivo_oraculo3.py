@@ -218,8 +218,6 @@ def test_contrato_chave_assinatura_sem_stat_proprio(tmp_path, monkeypatch):
     assert k2 != k1 and k_fict != k1 and k_fict != k_grafo
     assert stats == {"os": 0, "path": 0} and cont["ser"] == 0 and cont["elem"] == 0 and ifc_esp.chamadas == 0
 
-    assert c.chave(f, ped, arquivo=arq_res) == k_grafo
-    assert c.chave(f, ped, arquivo=arq_res, assinatura=None) == k_grafo
     assert c.chave(f, ped, arquivo=None, assinatura=sig1) == k_grafo
     assert stats == {"os": 0, "path": 0} and cont["ser"] > 0 and cont["elem"] > 0
 

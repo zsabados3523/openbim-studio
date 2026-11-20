@@ -317,6 +317,48 @@ def _validar_oclusores_extra(oclusores_extra: list[np.ndarray] | None) -> np.nda
     return partes[0] if len(partes) == 1 else np.concatenate(partes, axis=0)
 
 
+def _caixa_xy_ativos(ativos: list[tuple[int, tuple]]) -> tuple[float, float, float, float]:
+    """Calcula a AABB XY das arestas candidatas das pecas ativas."""
+    x0 = min(float(min(c[0][:, 0].min(), c[1][:, 0].min())) for _, c in ativos)
+    x1 = max(float(max(c[0][:, 0].max(), c[1][:, 0].max())) for _, c in ativos)
+    y0 = min(float(min(c[0][:, 1].min(), c[1][:, 1].min())) for _, c in ativos)
+    y1 = max(float(max(c[0][:, 1].max(), c[1][:, 1].max())) for _, c in ativos)
+    return x0, y0, x1, y1
+
+
+def _anexar_oclusores_extra(
+    P: np.ndarray,
+    Tw_comb: np.ndarray,
+    extra_tris: np.ndarray,
+    tol_z: float,
+    d_eps: float,
+    caixa_xy: tuple[float, float, float, float] | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Filtra triangulos extras validos perto da AABB XY das pecas e anexa sem solda nem dedup."""
+    if caixa_xy is None:
+        pts_xy = P[Tw_comb, :2]
+        cx0, cy0 = pts_xy.min(axis=(0, 1))
+        cx1, cy1 = pts_xy.max(axis=(0, 1))
+    else:
+        cx0, cy0, cx1, cy1 = caixa_xy
+    folga = max(abs(d_eps), 1e-6) + 2.0 * max(float(tol_z), 1e-6)
+    px0, py0, px1, py1 = cx0 - folga, cy0 - folga, cx1 + folga, cy1 + folga
+    ex0 = extra_tris[:, :, 0].min(axis=1)
+    ex1 = extra_tris[:, :, 0].max(axis=1)
+    ey0 = extra_tris[:, :, 1].min(axis=1)
+    ey1 = extra_tris[:, :, 1].max(axis=1)
+    tris = extra_tris[(ex1 >= px0) & (ex0 <= px1) & (ey1 >= py0) & (ey0 <= py1)]
+    if len(tris) == 0:
+        return P, Tw_comb
+    cr = np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0])
+    tris = tris[np.isfinite(cr).all(axis=1) & np.any(cr != 0.0, axis=1)]
+    if len(tris) == 0:
+        return P, Tw_comb
+    V_ex = tris.reshape(-1, 3)
+    Tw_ex = np.arange(len(V_ex), dtype=np.int64).reshape(-1, 3)
+    return np.vstack([P, V_ex]), np.vstack([Tw_comb, Tw_ex + len(P)])
+
+
 def _validar_trabalhadores(trabalhadores: int | None) -> int | None:
     """Valida o numero de trabalhadores: None ou inteiro >= 1 (rejeita bool e nao-inteiros)."""
     if trabalhadores is None:
@@ -397,15 +439,12 @@ def linhas_visiveis_multi(
     ativos = [(i, c) for i, c in enumerate(cands) if c is not None]
     if not ativos:
         return [[] for _ in pecas_l]
+    d_eps = -1e-6
     Tw_comb = tw_oks[0] if len(tw_oks) == 1 else _dedup_triangulos(np.vstack(tw_oks))
     if extra_tris is not None:
-        # Nao quantizar oclusores extras: preservar coordenadas exatas para limiar de tol_z e lascas sub-micron.
-        V_ex = extra_tris.reshape(-1, 3) + 0.0
-        _, idx_ex, inv_ex = np.unique(V_ex, axis=0, return_index=True, return_inverse=True)
-        Tw_ex = _dedup_triangulos(inv_ex.ravel().reshape(-1, 3))
-        if len(Tw_ex):
-            Tw_comb = np.vstack([Tw_comb, Tw_ex + len(P)])
-            P = np.vstack([P, V_ex[idx_ex]])
+        P, Tw_comb = _anexar_oclusores_extra(
+            P, Tw_comb, extra_tris, tol_z, d_eps, caixa_xy=_caixa_xy_ativos(ativos)
+        )
     prep = _preparar_triangulos(P, Tw_comb)
     memo = {}
     if n_trab is None:
@@ -413,12 +452,12 @@ def linhas_visiveis_multi(
     res: list[list[np.ndarray]] = [[] for _ in pecas_l]
     if n_trab == 1:
         for i, c in ativos:
-            res[i] = list(_visibilidade_hibrida(P, Tw_comb, *c, tol_z, -1e-6, min_len, prep=prep, memo=memo))
+            res[i] = list(_visibilidade_hibrida(P, Tw_comb, *c, tol_z, d_eps, min_len, prep=prep, memo=memo))
         return res
     with ThreadPoolExecutor(max_workers=n_trab) as pool:
         try:
             futs = [
-                (i, pool.submit(_visibilidade_hibrida, P, Tw_comb, *c, tol_z, -1e-6, min_len, prep=prep, memo=memo))
+                (i, pool.submit(_visibilidade_hibrida, P, Tw_comb, *c, tol_z, d_eps, min_len, prep=prep, memo=memo))
                 for i, c in ativos
             ]
             for i, fut in futs:

@@ -47,10 +47,13 @@ def _alvo(tx, rx):
         pend = int(est.get("pendentes", 0))
         if op == "abrir":
             dados = {"ok": True, "aberto": True, "pid": os.getpid()}
-        elif op == "construir":
-            dados = {"ok": True, "aceito": True, "pendentes": pend}
+        elif op == "construir":  # envelope real (persistente.py, spec §3): sem "ok"
+            modo = est.get("construir")
+            dados = {"ok": False, "erro": {"tipo": "X", "mensagem": "m", "rastro": ""}} if modo == "erro" else (
+                {"aceito": False, "motivo": "erro"} if modo == "recusa" else (
+                    {"foo": 1} if modo == "vazio" else {"aceito": True, "pendentes": pend}))
         elif op == "estado_construcao":
-            dados = {"ok": True, "ativo": pend > 0, "pendentes": pend, "feitos": 0, "tesseladas": 0, "reaproveitadas": 0,
+            dados = {"ativo": pend > 0, "pendentes": pend, "feitos": 0, "tesseladas": 0, "reaproveitadas": 0,
                      "falhas": 0, "lotes": 0, "lote_max_s": 0.0, "rss_mb": 0.0, "parado": est.get("parado"), "erro": None}
         else:
             sair = ler("sair.json")
@@ -70,8 +73,8 @@ class Amb:
         self.arq.write_text("ifc")
         self.estado(5)
 
-    def estado(self, pend, parado=None):
-        (self.pasta / "estado.json").write_text(json.dumps({"pendentes": pend, "parado": parado}))
+    def estado(self, pend, parado=None, construir=None):
+        (self.pasta / "estado.json").write_text(json.dumps({"pendentes": pend, "parado": parado, "construir": construir}))
 
     def sair(self, n, codigo=86):
         (self.pasta / "sair.json").write_text(json.dumps({"n": n, "codigo": codigo}))
@@ -193,6 +196,42 @@ def test_fila_vazia_podar_mata(amb):
     amb.avancar(2)
     f.podar()
     assert f.pid is None
+
+@pytest.mark.parametrize("modo", ["erro", "recusa", "vazio"])
+def test_reenvio_com_falha_nao_derruba_o_pedido(amb, modo):
+    f = amb.filho()
+    f.construir("g", limite_s=120)
+    amb.estado(5, construir=modo)
+    f.salvar()
+    r = ex(f)  # o reenvio de construir falha: pedido do usuario segue, construcao desmarcada
+    pid = r["pid"]
+    assert r["ok"] is True and amb.ops(pid) == ["construir", "desenho"] and len(amb.pids()) == 2
+    amb.avancar(2)
+    f.podar()
+    assert f.pid is None, "construcao desmarcada: ociosidade volta a valer"
+
+
+def test_filho_novo_com_zero_pendentes_nao_fica_ativo(amb):
+    f = amb.filho()
+    f.construir("g", limite_s=120)
+    amb.estado(0)
+    f.salvar()
+    pid = ex(f)["pid"]
+    assert amb.ops(pid) == ["construir", "desenho"]
+    amb.avancar(2)
+    f.podar()
+    assert f.pid is None
+
+
+def test_construir_direto_com_assinatura_bloqueada(amb):
+    f = amb.filho()
+    f.construir("g", limite_s=120)
+    amb.sair(1, 86)
+    pid = ex(f)["pid"]
+    tx = f._tx = EspiaTx(f._tx)
+    assert f.construir("g2", limite_s=120) == {"aceito": False, "motivo": "memoria"}
+    assert tx.ops == [] and amb.ops(pid) == ["desenho"]
+
 
 def test_construir_sem_pendentes_nao_marca_ativa(amb):
     amb.estado(0)
@@ -319,6 +358,9 @@ def test_pasta_geometria(tmp_path, monkeypatch):
 class _FalsoFilho:
     eventos: list = []
     falha_aquecer = False
+    solta = None  # Event: aquecer espera nele
+    chamou = threading.Event()
+    arqs: list = []
 
     def __init__(self, arquivo, **kw):
         self.arquivo = arquivo
@@ -328,19 +370,24 @@ class _FalsoFilho:
 
     def aquecer(self, cancelar=None, limite_s=0):
         self._rec("aquecer")
+        _FalsoFilho.chamou.set()
+        if _FalsoFilho.solta is not None:
+            _FalsoFilho.solta.wait(30)
         if _FalsoFilho.falha_aquecer:
             raise FilhoIndisponivel("x")
         return {"aberto": True}
 
     def construir(self, pasta_cache, **kw):
         self._rec("construir", pasta_cache)
+        _FalsoFilho.arqs.append(str(self.arquivo))
         return {"aceito": True, "pendentes": 0}
 
     salvar = invalidar = podar = fechar = lambda self: None
 
 def _gerente(monkeypatch, tmp_path, **kw):
     from openbim_app.desenho import gerente as G
-    _FalsoFilho.eventos, _FalsoFilho.falha_aquecer = [], False
+    _FalsoFilho.eventos, _FalsoFilho.falha_aquecer, _FalsoFilho.solta, _FalsoFilho.arqs = [], False, None, []
+    _FalsoFilho.chamou = threading.Event()
     monkeypatch.setattr(G, "FilhoPersistente", _FalsoFilho)
     monkeypatch.setenv("OBIM_CACHE_DIR", str(tmp_path / "cache"))
     arq = tmp_path / "Casa.ifc"
@@ -389,6 +436,24 @@ def test_gerente_nao_constroi_se_aquecer_falha_ou_gate_fechado(monkeypatch, tmp_
     _fundo(g)
     assert _FalsoFilho.eventos == []
     g.fechar()
+
+def test_gerente_invalidar_no_meio_do_aquecer_nao_constroi_no_filho_velho(monkeypatch, tmp_path):
+    g, arq = _gerente(monkeypatch, tmp_path, construir_cache=True)
+    _FalsoFilho.solta = threading.Event()
+    g.aquecer(str(arq), revisao=1, revisao_salva=1)
+    assert _FalsoFilho.chamou.wait(30)
+    g.invalidar()  # geracao nova + cancelamento: o filho velho nao recebe construir
+    _FalsoFilho.solta.set()
+    _fundo(g)
+    assert _nomes() == ["aquecer"] and _FalsoFilho.arqs == []
+    outro = tmp_path / "Outro.ifc"
+    outro.write_text("ifc")
+    _FalsoFilho.solta = None
+    g.aquecer(str(outro), revisao=1, revisao_salva=1)
+    _fundo(g)
+    assert _FalsoFilho.arqs == [str(outro.resolve())]
+    g.fechar()
+
 
 # MUTANTES (numeracao do cartao): 1 test_construcao_ativa_nao_morre_*; 2 test_fila_vazia_*; 3 test_saida_86_nao_conta_como_queda e
 # test_86_com_processo_morto_*; 4 test_86_bloqueia_construir_ate_assinatura_nova; 5 test_cancelar_mata_e_filho_novo_recebe_construir;

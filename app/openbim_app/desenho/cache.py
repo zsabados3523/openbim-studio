@@ -40,10 +40,8 @@ class _ControleChave:
     def checar(self) -> None:
         if self.cancelar is not None and self.cancelar.is_set():
             raise CacheCancelado("Cálculo da chave do cache cancelado")
-        agora = time.monotonic()
-        if agora - self.ultimo_yield >= _INTERVALO_GIL_S:
-            self.ultimo_yield = agora
-            time.sleep(0)
+        time.sleep(0)
+        self.ultimo_yield = time.monotonic()
 
     def passo_no(self) -> None:
         self.nos += 1
@@ -75,6 +73,8 @@ def _serializar(valor, vistos, ctrl: _ControleChave | None = None):
         return {"$bytes": valor.hex()}
     if isinstance(valor, (list, tuple)):
         return [_serializar(v, vistos, ctrl) for v in valor]
+    if isinstance(valor, (set, frozenset)):
+        return sorted((_serializar(v, vistos, ctrl) for v in valor), key=repr)
     if isinstance(valor, dict):
         return {str(k): _serializar(v, vistos, ctrl) for k, v in valor.items()}
     if hasattr(valor, "is_a") and hasattr(valor, "id"):
@@ -209,13 +209,18 @@ class CacheDesenho:
         limpo = {k: v for k, v in pedido.items() if k not in ("threads", "elementos")}
         h = hashlib.sha256()
 
+        def _default(o):
+            if isinstance(o, (set, frozenset)):
+                return sorted((_serializar(v, set(), ctrl) for v in o), key=repr)
+            return str(o)
+
         def _atualizar(obj) -> None:
             dados = json.dumps(
                 obj,
                 sort_keys=True,
                 ensure_ascii=False,
                 separators=(",", ":"),
-                default=str,
+                default=_default,
             ).encode("utf-8")
             h.update(f"{len(dados)}:".encode("ascii"))
             h.update(dados)
@@ -230,6 +235,7 @@ class CacheDesenho:
         for entrada in pedido.get("elementos") or ():
             ctrl.checar()
             _atualizar(_assinatura_elemento(ifc, entrada, ctrl))
+        ctrl.checar()
         return h.hexdigest()
 
     def obter(self, chave: str) -> dict | None:

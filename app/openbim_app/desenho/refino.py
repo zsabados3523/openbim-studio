@@ -122,6 +122,8 @@ def refinar_pesados(
                     progresso(f"peça {n}/{total} falhou: {guid}")
                 continue
             if cache is not None and chave is not None:
+                if cancelar is not None and cancelar.is_set():
+                    raise auxiliar.DesenhoCancelado("Operação cancelada antes de gravar no cache")
                 entrada_cache = {"svg": grupo, "grupo": grupo, "motor": motor_usado}
                 if motivo_hlr is not None:
                     entrada_cache["motivo_hlr"] = motivo_hlr

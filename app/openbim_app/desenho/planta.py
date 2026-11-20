@@ -194,6 +194,8 @@ def gerar_planta(
         r = cache.obter(ch)
         if r is None:
             r = _executar_com_retry()
+            if cancelar is not None and cancelar.is_set():
+                raise auxiliar.DesenhoCancelado("Operação cancelada antes de gravar no cache")
             cache.guardar(ch, r)
     else:
         r = _executar_com_retry()

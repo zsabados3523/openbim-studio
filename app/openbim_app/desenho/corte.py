@@ -148,6 +148,8 @@ def _gerar_corte_uma_vez(
         if r is None:
             with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc) as p:
                 r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor, filho=filho)
+            if cancelar is not None and cancelar.is_set():
+                raise auxiliar.DesenhoCancelado("Operação cancelada antes de gravar no cache")
             cache.guardar(ch, r)
     else:
         with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc) as p:

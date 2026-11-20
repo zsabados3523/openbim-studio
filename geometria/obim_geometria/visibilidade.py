@@ -291,6 +291,32 @@ def linhas_visiveis(
     return linhas_visiveis_multi([(verts, tris)], angulo_graus=angulo_graus, tol_z=tol_z, min_len=min_len)[0]
 
 
+def _validar_oclusores_extra(oclusores_extra: list[np.ndarray] | None) -> np.ndarray | None:
+    """Valida `oclusores_extra` e concatena os nao-vazios em (M, 3, 3) float64, ou retorna None."""
+    if oclusores_extra is None:
+        return None
+    if not isinstance(oclusores_extra, list):
+        raise ValueError("oclusores_extra deve ser uma lista de ndarrays (n, 3, 3) ou None")
+    partes: list[np.ndarray] = []
+    for item in oclusores_extra:
+        if not isinstance(item, np.ndarray) or item.ndim != 3 or item.shape[1:] != (3, 3):
+            raise ValueError("cada item de oclusores_extra deve ser um ndarray de formato (n, 3, 3)")
+        if (
+            item.dtype == bool
+            or not np.issubdtype(item.dtype, np.number)
+            or np.issubdtype(item.dtype, np.complexfloating)
+        ):
+            raise ValueError("oclusores_extra deve conter apenas numeros reais")
+        arr = np.asarray(item, dtype=np.float64)
+        if arr.size and (not np.isfinite(arr).all() or np.abs(arr).max() > 1e12):
+            raise ValueError("oclusores_extra deve conter apenas coordenadas finitas ate 1e12")
+        if len(arr):
+            partes.append(arr)
+    if not partes:
+        return None
+    return partes[0] if len(partes) == 1 else np.concatenate(partes, axis=0)
+
+
 def _validar_trabalhadores(trabalhadores: int | None) -> int | None:
     """Valida o numero de trabalhadores: None ou inteiro >= 1 (rejeita bool e nao-inteiros)."""
     if trabalhadores is None:
@@ -325,9 +351,11 @@ def linhas_visiveis_multi(
     tol_z: float = 1e-4,
     min_len: float = 1e-4,
     trabalhadores: int | None = None,
+    oclusores_extra: list[np.ndarray] | None = None,
 ) -> list[list[np.ndarray]]:
     """Calcula polilinhas visiveis de cada peca com oclusao mutua por todas as pecas."""
     n_trab = _validar_trabalhadores(trabalhadores)
+    extra_tris = _validar_oclusores_extra(oclusores_extra)
     for nome, val in (("angulo_graus", angulo_graus), ("tol_z", tol_z), ("min_len", min_len)):
         fv = float(val)
         if not (math.isfinite(fv) and fv >= 0.0):
@@ -370,6 +398,15 @@ def linhas_visiveis_multi(
     if not ativos:
         return [[] for _ in pecas_l]
     Tw_comb = tw_oks[0] if len(tw_oks) == 1 else _dedup_triangulos(np.vstack(tw_oks))
+    if extra_tris is not None:
+        V_ex = extra_tris.reshape(-1, 3)
+        _, idx_ex, inv_ex = np.unique(
+            np.round(V_ex / 1e-6).astype(np.int64), axis=0, return_index=True, return_inverse=True
+        )
+        Tw_ex = _dedup_triangulos(inv_ex.ravel().reshape(-1, 3))
+        if len(Tw_ex):
+            Tw_comb = np.vstack([Tw_comb, Tw_ex + len(P)])
+            P = np.vstack([P, V_ex[idx_ex]])
     prep = _preparar_triangulos(P, Tw_comb)
     memo = {}
     if n_trab is None:

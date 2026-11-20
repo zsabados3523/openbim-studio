@@ -107,10 +107,13 @@ class _CacheEspiao(M.CacheDesenho):
         super().__init__(pasta)
         self.arquivos, self.chaves, self.pedidos = [], [], []
 
-    def chave(self, ifc, pedido: dict, cancelar: threading.Event | None = None, *, arquivo=None) -> str:
+    def chave(self, ifc, pedido: dict, cancelar: threading.Event | None = None, *, arquivo=None, assinatura=None) -> str:
         self.arquivos.append(arquivo)
         self.pedidos.append(dict(pedido))
-        ch = super().chave(ifc, pedido, cancelar=cancelar, arquivo=arquivo)
+        kw = {"arquivo": arquivo}
+        if assinatura is not None:
+            kw["assinatura"] = assinatura
+        ch = super().chave(ifc, pedido, cancelar=cancelar, **kw)
         self.chaves.append(ch)
         return ch
 

@@ -8,7 +8,7 @@
 """
 from __future__ import annotations
 
-import os, threading
+import inspect, os, threading
 from pathlib import Path
 
 import pytest
@@ -86,10 +86,13 @@ class _CacheEspiao(M.CacheDesenho):
         self.guardou = 0
         self._ao_obter = ao_obter
 
-    def chave(self, ifc, pedido: dict, cancelar: threading.Event | None = None, *, arquivo=None) -> str:
+    def chave(self, ifc, pedido: dict, cancelar: threading.Event | None = None, *, arquivo=None, assinatura=None) -> str:
         self.arquivos.append(arquivo)
         self.pedidos.append(dict(pedido))
-        ch = super().chave(ifc, pedido, cancelar=cancelar, arquivo=arquivo)
+        kw = {"arquivo": arquivo}
+        if assinatura is not None:
+            kw["assinatura"] = assinatura
+        ch = super().chave(ifc, pedido, cancelar=cancelar, **kw)
         self.chaves.append(ch)
         return ch
 
@@ -174,7 +177,11 @@ def test_item1_planta_retry_divergente_nao_grava_sob_chave_arquivo(tmp_path):
     assert r1.svg == "<svg>MEMORIA_EDITADA</svg>" and len(ch1) == 2
     assert "assinatura" in ch1[0] and "assinatura" not in ch1[1]
 
-    k_arq = M.CacheDesenho(tmp_path / "cmp").chave(f, r1.pedido, arquivo=arq.resolve())
+    arq_res = arq.resolve()
+    kw_arq = {"arquivo": arq_res}
+    if "assinatura" in inspect.signature(M.CacheDesenho.chave).parameters:
+        kw_arq["assinatura"] = M.assinatura_arquivo(arq_res)
+    k_arq = M.CacheDesenho(tmp_path / "cmp").chave(f, r1.pedido, **kw_arq)
     assert k_arq not in esp.guardadas and esp.obter(k_arq) is None
 
     def exec_arq(q):

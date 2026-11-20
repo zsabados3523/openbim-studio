@@ -34,6 +34,14 @@ def pasta_padrao() -> Path:
     return raiz / "openbim-studio" / "desenho"
 
 
+def pasta_geometria() -> Path:
+    """Pasta de cache da geometria persistente. Não cria nada."""
+    ambiente = os.environ.get("OBIM_CACHE_DIR")
+    if ambiente:
+        return Path(ambiente) / "geometria"
+    return pasta_padrao().parent / "geometria"
+
+
 def _serializar(valor, vistos):
     """Converte um valor IFC (ou primitivo) em algo determinístico para o hash."""
     if valor is None or isinstance(valor, (str, int, float, bool)):

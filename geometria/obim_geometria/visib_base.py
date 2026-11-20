@@ -12,15 +12,30 @@ def _rle_idx(n: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return grp, off
 
 
-def _fatias(n: np.ndarray, lim: int):
+def _fatias(n: np.ndarray, lim: int, chaves: np.ndarray | None = None):
     """Gera pares (inicio, fim) fatiando `n` para soma <= `lim` por bloco."""
     ac = np.cumsum(n)
     i0 = 0
     while i0 < len(n):
         base = int(ac[i0 - 1]) if i0 else 0
         i1 = max(int(np.searchsorted(ac, base + lim, side="right")), i0 + 1)
+        if chaves is not None and i1 < len(n) and chaves[i1] == chaves[i1 - 1]:
+            fim_k = int(np.searchsorted(chaves, chaves[i1 - 1], side="right"))
+            if int(ac[fim_k - 1]) - base <= 2 * lim:
+                i1 = fim_k
         yield i0, i1
         i0 = i1
+
+
+def _dedup_int64(ch: np.ndarray) -> np.ndarray:
+    """Ordena in-place e remove duplicatas de vetor 1D de inteiros."""
+    if len(ch) <= 1:
+        return ch
+    ch.sort()
+    m = np.empty(len(ch), dtype=bool)
+    m[0] = True
+    m[1:] = ch[1:] != ch[:-1]
+    return ch[m]
 
 
 def _expandir_celulas(ix0: np.ndarray, ix1: np.ndarray, iy0: np.ndarray, iy1: np.ndarray, nx: int):

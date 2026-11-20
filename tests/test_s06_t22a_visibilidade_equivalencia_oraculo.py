@@ -13,7 +13,8 @@ import pytest
 
 from obim_geometria.visibilidade import linhas_visiveis_multi
 
-DOURADO = Path(__file__).parent / "data" / "s06_t22a_dourado.npz"
+# Um dourado por plataforma: o ponto flutuante muda onde as polilinhas se partem (provado em CI: o motor antigo tambem falha no Windows com o dourado do Linux). O comparador e o mesmo e estrito.
+DOURADO = Path(__file__).parent / "data" / ("s06_t22a_dourado_windows.npz" if sys.platform == "win32" else "s06_t22a_dourado.npz")
 TOL = 1e-9
 F = np.array([[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]])
 

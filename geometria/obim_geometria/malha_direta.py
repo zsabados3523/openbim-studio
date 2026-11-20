@@ -463,17 +463,21 @@ def _coletar_item(
     return True
 
 
-def malha_mundo(el, escala: float = 1.0, cache: dict | None = None) -> tuple[np.ndarray, np.ndarray] | None:
-    """Lê malha direta `(verts (n,3) float em metros, tris (m,3) int)` ou None se não suportada."""
+def _extrair_malha(
+    el, escala: float = 1.0, cache: dict | None = None, usar_placement: bool = True
+) -> tuple[np.ndarray, np.ndarray] | None:
     try:
         if el is None or el.is_a("IfcOpeningElement") or getattr(el, "HasOpenings", None):
             return None
         reps = _representacoes_corpo(el)
         if not reps:
             return None
-        m_place = _placement.get_local_placement(getattr(el, "ObjectPlacement", None))
-        if m_place is None or m_place.shape != (4, 4) or not np.isfinite(m_place).all():
-            return None
+        if usar_placement:
+            m_place = _placement.get_local_placement(getattr(el, "ObjectPlacement", None))
+            if m_place is None or m_place.shape != (4, 4) or not np.isfinite(m_place).all():
+                return None
+        else:
+            m_place = np.eye(4, dtype=np.float64)
         esc = float(escala)
         partes: list[tuple[np.ndarray, np.ndarray]] = []
         for rep in reps:
@@ -502,3 +506,13 @@ def malha_mundo(el, escala: float = 1.0, cache: dict | None = None) -> tuple[np.
         return np.ascontiguousarray(verts, dtype=np.float64), np.ascontiguousarray(tris, dtype=np.int64)
     except Exception:
         return None
+
+
+def malha_mundo(el, escala: float = 1.0, cache: dict | None = None) -> tuple[np.ndarray, np.ndarray] | None:
+    """Lê malha direta `(verts (n,3) float em metros, tris (m,3) int)` ou None se não suportada."""
+    return _extrair_malha(el, escala=escala, cache=cache, usar_placement=True)
+
+
+def malha_local(el, escala: float = 1.0, cache: dict | None = None) -> tuple[np.ndarray, np.ndarray] | None:
+    """Lê malha direta em coordenadas locais da peça `(verts (n,3) float em metros, tris (m,3) int)` ou None."""
+    return _extrair_malha(el, escala=escala, cache=cache, usar_placement=False)

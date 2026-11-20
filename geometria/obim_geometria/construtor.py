@@ -90,7 +90,8 @@ def pavimento_de(el) -> str | None:
 def soldar(v, t, tol: float = 1e-6) -> tuple[np.ndarray, np.ndarray]:
     """Solda vértices dentro de `tol` e remove triângulos degenerados ou órfãos.
 
-    Origem: algoritmo de soldagem por quantização em grade (s06).
+    Origem: `prototypes/s06/sonda_p0_cache._soldar_malha` (a ordem dos vértices difere
+    porque aqui preservamos a ordem da primeira ocorrência de cada célula).
     """
     verts = np.asarray(v, dtype=np.float64).reshape(-1, 3)
     tris = np.asarray(t, dtype=np.int64).reshape(-1, 3)
@@ -116,7 +117,39 @@ def soldar(v, t, tol: float = 1e-6) -> tuple[np.ndarray, np.ndarray]:
 
 
 def rss_mb() -> float:
-    """Devolve o RSS atual do processo em MiB."""
+    """Devolve o RSS atual do processo em MiB.
+
+    Origem: ramo `atual=True` de `viewport/viewport_qrhi/processo_malhas.py::pico_memoria_mb`.
+    """
+    if sys.platform == "win32":
+        from ctypes import wintypes
+
+        class _PROCESS_MEMORY_COUNTERS(ctypes.Structure):
+            _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD)] + [
+                (n, ctypes.c_size_t)
+                for n in (
+                    "PeakWorkingSetSize",
+                    "WorkingSetSize",
+                    "QuotaPeakPagedPoolUsage",
+                    "QuotaPagedPoolUsage",
+                    "QuotaPeakNonPagedPoolUsage",
+                    "QuotaNonPagedPoolUsage",
+                    "PagefileUsage",
+                    "PeakPagefileUsage",
+                )
+            ]
+
+        pmc = _PROCESS_MEMORY_COUNTERS()
+        pmc.cb = ctypes.sizeof(pmc)
+        k = ctypes.WinDLL("kernel32", use_last_error=True)
+        k.GetCurrentProcess.restype = wintypes.HANDLE
+        k.GetCurrentProcess.argtypes = []
+        f = ctypes.WinDLL("psapi", use_last_error=True).GetProcessMemoryInfo
+        f.argtypes = [wintypes.HANDLE, ctypes.POINTER(_PROCESS_MEMORY_COUNTERS), wintypes.DWORD]
+        f.restype = wintypes.BOOL
+        if not f(k.GetCurrentProcess(), ctypes.byref(pmc), pmc.cb):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return float(pmc.WorkingSetSize) / (2**20)
     if sys.platform.startswith("linux"):
         try:
             with open("/proc/self/status", encoding="ascii", errors="ignore") as arq:
@@ -124,32 +157,15 @@ def rss_mb() -> float:
                     if linha.startswith("VmRSS:"):
                         partes = linha.split()
                         if len(partes) >= 2:
-                            return float(partes[1]) / 1024.0
+                            return int(partes[1]) / 1024.0
         except OSError:
             pass
-    elif sys.platform == "win32":
-        class _PROCESS_MEMORY_COUNTERS(ctypes.Structure):
-            _fields_ = [
-                ("cb", ctypes.c_ulong),
-                ("PageFaultCount", ctypes.c_ulong),
-                ("PeakWorkingSetSize", ctypes.c_size_t),
-                ("WorkingSetSize", ctypes.c_size_t),
-                ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
-                ("QuotaPagedPoolUsage", ctypes.c_size_t),
-                ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
-                ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
-                ("PagefileUsage", ctypes.c_size_t),
-                ("PeakPagefileUsage", ctypes.c_size_t),
-            ]
+        return 0.0
+    if sys.platform == "darwin":
+        import resource
 
-        pmc = _PROCESS_MEMORY_COUNTERS()
-        pmc.cb = ctypes.sizeof(pmc)
-        proc = ctypes.windll.kernel32.GetCurrentProcess()
-        if ctypes.windll.psapi.GetProcessMemoryInfo(proc, ctypes.byref(pmc), pmc.cb):
-            return float(pmc.WorkingSetSize) / (1024.0 * 1024.0)
-    import resource
-
-    return float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) / 1024.0
+        return float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) / (2**20)  # bytes no macOS
+    return 0.0
 
 
 def matriz_mundo(el, escala: float) -> np.ndarray:
@@ -193,25 +209,28 @@ def _tesselar_representantes(
         chave_por_id[eid] = chave
 
     if restantes:
-        cfg = ifcopenshell.geom.settings()
-        cfg.set(cfg.USE_WORLD_COORDS, False)
-        it = ifcopenshell.geom.iterator(cfg, f, n_threads, include=restantes)
-        if it.initialize():
-            while True:
-                try:
-                    sh = it.get()
-                    geo = getattr(sh, "geometry", None)
-                    chave = chave_por_id.get(int(sh.id))
-                    if chave is not None and geo is not None and geo.verts and geo.faces:
-                        verts = np.asarray(geo.verts, dtype=np.float64).reshape(-1, 3)
-                        tris = np.asarray(geo.faces, dtype=np.int32).reshape(-1, 3)
-                        sv, st = soldar(verts, tris)
-                        if len(sv) and len(st):
-                            formas[chave] = (sv, st)
-                except Exception:
-                    pass
-                if not it.next():
-                    break
+        try:
+            cfg = ifcopenshell.geom.settings()
+            cfg.set(cfg.USE_WORLD_COORDS, False)
+            it = ifcopenshell.geom.iterator(cfg, f, n_threads, include=restantes)
+            if it.initialize():
+                while True:
+                    try:
+                        sh = it.get()
+                        geo = getattr(sh, "geometry", None)
+                        chave = chave_por_id.get(int(sh.id))
+                        if chave is not None and geo is not None and geo.verts and geo.faces:
+                            verts = np.asarray(geo.verts, dtype=np.float64).reshape(-1, 3)
+                            tris = np.asarray(geo.faces, dtype=np.int32).reshape(-1, 3)
+                            sv, st = soldar(verts, tris)
+                            if len(sv) and len(st):
+                                formas[chave] = (sv, st)
+                    except Exception:
+                        pass
+                    if not it.next():
+                        break
+        except Exception:
+            pass
     return formas
 
 
@@ -238,6 +257,8 @@ def construir_lote(
 
     falhas = 0
     pecas: list[tuple[int, object, str, str]] = []
+    memo_lote: dict[int, str] = {}
+    memo_ganhou = False
     for raw_id in ids:
         eid = int(raw_id)
         try:
@@ -250,11 +271,14 @@ def construir_lote(
             if not chave:
                 chave = cache_geometria.chave_da_forma(el, tesselacao=TESSELACAO)
                 memo[eid] = chave
+                memo_ganhou = True
+            memo_lote[eid] = chave
             pecas.append((eid, el, gid, chave))
         except Exception:
             falhas += 1
 
     existentes = cache.ocorrencias_por_ids([gid for _, _, gid, _ in pecas], documento=documento)
+    presentes = cache.formas_presentes({chave for _, _, _, chave in pecas})
     pendentes: list[tuple[object, str, str, np.ndarray]] = []
     reaproveitadas = 0
     for _, el, gid, chave in pecas:
@@ -264,12 +288,19 @@ def construir_lote(
             falhas += 1
             continue
         ant = existentes.get(gid)
-        if ant is not None and ant.chave_forma == chave and np.allclose(ant.matriz, mat, rtol=0.0, atol=_TOL_MATRIZ):
+        if (
+            ant is not None
+            and ant.chave_forma == chave
+            and chave in presentes
+            and np.allclose(ant.matriz, mat, rtol=0.0, atol=_TOL_MATRIZ)
+        ):
             reaproveitadas += 1
             continue
         pendentes.append((el, gid, chave, mat))
 
     if not pendentes:
+        if memo_ganhou and memo_lote:
+            cache.gravar_lote({}, [], documento=documento, memo=(assinatura, memo_lote))
         return {
             "tesseladas": 0,
             "reaproveitadas": reaproveitadas,
@@ -279,10 +310,10 @@ def construir_lote(
         }
 
     chaves_nec = {chave for _, _, chave, _ in pendentes}
-    presentes = cache.formas_presentes(chaves_nec)
+    presentes_pendentes = presentes & chaves_nec
 
     formas_lidas: dict[str, tuple[np.ndarray, np.ndarray]] = {}
-    for chave in sorted(presentes):
+    for chave in sorted(presentes_pendentes):
         par = cache.ler_forma(chave)
         if par is not None:
             formas_lidas[chave] = par
@@ -302,13 +333,11 @@ def construir_lote(
         if par is None:
             falhas += 1
             continue
-        if chave in formas_lidas:
-            reaproveitadas += 1
-        v, _ = par
-        w = v @ mat[:3, :3].T + mat[:3, 3]
-        caixa = np.vstack((w.min(axis=0), w.max(axis=0)))
-        ocorrencias.append(
-            cache_geometria.Ocorrencia(
+        try:
+            v, _ = par
+            w = v @ mat[:3, :3].T + mat[:3, 3]
+            caixa = np.vstack((w.min(axis=0), w.max(axis=0)))
+            oc = cache_geometria.Ocorrencia(
                 global_id=gid,
                 chave_forma=chave,
                 matriz=mat,
@@ -316,11 +345,17 @@ def construir_lote(
                 pavimento=pavimento_de(el),
                 classe_ifc=el.is_a(),
             )
-        )
+        except Exception:
+            falhas += 1
+            continue
+        if chave in formas_lidas:
+            reaproveitadas += 1
+        ocorrencias.append(oc)
 
     ocorrencias.sort(key=lambda oc: oc.global_id)
-    if formas_novas or ocorrencias:
-        cache.gravar_lote(formas_novas, ocorrencias, documento=documento, memo=(assinatura, memo))
+    formas_ordenadas = dict(sorted(formas_novas.items()))
+    if formas_ordenadas or ocorrencias or (memo_ganhou and memo_lote):
+        cache.gravar_lote(formas_ordenadas, ocorrencias, documento=documento, memo=(assinatura, memo_lote))
 
     return {
         "tesseladas": tesseladas,

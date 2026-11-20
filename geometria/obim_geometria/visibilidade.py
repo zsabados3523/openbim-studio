@@ -341,6 +341,7 @@ def _anexar_oclusores_extra(
         cx1, cy1 = pts_xy.max(axis=(0, 1))
     else:
         cx0, cy0, cx1, cy1 = caixa_xy
+    # margem conservadora (nao e tolerancia de Z): o filtro ja e inclusivo
     folga = max(abs(d_eps), 1e-6) + 2.0 * max(float(tol_z), 1e-6)
     px0, py0, px1, py1 = cx0 - folga, cy0 - folga, cx1 + folga, cy1 + folga
     ex0 = extra_tris[:, :, 0].min(axis=1)

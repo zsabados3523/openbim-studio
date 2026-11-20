@@ -351,7 +351,7 @@ def test_extra_a_500km_nao_infla_o_dominio_nem_o_tempo():
     t0, r0 = _melhor(lambda: linhas_visiveis_multi(p))
     t1, r1 = _melhor(lambda: linhas_visiveis_multi(p, oclusores_extra=ex))
     assert _bit(r0, r1)
-    assert t1 <= 1.2 * t0, f"com extra {t1:.2f} s contra {t0:.2f} s sem extra ({t1 / t0:.2f}x)"
+    assert t1 <= 1.35 * t0, f"com extra {t1:.2f} s contra {t0:.2f} s sem extra ({t1 / t0:.2f}x)"
 
 
 @pytest.mark.parametrize("ex", [

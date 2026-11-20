@@ -56,7 +56,7 @@ def _cena(posicoes, prefixo=None, esc=1.0, solto=False, escalas=None):
     return f, els
 
 
-def _parede_com_abertura(f, x=10.0):
+def _parede_com_abertura(f, x=10.0, y=0.0, comp=5):
     api = ifcopenshell.api.run
 
     def caixa(classe, dim, pos):
@@ -68,9 +68,9 @@ def _parede_com_abertura(f, x=10.0):
         api("geometry.edit_object_placement", f, product=e, matrix=m, is_si=False)
         return e
 
-    w = caixa("IfcWall", (5, 3, 0.2), (x, 0, 0))
+    w = caixa("IfcWall", (comp, 3, 0.2), (x, y, 0))
     api("spatial.assign_container", f, products=[w], relating_structure=f.andar)
-    op = caixa("IfcOpeningElement", (1, 1, 0.5), (x + 2, -0.1, 1))
+    op = caixa("IfcOpeningElement", (1, 1, 0.5), (x + 2, y - 0.1, 1))
     api("feature.add_feature", f, feature=op, element=w)
     return w, op
 
@@ -161,6 +161,8 @@ def test_soldar():  # mutantes 6 e 7
     # 5e-5 (acima de 1e-6) NÃO cola em (0,0,0)
     sv2, st2 = construtor.soldar(np.array([[0, 0, 0], [5e-5, 0, 0], [0, 1, 0]], float), np.array([[0, 1, 2]]))
     assert len(sv2) == 3 and len(st2) == 1
+    sv3, _ = construtor.soldar(np.array([[0, 0, 0], [5e-5, 0, 0], [0, 1, 0], [1, 1, 0]], float), [[0, 2, 3], [1, 2, 3]], tol=1e-3)  # (I)
+    assert len(sv3) == 3
 
 
 def test_rss_mb():
@@ -285,6 +287,7 @@ def test_mundo_milimetros_iterador_e_direta(tmp_path):  # mutantes 4, 5, 11 (A7)
         assert r["tesseladas"] == _distintas(f.by_type("IfcWall")) == 2 and r["falhas"] == 0  # 4 paredes, 2 formas
         _confere_mundo(f, cache, f.by_type("IfcWall"))
         assert np.isclose(cache.ler_ocorrencia("3LNnHUIBXEnvnzMtAfenLD", DOC).matriz[0, 3], 6.0)  # 6000 mm
+        assert cache.ler_ocorrencia("3LNnHUIBXEnvnzMtAfenLD", DOC).classe_ifc == "IfcWall"  # (J)
         r = _lote(g, cache, els + [w])  # direta (mm) + iterador com abertura
         assert r["tesseladas"] == 2 and r["falhas"] == 0  # os 2 cubos de mesmo tamanho dividem a forma
         _confere_mundo(g, cache, els + [w])
@@ -386,15 +389,98 @@ def test_memo_com_forma_ausente_tessela_sob_a_chave_do_memo(tmp_path, espia):  #
 def test_determinismo_threads(tmp_path):  # mutante 12 (A6)
     f = ifcopenshell.open(str(CASA))
     g, els = _cena([(i * 2, 0, 0) for i in range(8)], escalas=[1, 2, 3, 4, 5, 6, 7, 8])
-    w, _ = _parede_com_abertura(g)
+    ws = [_parede_com_abertura(g, 20 + 8 * i, 5 * i, 4 + i)[0] for i in range(6)]  # (G) 6 formas pelo iterador
     dumps = []
     for n in (1, 4):
         with _banco(tmp_path, f"t{n}") as cache:
             _lote(f, cache, f.by_type("IfcWall"), threads=n)
-            _lote(g, cache, els + [w], threads=n)
+            _lote(g, cache, els + ws, threads=n)
             dumps.append(_dump(cache))
-    assert dumps[0] == dumps[1] and len(dumps[0][0]) == 2 + 8 + 1
+    assert dumps[0] == dumps[1] and len(dumps[0][0]) == 2 + 8 + 6
+
+
+def test_forma_apagada_retessela_sem_orfa(tmp_path):  # (A)
+    f, els = _cena([(i, 0, 0) for i in range(3)], escalas=[1, 2, 3])
+    with _banco(tmp_path) as cache:
+        memo = {}
+        _lote(f, cache, els, memo=memo)
+        cache._con.execute("DELETE FROM formas")
+        r = _lote(f, cache, els, memo=memo)
+        assert r["tesseladas"] == 3 and r["falhas"] == 0
+        for e in els:
+            oc = cache.ler_ocorrencia(e.GlobalId, DOC)
+            assert oc and cache.formas_presentes([oc.chave_forma]) == {oc.chave_forma}
+
+
+def test_memo_gravado_so_com_pares_do_lote(tmp_path, espia):  # (B)
+    f, els = _cena([(i, 0, 0) for i in range(4)], escalas=[1, 2, 3, 4])
+    with _banco(tmp_path) as cache:
+        memo = {}
+        _lote(f, cache, els[:2], memo=memo)
+        _lote(f, cache, els[2:], memo=memo)
+    assert [set(x["memo"][1]) for x in espia.lotes] == [{e.id() for e in els[:2]}, {e.id() for e in els[2:]}]
+
+
+def test_sem_pendentes_mas_memo_novo_e_gravado(tmp_path, espia):  # (C)
+    f, els = _cena([(i, 0, 0) for i in range(4)], escalas=[1, 2, 3, 4])
+    with _banco(tmp_path) as cache:
+        _lote(f, cache, els)
+        espia.lotes.clear()
+        novo = {}
+        r = _lote(f, cache, els, memo=novo, assinatura="s2")  # (C) nada pendente, memo novo
+        assert r["gravadas"] == 0 and r["tesseladas"] == 0 and len(espia.lotes) == 1
+        assert not espia.lotes[0]["formas"] and not espia.lotes[0]["ocs"]
+        assert cache.memo_ler(DOC, "s2") == novo and len(novo) == 4
+
+
+def test_falha_isolada_nao_derruba_lote(tmp_path, monkeypatch):  # (D)
+    f, els = _cena([(i, 0, 0) for i in range(3)], escalas=[1, 2, 3])
+    real = construtor.pavimento_de
+    ruim = els[1].GlobalId
+
+    def pav(el):
+        if el.GlobalId == ruim:
+            raise RuntimeError("pavimento")
+        return real(el)
+
+    with _banco(tmp_path) as cache:
+        monkeypatch.setattr(construtor, "pavimento_de", pav)
+        r = _lote(f, cache, els)
+        assert r["falhas"] == 1 and r["gravadas"] == 2 and cache.ler_ocorrencia(ruim, DOC) is None
+
+
+def test_iterador_quebrado_so_derruba_as_pecas_dele(tmp_path, monkeypatch):  # (D)
+    f, els = _cena([(0, 0, 0)])
+    w, _ = _parede_com_abertura(f, 30)
+    with _banco(tmp_path) as cache:
+        monkeypatch.setattr(ifcopenshell.geom, "iterator", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("iterador")))
+        r = _lote(f, cache, els + [w])  # iterador quebra: a parede falha, o cubo segue
+        assert r["falhas"] == 1 and cache.ler_ocorrencia(w.GlobalId, DOC) is None and cache.ler_ocorrencia(els[0].GlobalId, DOC)
+
+
+def test_formas_novas_em_ordem_de_chave(tmp_path, espia):  # (E)
+    f, els = _cena([(i, 0, 0) for i in range(8)], escalas=list(range(1, 9)))
+    ws = [_parede_com_abertura(f, 20 + 8 * i, 5 * i, 4 + i)[0] for i in range(4)]
+    with _banco(tmp_path) as cache:
+        _lote(f, cache, els + ws, threads=4)
+    ks = list(espia.lotes[0]["formas"])
+    assert len(ks) == 12 and ks == sorted(ks)
+
+
+def test_pular_exige_chave_igual_e_matriz_dentro_da_tolerancia(tmp_path):  # (F) e (H)
+    f, (e,) = _cena([(1, 2, 3)])
+    with _banco(tmp_path) as cache:
+        _lote(f, cache, [e])
+        antiga = cache.ler_ocorrencia(e.GlobalId, DOC).chave_forma
+        e.Representation.Representations[0].Items[0].Coordinates.CoordList = [tuple(2.0 * c for c in q) for q in CUBO]  # mesma posição
+        r = _lote(f, cache, [e])
+        assert r["gravadas"] == 1 and cache.ler_ocorrencia(e.GlobalId, DOC).chave_forma != antiga
+        oc = cache.ler_ocorrencia(e.GlobalId, DOC)
+        oc.matriz[0, 3] += 1e-8
+        cache.gravar_ocorrencia(oc, DOC)
+        assert _lote(f, cache, [e])["gravadas"] == 1  # (H) 1e-8 > 1e-9: regrava
+
 
 # Mutantes (teste que derruba): 1 priorizar; 2 e 15 segunda_chamada_e_retomada; 3 copias/vinte_copias; 4 matriz_mundo e mundo_milimetros;
 # 5 e 11 copias e mundo_milimetros; 6 e 7 soldar e forma_soldada_dtypes; 8 um_lote_uma_transacao e erro_de_gravacao; 9 fila_inicial;
-# 10 um_lote (falha de peca); 12 determinismo; 13 segunda_chamada e memo_com_forma_ausente; 14 abrir_banco e recusam_memoria; 16 copias e vinte_copias.
+# 10 um_lote (falha de peca); Opus: A forma_apagada, B/C memo_gravado, D falha_isolada, E ordem_de_chave, F/H pular_exige, G determinismo, I soldar, J mundo_milimetros; 12 determinismo; 13 segunda_chamada e memo_com_forma_ausente; 14 abrir_banco e recusam_memoria; 16 copias e vinte_copias.

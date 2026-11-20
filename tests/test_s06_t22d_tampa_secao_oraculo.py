@@ -231,6 +231,97 @@ def test_funciona_com_trabalhadores(trab):
     assert comp(r[0]) == pytest.approx(3.0, abs=TOL)
 
 
+# ---- Rodada 2 (mutantes Argon): casos acrescentados ----
+INV2 = {
+    "dtype_bool": [np.zeros((1, 3, 3), dtype=bool)],
+    "dtype_complex": [np.zeros((1, 3, 3), dtype=complex)],
+    "coord_1e13": [np.full((1, 3, 3), 1e13)],
+}
+
+
+# (a) invalido levanta ValueError mesmo sem pecas
+@pytest.mark.parametrize("nome", list(INV))
+def test_entrada_invalida_com_pecas_vazias_levanta_valueerror(nome):
+    with pytest.raises(ValueError):
+        run([], INV[nome])
+
+
+# (d) dtype bool/complex e coordenada absurda (> 1e12) sao invalidos
+@pytest.mark.parametrize("nome", list(INV2))
+def test_dtype_e_coordenada_invalidos(nome):
+    with pytest.raises(ValueError):
+        run([viga()], INV2[nome])
+    with pytest.raises(ValueError):
+        run([], INV2[nome])
+
+
+# (b) a peca oclusada pode estar em qualquer indice
+def test_peca_oclusada_em_qualquer_indice():
+    r = run([longe(), viga()], [tampa(-1, 5, 2.0)])
+    assert len(r) == 2 and comp(r[1]) <= TOL and iguais(r[0], base([longe()])[0])
+    p3 = [longe(), viga(), caixa(np.array([202.0, 0.5, 0.5]), [4.0, 1.0, 1.0])]
+    r = run(p3, [tampa(-1, 5, 2.0)])
+    b3 = base(p3)
+    assert len(r) == 3 and comp(r[1]) <= TOL and iguais(r[0], b3[0]) and iguais(r[2], b3[2])
+
+
+# (c) winding invertido oculta igual (oclusor de duas faces)
+def test_winding_invertido_oculta_igual():
+    t = tampa(-1, 5, 2.0)
+    assert comp(run([viga()], [t[:, ::-1].copy()])[0]) <= TOL
+    t2 = tampa(-1, 2, 2.0)
+    assert iguais(run([viga()], [t2[:, ::-1].copy()])[0], run([viga()], [t2])[0], 1e-9)
+
+
+# (e) tampa inclinada: z(x) = 1 + tol_z + 0.25 (x - 2) cruza o limiar de oclusao em x = 2; so x > 2 oculta; restam 2+1+2? nao:
+# restam x < 2: 2 (y=0) + 1 (x=0) + 2 (y=1) = 5 m
+def _inclinada():
+    z = lambda x: 1.0 + TOLZ + 0.25 * (x - 2.0)
+    p = np.array([[-1, -1, z(-1)], [5, -1, z(5)], [5, 2, z(5)], [-1, 2, z(-1)]], float)
+    return p[[[0, 1, 2], [0, 2, 3]]]
+
+
+def test_tampa_inclinada_oculta_so_o_trecho_acima_do_limiar():
+    r = run([viga()], [_inclinada()])[0]
+    assert comp(r) == pytest.approx(5.0, abs=TOL)
+    assert pts(r)[:, 0].max() <= 2.0 + 1e-3 and pts(r)[:, 0].min() == pytest.approx(0.0, abs=TOL)
+
+
+# (f) limiar de tol_z: 2e-7 de cada lado (nao pode haver quantizacao de z nem de xy no oclusor)
+def test_limiar_tol_z_nos_dois_lados_e_em_qualquer_ordem():
+    ta, tb = tampa(-1, 5, 1.0 + 1e-3 - 2e-7), tampa(-1, 5, 1.0 + 1e-3 + 2e-7)
+    ref = linhas_visiveis_multi([viga()], tol_z=1e-3)[0]
+    assert iguais(linhas_visiveis_multi([viga()], tol_z=1e-3, oclusores_extra=[ta])[0], ref)
+    for oc in ([tb], [ta, tb], [tb, ta]):
+        assert comp(linhas_visiveis_multi([viga()], tol_z=1e-3, oclusores_extra=oc)[0]) <= TOL
+
+
+# (g) lasca estreita sobre a aresta y=0 do topo: oculta a aresta (comprimento 4 de y=0 some? ver medicao abaixo)
+def _lasca(h):
+    return [tampa(-1, 5, 2.0, y0=-h, y1=h)]
+
+
+def test_lasca_estreita_oculta_igual_a_lasca_10x_mais_larga():
+    r_fina = run([viga()], _lasca(2e-7))[0]
+    r_larga = run([viga()], _lasca(2e-6))[0]
+    # Medido com a lasca como PECA extra: 2e-6 -> 6.0 m (aresta y=0 de 4 m oculta; restam 1+1+4). A de 2e-7 como peca some na
+    # quantizacao de 1e-6 (da 10.0 m); isso e o defeito a evitar: oclusor extra nao e quantizado, vale a geometria real (6.0 m).
+    assert comp(r_larga) == pytest.approx(6.0, abs=TOL)
+    assert comp(r_fina) == pytest.approx(6.0, abs=TOL)
+    assert iguais(r_fina, r_larga, 1e-6)
+
+
+# (h) oclusor longe da peca (e em dominio gigante) nao altera nada e nao custa caro
+def test_oclusores_longe_nao_alteram_e_sao_rapidos():
+    import time
+
+    ref = linhas_visiveis_multi([viga()])
+    t0 = time.perf_counter()
+    r = linhas_visiveis_multi([viga()], oclusores_extra=[tampa(50, 55, 2.0), tampa(1e6, 1e6 + 10, 2.0, 1e6, 1e6 + 10)])
+    assert time.perf_counter() - t0 < 2.0
+    assert len(r) == 1 and len(r[0]) == len(ref[0]) and all(np.array_equal(p, q) for p, q in zip(r[0], ref[0]))
+
+
 # MUTANTES para o lider rodar contra a implementacao (cada um deve fazer pelo menos 1 teste falhar):
 #  M1 oclusores_extra ignorado (nunca entra em Tw_comb/prep).                      -> (1)(2)(8)
 #  M2 oclusor tambem gera linhas de saida (arestas candidatas dele entram em cands).-> (7)

@@ -62,7 +62,15 @@ def servir(tx, rx, *, construtor=None) -> None:
         return orig_abrir(caminho, pavimento)
 
     def _rss_atual() -> float:
-        return float(construtor.rss_mb()) if construtor is not None else 0.0
+        if construtor is None:
+            return 0.0
+        try:
+            return float(construtor.rss_mb())
+        except Exception as e:
+            if construcao is not None and construcao["parado"] is None:
+                construcao["parado"] = "erro"
+                construcao["erro"] = str(e)
+            return 0.0
 
     def _garantir_aberto(arquivo: str) -> None:
         nonlocal f, arq, sig_aberta, construcao
@@ -110,12 +118,17 @@ def servir(tx, rx, *, construtor=None) -> None:
             )
         except sqlite3.OperationalError as e:
             construcao["fila"] = ids + construcao["fila"]
-            construcao["ocupado_seguidas"] += 1
-            if construcao["ocupado_seguidas"] >= 3:
-                construcao["parado"] = "banco_ocupado"
-                construcao["erro"] = str(e)
+            msg = str(e).lower()
+            if "locked" in msg or "busy" in msg:
+                construcao["ocupado_seguidas"] += 1
+                if construcao["ocupado_seguidas"] >= 3:
+                    construcao["parado"] = "banco_ocupado"
+                    construcao["erro"] = str(e)
+                else:
+                    rx.poll(1.0)
             else:
-                rx.poll(1.0)
+                construcao["parado"] = "erro"
+                construcao["erro"] = str(e)
             return
         except Exception as e:
             construcao["fila"] = ids + construcao["fila"]
@@ -131,9 +144,18 @@ def servir(tx, rx, *, construtor=None) -> None:
         construcao["falhas"] += int(res.get("falhas", 0))
         construcao["lotes"] += 1
         construcao["lote_max_s"] = max(construcao["lote_max_s"], float(res.get("segundos", dt)))
-        if construtor.rss_mb() > construcao["limite_mb"]:
+        try:
+            rss = float(construtor.rss_mb())
+        except Exception as e:
+            construcao["parado"] = "erro"
+            construcao["erro"] = str(e)
+            return
+        if rss > construcao["limite_mb"]:
             if cache is not None:
-                cache.fechar()
+                try:
+                    cache.fechar()
+                except Exception:
+                    pass
             os._exit(SAIDA_MEMORIA)
 
     while True:
@@ -193,9 +215,13 @@ def servir(tx, rx, *, construtor=None) -> None:
             if not isinstance(pasta_cache, str) or not pasta_cache:
                 responder_erro(numero, "PedidoInvalido", "Pedido sem 'pasta_cache' válido")
                 continue
-            if construtor is None:
-                construtor = importlib.import_module("obim_geometria.construtor")
             try:
+                if construtor is None:
+                    try:
+                        construtor = importlib.import_module("obim_geometria.construtor")
+                    except Exception:
+                        responder(numero, {"aceito": False, "motivo": "erro"})
+                        continue
                 _garantir_aberto(arquivo)
                 if construcao is not None and construcao["arquivo"] == arquivo and construcao["sig"] == sig_aberta:
                     responder(numero, {"aceito": True, "pendentes": len(construcao["fila"])})
@@ -217,7 +243,7 @@ def servir(tx, rx, *, construtor=None) -> None:
                     "assinatura": assinatura,
                     "memo": memo,
                     "fila": fila,
-                    "lote_max": int(pedido.get("lote_max", 64)),
+                    "lote_max": max(1, int(pedido.get("lote_max", 64))),
                     "limite_mb": float(pedido.get("limite_mb", 6000.0)),
                     "threads": pedido.get("threads"),
                     "feitos": 0,
@@ -266,4 +292,7 @@ def servir(tx, rx, *, construtor=None) -> None:
         responder(numero, dados)
         if op == "desenho" and construcao is not None and construcao["parado"] is None and construcao["fila"]:
             elementos = pedido.get("elementos") or []
-            construcao["fila"] = construtor.priorizar(construcao["fila"], [eid for eid, _ in elementos])
+            try:
+                construcao["fila"] = construtor.priorizar(construcao["fila"], [eid for eid, _ in elementos])
+            except Exception:
+                pass

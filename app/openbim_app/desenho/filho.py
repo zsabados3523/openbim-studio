@@ -231,18 +231,25 @@ class FilhoPersistente:
         if self._construcao_params is not None and (
             self._sig_bloqueada_construir is None or self._sig != self._sig_bloqueada_construir
         ):
-            dados_c = aux._tratar_resposta(
-                self._enviar_e_ler(
+            try:
+                dados_c = self._enviar_e_ler(
                     {"op": "construir", "arquivo": self.arquivo, **self._construcao_params},
                     fim,
                     cancelar,
                     limite_s,
                     aux,
                 )
-            )
-            self._construcao_ativa = bool(
-                dados_c.get("aceito") and int(dados_c.get("pendentes", 0)) > 0
-            )
+            except aux.DesenhoCancelado:
+                raise
+            except Exception:
+                self._construcao_ativa = False
+            else:
+                self._construcao_ativa = bool(
+                    isinstance(dados_c, dict)
+                    and dados_c.get("ok") is not False
+                    and dados_c.get("aceito") is True
+                    and int(dados_c.get("pendentes", 0)) > 0
+                )
 
     def _adquirir_trava(self, cancelar: threading.Event | None, aux) -> None:
         if cancelar is not None and cancelar.is_set():
@@ -279,17 +286,20 @@ class FilhoPersistente:
                     if self._proc is None:
                         self._subir(fim, cancelar, limite_s)
                     elif self._construcao_ativa and self._ocioso_vencido():
-                        est = aux._tratar_resposta(
-                            self._enviar_e_ler(
-                                {"op": "estado_construcao", "arquivo": self.arquivo},
-                                fim,
-                                cancelar,
-                                limite_s,
-                                aux,
-                            )
+                        est = self._enviar_e_ler(
+                            {"op": "estado_construcao", "arquivo": self.arquivo},
+                            fim,
+                            cancelar,
+                            limite_s,
+                            aux,
                         )
                         self._fim_ultimo = self._relogio()
-                        if int(est.get("pendentes", 0)) == 0 or est.get("parado"):
+                        if (
+                            not isinstance(est, dict)
+                            or est.get("ok") is False
+                            or int(est.get("pendentes", 0)) == 0
+                            or est.get("parado")
+                        ):
                             self._construcao_ativa = False
                     dados = self._enviar_e_ler(
                         pedido, fim, cancelar, limite_s, aux, ao_fase=ao_fase
@@ -303,11 +313,31 @@ class FilhoPersistente:
 
                 self._quedas_seguidas = 0
                 self._fim_ultimo = self._relogio()
-                if pedido.get("op") == "abrir" and isinstance(dados, dict) and dados.get("aberto") is True:
+                op = pedido.get("op")
+                if op == "abrir" and isinstance(dados, dict) and dados.get("aberto") is True:
                     return dados
+                if op in ("construir", "estado_construcao"):
+                    return self._tratar_resposta_construcao(op, dados, aux)
                 return aux._tratar_resposta(dados)
         finally:
             self._trava.release()
+
+    @staticmethod
+    def _tratar_resposta_construcao(op: str, dados, aux) -> dict:
+        if not isinstance(dados, dict):
+            raise aux.ProtocoloInvalido(
+                f"Resposta inválida do processo auxiliar: esperava dict, obteve {type(dados).__name__}"
+            )
+        if dados.get("ok") is False:
+            erro = dados.get("erro") if isinstance(dados.get("erro"), dict) else {}
+            raise aux.FalhaNoAuxiliar(
+                erro.get("tipo", "RuntimeError"),
+                erro.get("mensagem", ""),
+                erro.get("rastro", ""),
+            )
+        if op == "construir" and ("aceito" not in dados or (dados.get("aceito") and "pendentes" not in dados)):
+            raise aux.ProtocoloInvalido("Resposta de 'construir' sem 'aceito'/'pendentes'")
+        return dados
 
     def aquecer(
         self,
@@ -332,6 +362,11 @@ class FilhoPersistente:
         limite_s: float = LIMITE_PADRAO_S,
     ) -> dict:
         """Inicia ou atualiza a construção do cache de geometria em segundo plano no filho."""
+        with self._trava:
+            if self._sig_bloqueada_construir is not None:
+                if self._disco() == self._sig_bloqueada_construir:
+                    return {"aceito": False, "motivo": "memoria"}
+                self._sig_bloqueada_construir = None
         params = {
             "pasta_cache": str(pasta_cache),
             "lote_max": int(lote_max),

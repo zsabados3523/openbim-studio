@@ -14,6 +14,7 @@ import ifcopenshell.util.unit
 
 from openbim_app import vistas_ifc
 from openbim_app.desenho import auxiliar, selecao
+from openbim_app.desenho.cache import CacheCancelado
 from openbim_app.desenho.selecao import Selecao, SelecaoInvalida
 
 if TYPE_CHECKING:
@@ -186,7 +187,10 @@ def gerar_planta(
             return _executar_planta(None)
 
     if cache is not None:
-        ch = cache.chave(ifc, pedido)
+        try:
+            ch = cache.chave(ifc, pedido, cancelar=cancelar)
+        except CacheCancelado as exc:
+            raise auxiliar.DesenhoCancelado("Operação cancelada no cálculo da chave do cache") from exc
         r = cache.obter(ch)
         if r is None:
             r = _executar_com_retry()

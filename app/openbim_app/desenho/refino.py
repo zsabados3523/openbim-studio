@@ -5,6 +5,7 @@ from __future__ import annotations
 import obim_geometria.pecas as pecas
 
 from openbim_app.desenho import auxiliar
+from openbim_app.desenho.cache import CacheCancelado
 
 _VERSAO_REFINO = "visibilidade-v1"
 
@@ -15,10 +16,17 @@ def _erro(exc: Exception) -> str:
     return f"{type(exc).__name__}: {exc}"
 
 
-def _chave_cache(cache, ifc, pedido_peca: dict) -> str | None:
+def _chave_cache(cache, ifc, pedido_peca: dict, cancelar=None) -> str | None:
     if cache is None:
         return None
-    return cache.chave(ifc, {**pedido_peca, "motor": "auto", "versao_refino": _VERSAO_REFINO})
+    try:
+        return cache.chave(
+            ifc,
+            {**pedido_peca, "motor": "auto", "versao_refino": _VERSAO_REFINO},
+            cancelar=cancelar,
+        )
+    except CacheCancelado as exc:
+        raise auxiliar.DesenhoCancelado("Operação cancelada no cálculo da chave do cache") from exc
 
 
 def _refinar_uma(ifc, pedido_peca: dict, ident, *, executor, limite_s: float, cancelar) -> dict:
@@ -81,7 +89,7 @@ def refinar_pesados(
             raise auxiliar.DesenhoCancelado("Operação cancelada antes de refinar a peça")
         guid, ident = peca["guid"], peca["id"]
         pedido_peca = pecas.pedido_peca(pedido, ident)
-        chave = _chave_cache(cache, ifc, pedido_peca)
+        chave = _chave_cache(cache, ifc, pedido_peca, cancelar=cancelar)
         dados = cache.obter(chave) if chave is not None else None
         grupo = None
         motor_usado = None

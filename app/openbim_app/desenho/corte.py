@@ -78,6 +78,7 @@ def _gerar_corte_uma_vez(
         cancelar=cancelar,
         sessao=sessao_selecao,
         caminho_ifc=caminho_ifc,
+        assinatura_ifc=assinatura_ifc,
         profundidade_corte=profundidade_corte,
         filho=filho,
     )
@@ -248,4 +249,6 @@ def gerar_corte(
         except auxiliar.Divergente:
             if idx + 1 >= len(tentativas):
                 raise
+            if sessao_selecao is not None:
+                sessao_selecao.invalidar()
     raise AssertionError("unreachable")

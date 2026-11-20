@@ -13,7 +13,10 @@ def _rle_idx(n: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _fatias(n: np.ndarray, lim: int, chaves: np.ndarray | None = None):
-    """Gera pares (inicio, fim) fatiando `n` para soma <= `lim` por bloco."""
+    """Gera pares (inicio, fim) fatiando `n` para soma <= `lim` por bloco.
+
+    Pre-condicao: se `chaves` for dado, deve estar em ordem nao-decrescente (senao o laco pode nao terminar).
+    """
     ac = np.cumsum(n)
     i0 = 0
     while i0 < len(n):
@@ -28,7 +31,7 @@ def _fatias(n: np.ndarray, lim: int, chaves: np.ndarray | None = None):
 
 
 def _dedup_int64(ch: np.ndarray) -> np.ndarray:
-    """Ordena in-place e remove duplicatas de vetor 1D de inteiros."""
+    """Ordena in-place (muta `ch`; passe um temporario) e remove duplicatas de vetor 1D de inteiros."""
     if len(ch) <= 1:
         return ch
     ch.sort()

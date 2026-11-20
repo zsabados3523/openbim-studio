@@ -399,10 +399,9 @@ def linhas_visiveis_multi(
         return [[] for _ in pecas_l]
     Tw_comb = tw_oks[0] if len(tw_oks) == 1 else _dedup_triangulos(np.vstack(tw_oks))
     if extra_tris is not None:
-        V_ex = extra_tris.reshape(-1, 3)
-        _, idx_ex, inv_ex = np.unique(
-            np.round(V_ex / 1e-6).astype(np.int64), axis=0, return_index=True, return_inverse=True
-        )
+        # Nao quantizar oclusores extras: preservar coordenadas exatas para limiar de tol_z e lascas sub-micron.
+        V_ex = extra_tris.reshape(-1, 3) + 0.0
+        _, idx_ex, inv_ex = np.unique(V_ex, axis=0, return_index=True, return_inverse=True)
         Tw_ex = _dedup_triangulos(inv_ex.ravel().reshape(-1, 3))
         if len(Tw_ex):
             Tw_comb = np.vstack([Tw_comb, Tw_ex + len(P)])

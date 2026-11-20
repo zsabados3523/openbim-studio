@@ -13,9 +13,11 @@ from __future__ import annotations
 import functools
 import inspect
 import itertools
+import math
 import os
 import threading
 import weakref
+from collections import deque
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, Signal, Slot
@@ -138,17 +140,37 @@ def _medir_rss_conjunto_mb() -> float:
             vistos.add(pid)
             try:
                 total += _ler_vmrss_mb(pid)
-                for arq in Path(f"/proc/{pid}/task").glob("*/children"):
-                    for tok in arq.read_text(encoding="utf-8", errors="ignore").split():
-                        if tok.isdigit():
-                            fila.append(int(tok))
             except OSError:
                 continue
+            try:
+                arqs = list(Path(f"/proc/{pid}/task").glob("*/children"))
+            except OSError:
+                arqs = []
+            for arq in arqs:
+                try:
+                    txt = arq.read_text(encoding="utf-8", errors="ignore")
+                except OSError:
+                    continue
+                for tok in txt.split():
+                    if tok.isdigit():
+                        fila.append(int(tok))
         return total
     import psutil
     proc = psutil.Process(raiz)
-    procs = [proc, *proc.children(recursive=True)]
-    return sum(p.memory_info().rss for p in procs) / (1024.0 * 1024.0)
+    try:
+        total = float(proc.memory_info().rss)
+    except (psutil.Error, OSError):
+        total = 0.0
+    try:
+        filhos = proc.children(recursive=True)
+    except (psutil.Error, OSError):
+        filhos = []
+    for p in filhos:
+        try:
+            total += float(p.memory_info().rss)
+        except (psutil.Error, OSError):
+            continue
+    return total / (1024.0 * 1024.0)
 
 
 class _Pedido:
@@ -208,7 +230,9 @@ class GerenteDesenho(QObject):
         self._threads: set = set()
         self._cancelamentos_aquecer: set[threading.Event] = set()
         self._trava = threading.Lock()
-        self._cond_vaga = threading.Condition(self._trava)
+        self._trava_vaga = threading.Lock()
+        self._cond_vaga = threading.Condition(self._trava_vaga)
+        self._fila_vagas: deque[_Pedido] = deque()
         self._vagas_em_uso = 0
         self._rss_reservado = 0.0
         self._geracao = 0
@@ -218,26 +242,42 @@ class GerenteDesenho(QObject):
         self._filhos_doc: dict[Path, FilhoPersistente] = {}
         self._evento.connect(self._tratar, Qt.ConnectionType.QueuedConnection)
 
-    def _calcular_limite_travado(self) -> int | None:
-        if not any(getattr(f, "construcao_ativa", False) for f in self._filhos_doc.values()):
-            return None
-        teto_n = self._limite_construcao if self._limite_construcao is not None else 2
+    def _construcao_ativa_agora(self) -> bool:
+        with self._trava:
+            return any(getattr(f, "construcao_ativa", False) for f in self._filhos_doc.values())
+
+    def _ler_rss_valido(self) -> float | None:
         try:
             medir = self._medir_rss_mb if self._medir_rss_mb is not None else _medir_rss_conjunto_mb
-            rss_medido = float(medir())
+            rss = float(medir())
         except Exception:
+            return None
+        if not math.isfinite(rss) or rss < 0.0:
+            return None
+        return rss
+
+    def _limite_com_rss(self, rss_medido: float | None, vagas: int, reservado: float) -> int:
+        if rss_medido is None:
             return 1
-        rss_efetivo = max(rss_medido, self._rss_reservado)
+        teto_n = self._limite_construcao if self._limite_construcao is not None else 2
+        rss_efetivo = max(rss_medido, reservado)
         if self._custo_trabalhador_mb <= 0:
             adicionais = teto_n
         else:
             adicionais = int(max(0.0, self._teto_memoria_mb - rss_efetivo) // self._custo_trabalhador_mb)
-        return max(1, min(teto_n, self._vagas_em_uso + adicionais))
+        return max(1, min(teto_n, vagas + adicionais))
 
     def limite_trabalhadores(self) -> int | None:
         """Retorna o limite de trabalhadores durante construcao ativa, ou None."""
-        with self._trava:
-            return self._calcular_limite_travado()
+        if not self._construcao_ativa_agora():
+            return None
+        rss_medido = self._ler_rss_valido()
+        if not self._construcao_ativa_agora():
+            return None
+        with self._cond_vaga:
+            vagas = self._vagas_em_uso
+            reservado = self._rss_reservado
+        return self._limite_com_rss(rss_medido, vagas, reservado)
 
     def _obter_filho_travado(self, caminho_resolvido: Path) -> tuple[FilhoPersistente, list[FilhoPersistente]]:
         filho = self._filhos_doc.get(caminho_resolvido)
@@ -289,9 +329,10 @@ class GerenteDesenho(QObject):
         except (FilhoIndisponivel, ErroAuxiliar):
             pass
         finally:
-            with self._cond_vaga:
+            with self._trava:
                 self._cancelamentos_aquecer.discard(cancelar)
                 self._threads.discard(t)
+            with self._cond_vaga:
                 self._cond_vaga.notify_all()
 
     def pedir(self, tipo, ifc, vista_guid, *, caminho_ifc=None, revisao_salva=None, revisao=None, **opcoes) -> str:
@@ -442,7 +483,7 @@ class GerenteDesenho(QObject):
         peds = list(self._ativos.values())
         for ped in peds:
             self.cancelar(ped.chave)
-        with self._cond_vaga:
+        with self._trava:
             self._geracao += 1
             for ev in self._cancelamentos_aquecer:
                 ev.set()
@@ -450,6 +491,7 @@ class GerenteDesenho(QObject):
             vivas = list(self._threads)
             filhos = list(self._filhos_doc.values())
             self._filhos_doc.clear()
+        with self._cond_vaga:
             self._cond_vaga.notify_all()
         for t in vivas:
             t.join(timeout=10)
@@ -460,43 +502,65 @@ class GerenteDesenho(QObject):
     encerrar = fechar
 
     def _adquirir_vaga(self, ped: _Pedido, opcoes: dict) -> tuple[int, float]:
-        """Adquire vaga de trabalhador durante construcao ativa; retorna (cota, reserva_mb)."""
+        """Adquire vaga de trabalhador em fila FIFO durante construcao ativa; retorna (cota, reserva_mb)."""
         with self._cond_vaga:
+            if ped.cancelar.is_set():
+                raise DesenhoCancelado("cancelado na fila")
+            self._fila_vagas.append(ped)
+        try:
             while True:
-                if ped.cancelar.is_set():
-                    raise DesenhoCancelado("cancelado na fila")
-                limite = self._calcular_limite_travado()
-                if limite is None:
+                with self._cond_vaga:
+                    while not ped.cancelar.is_set() and self._fila_vagas[0] is not ped:
+                        self._cond_vaga.wait(timeout=0.1)
+                    if ped.cancelar.is_set():
+                        raise DesenhoCancelado("cancelado na fila")
+                if not self._construcao_ativa_agora():
                     return 0, 0.0
-                if self._vagas_em_uso == 0 or self._vagas_em_uso < limite:
-                    cota = 1
-                    if "threads" in opcoes and opcoes["threads"] is not None:
-                        cota = min(cota, max(1, int(opcoes["threads"])))
-                    try:
-                        medir = self._medir_rss_mb if self._medir_rss_mb is not None else _medir_rss_conjunto_mb
-                        rss_medido = float(medir())
-                    except Exception:
-                        rss_medido = 0.0
-                    rss_base = max(rss_medido, self._rss_reservado)
-                    reserva_mb = cota * max(0.0, self._custo_trabalhador_mb)
-                    self._vagas_em_uso += cota
-                    self._rss_reservado = rss_base + reserva_mb
-                    opcoes["threads"] = cota
-                    return cota, reserva_mb
-                self._cond_vaga.wait(timeout=0.1)
+                rss_medido = self._ler_rss_valido()
+                with self._cond_vaga:
+                    if ped.cancelar.is_set():
+                        raise DesenhoCancelado("cancelado na fila")
+                    if self._fila_vagas[0] is not ped:
+                        continue
+                    limite = self._limite_com_rss(rss_medido, self._vagas_em_uso, self._rss_reservado)
+                    if self._vagas_em_uso == 0 or self._vagas_em_uso < limite:
+                        cota = 1
+                        if "threads" in opcoes and opcoes["threads"] is not None:
+                            cota = min(cota, max(1, int(opcoes["threads"])))
+                        if rss_medido is None:
+                            reserva_mb = max(
+                                cota * max(0.0, self._custo_trabalhador_mb),
+                                max(0.0, self._teto_memoria_mb),
+                            )
+                            rss_base = 0.0
+                        else:
+                            reserva_mb = cota * max(0.0, self._custo_trabalhador_mb)
+                            rss_base = max(rss_medido, self._rss_reservado)
+                        self._vagas_em_uso += cota
+                        self._rss_reservado = max(self._rss_reservado, rss_base + reserva_mb)
+                        opcoes["threads"] = cota
+                        return cota, reserva_mb
+                    self._cond_vaga.wait(timeout=0.1)
+        finally:
+            with self._cond_vaga:
+                try:
+                    self._fila_vagas.remove(ped)
+                except ValueError:
+                    pass
+                self._cond_vaga.notify_all()
 
     def _rodar(self, ped, tipo, ifc, vista_guid, opcoes, sessao=None):
         # Thread de fundo: nada de Qt aqui alem de emitir o sinal interno (fila).
         cota = 0
         reserva_mb = 0.0
         try:
+            cota, reserva_mb = self._adquirir_vaga(ped, opcoes)
             with self._trava:
                 mesma_geracao = ped.geracao == self._geracao
             if not mesma_geracao:
                 opcoes = dict(opcoes)
                 opcoes.pop("caminho_ifc", None)
                 opcoes.pop("assinatura_ifc", None)
-            cota, reserva_mb = self._adquirir_vaga(ped, opcoes)
             extra = {}
             try:
                 params = inspect.signature(self._motor).parameters.values()
@@ -525,14 +589,15 @@ class GerenteDesenho(QObject):
             if not ped.cancelar.is_set():
                 self._evento.emit(ped, "falhou", str(e) or type(e).__name__)
         finally:
-            with self._cond_vaga:
-                if cota:
+            if cota:
+                with self._cond_vaga:
                     self._vagas_em_uso = max(0, self._vagas_em_uso - cota)
                     if self._vagas_em_uso == 0:
                         self._rss_reservado = 0.0
                     else:
                         self._rss_reservado = max(0.0, self._rss_reservado - reserva_mb)
                     self._cond_vaga.notify_all()
+            with self._trava:
                 self._threads.discard(ped.thread)
 
     @Slot(object, str, object)

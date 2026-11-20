@@ -81,7 +81,15 @@ class FilhoPersistente:
 
     @property
     def construcao_ativa(self) -> bool:
-        return self._construcao_ativa
+        if not self._construcao_ativa:
+            return False
+        p = self._proc
+        if p is None:
+            return False
+        try:
+            return bool(p.is_alive())
+        except Exception:
+            return False
 
     @property
     def pid(self) -> int | None:
@@ -397,10 +405,11 @@ class FilhoPersistente:
             limite_s=limite_s,
         )
         with self._trava:
-            self._construcao_params = params
-            self._construcao_ativa = bool(
-                dados.get("aceito") and int(dados.get("pendentes", 0)) > 0 and dados.get("parado") is None
-            )
+            if not self._fechado and self._proc is not None and self._proc.is_alive():
+                self._construcao_params = params
+                self._construcao_ativa = bool(
+                    dados.get("aceito") and int(dados.get("pendentes", 0)) > 0 and dados.get("parado") is None
+                )
         return dados
 
     def salvar(self) -> None:

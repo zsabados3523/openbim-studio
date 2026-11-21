@@ -357,6 +357,7 @@ def _dentro_grupos_vetorizado(
         py_p = my[idx_par]
         n_p = len(idx_par)
         d2_min = np.full(n_p, np.inf, dtype=float)
+        tem_cand = np.zeros(n_p, dtype=bool)
         n_ce = len(g.cx)
         step_c = max(1, _MAX_ELEMS_BLOCO // max(1, n_ce))
         for ini in range(0, n_p, step_c):
@@ -371,6 +372,7 @@ def _dentro_grupos_vetorizado(
             pi_c, ei_c = np.nonzero(cmask)
             if len(pi_c) == 0:
                 continue
+            tem_cand[ini + pi_c] = True
             cx_c, cy_c = g.cx[ei_c], g.cy[ei_c]
             ex_c, ey_c = g.ex[ei_c], g.ey[ei_c]
             u = np.clip(((px_s[pi_c] - cx_c) * ex_c + (py_s[pi_c] - cy_c) * ey_c) / g.el2[ei_c], 0.0, 1.0)
@@ -383,6 +385,7 @@ def _dentro_grupos_vetorizado(
             ok_dist = d2_min > eps2
         else:
             ok_dist = np.sqrt(d2_min) >= (encolher - _EPS)
+        ok_dist |= ~tem_cand  # sem candidatos: dentro (como a referencia)
         dentro[idx_par[ok_dist]] = True
 
     return dentro
@@ -415,7 +418,7 @@ def recortar_fora_dos_aneis(polilinhas, aneis, encolher: float = 5e-4):
 
         d = pts[1:] - pts[:-1]
         aa_all = d[:, 0] * d[:, 0] + d[:, 1] * d[:, 1]
-        valid_i = np.flatnonzero(aa_all > eps2)
+        valid_i = np.flatnonzero(~(aa_all <= eps2))  # NaN nao e descartado (como a referencia)
         if len(valid_i) > 0:
             ativos_idx.append(p_idx)
             segs_info.append((p_idx, valid_i, d[valid_i, 0], d[valid_i, 1], aa_all[valid_i]))

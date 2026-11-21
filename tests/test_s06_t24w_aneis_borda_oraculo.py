@@ -427,3 +427,101 @@ def test_mutante_05_ignorar_toque_e_contar_como_fora():
     """Mutante 5: contar toque de borda como 'fora' deixa furo com area > 0 e ilha com area < 0."""
     _checar_aneis_e_grupos(_segs_de([_EXT_TRI, [(3.0, 3.0), (5.0, 5.0), (6.0, 8.0)]]), [50.0, -2.0], [2])
     _checar_aneis_e_grupos(_segs_de([_CAIXA_M, _EXT_TRI, [(3.0, 3.0), (5.0, 5.0), (6.0, 8.0)]]), [144.0, -50.0, 2.0], [2, 1])
+
+
+# ---------- (5) REVISAO 1: BBOX COM RUIDO, COLINEAR TOTAL E TOLERANCIA (7 TESTES) ----------
+def _area_trans(pts: np.ndarray) -> float:
+    x = pts[:, 0] - pts[0, 0]
+    y = pts[:, 1] - pts[0, 1]
+    return 0.5 * float(np.sum(x[:-1] * y[1:] - x[1:] * y[:-1]) + x[-1] * y[0] - x[0] * y[-1])
+
+
+@pytest.mark.parametrize(
+    ("offset", "eps"),
+    [
+        pytest.param((0.0, 0.0), -1e-11, id="origem_ruido_m1e11"),
+        pytest.param((500_000.0, 7_500_000.0), -6e-11, id="utm_1ulp_x"),
+        pytest.param((500_000.0, 7_500_000.0), -1e-9, id="utm_1ulp_y"),
+    ],
+)
+def test_rev1_bbox_toque_com_ruido_sub_tol(offset: tuple[float, float], eps: float):
+    """Furo encostando em aresta na extremidade da bbox com ruido sub-tol nao perde o pai."""
+    ox, oy = offset
+    ext = [(ox, oy), (ox + 10.0, oy), (ox + 10.0, oy + 10.0), (ox, oy + 10.0)]
+    furo_x = [(ox + eps, oy + 2.0), (ox + 4.0, oy + 2.0), (ox + 4.0, oy + 8.0), (ox + eps, oy + 8.0)]
+    cenas = [("x", furo_x)]
+    if oy + eps != oy:
+        furo_y = [(ox + 2.0, oy + eps), (ox + 8.0, oy + eps), (ox + 8.0, oy + 4.0), (ox + 2.0, oy + 4.0)]
+        cenas.append(("y", furo_y))
+    for eixo, furo in cenas:
+        fe, ab = aneis.aneis_de_segmentos(_segs_de([ext, furo]))
+        assert ab == [] and len(fe) == 2, f"eixo={eixo} fe={len(fe)} ab={len(ab)}"
+        areas = sorted((_area_trans(r) for r in fe), key=lambda a: -abs(a))
+        assert areas[0] > 0.0 and areas[1] < 0.0, f"furo virou externo ({eixo}): areas={areas}"
+
+
+def test_rev1_colinear_total_furo_interno_angulos_e_formas():
+    """Furo com todas as arestas colineares ao externo (sem vertices comuns): quadrado e triangulo em 36 angulos."""
+    j_sq_ears = [
+        (0.1, 0.0), (9.9, 0.0), (9.9, -0.1), (10.1, -0.1), (10.1, 0.1), (10.0, 0.1),
+        (10.0, 9.9), (10.1, 9.9), (10.1, 10.1), (9.9, 10.1), (9.9, 10.0),
+        (0.1, 10.0), (0.1, 10.1), (-0.1, 10.1), (-0.1, 9.9), (0.0, 9.9),
+        (0.0, 0.1), (-0.1, 0.1), (-0.1, -0.1), (0.1, -0.1),
+    ]
+    i_sq = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]
+    j_tri_ears = [
+        (0.5, 0.0), (9.5, 0.0), (9.5, -0.5), (11.0, -0.5), (10.0, 1.0), (9.5, 0.5),
+        (0.5, 9.5), (1.0, 10.0), (-0.5, 11.0), (-0.5, 9.5), (0.0, 9.5),
+        (0.0, 0.5), (-0.5, 0.5), (-0.5, -0.5), (0.5, -0.5),
+    ]
+    i_tri = [(0.0, 0.0), (10.0, 0.0), (0.0, 10.0)]
+    for nome, ext, furo in (("quadrado", j_sq_ears, i_sq), ("triangulo", j_tri_ears, i_tri)):
+        for deg in range(0, 360, 10):
+            th = math.radians(deg)
+            fe, ab = aneis.aneis_de_segmentos(_segs_de([_rot(ext, th), _rot(furo, th)]))
+            assert ab == [] and len(fe) == 2, f"{nome} deg={deg} fe={len(fe)} ab={len(ab)}"
+            areas = sorted((_area_trans(r) for r in fe), key=lambda a: -abs(a))
+            assert areas[0] > 0.0 and areas[1] < 0.0, f"{nome} deg={deg}: furo colinear virou externo: areas={areas}"
+
+
+def test_rev1_colinear_total_externo_em_cavidade_angulos():
+    """Anel externo em cavidade de C-shape (todas as arestas colineares, fora de j) mantem area > 0 em 36 angulos."""
+    j_c = [
+        (0.0, 0.0), (3.0, 0.0), (3.0, 2.0), (2.1, 2.0), (2.1, 1.9), (1.9, 1.9), (1.9, 2.1), (2.0, 2.1),
+        (2.0, 7.9), (1.9, 7.9), (1.9, 8.1), (2.1, 8.1), (2.1, 8.0),
+        (7.9, 8.0), (7.9, 8.1), (8.1, 8.1), (8.1, 7.9), (8.0, 7.9),
+        (8.0, 2.1), (8.1, 2.1), (8.1, 1.9), (7.9, 1.9), (7.9, 2.0),
+        (3.05, 2.0), (3.05, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0),
+    ]
+    i_cav = [(2.0, 2.0), (8.0, 2.0), (8.0, 8.0), (2.0, 8.0)]
+    for deg in range(0, 360, 10):
+        th = math.radians(deg)
+        fe, ab = aneis.aneis_de_segmentos(_segs_de([_rot(j_c, th), _rot(i_cav, th)]))
+        assert ab == [] and len(fe) == 2, f"deg={deg} fe={len(fe)} ab={len(ab)}"
+        areas = sorted((_area_trans(r) for r in fe), key=lambda a: -abs(a))
+        assert areas[0] > 0.0 and areas[1] > 0.0, f"deg={deg}: externo em cavidade virou furo: areas={areas}"
+
+
+def test_rev1_tol_borda_anel_pequeno_1e6m():
+    """Tolerancia de borda escala com o anel em cena pequena (1e-6 m, tol=1e-9) em varios angulos."""
+    s = 1e-6
+    ext = [(0.0, 0.0), (s, 0.0), (s, s), (0.0, s)]
+    furo = [(s, 0.1 * s), (s, 0.5 * s), (s, 0.9 * s), (s - 1.5e-8, 0.5 * s)]
+    for deg in (0, 15, 30, 45, 90, 135, 210, 300):
+        th = math.radians(deg)
+        fe, ab = aneis.aneis_de_segmentos(_segs_de([_rot(ext, th), _rot(furo, th)]), tol=1e-9)
+        assert ab == [] and len(fe) == 2, f"deg={deg} fe={len(fe)} ab={len(ab)}"
+        areas = sorted((_area_trans(r) for r in fe), key=lambda a: -abs(a))
+        assert areas[0] > 0.0 and areas[1] < 0.0, f"deg={deg}: furo pequeno 1e-6m virou externo: areas={areas}"
+
+
+def test_rev1_tol_borda_anel_fino_em_metros():
+    """Furo fino em metros (espessura 1.5e-8 m, tol=1e-6) nao e engolido por tol_borda fixa em varios angulos."""
+    ext = [(0.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
+    furo = [(0.2, 0.2), (0.4, 0.4), (0.6, 0.6), (0.8, 0.8), (0.5, 0.5 + 1.5e-8)]
+    for deg in (0, 30, 60, 90, 135, 210):
+        th = math.radians(deg)
+        fe, ab = aneis.aneis_de_segmentos(_segs_de([_rot(ext, th), _rot(furo, th)]))
+        assert ab == [] and len(fe) == 2, f"deg={deg} fe={len(fe)} ab={len(ab)}"
+        areas = sorted((_area_trans(r) for r in fe), key=lambda a: -abs(a))
+        assert areas[0] > 0.0 and areas[1] < 0.0, f"deg={deg}: furo fino (tol=1e-6) virou externo: areas={areas}"

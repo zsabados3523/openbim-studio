@@ -217,6 +217,19 @@ def _banco_integro(con: sqlite3.Connection, cabecalho_json: str) -> bool:
     return row is not None and row[0] == cabecalho_json
 
 
+def _validar_row_forma(row) -> tuple[np.dtype, bytes, bytes] | None:
+    if len(row) != 4 or row[0] not in ("float32", "float64"):
+        return None
+    raw_v, raw_t, raw_ck = row[1], row[2], row[3]
+    if not all(isinstance(x, (bytes, bytearray, memoryview)) for x in (raw_v, raw_t, raw_ck)):
+        return None
+    bv, bt, ck = bytes(raw_v), bytes(raw_t), bytes(raw_ck)
+    dt_v = np.dtype(row[0])
+    if len(bv) % (3 * dt_v.itemsize) != 0 or len(bt) % 12 != 0 or ck != _digest_forma(row[0], bv, bt):
+        return None
+    return dt_v, bv, bt
+
+
 class CacheGeometria:
     """Armazenamento SQLite de formas tesseladas e ocorrências de peças."""
 
@@ -267,30 +280,47 @@ class CacheGeometria:
         with self._tx():
             self._con.execute(_SQL_INS_FORMA, (*item, agora))
 
-    def apagar_forma(self, chave: str) -> bool:
+    def apagar_forma(self, chave: str, *, somente_corrompida: bool = False) -> bool:
         """Remove a linha `chave` da tabela `formas` em transação; devolve True se existia."""
         with self._tx():
+            if somente_corrompida:
+                row = self._con.execute(
+                    "SELECT dtype_v, vertices, triangulos, checksum FROM formas WHERE chave = ?",
+                    (chave,),
+                ).fetchone()
+                if row is None or _validar_row_forma(row) is not None:
+                    return False
             cur = self._con.execute("DELETE FROM formas WHERE chave = ?", (chave,))
             return (cur.rowcount or 0) > 0
 
-    def ler_forma(self, chave: str) -> tuple[np.ndarray, np.ndarray] | None:
+    def ler_forma_estado(self, chave: str) -> tuple[str, tuple[np.ndarray, np.ndarray] | None]:
+        """Lê forma distinguindo `ok`, `ausente`, `corrompida` e `erro` transitorio."""
         if self._con is None:
-            return None
+            return "erro", None
         try:
             row = self._con.execute(
                 "SELECT dtype_v, vertices, triangulos, checksum FROM formas WHERE chave = ?", (chave,)
             ).fetchone()
-            if row is None or row[0] not in ("float32", "float64"):
-                return None
-            dtype_v, bv, bt, ck = row[0], bytes(row[1]), bytes(row[2]), bytes(row[3])
-            dt_v = np.dtype(dtype_v)
-            if len(bv) % (3 * dt_v.itemsize) != 0 or len(bt) % 12 != 0 or ck != _digest_forma(dtype_v, bv, bt):
-                return None
+        except (sqlite3.Error, OSError, MemoryError):
+            return "erro", None
+        if row is None:
+            return "ausente", None
+        try:
+            validada = _validar_row_forma(row)
+            if validada is None:
+                return "corrompida", None
+            dt_v, bv, bt = validada
             v = np.frombuffer(bv, dtype=dt_v).reshape((-1, 3)).copy()
             t = np.frombuffer(bt, dtype=np.int32).reshape((-1, 3)).copy()
-            return v, t
-        except Exception:
-            return None
+            return "ok", (v, t)
+        except (sqlite3.Error, OSError, MemoryError):
+            return "erro", None
+        except (TypeError, ValueError):
+            return "corrompida", None
+
+    def ler_forma(self, chave: str) -> tuple[np.ndarray, np.ndarray] | None:
+        _, forma = self.ler_forma_estado(chave)
+        return forma
 
     def formas_presentes(self, chaves) -> set[str]:
         if self._con is None:

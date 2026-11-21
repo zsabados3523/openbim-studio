@@ -2,6 +2,8 @@
 """Leitura de malhas do cache de geometria transformadas para coordenadas do mundo."""
 from __future__ import annotations
 
+import sqlite3
+
 import numpy as np
 
 from obim_geometria.cache_geometria import CacheGeometria
@@ -26,16 +28,28 @@ def malhas_do_cache(
     chaves = sorted({oc.chave_forma for oc in ocorrencias.values()})
 
     formas: dict[str, tuple[np.ndarray, np.ndarray] | None] = {}
-    chaves_nulas: list[str] = []
+    chaves_corrompidas: list[str] = []
+    ler_estado = getattr(cache, "ler_forma_estado", None)
     for chave in chaves:
-        forma = cache.ler_forma(chave)
-        formas[chave] = forma
-        if forma is None:
-            chaves_nulas.append(chave)
+        if ler_estado is not None:
+            estado, forma = ler_estado(chave)
+            formas[chave] = forma
+            if estado == "corrompida":
+                chaves_corrompidas.append(chave)
+        else:
+            forma = cache.ler_forma(chave)
+            formas[chave] = forma
+            if forma is None:
+                chaves_corrompidas.append(chave)
 
-    if chaves_nulas:
-        for chave in sorted(cache.formas_presentes(chaves_nulas)):
-            cache.apagar_forma(chave)
+    for chave in chaves_corrompidas:
+        try:
+            try:
+                cache.apagar_forma(chave, somente_corrompida=True)
+            except TypeError:
+                cache.apagar_forma(chave)
+        except sqlite3.OperationalError:
+            pass
 
     malhas_mundo: dict[str, tuple[np.ndarray, np.ndarray]] = {}
     faltantes: list[str] = []

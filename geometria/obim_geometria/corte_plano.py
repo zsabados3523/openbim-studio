@@ -67,16 +67,11 @@ def cortar_malha_no_plano(verts, tris, z):
         return idx
 
     tris_out: list[tuple[int, int, int]] = []
-    segs_vistos: set[tuple[int, int]] = set()
     segs_out: list[tuple[int, int]] = []
     arestas_plano: dict[tuple[int, int], tuple[bool, bool]] = {}
 
     def add_seg(ia: int, ib: int) -> None:
-        if ia == ib:
-            return
-        chave = (ia, ib) if ia < ib else (ib, ia)
-        if chave not in segs_vistos:
-            segs_vistos.add(chave)
+        if ia != ib:
             segs_out.append((ia, ib))
 
     def marca_aresta_plano(ia: int, ib: int, lado: int) -> None:
@@ -160,7 +155,13 @@ def cortar_malha_no_plano(verts, tris, z):
         tris_abaixo = np.zeros((0, 3), dtype=int)
 
     if segs_out:
-        segs_idx = np.asarray(segs_out, dtype=int)
+        segs_idx = np.asarray(segs_out, dtype=np.int64)
+        chaves = np.sort(segs_idx, axis=1)
+        chaves_1d = np.ascontiguousarray(chaves).view(np.dtype((np.void, chaves.dtype.itemsize * 2))).ravel()
+        _, first_idx, counts = np.unique(chaves_1d, return_index=True, return_counts=True)
+        manter = first_idx[(counts & 1) == 1]
+        manter.sort()
+        segs_idx = segs_idx[manter]
         segmentos_secao = np.hstack([todos_verts[segs_idx[:, 0], :2], todos_verts[segs_idx[:, 1], :2]])
     else:
         segmentos_secao = np.zeros((0, 4), dtype=float)

@@ -2143,50 +2143,126 @@ _ITENS_SO_ANOTACAO = (
     "IfcAnnotationFillArea",
 )
 
+_SOLIDOS_COMUNS = frozenset({
+    "IfcExtrudedAreaSolid",
+    "IfcExtrudedAreaSolidTapered",
+    "IfcRevolvedAreaSolid",
+    "IfcRevolvedAreaSolidTapered",
+    "IfcSurfaceCurveSweptAreaSolid",
+    "IfcFixedReferenceSweptAreaSolid",
+    "IfcSweptAreaSolid",
+    "IfcSweptDiskSolid",
+    "IfcFacetedBrep",
+    "IfcAdvancedBrep",
+    "IfcTriangulatedFaceSet",
+    "IfcPolygonalFaceSet",
+    "IfcFaceBasedSurfaceModel",
+    "IfcShellBasedSurfaceModel",
+    "IfcBooleanClippingResult",
+    "IfcBooleanResult",
+    "IfcCsgSolid",
+    "IfcSolidModel",
+    "IfcTessellatedItem",
+    "IfcHalfSpaceSolid",
+    "IfcPolygonalBoundedHalfSpace",
+    "IfcBoxedHalfSpace",
+    "IfcBlock",
+    "IfcSphere",
+    "IfcRightCircularCone",
+    "IfcRightCircularCylinder",
+    "IfcRectangularPyramid",
+})
 
-def _item_so_anotacao(it, visitados: set[int] | None = None) -> bool:
+
+_IFC_ENTITY = getattr(ifcopenshell, "entity_instance", None)
+
+
+def _item_so_anotacao(
+    it,
+    visitados: set[int] | None = None,
+    memo_src: dict[int, bool] | None = None,
+) -> bool:
     """True se o item de representacao IFC for apenas curva/anotacao 2D (sem solido/malha)."""
-    if it is None or not hasattr(it, "is_a"):
+    if it is None:
         return False
-    if any(it.is_a(t) for t in _ITENS_SO_ANOTACAO):
-        return True
-    if it.is_a("IfcGeometricSet"):
-        elems = getattr(it, "Elements", None) or ()
-        return all(_item_so_anotacao(sub, visitados) for sub in elems)
-    if it.is_a("IfcMappedItem"):
-        src = getattr(it, "MappingSource", None)
-        mrep = getattr(src, "MappedRepresentation", None)
-        items = getattr(mrep, "Items", None) or ()
+    is_a_fn = getattr(it, "is_a", None)
+    if is_a_fn is None:
+        return False
+    tipo = is_a_fn()
+    eh_ifc = _IFC_ENTITY is not None and type(it) is _IFC_ENTITY
+    if isinstance(tipo, str):
+        if tipo in _SOLIDOS_COMUNS:
+            return False
+        eh_mapped = tipo == "IfcMappedItem"
+    else:
+        eh_mapped = bool(is_a_fn("IfcMappedItem"))
+    if eh_mapped:
+        src = it[0] if eh_ifc else getattr(it, "MappingSource", None)
+        sid = (src.id() if hasattr(src, "id") else id(src)) if src is not None else None
+        if memo_src is not None and sid is not None and sid in memo_src:
+            return memo_src[sid]
+        mrep = (
+            src[1]
+            if (src is not None and _IFC_ENTITY is not None and type(src) is _IFC_ENTITY)
+            else getattr(src, "MappedRepresentation", None)
+        )
+        items = (
+            (mrep[3] or ())
+            if (mrep is not None and _IFC_ENTITY is not None and type(mrep) is _IFC_ENTITY)
+            else (getattr(mrep, "Items", None) or ())
+        )
         if not items:
+            if memo_src is not None and sid is not None:
+                memo_src[sid] = False
             return False
         vistos = set() if visitados is None else visitados
         iid = it.id() if hasattr(it, "id") else id(it)
         if iid in vistos:
             return True
         vistos.add(iid)
-        return all(_item_so_anotacao(sub, vistos) for sub in items)
+        res = all(_item_so_anotacao(sub, vistos, memo_src) for sub in items)
+        if memo_src is not None and sid is not None:
+            memo_src[sid] = res
+        return res
+    if any(is_a_fn(t) for t in _ITENS_SO_ANOTACAO):
+        return True
+    if is_a_fn("IfcGeometricSet"):
+        elems = getattr(it, "Elements", None) or ()
+        return bool(elems) and all(_item_so_anotacao(sub, visitados, memo_src) for sub in elems)
     return False
 
 
-def _eh_so_anotacao(el) -> bool:
-    """True se todas as representacoes do elemento contiverem apenas itens 2D/anotacao."""
-    rep_prod = getattr(el, "Representation", None)
-    reps = getattr(rep_prod, "Representations", None) if rep_prod is not None else None
+def _eh_so_anotacao_rep(rep_prod, memo_src: dict[int, bool] | None = None) -> bool:
+    """True se todas as representacoes de rep_prod contiverem apenas itens 2D/anotacao."""
+    if rep_prod is None:
+        return False
+    eh_ifc = _IFC_ENTITY is not None and type(rep_prod) is _IFC_ENTITY
+    reps = rep_prod[2] if eh_ifc else getattr(rep_prod, "Representations", None)
     if not reps:
         return False
     tem_item = False
     for rep in reps:
-        items = getattr(rep, "Items", None) or ()
+        items = (
+            (rep[3] or ())
+            if (_IFC_ENTITY is not None and type(rep) is _IFC_ENTITY)
+            else (getattr(rep, "Items", None) or ())
+        )
         for it in items:
             tem_item = True
-            if not _item_so_anotacao(it):
+            if not _item_so_anotacao(it, None, memo_src):
                 return False
     return tem_item
+
+
+def _eh_so_anotacao(el, memo_src: dict[int, bool] | None = None) -> bool:
+    """True se todas as representacoes do elemento contiverem apenas itens 2D/anotacao."""
+    return _eh_so_anotacao_rep(getattr(el, "Representation", None), memo_src)
 
 
 def _elementos_validos_cache(f, pedido: dict) -> list[tuple[int, str]]:
     """Filtra pedido['elementos'] removendo IfcOpeningElement, sem Representation ou so-anotacao."""
     validos: list[tuple[int, str]] = []
+    memo_src: dict[int, bool] = {}
     for id_step, gid in pedido.get("elementos") or ():
         try:
             el = f.by_id(int(id_step))
@@ -2194,7 +2270,8 @@ def _elementos_validos_cache(f, pedido: dict) -> list[tuple[int, str]]:
             el = None
         if el is None or el.is_a("IfcOpeningElement"):
             continue
-        if getattr(el, "Representation", None) is None or _eh_so_anotacao(el):
+        rep_prod = getattr(el, "Representation", None)
+        if rep_prod is None or _eh_so_anotacao_rep(rep_prod, memo_src):
             continue
         validos.append((int(id_step), str(gid)))
     return validos

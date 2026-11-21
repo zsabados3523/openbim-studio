@@ -25,6 +25,16 @@ def _eps_plano(z_val: float) -> float:
     return max(1e-9, 1e-12 * max(1.0, abs(z_val)))
 
 
+def _area_estavel(pts: np.ndarray) -> float:
+    """Area com sinal (shoelace) transladada pelo primeiro ponto para evitar cancelamento float64."""
+    arr = np.asarray(pts, dtype=np.float64)
+    if len(arr) < 3:
+        return 0.0
+    x = arr[:, 0] - arr[0, 0]
+    y = arr[:, 1] - arr[0, 1]
+    return 0.5 * float(np.sum(x[:-1] * y[1:] - x[1:] * y[:-1]) + x[-1] * y[0] - x[0] * y[-1])
+
+
 def _fmt6(v: float) -> str:
     """Formata coordenada com 6 casas decimais, normalizando -0.0 para 0.0."""
     return f"{round(float(v), 6) + 0.0:.6f}"
@@ -343,7 +353,7 @@ def desenhar_planta_cache(
                 return None, "secao_aberta"
 
             if fechados:
-                bons = [a for a in fechados if abs(aneis._area(a)) > 1e-12]
+                bons = [a for a in fechados if abs(_area_estavel(a)) > 1e-12]
                 if bons:
                     fechados = bons
             grupos = oclusores._agrupar_aneis(fechados) if fechados else []

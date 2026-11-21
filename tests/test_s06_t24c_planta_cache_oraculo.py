@@ -997,15 +997,10 @@ def test_integracao_desenho_quedas_secao_aberta_e_malha_invalida(tmp_path, monke
 
     real_ler = desenho.cache_leitura.malhas_do_cache
 
-    # 1) Injeta malha cortada sem nenhum segmento de corte (T24f: 1/1 aberta seria parcial aceita) -> cai secao_aberta
+    # 1) Injeta malha cortada com segmentos sem anel/cadeia (T24s: corte vazio nao derruba) -> cai secao_aberta
     def ler_secao_aberta(cache, doc, ids):
         malhas, falt = real_ler(cache, doc, ids)
-        v_sem_seg = np.array(
-            [[0.0, 0.0, 0.0], [4.0, 0.0, 0.0], [4.0, 0.2, 0.0], [0.0, 0.0, 2.8], [4.0, 0.0, 2.8], [4.0, 0.2, 2.8]],
-            dtype=np.float64,
-        )
-        t_sem_seg = np.array([[0, 1, 2], [3, 4, 5]], dtype=np.int32)
-        malhas[cena.parede.GlobalId] = (v_sem_seg, t_sem_seg)
+        malhas[cena.parede.GlobalId] = _caixa_np(0.0, 0.0, 0.0, 2e-7, 2e-7, 2.8)
         return malhas, falt
 
     monkeypatch.setattr(desenho.cache_leitura, "malhas_do_cache", ler_secao_aberta)

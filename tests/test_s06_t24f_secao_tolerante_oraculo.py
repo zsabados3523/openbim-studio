@@ -845,9 +845,9 @@ def test_regra2_peca_100_porcento_aberta_aceita_sem_tampa_e_sem_omissao():
 
 
 def test_regra2_peca_cortada_sem_fechados_e_sem_segmentos_cai_secao_aberta():
-    """Peca cortada sem nenhum anel fechado e sem nenhum segmento -> sempre cai secao_aberta (mesmo 1 de 6)."""
+    """Peca cortada com segmentos mas sem anel fechado nem cadeia aberta (T24s) -> sempre cai secao_aberta (mesmo 1 de 6)."""
     pecas = [(10 + i, f"G_BOA_{i}", "IfcWall", _caixa_np(i * 4.0, 0.0, 0.0, i * 4.0 + 2.0, 0.3, 2.8)) for i in range(5)]
-    pecas.append((99, "G_SEM_SEGS", "IfcWall", _malha_sem_segmentos_corte_np(30.0, 0.0, 0.0, 32.0, 0.5, 2.8)))
+    pecas.append((99, "G_SEM_SEGS", "IfcWall", _caixa_np(30.0, 0.0, 0.0, 30.0 + 2e-7, 2e-7, 2.8)))
     f, pedido, malhas, ev = _montar_cena_numpy(pecas, altura_corte_m=1.2)
     resp, motivo = planta_cache.desenhar_planta_cache(f, pedido, malhas, ev)
     assert resp is None and motivo == "secao_aberta"

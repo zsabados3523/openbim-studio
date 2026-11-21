@@ -393,7 +393,7 @@ def test_mutante_03_contagem_secoes_parciais_errada():
 
 
 def test_mutante_04_limite_25_ignorado():
-    """Mutante 4: ignorar o limite de 25% para pecas nao agrupaveis ou aceitar peca sem segmentos."""
+    """Mutante 4: ignorar o limite de 25% para pecas nao agrupaveis ou aceitar peca com segmentos sem anel."""
     assert planta_cache.desenhar_planta_cache(
         *_montar_cena_numpy([*_boas(2), (12, "G_R0", "IfcWindow", _malha_furo_sem_pai_np(10.0, 0.0)),
                              (13, "G_R1", "IfcWindow", _malha_furo_sem_pai_np(16.0, 0.0))], altura_corte_m=1.2)
@@ -404,5 +404,5 @@ def test_mutante_04_limite_25_ignorado():
                              (13, "G_R2", "IfcDoor", _malha_anel_area_quase_zero_np(12.0, 0.0))], altura_corte_m=1.2)
     ) == (None, "secao_aberta")
     assert planta_cache.desenhar_planta_cache(
-        *_montar_cena_numpy([*_boas(4), (99, "G_SEM_SEGS", "IfcWall", _malha_sem_segmentos_corte_np(24.0, 0.0, 0.0, 26.0, 0.5, 2.8))], altura_corte_m=1.2)
+        *_montar_cena_numpy([*_boas(4), (99, "G_SEM_SEGS", "IfcWall", _caixa_np(24.0, 0.0, 0.0, 24.0 + 2e-7, 2e-7, 2.8))], altura_corte_m=1.2)
     ) == (None, "secao_aberta")

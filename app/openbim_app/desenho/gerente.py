@@ -277,7 +277,6 @@ class GerenteDesenho(QObject):
                     self._cond_vaga.notify_all()
 
     def _verificar_estado_construcao(self, *, sincrono: bool = False) -> None:
-        t_fundo = None
         with self._trava:
             agora = float(self._relogio())
             filhos = [f for f in self._filhos_doc.values() if getattr(f, "construcao_ativa", False)]
@@ -300,17 +299,14 @@ class GerenteDesenho(QObject):
                     args=(filhos, timeout_s, True),
                     daemon=True,
                 )
-                self._threads.add(t_fundo)
-        if sincrono:
-            self._consultar_estado_fundo(filhos, timeout_s, False)
-        else:
-            try:
-                t_fundo.start()
-            except BaseException:
-                with self._trava:
-                    self._threads.discard(t_fundo)
+                try:
+                    t_fundo.start()
+                except BaseException:
                     self._consultando_estado = False
-                raise
+                    raise
+                self._threads.add(t_fundo)
+                return
+        self._consultar_estado_fundo(filhos, timeout_s, False)
 
     def _ler_rss_valido(self) -> float | None:
         try:
@@ -376,11 +372,15 @@ class GerenteDesenho(QObject):
             t = threading.Thread(
                 target=self._aquecer, args=(filho, geracao, cancelar), daemon=True
             )
-            self._threads.add(t)
             self._cancelamentos_aquecer.add(cancelar)
+            try:
+                t.start()
+            except BaseException:
+                self._cancelamentos_aquecer.discard(cancelar)
+                raise
+            self._threads.add(t)
         for f in fechar_ociosos:
             f.fechar()
-        t.start()
 
     def _aquecer(self, filho: FilhoPersistente, geracao: int, cancelar: threading.Event) -> None:
         t = threading.current_thread()
@@ -452,8 +452,8 @@ class GerenteDesenho(QObject):
         ped.thread = threading.Thread(
             target=self._rodar, args=(ped, tipo, ifc, vista_guid, dict(opcoes), sessao), daemon=True)
         with self._trava:
+            ped.thread.start()
             self._threads.add(ped.thread)
-        ped.thread.start()
         return chave
 
     def _limpar_mortas_travado(self) -> None:
@@ -570,10 +570,16 @@ class GerenteDesenho(QObject):
         with self._cond_vaga:
             self._cond_vaga.notify_all()
         for t in vivas:
-            t.join(timeout=10)
+            if t.ident is not None:
+                try:
+                    t.join(timeout=10)
+                except RuntimeError:
+                    pass
         for f in filhos:
-            f.podar()
-            f.fechar()
+            try:
+                f.podar()
+            finally:
+                f.fechar()
 
     encerrar = fechar
 

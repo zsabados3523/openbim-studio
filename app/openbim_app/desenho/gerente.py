@@ -23,7 +23,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Qt, Signal, Slot
 
 from openbim_app.desenho.auxiliar import DesenhoCancelado, ErroAuxiliar
-from openbim_app.desenho.cache import arquivo_resolvido, resolver_assinatura
+from openbim_app.desenho.cache import arquivo_resolvido, pasta_geometria, resolver_assinatura
 from openbim_app.desenho.filho import FilhoIndisponivel, FilhoPersistente
 from openbim_app.desenho.selecao import SessaoSelecao
 
@@ -71,6 +71,14 @@ def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, 
             opcoes.pop("caminho_ifc", None)
     if sig_inicio is not None:
         kw_sessao["assinatura_ifc"] = sig_inicio
+    if tipo == "planta" and caminho_refino is not None and sig_inicio is not None:
+        pasta_geo = opcoes.get("pasta_cache_geometria")
+        if pasta_geo is None:
+            cand = pasta_geometria()
+            if (cand / "cache_geometria.sqlite").is_file():
+                opcoes["pasta_cache_geometria"] = str(cand)
+    else:
+        opcoes.pop("pasta_cache_geometria", None)
     r = gerar(ifc, vista_guid, cache=cache, cancelar=cancelar, **kw_sessao, **opcoes)
     dados = {
         "svg": r.svg,
@@ -84,7 +92,10 @@ def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, 
         faltantes = [int(x) for x in (getattr(r, "faltantes", ()) or ())]
         dados["faltantes"] = faltantes
         dados["incompleta"] = bool(getattr(r, "incompleta", False) or faltantes)
-    if tipo == "planta" and dados["pesados"]:
+        dados["via_cache"] = bool(getattr(r, "via_cache", False))
+        dados["queda"] = getattr(r, "queda", None)
+        dados["n_faltantes"] = int(getattr(r, "n_faltantes", 0) or 0)
+    if tipo == "planta" and dados["pesados"] and not dados["via_cache"]:
         if previa is not None:
             previa(dados)
         from openbim_app.desenho import refino
@@ -345,6 +356,7 @@ class GerenteDesenho(QObject):
         else:
             opcoes.pop("caminho_ifc", None)
             opcoes.pop("assinatura_ifc", None)
+            opcoes.pop("pasta_cache_geometria", None)
         filho = None
         fechar_ociosos = []
         with self._trava:
@@ -561,6 +573,7 @@ class GerenteDesenho(QObject):
                 opcoes = dict(opcoes)
                 opcoes.pop("caminho_ifc", None)
                 opcoes.pop("assinatura_ifc", None)
+                opcoes.pop("pasta_cache_geometria", None)
             extra = {}
             try:
                 params = inspect.signature(self._motor).parameters.values()

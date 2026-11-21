@@ -288,7 +288,7 @@ class CacheDesenho:
                     arq_chave = str(arq_resolvido)
                     tam, mtime_ns = int(st.st_size), int(st.st_mtime_ns)
             if arq_chave is not None:
-                pedido_arq = {k: v for k, v in pedido.items() if k != "threads"}
+                pedido_arq = {k: v for k, v in pedido.items() if k not in ("threads", "pasta_cache_geometria")}
                 _atualizar(
                     {
                         "modo": "arquivo",
@@ -302,7 +302,7 @@ class CacheDesenho:
                 ctrl.checar()
                 return h.hexdigest()
 
-        limpo = {k: v for k, v in pedido.items() if k not in ("threads", "elementos")}
+        limpo = {k: v for k, v in pedido.items() if k not in ("threads", "elementos", "pasta_cache_geometria")}
         _atualizar(
             {
                 "versao": VERSAO_MODULO,

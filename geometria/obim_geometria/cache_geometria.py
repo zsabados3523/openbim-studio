@@ -29,6 +29,14 @@ _SQL_INS_OC = (
 _SQL_SEL_OC = (
     "SELECT documento, global_id, chave_forma, matriz, caixa, pavimento, classe_ifc, checksum FROM ocorrencias"
 )
+_SQL_SEL_FORMA = (
+    "SELECT "
+    "CASE WHEN typeof(dtype_v) = 'text' THEN CAST(dtype_v AS BLOB) ELSE NULL END, "
+    "CASE WHEN typeof(vertices) = 'blob' THEN vertices ELSE NULL END, "
+    "CASE WHEN typeof(triangulos) = 'blob' THEN triangulos ELSE NULL END, "
+    "CASE WHEN typeof(checksum) = 'blob' THEN checksum ELSE NULL END "
+    "FROM formas WHERE chave = ?"
+)
 _ESQUEMA_COLUNAS = {
     "meta": ("chave", "valor"),
     "formas": ("chave", "dtype_v", "vertices", "triangulos", "checksum", "gravado_em"),
@@ -217,15 +225,34 @@ def _banco_integro(con: sqlite3.Connection, cabecalho_json: str) -> bool:
     return row is not None and row[0] == cabecalho_json
 
 
+def _eh_erro_decodificacao(exc: BaseException) -> bool:
+    if isinstance(exc, UnicodeDecodeError):
+        return True
+    msg = str(exc).lower()
+    return "could not decode" in msg or "utf-8" in msg or "utf8" in msg
+
+
 def _validar_row_forma(row) -> tuple[np.dtype, bytes, bytes] | None:
-    if len(row) != 4 or row[0] not in ("float32", "float64"):
+    if len(row) != 4:
+        return None
+    raw_dt = row[0]
+    if isinstance(raw_dt, (bytes, bytearray, memoryview)):
+        raw_dt_b = bytes(raw_dt)
+        if raw_dt_b not in (b"float32", b"float64"):
+            return None
+        dtype_str = raw_dt_b.decode("ascii")
+    elif isinstance(raw_dt, str):
+        if raw_dt not in ("float32", "float64"):
+            return None
+        dtype_str = raw_dt
+    else:
         return None
     raw_v, raw_t, raw_ck = row[1], row[2], row[3]
     if not all(isinstance(x, (bytes, bytearray, memoryview)) for x in (raw_v, raw_t, raw_ck)):
         return None
     bv, bt, ck = bytes(raw_v), bytes(raw_t), bytes(raw_ck)
-    dt_v = np.dtype(row[0])
-    if len(bv) % (3 * dt_v.itemsize) != 0 or len(bt) % 12 != 0 or ck != _digest_forma(row[0], bv, bt):
+    dt_v = np.dtype(dtype_str)
+    if len(bv) % (3 * dt_v.itemsize) != 0 or len(bt) % 12 != 0 or ck != _digest_forma(dtype_str, bv, bt):
         return None
     return dt_v, bv, bt
 
@@ -284,11 +311,19 @@ class CacheGeometria:
         """Remove a linha `chave` da tabela `formas` em transação; devolve True se existia."""
         with self._tx():
             if somente_corrompida:
-                row = self._con.execute(
-                    "SELECT dtype_v, vertices, triangulos, checksum FROM formas WHERE chave = ?",
-                    (chave,),
-                ).fetchone()
-                if row is None or _validar_row_forma(row) is not None:
+                try:
+                    row = self._con.execute(_SQL_SEL_FORMA, (chave,)).fetchone()
+                except UnicodeDecodeError:
+                    row = None
+                    corrompida = True
+                except sqlite3.Error as exc:
+                    if not _eh_erro_decodificacao(exc):
+                        raise
+                    row = None
+                    corrompida = True
+                else:
+                    corrompida = row is not None and _validar_row_forma(row) is None
+                if not corrompida:
                     return False
             cur = self._con.execute("DELETE FROM formas WHERE chave = ?", (chave,))
             return (cur.rowcount or 0) > 0
@@ -298,10 +333,14 @@ class CacheGeometria:
         if self._con is None:
             return "erro", None
         try:
-            row = self._con.execute(
-                "SELECT dtype_v, vertices, triangulos, checksum FROM formas WHERE chave = ?", (chave,)
-            ).fetchone()
-        except (sqlite3.Error, OSError, MemoryError):
+            row = self._con.execute(_SQL_SEL_FORMA, (chave,)).fetchone()
+        except UnicodeDecodeError:
+            return "corrompida", None
+        except sqlite3.Error as exc:
+            if _eh_erro_decodificacao(exc):
+                return "corrompida", None
+            return "erro", None
+        except (OSError, MemoryError):
             return "erro", None
         if row is None:
             return "ausente", None
@@ -313,7 +352,13 @@ class CacheGeometria:
             v = np.frombuffer(bv, dtype=dt_v).reshape((-1, 3)).copy()
             t = np.frombuffer(bt, dtype=np.int32).reshape((-1, 3)).copy()
             return "ok", (v, t)
-        except (sqlite3.Error, OSError, MemoryError):
+        except UnicodeDecodeError:
+            return "corrompida", None
+        except sqlite3.Error as exc:
+            if _eh_erro_decodificacao(exc):
+                return "corrompida", None
+            return "erro", None
+        except (OSError, MemoryError):
             return "erro", None
         except (TypeError, ValueError):
             return "corrompida", None

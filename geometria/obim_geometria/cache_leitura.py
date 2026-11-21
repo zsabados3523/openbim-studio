@@ -37,10 +37,7 @@ def malhas_do_cache(
             if estado == "corrompida":
                 chaves_corrompidas.append(chave)
         else:
-            forma = cache.ler_forma(chave)
-            formas[chave] = forma
-            if forma is None:
-                chaves_corrompidas.append(chave)
+            formas[chave] = cache.ler_forma(chave)
 
     for chave in chaves_corrompidas:
         try:

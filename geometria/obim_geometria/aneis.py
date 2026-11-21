@@ -165,10 +165,58 @@ def aneis_de_segmentos(segs, tol: float = 1e-6):
         for i, r in enumerate(fechados):
             rx, ry = r[:, 0], r[:, 1]
             bboxes[i] = (rx.min(), ry.min(), rx.max(), ry.max())
-            edges_xy.append((rx, ry, np.roll(rx, -1), np.roll(ry, -1)))
+            rx_n = np.empty_like(rx)
+            rx_n[:-1], rx_n[-1] = rx[1:], rx[0]
+            ry_n = np.empty_like(ry)
+            ry_n[:-1], ry_n[-1] = ry[1:], ry[0]
+            edges_xy.append((rx, ry, rx_n, ry_n))
+
+        tol_borda2 = 1e-8 * 1e-8
+        edge_diffs: list[tuple | None] = [None] * n_rings
+
+        def _na_borda(px: float, py: float, j: int) -> bool:
+            diffs = edge_diffs[j]
+            if diffs is None:
+                x1, y1, x2, y2 = edges_xy[j]
+                if len(x1) <= 32:
+                    segs_py = []
+                    for ax, ay, bx, by in zip(x1.tolist(), y1.tolist(), x2.tolist(), y2.tolist()):
+                        dx = bx - ax
+                        dy = by - ay
+                        len2 = dx * dx + dy * dy
+                        segs_py.append((ax, ay, dx, dy, 1.0 / len2 if len2 > 0.0 else 0.0))
+                    diffs = (True, segs_py)
+                else:
+                    dx = x2 - x1
+                    dy = y2 - y1
+                    len2 = dx * dx + dy * dy
+                    inv_len2 = np.where(len2 > 0.0, 1.0 / len2, 0.0)
+                    diffs = (False, (x1, y1, dx, dy, inv_len2))
+                edge_diffs[j] = diffs
+            if diffs[0]:
+                for x1s, y1s, dxs, dys, invs in diffs[1]:
+                    vx = px - x1s
+                    vy = py - y1s
+                    t = (vx * dxs + vy * dys) * invs
+                    if t < 0.0:
+                        t = 0.0
+                    elif t > 1.0:
+                        t = 1.0
+                    rx_d = vx - t * dxs
+                    ry_d = vy - t * dys
+                    if rx_d * rx_d + ry_d * ry_d <= tol_borda2:
+                        return True
+                return False
+            x1, y1, dx, dy, inv_len2 = diffs[1]
+            vx = px - x1
+            vy = py - y1
+            t = np.clip((vx * dx + vy * dy) * inv_len2, 0.0, 1.0)
+            rx_d = vx - t * dx
+            ry_d = vy - t * dy
+            return bool(np.any(rx_d * rx_d + ry_d * ry_d <= tol_borda2))
 
         for i, r in enumerate(fechados):
-            px, py = 0.5 * (float(r[0, 0]) + float(r[1, 0])), 0.5 * (float(r[0, 1]) + float(r[1, 1]))
+            px0, py0 = 0.5 * (float(r[0, 0]) + float(r[1, 0])), 0.5 * (float(r[0, 1]) + float(r[1, 1]))
             cand = np.flatnonzero(
                 (abs_areas > abs_areas[i])
                 & (bboxes[:, 0] <= bboxes[i, 0] + _EPS)
@@ -177,9 +225,52 @@ def aneis_de_segmentos(segs, tol: float = 1e-6):
                 & (bboxes[:, 3] >= bboxes[i, 3] - _EPS)
             )
             cont = 0
-            for j in cand:
-                if _ponto_no_anel_arr(px, py, *edges_xy[j]):
-                    cont += 1
+            if len(cand):
+                toque = False
+                for j in cand:
+                    if _na_borda(px0, py0, j):
+                        toque = True
+                        break
+                if not toque:
+                    for j in cand:
+                        if _ponto_no_anel_arr(px0, py0, *edges_xy[j]):
+                            cont += 1
+                else:
+                    x1_i, y1_i, x2_i, y2_i = edges_xy[i]
+                    mids_x = 0.5 * (x1_i + x2_i)
+                    mids_y = 0.5 * (y1_i + y2_i)
+                    escolhido = None
+                    for k in range(1, len(r)):
+                        pxk, pyk = float(mids_x[k]), float(mids_y[k])
+                        if not any(_na_borda(pxk, pyk, int(j)) for j in cand):
+                            escolhido = (pxk, pyk)
+                            break
+                    if escolhido is not None:
+                        px, py = escolhido
+                        for j in cand:
+                            if _ponto_no_anel_arr(px, py, *edges_xy[j]):
+                                cont += 1
+                    else:
+                        m_edges = len(r)
+                        for j in cand:
+                            ji = int(j)
+                            ex_j = edges_xy[ji]
+                            testado = False
+                            for k in range(m_edges):
+                                pxk, pyk = float(mids_x[k]), float(mids_y[k])
+                                if not _na_borda(pxk, pyk, ji):
+                                    if _ponto_no_anel_arr(pxk, pyk, *ex_j):
+                                        cont += 1
+                                    testado = True
+                                    break
+                            if not testado:
+                                votos = sum(
+                                    1
+                                    for k in range(m_edges)
+                                    if _ponto_no_anel_arr(float(mids_x[k]), float(mids_y[k]), *ex_j)
+                                )
+                                if votos * 2 > m_edges:
+                                    cont += 1
             area_signed = areas[i]
             if (cont % 2 == 1 and area_signed > 0.0) or (cont % 2 == 0 and area_signed < 0.0):
                 r = r[::-1].copy()

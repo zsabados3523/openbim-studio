@@ -2135,8 +2135,57 @@ def _desenhar_planta_cache(f, pedido, malhas_mundo, elementos_validos, fase, abr
     )
 
 
+_ITENS_SO_ANOTACAO = (
+    "IfcGeometricCurveSet",
+    "IfcCurve",
+    "IfcPoint",
+    "IfcTextLiteral",
+    "IfcAnnotationFillArea",
+)
+
+
+def _item_so_anotacao(it, visitados: set[int] | None = None) -> bool:
+    """True se o item de representacao IFC for apenas curva/anotacao 2D (sem solido/malha)."""
+    if it is None or not hasattr(it, "is_a"):
+        return False
+    if any(it.is_a(t) for t in _ITENS_SO_ANOTACAO):
+        return True
+    if it.is_a("IfcGeometricSet"):
+        elems = getattr(it, "Elements", None) or ()
+        return all(_item_so_anotacao(sub, visitados) for sub in elems)
+    if it.is_a("IfcMappedItem"):
+        src = getattr(it, "MappingSource", None)
+        mrep = getattr(src, "MappedRepresentation", None)
+        items = getattr(mrep, "Items", None) or ()
+        if not items:
+            return False
+        vistos = set() if visitados is None else visitados
+        iid = it.id() if hasattr(it, "id") else id(it)
+        if iid in vistos:
+            return True
+        vistos.add(iid)
+        return all(_item_so_anotacao(sub, vistos) for sub in items)
+    return False
+
+
+def _eh_so_anotacao(el) -> bool:
+    """True se todas as representacoes do elemento contiverem apenas itens 2D/anotacao."""
+    rep_prod = getattr(el, "Representation", None)
+    reps = getattr(rep_prod, "Representations", None) if rep_prod is not None else None
+    if not reps:
+        return False
+    tem_item = False
+    for rep in reps:
+        items = getattr(rep, "Items", None) or ()
+        for it in items:
+            tem_item = True
+            if not _item_so_anotacao(it):
+                return False
+    return tem_item
+
+
 def _elementos_validos_cache(f, pedido: dict) -> list[tuple[int, str]]:
-    """Filtra pedido['elementos'] removendo IfcOpeningElement e elementos sem Representation."""
+    """Filtra pedido['elementos'] removendo IfcOpeningElement, sem Representation ou so-anotacao."""
     validos: list[tuple[int, str]] = []
     for id_step, gid in pedido.get("elementos") or ():
         try:
@@ -2145,7 +2194,7 @@ def _elementos_validos_cache(f, pedido: dict) -> list[tuple[int, str]]:
             el = None
         if el is None or el.is_a("IfcOpeningElement"):
             continue
-        if getattr(el, "Representation", None) is None:
+        if getattr(el, "Representation", None) is None or _eh_so_anotacao(el):
             continue
         validos.append((int(id_step), str(gid)))
     return validos

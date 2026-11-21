@@ -317,17 +317,35 @@ def desenhar_planta_cache(
                 if oz != 0.0:
                     v[:, 2] -= oz
 
-            n_cortadas += 1
             if np.any(np.abs(v[:, 2] - z_ef) <= eps_ef):
                 return None, "secao_aberta"
 
             v_ab, t_ab, segs = corte_plano.cortar_malha_no_plano(v, t, z_ef)
             del v, t
+            dx_g, dy_g = px - ox, py - oy
+            if len(segs) == 0:
+                del segs
+                if len(t_ab) > 0:
+                    if dx_g != 0.0 or dy_g != 0.0:
+                        v_ab = v_ab.astype(np.float64, copy=True)
+                        v_ab[:, 0] += dx_g
+                        v_ab[:, 1] += dy_g
+                    malhas_proj.append((v_ab, t_ab))
+                else:
+                    enviados.pop()
+                del v_ab, t_ab
+                continue
+
+            n_cortadas += 1
             fechados, abertos = aneis.aneis_de_segmentos(segs)
             del segs
             if not fechados and not abertos:
                 return None, "secao_aberta"
 
+            if fechados:
+                bons = [a for a in fechados if abs(aneis._area(a)) > 1e-12]
+                if bons:
+                    fechados = bons
             grupos = oclusores._agrupar_aneis(fechados) if fechados else []
             if fechados and not grupos:
                 # T24h: aneis nao agrupaveis viram cadeias abertas (linha, fora da tampa)
@@ -338,7 +356,6 @@ def desenhar_planta_cache(
                 secoes_parciais += 1
 
             pecas_secao.append((str(gid), classe, fechados, abertos, px, py))
-            dx_g, dy_g = px - ox, py - oy
             if dx_g != 0.0 or dy_g != 0.0:
                 desloc = np.array([dx_g, dy_g], dtype=np.float64)
                 for rings, _ in grupos:

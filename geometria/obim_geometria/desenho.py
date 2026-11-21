@@ -5,7 +5,6 @@ import functools
 import math
 import os
 import re
-import sqlite3
 import threading
 import time
 import traceback
@@ -2220,7 +2219,7 @@ def _tentar_planta_pelo_cache(
     except Exception:
         return None, "erro_motor", 0, cache_s
 
-    if isinstance(resp_ok, dict) and motivo is None:
+    if isinstance(resp_ok, dict) and resp_ok.get("ok") is True and motivo is None:
         return _anexar_telemetria_cache(
             resp_ok, via_cache=True, queda=None, n_faltantes=0, cache_s=cache_s
         ), None, 0, cache_s
@@ -2266,6 +2265,8 @@ def processar(pedido: dict, fase=None) -> dict:
             if resp_cache is not None:
                 return resp_cache
             info_queda = (motivo_queda, n_faltantes, cache_s)
+            # queda: o pavimento inteiro vai ao motor; sub-pedidos nao reabrem o cache
+            pedido = {k: v for k, v in pedido.items() if k != "pasta_cache_geometria"}
 
         if n_faixas is not None:
             resp = _planta_em_faixas(pedido, fase, n_faixas, f=f, abrir_s=abrir_s)

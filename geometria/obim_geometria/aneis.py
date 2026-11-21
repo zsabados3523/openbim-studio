@@ -26,58 +26,57 @@ def _ponto_interior(r: np.ndarray, area_signed: float) -> tuple[float, float]:
         )
 
     pts = [(float(px) - x0, float(py) - y0) for px, py in r.tolist()]
-    orient = 1.0 if area_signed >= 0.0 else -1.0
-    best_abs_cross = -1.0
-    best_pt: tuple[float, float] | None = None
+    if m <= 64:
+        orient = 1.0 if area_signed >= 0.0 else -1.0
+        best_abs_cross = -1.0
+        best_pt: tuple[float, float] | None = None
 
-    for curr in range(m):
-        prev_idx = curr - 1 if curr > 0 else m - 1
-        next_idx = curr + 1 if curr + 1 < m else 0
-        ax, ay = pts[prev_idx]
-        bx, by = pts[curr]
-        cx, cy = pts[next_idx]
-        cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
-        if cross * orient <= 0.0:
-            continue
-
-        minx = ax if ax < bx else bx
-        if cx < minx:
-            minx = cx
-        maxx = ax if ax > bx else bx
-        if cx > maxx:
-            maxx = cx
-        miny = ay if ay < by else by
-        if cy < miny:
-            miny = cy
-        maxy = ay if ay > by else by
-        if cy > maxy:
-            maxy = cy
-
-        e1x, e1y = bx - ax, by - ay
-        e2x, e2y = cx - bx, cy - by
-        e3x, e3y = ax - cx, ay - cy
-        valida = True
-        for k, (px, py) in enumerate(pts):
-            if k == prev_idx or k == curr or k == next_idx:
+        for curr in range(m):
+            prev_idx = curr - 1 if curr > 0 else m - 1
+            next_idx = curr + 1 if curr + 1 < m else 0
+            ax, ay = pts[prev_idx]
+            bx, by = pts[curr]
+            cx, cy = pts[next_idx]
+            cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+            if cross * orient <= 0.0:
                 continue
-            if minx <= px <= maxx and miny <= py <= maxy:
-                if (
-                    (e1x * (py - ay) - e1y * (px - ax)) * orient >= 0.0
-                    and (e2x * (py - by) - e2y * (px - bx)) * orient >= 0.0
-                    and (e3x * (py - cy) - e3y * (px - cx)) * orient >= 0.0
-                ):
-                    valida = False
-                    break
-        if valida:
-            abs_cross = abs(cross)
-            if m > 64:
-                return x0 + (ax + bx + cx) / 3.0, y0 + (ay + by + cy) / 3.0
-            if abs_cross > best_abs_cross:
-                best_abs_cross = abs_cross
-                best_pt = (x0 + (ax + bx + cx) / 3.0, y0 + (ay + by + cy) / 3.0)
 
-    if best_pt is not None:
-        return best_pt
+            minx = ax if ax < bx else bx
+            if cx < minx:
+                minx = cx
+            maxx = ax if ax > bx else bx
+            if cx > maxx:
+                maxx = cx
+            miny = ay if ay < by else by
+            if cy < miny:
+                miny = cy
+            maxy = ay if ay > by else by
+            if cy > maxy:
+                maxy = cy
+
+            e1x, e1y = bx - ax, by - ay
+            e2x, e2y = cx - bx, cy - by
+            e3x, e3y = ax - cx, ay - cy
+            valida = True
+            for k, (px, py) in enumerate(pts):
+                if k == prev_idx or k == curr or k == next_idx:
+                    continue
+                if minx <= px <= maxx and miny <= py <= maxy:
+                    if (
+                        (e1x * (py - ay) - e1y * (px - ax)) * orient >= 0.0
+                        and (e2x * (py - by) - e2y * (px - bx)) * orient >= 0.0
+                        and (e3x * (py - cy) - e3y * (px - cx)) * orient >= 0.0
+                    ):
+                        valida = False
+                        break
+            if valida:
+                abs_cross = abs(cross)
+                if abs_cross > best_abs_cross:
+                    best_abs_cross = abs_cross
+                    best_pt = (x0 + (ax + bx + cx) / 3.0, y0 + (ay + by + cy) / 3.0)
+
+        if best_pt is not None:
+            return best_pt
 
     ys = sorted({py for _, py in pts})
     if len(ys) >= 2:

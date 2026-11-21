@@ -86,20 +86,37 @@ def _varrer_cels_triangulos(cand, nx_, ny_, cc_, tx0, tx1, ty0, ty1, mn_x, mn_y,
 
 def _unir_intervalos(He: np.ndarray, Hlo: np.ndarray, Hhi: np.ndarray):
     """Ordena e une intervalos [lo, hi] sobrepostos por aresta."""
-    if len(He) <= 1:
-        return He, Hlo, Hhi
+    n = len(He)
+    if n == 0:
+        return He[:0].copy(), np.empty(0, dtype=np.float64), np.empty(0, dtype=np.float64)
+    if n == 1:
+        lo = np.asarray(Hlo, dtype=np.float64)
+        return He.copy(), lo.copy(), np.maximum(lo, np.asarray(Hhi, dtype=np.float64))
     o = np.lexsort((Hlo, He))
     He = He[o]
-    Hlo = Hlo[o]
-    Hhi = Hhi[o]
+    Hlo = np.asarray(Hlo[o], dtype=np.float64)
+    Hhi = np.asarray(Hhi[o], dtype=np.float64)
     del o
-    novo = np.concatenate([[True], He[1:] != He[:-1]])
-    off = np.cumsum(novo) * 2.0
-    hic = np.maximum.accumulate(Hhi + off)
-    prev_hi = np.where(novo, -1.0, np.concatenate([[0.0], hic[:-1]]) - off)
-    ini = novo | (Hlo > prev_hi + 1e-9)
-    fim = np.concatenate([ini[1:], [True]])
-    return He[ini], Hlo[ini], np.maximum(Hlo[ini], (hic - off)[fim])
+    novo = np.empty(n, dtype=bool)
+    novo[0] = True
+    np.not_equal(He[1:], He[:-1], out=novo[1:])
+    grp = np.cumsum(novo, dtype=np.int64)
+    s = np.argsort(Hhi)
+    Hhi_s = Hhi[s]
+    rank = np.empty(n, dtype=np.int64)
+    rank[s] = np.arange(n, dtype=np.int64)
+    del s
+    base = grp * n
+    hic_rank = np.maximum.accumulate(base + rank) - base
+    hic = Hhi_s[hic_rank]
+    del Hhi_s, rank, base, hic_rank, grp
+    ini = novo
+    ini[1:] |= Hlo[1:] > hic[:-1] + 1e-9
+    fim = np.empty(n, dtype=bool)
+    fim[:-1] = ini[1:]
+    fim[-1] = True
+    Hlo_ini = Hlo[ini]
+    return He[ini], Hlo_ini, np.maximum(Hlo_ini, hic[fim])
 
 
 def _compactar_H(H_l: list, limpar: bool = False):

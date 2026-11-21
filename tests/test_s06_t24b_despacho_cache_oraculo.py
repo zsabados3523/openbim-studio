@@ -250,10 +250,7 @@ def test_excecao_no_gancho_e_stub_padrao_caem_como_erro_motor(tmp_path, monkeypa
     cena = _criar_cena(tmp_path)
     base = desenho.processar(cena.pedido_base)
 
-    r_stub = desenho.processar(cena.pedido_cache)
-    _checar_telemetria(r_stub, via_cache=False, queda="erro_motor", n_faltantes=0)
-    assert r_stub["svg"] == base["svg"] and "faltantes" not in r_stub
-
+    # T24c: o gancho deixou de ser stub; o caso 'stub padrao' nao existe mais (contrato mudou)
     chamadas = _espiar_gancho(monkeypatch, lambda *_a: (_ for _ in ()).throw(RuntimeError("falha no motor")))
     r_exc = desenho.processar(cena.pedido_cache)
     _checar_telemetria(r_exc, via_cache=False, queda="erro_motor", n_faltantes=0)

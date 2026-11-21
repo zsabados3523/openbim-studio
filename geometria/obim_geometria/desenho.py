@@ -31,6 +31,7 @@ from obim_geometria import (
     oclusores,
     peca_cortada,
     peca_visivel,
+    planta_cache,
     silhueta,
     visibilidade,
 )
@@ -2125,8 +2126,10 @@ _MOTIVOS_QUEDA_CACHE = frozenset({
 
 
 def _desenhar_planta_cache(f, pedido, malhas_mundo, elementos_validos, fase, abrir_s):
-    """Gancho modular para desenho da planta pelo cache (stub T24b; implementado na T24c)."""
-    return None, "erro_motor"
+    """Delega o desenho da planta pelo cache para `planta_cache` (T24c)."""
+    return planta_cache.desenhar_planta_cache(
+        f, pedido, malhas_mundo, elementos_validos, fase=fase, abrir_s=abrir_s
+    )
 
 
 def _elementos_validos_cache(f, pedido: dict) -> list[tuple[int, str]]:

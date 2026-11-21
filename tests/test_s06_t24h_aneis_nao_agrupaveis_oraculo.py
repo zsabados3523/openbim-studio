@@ -357,7 +357,7 @@ def test_mutante_02_peca_ruim_entra_na_tampa(monkeypatch):
     )
     pecas = [
         (10, "G_RUIM_FSP", "IfcFurnishingElement", _malha_furo_sem_pai_np(0.0, 0.0)),
-        (11, "G_BOA_0", "IfcWall", _caixa_np(10.0, 0.0, 0.0, 12.0, 1.0, 2.8)),
+        (11, "G_BOA_ALVO", "IfcWall", _caixa_np(10.0, 0.0, 0.0, 12.0, 1.0, 2.8)),
         *_boas(2, id0=12, x0=15.0, passo=5.0),
         (14, "G_BARRA_SOB_RUIM", "IfcSlab", _caixa_np(0.6, -0.5, 0.0, 0.9, 4.5, 0.2)),
         (15, "G_BARRA_SOB_BOA", "IfcSlab", _caixa_np(10.9, -0.5, 0.0, 11.1, 1.5, 0.2)),

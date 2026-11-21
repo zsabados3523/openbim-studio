@@ -2288,7 +2288,11 @@ def processar(pedido: dict, fase=None) -> dict:
             pedido = {k: v for k, v in pedido.items() if k != "pasta_cache_geometria"}
     if info_queda is not None:
         t_r0 = time.perf_counter()
-        f = _abrir_ifc(pedido.get("arquivo"), pav_guid)
+        f = None  # solta o arquivo lazy antes de reabrir (evita pico de RAM)
+        try:
+            f = _abrir_ifc(pedido.get("arquivo"), pav_guid)
+        except Exception as e:
+            return {"ok": False, "erro": {"tipo": type(e).__name__, "mensagem": str(e), "rastro": traceback.format_exc()}}
         abrir_s += time.perf_counter() - t_r0
     with _sem_rastro(f):
         if n_faixas is not None:

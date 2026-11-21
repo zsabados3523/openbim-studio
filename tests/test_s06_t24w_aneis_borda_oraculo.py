@@ -525,3 +525,168 @@ def test_rev1_tol_borda_anel_fino_em_metros():
         assert ab == [] and len(fe) == 2, f"deg={deg} fe={len(fe)} ab={len(ab)}"
         areas = sorted((_area_trans(r) for r in fe), key=lambda a: -abs(a))
         assert areas[0] > 0.0 and areas[1] < 0.0, f"deg={deg}: furo fino (tol=1e-6) virou externo: areas={areas}"
+
+
+# ---------- (6) REVISAO 2: _PONTO_INTERIOR M > 64 COM VERTICES COLINEARES (9 TESTES) ----------
+def _subdiv(pts, per_edge: int):
+    out = []
+    n = len(pts)
+    for i in range(n):
+        x0, y0 = pts[i]
+        x1, y1 = pts[(i + 1) % n]
+        for k in range(per_edge):
+            t = k / per_edge
+            out.append((x0 + (x1 - x0) * t, y0 + (y1 - y0) * t))
+    return out
+
+
+def _subdiv_m(pts, m: int):
+    n = len(pts)
+    base, rem = divmod(m, n)
+    out = []
+    for i in range(n):
+        k_edge = base + (1 if i < rem else 0)
+        x0, y0 = pts[i]
+        x1, y1 = pts[(i + 1) % n]
+        for k in range(k_edge):
+            t = k / k_edge
+            out.append((x0 + (x1 - x0) * t, y0 + (y1 - y0) * t))
+    return out
+
+
+def _dist_borda(px: float, py: float, r: np.ndarray) -> float:
+    x1, y1 = r[:, 0], r[:, 1]
+    x2, y2 = np.roll(x1, -1), np.roll(y1, -1)
+    dx, dy = x2 - x1, y2 - y1
+    len2 = dx * dx + dy * dy
+    t = np.clip(((px - x1) * dx + (py - y1) * dy) / np.where(len2 > 0.0, len2, 1.0), 0.0, 1.0)
+    return float(np.sqrt(np.min((px - (x1 + t * dx)) ** 2 + (py - (y1 + t * dy)) ** 2)))
+
+
+def _enclosing_colinear_j(poly_ccw, cut: float = 0.005, ear: float = 0.02):
+    """Externo simples que envolve `poly_ccw` colinearmente em todas as arestas sem vertices comuns."""
+    n = len(poly_ccw)
+    out = []
+    for i in range(n):
+        ax, ay = poly_ccw[(i - 1) % n]
+        bx, by = poly_ccw[i]
+        cx, cy = poly_ccw[(i + 1) % n]
+        p1 = (ax + (1.0 - cut) * (bx - ax), ay + (1.0 - cut) * (by - ay))
+        p2 = (bx + cut * (cx - bx), by + cut * (cy - by))
+        lab = math.hypot(bx - ax, by - ay)
+        lbc = math.hypot(cx - bx, cy - by)
+        nab = ((by - ay) / lab, -(bx - ax) / lab)
+        nbc = ((cy - by) / lbc, -(cx - bx) / lbc)
+        cross = (bx - ax) * (cy - by) - (by - ay) * (cx - bx)
+        if cross < 0.0:
+            bix, biy = nab[0] + nbc[0], nab[1] + nbc[1]
+            bl = math.hypot(bix, biy)
+            qm = (bx + 0.03 * bix / bl, by + 0.03 * biy / bl)
+            out.extend([p1, qm, p2])
+        else:
+            q1 = (p1[0] + ear * nab[0], p1[1] + ear * nab[1])
+            q2 = (bx + ear * (nab[0] + nbc[0]), by + ear * (nab[1] + nbc[1]))
+            q3 = (p2[0] + ear * nbc[0], p2[1] + ear * nbc[1])
+            out.extend([p1, q1, q2, q3, p2])
+    return out
+
+
+def test_rev2_defeito1a_ponto_interior_m_gt_64_retorna_ponto_fora_do_anel():
+    """`_ponto_interior` com m=80 (>64) e vertices colineares nao retorna ponto fora do proprio anel."""
+    sq80 = _subdiv([(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)], 20)
+    sq80 = sq80[5:] + sq80[:5]  # inicio no meio de aresta reta
+    r = np.array(_rot(sq80, math.radians(11.0)), dtype=float)
+    px, py = aneis._ponto_interior(r, _area_trans(r))
+    x1, y1 = r[:, 0], r[:, 1]
+    x2, y2 = np.roll(x1, -1), np.roll(y1, -1)
+    assert aneis._ponto_no_anel_arr(px, py, x1, y1, x2, y2), (
+        f"_ponto_interior retornou ponto fora do proprio anel (m={len(r)}): {(px, py)}"
+    )
+
+
+def test_rev2_defeito1b_aneis_de_segmentos_furo_colinear_m_gt_64():
+    """Furo concavo colinear total (dart m=68 > 64) sai area < 0 em varios angulos no fluxo completo."""
+    dart = [(0.0, 5.0), (10.0, 0.0), (0.4, 5.0), (10.0, 10.0)]
+    dart_68 = _subdiv(dart, 17)  # m=68 > 64
+    j_dart = _enclosing_colinear_j(dart)
+    for deg in (0, 5, 30, 355):
+        th = math.radians(deg)
+        fe, ab = aneis.aneis_de_segmentos(_segs_de([_rot(j_dart, th), _rot(dart_68, th)]))
+        assert ab == [] and len(fe) == 2
+        areas = sorted((_area_trans(r) for r in fe), key=lambda v: -abs(v))
+        assert areas[0] > 0.0 and areas[1] < 0.0, (
+            f"deg={deg}: furo colinear m=68 virou externo: areas={areas}"
+        )
+
+
+@pytest.mark.parametrize("m", [65, 80, 200, 500], ids=["m65", "m80", "m200", "m500"])
+def test_rev2_furo_quadrado_subdividido_colinear_m_gt_64(m: int):
+    """Furo quadrado subdividido (m=65, 80, 200, 500 colineares) em varios angulos: `_ponto_interior` e fluxo completo."""
+    sq = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]
+    sq_m = _subdiv_m(sq, m)
+    sq_shift = sq_m[3:] + sq_m[:3]
+    j_sq = _enclosing_colinear_j(sq)
+    for deg in (0, 5, 11, 25, 35, 45, 73, 135, 210, 300):
+        th = math.radians(deg)
+        r = np.array(_rot(sq_shift, th), dtype=float)
+        px, py = aneis._ponto_interior(r, _area_trans(r))
+        x1, y1 = r[:, 0], r[:, 1]
+        x2, y2 = np.roll(x1, -1), np.roll(y1, -1)
+        assert aneis._ponto_no_anel_arr(px, py, x1, y1, x2, y2), (
+            f"m={m} deg={deg}: _ponto_interior fora do quadrado: {(px, py)}"
+        )
+        assert _dist_borda(px, py, r) > 1e-6, (
+            f"m={m} deg={deg}: _ponto_interior sobre a borda (dist={_dist_borda(px, py, r):.3e})"
+        )
+        fe, ab = aneis.aneis_de_segmentos(_segs_de([_rot(j_sq, th), _rot(sq_m, th)]))
+        assert ab == [] and len(fe) == 2, f"m={m} deg={deg}: fe={len(fe)} ab={len(ab)}"
+        areas = sorted((_area_trans(rg) for rg in fe), key=lambda v: -abs(v))
+        assert areas[0] > 0.0 and areas[1] < 0.0, f"m={m} deg={deg}: furo quadrado virou externo: areas={areas}"
+
+
+@pytest.mark.parametrize(
+    ("poly", "m", "angulos"),
+    [
+        pytest.param(
+            [(0.0, 5.0), (10.0, 0.0), (10.0, 2.0), (0.5, 5.0), (10.0, 8.0), (10.0, 10.0)],
+            72,
+            (0, 10, 30, 50, 135, 210, 350),
+            id="chevron_m72",
+        ),
+        pytest.param(
+            [(0.0, 5.0), (10.0, 0.0), (0.4, 5.0), (10.0, 10.0)],
+            80,
+            (0, 15, 30, 45, 135, 300, 355),
+            id="dart_m80",
+        ),
+        pytest.param(
+            [(0.0, 5.0), (10.0, 0.0), (10.0, 2.0), (0.5, 5.0), (10.0, 8.0), (10.0, 10.0)],
+            120,
+            (0, 10, 30, 90, 210, 350),
+            id="chevron_m120",
+        ),
+    ],
+)
+def test_rev2_anel_concavo_m_gt_64_colinear(poly, m: int, angulos: tuple[int, ...]):
+    """Anel concavo m>64 com arestas colineares: fluxo completo `aneis_de_segmentos` e `_ponto_interior`."""
+    ring_m = _subdiv_m(poly, m)
+    ring_shift = ring_m[3:] + ring_m[:3]
+    j_ext = _enclosing_colinear_j(poly)
+    for deg in angulos:
+        th = math.radians(deg)
+        fe, ab = aneis.aneis_de_segmentos(_segs_de([_rot(j_ext, th), _rot(ring_m, th)]))
+        assert ab == [] and len(fe) == 2, f"m={m} deg={deg}: fe={len(fe)} ab={len(ab)}"
+        areas = sorted((_area_trans(rg) for rg in fe), key=lambda v: -abs(v))
+        assert areas[0] > 0.0 and areas[1] < 0.0, (
+            f"m={m} deg={deg}: furo concavo colinear virou externo: areas={areas}"
+        )
+        r = np.array(_rot(ring_shift, th), dtype=float)
+        px, py = aneis._ponto_interior(r, _area_trans(r))
+        x1, y1 = r[:, 0], r[:, 1]
+        x2, y2 = np.roll(x1, -1), np.roll(y1, -1)
+        assert aneis._ponto_no_anel_arr(px, py, x1, y1, x2, y2), (
+            f"m={m} deg={deg}: _ponto_interior fora do concavo: {(px, py)}"
+        )
+        assert _dist_borda(px, py, r) > 1e-6, (
+            f"m={m} deg={deg}: _ponto_interior na borda do concavo (dist={_dist_borda(px, py, r):.3e})"
+        )

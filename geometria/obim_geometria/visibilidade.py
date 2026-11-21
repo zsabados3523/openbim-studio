@@ -28,6 +28,7 @@ from obim_geometria.visib_mapa import (
     _compactar_H,
     _filtrar_e_recortar,
     _mapa_z_conservador,
+    _subgrade_celulas_densas,
     _varrer_cels_triangulos,
 )
 
@@ -151,6 +152,7 @@ def _visibilidade_hibrida(
     rem_t = _passagem_faixas_orientadas(P, tv, kept_idx, ek_idx, a, b, d, g, tol_z, d_eps, ctx, H_l)
     cg = g
     nt_all = len(A)
+    usar_subgrade = os.environ.get("OBIM_VISIB_SUBGRADE") != "0"
     while len(rem_t) and len(ek_idx):
         Wc = int(math.ceil(dx_dom / cg)) + 2
         Hc = int(math.ceil(dy_dom / cg)) + 2
@@ -230,6 +232,27 @@ def _visibilidade_hibrida(
                         eobj = eobj[nz]
                         ecel = ecel[nz]
                         ntri_par = ntri_par[nz]
+                        if usar_subgrade and len(eobj):
+                            denso_cel = cont >= 128
+                            eh_denso = denso_cel[ecel]
+                            if np.any(eh_denso) and int(ntri_par[eh_denso].sum()) >= 20_000_000:
+                                eo_n, ec_n, nt_n = eobj[~eh_denso], ecel[~eh_denso], ntri_par[~eh_denso]
+                                for p0, p1 in _fatias(nt_n, 200_000, chaves=eo_n):
+                                    g3, kk = _rle_idx(nt_n[p0:p1])
+                                    _filtrar_e_recortar(
+                                        eo_n[p0:p1][g3], tri_por_cel[ini_cel[ec_n[p0:p1]][g3] + kk],
+                                        a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
+                                        tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin, nt_all,
+                                        tol_z, d_eps, H_l,
+                                    )
+                                _subgrade_celulas_densas(
+                                    eobj[eh_denso], ecel[eh_denso], cont, ini_cel, tri_por_cel,
+                                    bx0, by0, Wl, mn_x, mn_y, cg,
+                                    a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
+                                    tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin, nt_all,
+                                    tol_z, d_eps, H_l,
+                                )
+                                continue
                         # shortcut: pares por celula tem custo ~N^2 por ancora comum (vertice muito usado);
                         # limite pratico ~1000 arestas no mesmo vertice
                         # (cone 4096 lados = 17 s; max IFC real = 128).

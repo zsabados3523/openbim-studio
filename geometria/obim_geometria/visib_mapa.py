@@ -268,7 +268,7 @@ def _subgrade_celulas_densas(
             mg = (
                 (ex1[eo_g] >= tx0[t_grd].min()) & (ex0[eo_g] <= tx1[t_grd].max())
                 & (ey1[eo_g] >= ty0[t_grd].min()) & (ey0[eo_g] <= ty1[t_grd].max())
-                & (ezmin[eo_g] < tzmax[t_grd].max() - tol_z)
+                & (tzmax[t_grd].max() > ezmin[eo_g] + tol_z)
             )
             eo_g = eo_g[mg]
         if len(eo_g):
@@ -294,7 +294,12 @@ def _subgrade_celulas_densas(
     cont_s = np.bincount(cel_sub_ord, minlength=ncel_s)
     ini_s = np.cumsum(cont_s) - cont_s
     sub_tzmax = np.full(ncel_s, -np.inf)
-    np.maximum.at(sub_tzmax, cel_sub_ord, tzmax[tri_sub])
+    z_dil = (
+        A[tri_sub, 2]
+        + gx[tri_sub] * (np.where(gx[tri_sub] >= 0, tx1[tri_sub] + eps, tx0[tri_sub] - eps) - A[tri_sub, 0])
+        + gy[tri_sub] * (np.where(gy[tri_sub] >= 0, ty1[tri_sub] + eps, ty0[tri_sub] - eps) - A[tri_sub, 1])
+    )
+    np.maximum.at(sub_tzmax, cel_sub_ord, np.maximum(tzmax[tri_sub], z_dil))
 
     p0x, p0y = a[eo_u, 0], a[eo_u, 1]
     ddx, ddy = d[eo_u, 0], d[eo_u, 1]

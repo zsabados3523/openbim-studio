@@ -233,9 +233,9 @@ def _visibilidade_hibrida(
                         ecel = ecel[nz]
                         ntri_par = ntri_par[nz]
                         if usar_subgrade and len(eobj):
-                            denso_cel = cont >= 24
+                            denso_cel = cont >= 128
                             eh_denso = denso_cel[ecel]
-                            if np.any(eh_denso) and int(ntri_par[eh_denso].sum()) >= 50_000:
+                            if np.any(eh_denso) and int(ntri_par[eh_denso].sum()) >= 20_000_000:
                                 eo_n, ec_n, nt_n = eobj[~eh_denso], ecel[~eh_denso], ntri_par[~eh_denso]
                                 for p0, p1 in _fatias(nt_n, 200_000, chaves=eo_n):
                                     g3, kk = _rle_idx(nt_n[p0:p1])

@@ -343,6 +343,14 @@ class FilhoPersistente:
                             and int(res.get("pendentes", 0)) > 0
                             and res.get("parado") is None
                         )
+                        if self._construcao_ativa:
+                            self._construcao_params = {
+                                k: pedido[k]
+                                for k in ("pasta_cache", "lote_max", "limite_mb", "threads")
+                                if k in pedido
+                            }
+                        else:
+                            self._construcao_params = None
                     return res
                 return aux._tratar_resposta(dados)
         finally:
@@ -399,20 +407,17 @@ class FilhoPersistente:
             "limite_mb": float(limite_mb),
             "threads": threads,
         }
-        dados = self.executar(
+        return self.executar(
             {"op": "construir", "arquivo": self.arquivo, **params},
             cancelar=cancelar,
             limite_s=limite_s,
         )
-        with self._trava:
-            if not self._fechado and self._proc is not None and self._proc.is_alive() and self._construcao_ativa:
-                self._construcao_params = params
-        return dados
 
     def consultar_estado_construcao(self, *, timeout_s: float = 0.5) -> bool | None:
         """Consulta estado_construcao sem matar o filho em timeout/erro; retorna construcao_ativa ou None se falhou."""
         aux = _auxiliar()
         limite = max(0.01, float(timeout_s))
+        fim = time.monotonic() + limite
         if not self._trava.acquire(timeout=limite):
             return None
         try:
@@ -424,7 +429,8 @@ class FilhoPersistente:
             if not self._proc.is_alive():
                 self._tratar_morte(self._codigo_saida())
                 return False
-            fim = time.monotonic() + limite
+            if (fim - time.monotonic()) <= 0:
+                return None
             try:
                 dados = self._enviar_e_ler(
                     {"op": "estado_construcao", "arquivo": self.arquivo},
@@ -440,9 +446,14 @@ class FilhoPersistente:
                 return None
             if not isinstance(dados, dict) or dados.get("ok") is False:
                 return None
+            try:
+                pendentes = int(dados.get("pendentes", 0))
+            except (TypeError, ValueError):
+                return None
+            self._fim_ultimo = self._relogio()
             self._construcao_ativa = bool(
                 dados.get("ativo", True)
-                and int(dados.get("pendentes", 0)) > 0
+                and pendentes > 0
                 and dados.get("parado") is None
             )
             return self._construcao_ativa

@@ -255,8 +255,9 @@ class GerenteDesenho(QObject):
         with self._trava:
             return any(getattr(f, "construcao_ativa", False) for f in self._filhos_doc.values())
 
-    def _consultar_estado_fundo(self, filhos: list, timeout_s: float) -> None:
+    def _consultar_estado_fundo(self, filhos: list, timeout_s: float, remover_thread: bool = False) -> None:
         desativou = False
+        t = threading.current_thread()
         try:
             for f in filhos:
                 consultar = getattr(f, "consultar_estado_construcao", None)
@@ -269,13 +270,16 @@ class GerenteDesenho(QObject):
         finally:
             with self._trava:
                 self._consultando_estado = False
+                if remover_thread:
+                    self._threads.discard(t)
             if desativou:
                 with self._cond_vaga:
                     self._cond_vaga.notify_all()
 
     def _verificar_estado_construcao(self, *, sincrono: bool = False) -> None:
-        agora = float(self._relogio())
+        t_fundo = None
         with self._trava:
+            agora = float(self._relogio())
             filhos = [f for f in self._filhos_doc.values() if getattr(f, "construcao_ativa", False)]
             if not filhos:
                 self._ultima_consulta_estado = None
@@ -285,19 +289,28 @@ class GerenteDesenho(QObject):
                 return
             if (agora - self._ultima_consulta_estado) < self._intervalo_estado_s:
                 return
-            if self._consultando_estado and self._intervalo_estado_s <= 0.0:
+            if self._consultando_estado:
                 return
             self._ultima_consulta_estado = agora
             self._consultando_estado = True
             timeout_s = self._timeout_estado_s
+            if not sincrono:
+                t_fundo = threading.Thread(
+                    target=self._consultar_estado_fundo,
+                    args=(filhos, timeout_s, True),
+                    daemon=True,
+                )
+                self._threads.add(t_fundo)
         if sincrono:
-            self._consultar_estado_fundo(filhos, timeout_s)
+            self._consultar_estado_fundo(filhos, timeout_s, False)
         else:
-            threading.Thread(
-                target=self._consultar_estado_fundo,
-                args=(filhos, timeout_s),
-                daemon=True,
-            ).start()
+            try:
+                t_fundo.start()
+            except BaseException:
+                with self._trava:
+                    self._threads.discard(t_fundo)
+                    self._consultando_estado = False
+                raise
 
     def _ler_rss_valido(self) -> float | None:
         try:
@@ -383,9 +396,10 @@ class GerenteDesenho(QObject):
                 from openbim_app.desenho.cache import pasta_geometria
                 filho.construir(str(pasta_geometria()), cancelar=cancelar)
                 if getattr(filho, "construcao_ativa", False):
-                    agora = float(self._relogio())
                     with self._trava:
-                        self._ultima_consulta_estado = agora
+                        agora = float(self._relogio())
+                        if self._ultima_consulta_estado is None or agora > self._ultima_consulta_estado:
+                            self._ultima_consulta_estado = agora
         except (FilhoIndisponivel, ErroAuxiliar):
             pass
         finally:

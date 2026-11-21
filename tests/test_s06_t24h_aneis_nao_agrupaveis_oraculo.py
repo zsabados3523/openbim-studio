@@ -86,9 +86,16 @@ def _verificar_linhas_peca_ruim(parsed, gid: str, malha, z_corte: float) -> None
     _, _, segs_corte = corte_plano.cortar_malha_no_plano(*malha, z_corte)
     fechados, abertos = aneis.aneis_de_segmentos(segs_corte)
     assert len(pls) >= len(fechados) + len(abertos)
+    arestas_esp = [np.hstack([a, np.roll(a, -1, axis=0)]) for a in fechados]
+    arestas_esp.extend(np.hstack([c[:-1], c[1:]]) for c in abertos if len(c) >= 2)
+    segs_aneis = np.vstack(arestas_esp)
+    n_arestas_esp = len(segs_aneis)
+    assert len(segs_des) >= n_arestas_esp, f"{gid}: {len(segs_des)} < {n_arestas_esp} arestas"
     segs_esp = np.asarray(segs_corte, dtype=np.float64).reshape(-1, 4)
     assert float(_dist_pontos_a_segs(_pontos_de_segs(segs_des), segs_esp).max()) <= 1e-4
     assert float(_dist_pontos_a_segs(np.vstack([*fechados, *abertos]), segs_des).max()) <= 1e-4
+    medios_esp = 0.5 * (segs_aneis[:, :2] + segs_aneis[:, 2:])
+    assert float(_dist_pontos_a_segs(medios_esp, segs_des).max()) <= 1e-4
 
 
 def _congelar_snapshot(malhas: dict, pedido: dict):
@@ -377,10 +384,12 @@ def test_mutante_03_contagem_secoes_parciais_errada():
         *_montar_cena_numpy([*boas3, (13, "G_SO_FECH_RUIM", "IfcDoor", _malha_anel_area_quase_zero_np(12.0, 0.0))], altura_corte_m=1.2)
     )
     assert mot1 is None and r1 is not None and type(r1["secoes_parciais"]) is int and r1["secoes_parciais"] == 1
+    malha_mista = _malha_mista_nao_agrupavel_e_aberta_np(12.0, 0.0)
     r2, mot2 = planta_cache.desenhar_planta_cache(
-        *_montar_cena_numpy([*boas3, (13, "G_MISTA_RUIM", "IfcFurnishingElement", _malha_mista_nao_agrupavel_e_aberta_np(12.0, 0.0))], altura_corte_m=1.2)
+        *_montar_cena_numpy([*boas3, (13, "G_MISTA_RUIM", "IfcFurnishingElement", malha_mista)], altura_corte_m=1.2)
     )
     assert mot2 is None and r2 is not None and type(r2["secoes_parciais"]) is int and r2["secoes_parciais"] == 1
+    _verificar_linhas_peca_ruim(_parse_svg(r2["svg"]), "G_MISTA_RUIM", malha_mista, 1.2)
 
 
 def test_mutante_04_limite_25_ignorado():

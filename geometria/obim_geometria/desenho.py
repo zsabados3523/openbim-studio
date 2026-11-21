@@ -5,10 +5,12 @@ import functools
 import math
 import os
 import re
+import sqlite3
 import threading
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from types import SimpleNamespace
 import ifcopenshell
 import ifcopenshell.api
@@ -19,7 +21,20 @@ import ifcopenshell.util.element
 import ifcopenshell.util.placement
 import numpy as np
 import shapely
-from obim_geometria import aneis, corte_plano, faixas, nucleos, oclusores, peca_cortada, peca_visivel, silhueta, visibilidade
+from obim_geometria import (
+    aneis,
+    cache_geometria,
+    cache_leitura,
+    construtor,
+    corte_plano,
+    faixas,
+    nucleos,
+    oclusores,
+    peca_cortada,
+    peca_visivel,
+    silhueta,
+    visibilidade,
+)
 
 
 def caixa_valida(c) -> list[float] | None:
@@ -2098,6 +2113,122 @@ def _sem_rastro(f):
         f.discard_transaction()
 
 
+_MOTIVOS_QUEDA_CACHE = frozenset({
+    "sem_arquivo_salvo",
+    "opcoes_incompativeis",
+    "cache_ausente",
+    "cache_invalido",
+    "cache_incompleto",
+    "malha_invalida",
+    "secao_aberta",
+    "erro_motor",
+})
+
+
+def _desenhar_planta_cache(f, pedido, malhas_mundo, elementos_validos, fase, abrir_s):
+    """Gancho modular para desenho da planta pelo cache (stub T24b; implementado na T24c)."""
+    return None, "erro_motor"
+
+
+def _elementos_validos_cache(f, pedido: dict) -> list[tuple[int, str]]:
+    """Filtra pedido['elementos'] removendo IfcOpeningElement e elementos sem Representation."""
+    validos: list[tuple[int, str]] = []
+    for id_step, gid in pedido.get("elementos") or ():
+        try:
+            el = f.by_id(int(id_step))
+        except Exception:
+            el = None
+        if el is None or el.is_a("IfcOpeningElement"):
+            continue
+        if getattr(el, "Representation", None) is None:
+            continue
+        validos.append((int(id_step), str(gid)))
+    return validos
+
+
+def _anexar_telemetria_cache(
+    resp: dict,
+    *,
+    via_cache: bool,
+    queda: str | None,
+    n_faltantes: int,
+    cache_s: float,
+) -> dict:
+    """Anexa telemetria de despacho pelo cache sem sobrescrever faltantes/incompleta da T19i1."""
+    resp["via_cache"] = bool(via_cache)
+    resp["queda"] = queda
+    resp["n_faltantes"] = int(n_faltantes)
+    tempos = dict(resp.get("tempos") or {})
+    tempos["cache_s"] = float(cache_s)
+    motor_s = tempos.get("motor_s")
+    tempos["motor_s"] = float(motor_s) if motor_s is not None else 0.0
+    resp["tempos"] = tempos
+    return resp
+
+
+def _tentar_planta_pelo_cache(
+    f,
+    pedido: dict,
+    pasta_cache: str | Path,
+    fase,
+    abrir_s: float,
+) -> tuple[dict | None, str | None, int, float]:
+    """Tenta desenhar a planta pelo cache. Retorna (resp_ok, queda, n_faltantes, cache_s)."""
+    t0 = time.perf_counter()
+    elementos_validos = _elementos_validos_cache(f, pedido)
+
+    if pedido.get("moveis_como_caixa"):
+        return None, "opcoes_incompativeis", 0, time.perf_counter() - t0
+
+    arq = pedido.get("arquivo")
+    if not arq or not Path(arq).is_file():
+        return None, "sem_arquivo_salvo", len(elementos_validos), time.perf_counter() - t0
+
+    caminho_banco = Path(pasta_cache) / cache_geometria.NOME_BANCO
+    if not caminho_banco.is_file():
+        return None, "cache_ausente", len(elementos_validos), time.perf_counter() - t0
+
+    cab_json = cache_geometria._json_canonico(
+        cache_geometria.cabecalho_atual(tesselacao=construtor.TESSELACAO)
+    )
+    con = None
+    cache = None
+    try:
+        con = cache_geometria._conectar(caminho_banco)
+        if not cache_geometria._banco_integro(con, cab_json):
+            return None, "cache_invalido", len(elementos_validos), time.perf_counter() - t0
+        cache = cache_geometria.CacheGeometria(caminho_banco, con)
+        con = None
+        doc = cache_geometria.documento_de(arq)
+        malhas_mundo, faltantes = cache_leitura.malhas_do_cache(
+            cache, doc, [gid for _, gid in elementos_validos]
+        )
+    except Exception:
+        return None, "cache_invalido", len(elementos_validos), time.perf_counter() - t0
+    finally:
+        if cache is not None:
+            cache.fechar()
+        elif con is not None:
+            cache_geometria._fechar_con(con)
+
+    cache_s = time.perf_counter() - t0
+    if faltantes:
+        return None, "cache_incompleto", len(faltantes), cache_s
+
+    try:
+        resp_ok, motivo = _desenhar_planta_cache(f, pedido, malhas_mundo, elementos_validos, fase, abrir_s)
+    except Exception:
+        return None, "erro_motor", 0, cache_s
+
+    if isinstance(resp_ok, dict) and motivo is None:
+        return _anexar_telemetria_cache(
+            resp_ok, via_cache=True, queda=None, n_faltantes=0, cache_s=cache_s
+        ), None, 0, cache_s
+
+    motivo_final = motivo if motivo in _MOTIVOS_QUEDA_CACHE else "erro_motor"
+    return None, motivo_final, 0, cache_s
+
+
 def processar(pedido: dict, fase=None) -> dict:
     erro = _conferir_assinatura(pedido)
     if erro is not None:
@@ -2125,11 +2256,29 @@ def processar(pedido: dict, fase=None) -> dict:
             return _processar_base(pedido, fase, f=f, abrir_s=abrir_s)
         if pedido.get("faixa") is not None:
             return _planta_recortada(pedido, fase, f=f, abrir_s=abrir_s)
+
+        pasta_cache = pedido.get("pasta_cache_geometria")
+        info_queda = None
+        if pasta_cache is not None and str(pasta_cache) != "":
+            resp_cache, motivo_queda, n_faltantes, cache_s = _tentar_planta_pelo_cache(
+                f, pedido, pasta_cache, fase, abrir_s
+            )
+            if resp_cache is not None:
+                return resp_cache
+            info_queda = (motivo_queda, n_faltantes, cache_s)
+
         if n_faixas is not None:
-            return _planta_em_faixas(pedido, fase, n_faixas, f=f, abrir_s=abrir_s)
-        if pedido.get("componentes"):
-            return _planta_por_componentes(pedido, fase, f=f, abrir_s=abrir_s)
-        return _processar_base(pedido, fase, f=f, abrir_s=abrir_s)
+            resp = _planta_em_faixas(pedido, fase, n_faixas, f=f, abrir_s=abrir_s)
+        elif pedido.get("componentes"):
+            resp = _planta_por_componentes(pedido, fase, f=f, abrir_s=abrir_s)
+        else:
+            resp = _processar_base(pedido, fase, f=f, abrir_s=abrir_s)
+        if info_queda is not None and isinstance(resp, dict):
+            motivo_queda, n_faltantes, cache_s = info_queda
+            _anexar_telemetria_cache(
+                resp, via_cache=False, queda=motivo_queda, n_faltantes=n_faltantes, cache_s=cache_s
+            )
+        return resp
 
 
 def processar_lote(pedido: dict, fase=None) -> dict:

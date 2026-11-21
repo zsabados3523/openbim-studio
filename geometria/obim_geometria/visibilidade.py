@@ -33,27 +33,65 @@ from obim_geometria.visib_mapa import (
 )
 
 
-def _cull_tris(kept, ea_, eb_, tx0, tx1, ty0, ty1, mn_x, mn_y, dx_dom, dy_dom, n=512):
+def _cull_tris(
+    kept, ea_, eb_, tx0, tx1, ty0, ty1, mn_x, mn_y, dx_dom, dy_dom, n=512, kept_caixas=None
+):
     """Mantem triangulos cuja caixa toca celula coberta pela caixa de alguma aresta (superconjunto)."""
+    if len(kept) == 0 or len(ea_) == 0:
+        return kept[:0]
     c = max(dx_dom, dy_dom, 1e-9) / n
     W = int(dx_dom / c) + 3
     H = int(dy_dom / c) + 3
+
     def ij(x, y):
-        return (np.clip(np.floor((x - mn_x) / c).astype(np.int64) , 0, W - 1),
-                np.clip(np.floor((y - mn_y) / c).astype(np.int64) , 0, H - 1))
+        return (
+            np.clip(np.floor((x - mn_x) / c).astype(np.int64), 0, W - 1),
+            np.clip(np.floor((y - mn_y) / c).astype(np.int64), 0, H - 1),
+        )
+
+    if kept_caixas is not None:
+        kx0, kx1, ky0, ky1 = kept_caixas
+    else:
+        kx0, kx1, ky0, ky1 = tx0[kept], tx1[kept], ty0[kept], ty1[kept]
+    pad = max(3.0 * c, 1e-6)
+    bx0 = float(min(ea_[:, 0].min(), eb_[:, 0].min())) - pad
+    bx1 = float(max(ea_[:, 0].max(), eb_[:, 0].max())) + pad
+    by0 = float(min(ea_[:, 1].min(), eb_[:, 1].min())) - pad
+    by1 = float(max(ea_[:, 1].max(), eb_[:, 1].max())) + pad
+    sel = np.nonzero((kx1 >= bx0) & (kx0 <= bx1) & (ky1 >= by0) & (ky0 <= by1))[0]
+    if len(sel) == 0:
+        return kept[:0]
+    kept = kept[sel]
     ex0, ey0 = ij(np.minimum(ea_[:, 0], eb_[:, 0]), np.minimum(ea_[:, 1], eb_[:, 1]))
     ex1, ey1 = ij(np.maximum(ea_[:, 0], eb_[:, 0]), np.maximum(ea_[:, 1], eb_[:, 1]))
-    ex0 = np.maximum(ex0 - 1, 0); ey0 = np.maximum(ey0 - 1, 0)
-    ex1 = np.minimum(ex1 + 1, W - 1); ey1 = np.minimum(ey1 + 1, H - 1)
-    dif = np.zeros((H + 1, W + 1), np.int64)
-    np.add.at(dif, (ey0, ex0), 1); np.add.at(dif, (ey0, ex1 + 1), -1)
-    np.add.at(dif, (ey1 + 1, ex0), -1); np.add.at(dif, (ey1 + 1, ex1 + 1), 1)
-    occ = (dif.cumsum(0).cumsum(1)[:H, :W] > 0).astype(np.int64)
-    sat = np.zeros((H + 1, W + 1), np.int64)
+    ex0 = np.maximum(ex0 - 1, 0)
+    ey0 = np.maximum(ey0 - 1, 0)
+    ex1 = np.minimum(ex1 + 1, W - 1)
+    ey1 = np.minimum(ey1 + 1, H - 1)
+    gx0, gx1 = int(ex0.min()), int(ex1.max())
+    gy0, gy1 = int(ey0.min()), int(ey1.max())
+    qx0, qy0 = ij(kx0[sel], ky0[sel])
+    qx1, qy1 = ij(kx1[sel], ky1[sel])
+    ok_ov = (qx1 >= gx0) & (qx0 <= gx1) & (qy1 >= gy0) & (qy0 <= gy1)
+    if not np.any(ok_ov):
+        return kept[:0]
+    kept = kept[ok_ov]
+    Hl, Wl = gy1 - gy0 + 1, gx1 - gx0 + 1
+    ex0_l, ex1_l = ex0 - gx0, ex1 - gx0
+    ey0_l, ey1_l = ey0 - gy0, ey1 - gy0
+    dif = np.zeros((Hl + 1, Wl + 1), np.int64)
+    np.add.at(dif, (ey0_l, ex0_l), 1)
+    np.add.at(dif, (ey0_l, ex1_l + 1), -1)
+    np.add.at(dif, (ey1_l + 1, ex0_l), -1)
+    np.add.at(dif, (ey1_l + 1, ex1_l + 1), 1)
+    occ = (dif.cumsum(0).cumsum(1)[:Hl, :Wl] > 0).astype(np.int64)
+    sat = np.zeros((Hl + 1, Wl + 1), np.int64)
     sat[1:, 1:] = occ.cumsum(0).cumsum(1)
-    qx0, qy0 = ij(tx0[kept], ty0[kept])
-    qx1, qy1 = ij(tx1[kept], ty1[kept])
-    tot = sat[qy1 + 1, qx1 + 1] - sat[qy0, qx1 + 1] - sat[qy1 + 1, qx0] + sat[qy0, qx0]
+    cx0 = np.maximum(qx0[ok_ov], gx0) - gx0
+    cx1 = np.minimum(qx1[ok_ov], gx1) - gx0
+    cy0 = np.maximum(qy0[ok_ov], gy0) - gy0
+    cy1 = np.minimum(qy1[ok_ov], gy1) - gy0
+    tot = sat[cy1 + 1, cx1 + 1] - sat[cy0, cx1 + 1] - sat[cy1 + 1, cx0] + sat[cy0, cx0]
     return kept[tot > 0]
 
 
@@ -92,7 +130,14 @@ def _visibilidade_hibrida(
             sl = idx_s[k0:k0 + 50_000]
             tobj, tcel = _expandir_celulas(tx0i[sl], tx1i[sl], ty0i[sl], ty1i[sl], W_)
             np.logical_or.at(tri_keep, sl[tobj], tzmax[sl[tobj]] >= zf_flat_[tcel] - 1e-9)
-        return z_full_, zf_flat_, W_, H_, np.nonzero(tri_keep)[0]
+        kept_ = np.nonzero(tri_keep)[0]
+        kept_caixas_ = (
+            np.ascontiguousarray(tx0[kept_]),
+            np.ascontiguousarray(tx1[kept_]),
+            np.ascontiguousarray(ty0[kept_]),
+            np.ascontiguousarray(ty1[kept_]),
+        )
+        return z_full_, zf_flat_, W_, H_, kept_, kept_caixas_
 
     if memo is None:
         entrada = _calc_mapa_z()
@@ -116,7 +161,7 @@ def _visibilidade_hibrida(
                     slot[1] -= 1
                     if slot[1] == 0:
                         _MEMO_CHAVE_LOCKS.pop(mk, None)
-    z_full, zf_flat, W, H, kept_idx = entrada
+    z_full, zf_flat, W, H, kept_idx, kept_caixas = entrada
     d = b - a
     step_g = 0.999 * g
     nsub_g = np.maximum(1, np.ceil(np.maximum(np.abs(d[:, 0]), np.abs(d[:, 1])) / step_g).astype(np.int64))
@@ -142,7 +187,10 @@ def _visibilidade_hibrida(
     ek_idx = np.nonzero(ek_mask)[0]
     n_ref = len(kept_idx)
     if len(ek_idx) and len(kept_idx):
-        kept_idx = _cull_tris(kept_idx, a[ek_idx], b[ek_idx], tx0, tx1, ty0, ty1, mn_x, mn_y, dx_dom, dy_dom)
+        kept_idx = _cull_tris(
+            kept_idx, a[ek_idx], b[ek_idx], tx0, tx1, ty0, ty1, mn_x, mn_y, dx_dom, dy_dom,
+            kept_caixas=kept_caixas,
+        )
     ex0 = np.minimum(a[:, 0], b[:, 0])
     ex1 = np.maximum(a[:, 0], b[:, 0])
     ey0 = np.minimum(a[:, 1], b[:, 1])

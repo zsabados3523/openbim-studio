@@ -267,6 +267,12 @@ class CacheGeometria:
         with self._tx():
             self._con.execute(_SQL_INS_FORMA, (*item, agora))
 
+    def apagar_forma(self, chave: str) -> bool:
+        """Remove a linha `chave` da tabela `formas` em transação; devolve True se existia."""
+        with self._tx():
+            cur = self._con.execute("DELETE FROM formas WHERE chave = ?", (chave,))
+            return (cur.rowcount or 0) > 0
+
     def ler_forma(self, chave: str) -> tuple[np.ndarray, np.ndarray] | None:
         if self._con is None:
             return None

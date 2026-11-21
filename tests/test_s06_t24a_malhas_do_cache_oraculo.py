@@ -171,7 +171,7 @@ def test_aplica_matriz_rotacao_translacao_e_escala(cache):
         assert tw.dtype == np.int32 and tw.shape == t_loc.shape and tw.flags["C_CONTIGUOUS"]
         assert np.allclose(vw, _mundo(v_loc, m), rtol=0.0, atol=1e-12) and np.array_equal(tw, t_loc)
         assert not np.allclose(vw, v_loc)
-        assert not np.allclose(vw, v_loc @ m[:3, :3] + m[:3, 3])  # detecta falta de .T
+        assert not np.allclose(vw, v_loc @ m[:3, :3] + m[:3, 3], rtol=0.0, atol=1e-6)  # detecta falta de .T
 
 
 def test_forma_float32_promovida_para_float64_no_mundo(cache):

@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 import math
 import numbers
 import os
+import threading
 
 import numpy as np
 
@@ -55,6 +56,10 @@ def _cull_tris(kept, ea_, eb_, tx0, tx1, ty0, ty1, mn_x, mn_y, dx_dom, dy_dom, n
     return kept[tot > 0]
 
 
+_MEMO_MGR_LOCK = threading.Lock()
+_MEMO_CHAVE_LOCKS: dict[tuple[int, tuple], list] = {}
+
+
 def _visibilidade_hibrida(
     P, Tw, a, b, ea, eb, tol_z: float, d_eps: float, min_len: float, prep=None, memo=None
 ) -> np.ndarray:
@@ -72,27 +77,45 @@ def _visibilidade_hibrida(
     while (math.ceil(dx_dom / g) + 2) * (math.ceil(dy_dom / g) + 2) > 6_000_000:
         g *= 1.05
     chave = (mn_x, mn_y, mx_x, mx_y, g)
-    entrada = memo.get(chave) if memo is not None else None
-    if entrada is not None:
-        z_full, zf_flat, W, H, kept_idx = entrada
-    else:
-        z_full, W, H = _mapa_z_conservador(
+
+    def _calc_mapa_z():
+        z_full_, W_, H_ = _mapa_z_conservador(
             A, gx, gy, nx_, ny_, cc_, tx0, tx1, ty0, ty1, mn_x, mn_y, mx_x, mx_y, g
         )
-        tx0i, tx1i, ty0i, ty1i = _cel_caixa(tx0, tx1, ty0, ty1, mn_x, mn_y, g, W, H)
+        tx0i, tx1i, ty0i, ty1i = _cel_caixa(tx0, tx1, ty0, ty1, mn_x, mn_y, g, W_, H_)
         idx_s = np.nonzero((tx1i - tx0i + 1) * (ty1i - ty0i + 1) <= 25)[0]
         tri_keep = np.ones(len(A), bool)
-        zf_flat = z_full.ravel()
+        zf_flat_ = z_full_.ravel()
         tri_keep[idx_s] = False
         for k0 in range(0, len(idx_s), 50_000):
             sl = idx_s[k0:k0 + 50_000]
-            tobj, tcel = _expandir_celulas(tx0i[sl], tx1i[sl], ty0i[sl], ty1i[sl], W)
-            np.logical_or.at(tri_keep, sl[tobj], tzmax[sl[tobj]] >= zf_flat[tcel] - 1e-9)
-        kept_idx = np.nonzero(tri_keep)[0]
-        if memo is not None:
-            z_full, zf_flat, W, H, kept_idx = memo.setdefault(
-                chave, (z_full, zf_flat, W, H, kept_idx)
-            )
+            tobj, tcel = _expandir_celulas(tx0i[sl], tx1i[sl], ty0i[sl], ty1i[sl], W_)
+            np.logical_or.at(tri_keep, sl[tobj], tzmax[sl[tobj]] >= zf_flat_[tcel] - 1e-9)
+        return z_full_, zf_flat_, W_, H_, np.nonzero(tri_keep)[0]
+
+    if memo is None:
+        entrada = _calc_mapa_z()
+    else:
+        entrada = memo.get(chave)
+        if entrada is None:
+            mk = (id(memo), chave)
+            with _MEMO_MGR_LOCK:
+                slot = _MEMO_CHAVE_LOCKS.get(mk)
+                if slot is None:
+                    slot = [threading.Lock(), 0]
+                    _MEMO_CHAVE_LOCKS[mk] = slot
+                slot[1] += 1
+            try:
+                with slot[0]:
+                    entrada = memo.get(chave)
+                    if entrada is None:
+                        entrada = memo.setdefault(chave, _calc_mapa_z())
+            finally:
+                with _MEMO_MGR_LOCK:
+                    slot[1] -= 1
+                    if slot[1] == 0:
+                        _MEMO_CHAVE_LOCKS.pop(mk, None)
+    z_full, zf_flat, W, H, kept_idx = entrada
     d = b - a
     step_g = 0.999 * g
     nsub_g = np.maximum(1, np.ceil(np.maximum(np.abs(d[:, 0]), np.abs(d[:, 1])) / step_g).astype(np.int64))

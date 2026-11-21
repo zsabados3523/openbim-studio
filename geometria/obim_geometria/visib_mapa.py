@@ -123,12 +123,9 @@ def _filtrar_e_recortar(
     pe, pt, a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
     tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin, nt_all, tol_z, d_eps, H_l,
 ):
-    """Deduplica pares antes dos gathers, aplica filtros e executa o recorte analitico."""
+    """Filtra por Z e caixa XY, deduplica pares e executa o recorte analitico."""
     if not len(pe):
         return
-    ch = _dedup_int64(pe.astype(np.int64) * nt_all + pt)
-    pe = ch // nt_all
-    pt = ch % nt_all
     m = (
         (tzmax[pt] > ezmin[pe] + tol_z) & (tx1[pt] >= ex0[pe]) & (tx0[pt] <= ex1[pe])
         & (ty1[pt] >= ey0[pe]) & (ty0[pt] <= ey1[pe])
@@ -137,6 +134,9 @@ def _filtrar_e_recortar(
         return
     pe = pe[m]
     pt = pt[m]
+    ch = _dedup_int64(pe.astype(np.int64) * nt_all + pt)
+    pe = ch // nt_all
+    pt = ch % nt_all
     tv_p = tv[pt]
     a_sh = (ea[pe] == tv_p[:, 0]) | (ea[pe] == tv_p[:, 1]) | (ea[pe] == tv_p[:, 2])
     b_sh = (eb[pe] == tv_p[:, 0]) | (eb[pe] == tv_p[:, 1]) | (eb[pe] == tv_p[:, 2])

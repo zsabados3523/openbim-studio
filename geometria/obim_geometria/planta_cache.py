@@ -89,7 +89,7 @@ def _poli_para_d(
 
 def _montar_svg(
     pav_guid: str,
-    pecas_secao: list[tuple[str, str, list[np.ndarray]]],
+    pecas_secao: list[tuple[str, str, list[np.ndarray], float, float]],
     pols_proj: list[np.ndarray],
     *,
     ox: float = 0.0,
@@ -101,10 +101,10 @@ def _montar_svg(
     partes_secao: list[str] = []
     n_paths = 0
 
-    for gid, classe, fechados in pecas_secao:
+    for gid, classe, fechados, px, py in pecas_secao:
         subpaths: list[str] = []
         for anel in fechados:
-            sub = _anel_para_d(anel, xs, ys, ox=ox, oy=oy)
+            sub = _anel_para_d(anel, xs, ys, ox=px, oy=py)
             if sub:
                 subpaths.append(sub)
         if not subpaths:
@@ -168,23 +168,53 @@ def desenhar_planta_cache(
         if not math.isfinite(z):
             return None, "erro_motor"
 
-        eps = 1e-9 * max(1.0, abs(z))
         oz = z if abs(z) > 1000.0 else 0.0
         z_local = z - oz
         eps_plano = max(1e-9, 1e-12 * max(1.0, abs(z_local)))
         ordenados = sorted(elementos_validos, key=lambda item: (str(item[1]), int(item[0])))
 
         t_corte0 = time.perf_counter()
-        enviados: list[int] = []
-        pecas_secao: list[tuple[str, str, list[np.ndarray]]] = []
-        grupos_secao: list[list[np.ndarray]] = []
-        malhas_proj: list[tuple[np.ndarray, np.ndarray]] = []
-        ox: float | None = None
-        oy: float = 0.0
-
+        xmin: float | None = None
+        xmax: float | None = None
+        ymin: float | None = None
+        ymax: float | None = None
         for id_step, gid in ordenados:
             if gid not in malhas_mundo:
                 return None, "malha_invalida"
+            verts_raw, tris_raw = malhas_mundo[gid]
+            validada = _validar_malha(verts_raw, tris_raw)
+            del verts_raw, tris_raw
+            if validada is None:
+                return None, "malha_invalida"
+            v, t = validada
+            del validada
+            if f.by_id(int(id_step)) is None:
+                return None, "erro_motor"
+            zmin_loc = float(v[:, 2].min()) - oz
+            if zmin_loc <= z_local + eps_plano:
+                px_min, px_max = float(v[:, 0].min()), float(v[:, 0].max())
+                py_min, py_max = float(v[:, 1].min()), float(v[:, 1].max())
+                xmin = px_min if xmin is None else min(xmin, px_min)
+                xmax = px_max if xmax is None else max(xmax, px_max)
+                ymin = py_min if ymin is None else min(ymin, py_min)
+                ymax = py_max if ymax is None else max(ymax, py_max)
+            del v, t
+
+        if xmin is not None and (
+            abs(xmin) > 1000.0 or abs(xmax) > 1000.0 or abs(ymin) > 1000.0 or abs(ymax) > 1000.0
+        ):
+            ox = 0.5 * (xmin + xmax)
+            oy = 0.5 * (ymin + ymax)
+        else:
+            ox = 0.0
+            oy = 0.0
+
+        enviados: list[int] = []
+        pecas_secao: list[tuple[str, str, list[np.ndarray], float, float]] = []
+        grupos_secao: list[list[np.ndarray]] = []
+        malhas_proj: list[tuple[np.ndarray, np.ndarray]] = []
+
+        for id_step, gid in ordenados:
             verts_raw, tris_raw = malhas_mundo[gid]
             validada = _validar_malha(verts_raw, tris_raw)
             del verts_raw, tris_raw
@@ -199,34 +229,43 @@ def desenhar_planta_cache(
             classe = str(el.is_a() or "IfcProduct")
             del el
 
-            zmin = float(v[:, 2].min())
-            zmax = float(v[:, 2].max())
-            if zmin > z + eps:
+            zmin_loc = float(v[:, 2].min()) - oz
+            zmax_loc = float(v[:, 2].max()) - oz
+            if zmin_loc > z_local + eps_plano:
                 del v, t
                 continue
 
-            if ox is None:
-                x0 = float(v[0, 0])
-                y0 = float(v[0, 1])
-                if abs(x0) > 1000.0 or abs(y0) > 1000.0:
-                    ox, oy = x0, y0
-                else:
-                    ox, oy = 0.0, 0.0
-
-            if ox != 0.0 or oy != 0.0 or oz != 0.0:
-                v = v.astype(np.float64, copy=True)
-                if ox != 0.0:
-                    v[:, 0] -= ox
-                if oy != 0.0:
-                    v[:, 1] -= oy
-                if oz != 0.0:
-                    v[:, 2] -= oz
-
             enviados.append(int(id_step))
-            if zmax <= z + eps:
+            if zmax_loc <= z_local + eps_plano:
+                if ox != 0.0 or oy != 0.0 or oz != 0.0:
+                    v = v.astype(np.float64, copy=True)
+                    if ox != 0.0:
+                        v[:, 0] -= ox
+                    if oy != 0.0:
+                        v[:, 1] -= oy
+                    if oz != 0.0:
+                        v[:, 2] -= oz
                 malhas_proj.append((v, t))
                 del v, t
                 continue
+
+            px_min, px_max = float(v[:, 0].min()), float(v[:, 0].max())
+            py_min, py_max = float(v[:, 1].min()), float(v[:, 1].max())
+            if abs(px_min) > 1000.0 or abs(px_max) > 1000.0 or abs(py_min) > 1000.0 or abs(py_max) > 1000.0:
+                px = 0.5 * (px_min + px_max)
+                py = 0.5 * (py_min + py_max)
+            else:
+                px = 0.0
+                py = 0.0
+
+            if px != 0.0 or py != 0.0 or oz != 0.0:
+                v = v.astype(np.float64, copy=True)
+                if px != 0.0:
+                    v[:, 0] -= px
+                if py != 0.0:
+                    v[:, 1] -= py
+                if oz != 0.0:
+                    v[:, 2] -= oz
 
             if np.any(np.abs(v[:, 2] - z_local) <= eps_plano):
                 return None, "secao_aberta"
@@ -242,11 +281,21 @@ def desenhar_planta_cache(
             if not grupos:
                 return None, "secao_aberta"
 
-            pecas_secao.append((str(gid), classe, fechados))
-            for rings, _ in grupos:
-                grupos_secao.append(rings)
+            pecas_secao.append((str(gid), classe, fechados, px, py))
+            dx_g, dy_g = px - ox, py - oy
+            if dx_g != 0.0 or dy_g != 0.0:
+                desloc = np.array([dx_g, dy_g], dtype=np.float64)
+                for rings, _ in grupos:
+                    grupos_secao.append([np.asarray(r, dtype=np.float64) + desloc for r in rings])
+            else:
+                for rings, _ in grupos:
+                    grupos_secao.append(rings)
             del fechados, abertos, grupos
             if len(t_ab) > 0:
+                if dx_g != 0.0 or dy_g != 0.0:
+                    v_ab = v_ab.astype(np.float64, copy=True)
+                    v_ab[:, 0] += dx_g
+                    v_ab[:, 1] += dy_g
                 malhas_proj.append((v_ab, t_ab))
             del v_ab, t_ab
 
@@ -281,7 +330,7 @@ def desenhar_planta_cache(
             pav_guid,
             pecas_secao,
             pols_proj,
-            ox=0.0 if ox is None else ox,
+            ox=ox,
             oy=oy,
         )
         del pecas_secao, pols_proj

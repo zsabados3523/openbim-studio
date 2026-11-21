@@ -2157,11 +2157,13 @@ def _anexar_telemetria_cache(
     queda: str | None,
     n_faltantes: int,
     cache_s: float,
+    secoes_parciais: int = 0,
 ) -> dict:
     """Anexa telemetria de despacho pelo cache sem sobrescrever faltantes/incompleta da T19i1."""
     resp["via_cache"] = bool(via_cache)
     resp["queda"] = queda
     resp["n_faltantes"] = int(n_faltantes)
+    resp["secoes_parciais"] = int(secoes_parciais)
     tempos = dict(resp.get("tempos") or {})
     tempos["cache_s"] = float(cache_s)
     motor_s = tempos.get("motor_s")
@@ -2228,7 +2230,12 @@ def _tentar_planta_pelo_cache(
 
     if isinstance(resp_ok, dict) and resp_ok.get("ok") is True and motivo is None:
         return _anexar_telemetria_cache(
-            resp_ok, via_cache=True, queda=None, n_faltantes=0, cache_s=cache_s
+            resp_ok,
+            via_cache=True,
+            queda=None,
+            n_faltantes=0,
+            cache_s=cache_s,
+            secoes_parciais=int(resp_ok.get("secoes_parciais") or 0),
         ), None, 0, cache_s
 
     motivo_final = motivo if motivo in _MOTIVOS_QUEDA_CACHE else "erro_motor"

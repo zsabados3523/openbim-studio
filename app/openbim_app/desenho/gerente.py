@@ -95,6 +95,7 @@ def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, 
         dados["via_cache"] = bool(getattr(r, "via_cache", False))
         dados["queda"] = getattr(r, "queda", None)
         dados["n_faltantes"] = int(getattr(r, "n_faltantes", 0) or 0)
+        dados["secoes_parciais"] = int(getattr(r, "secoes_parciais", 0) or 0)
     if tipo == "planta" and dados["pesados"] and not dados["via_cache"]:
         if previa is not None:
             previa(dados)

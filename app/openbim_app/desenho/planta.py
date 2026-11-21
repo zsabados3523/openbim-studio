@@ -40,6 +40,7 @@ class Planta:
     via_cache: bool = False
     queda: str | None = None
     n_faltantes: int = 0
+    secoes_parciais: int = 0
 
     @property
     def incompleta(self) -> bool:
@@ -265,4 +266,5 @@ def gerar_planta(
         via_cache=bool(r.get("via_cache", False)),
         queda=r.get("queda"),
         n_faltantes=int(r.get("n_faltantes") or 0),
+        secoes_parciais=int(r.get("secoes_parciais") or 0),
     )

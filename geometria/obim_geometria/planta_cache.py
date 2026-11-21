@@ -18,6 +18,13 @@ from obim_geometria import (
 )
 
 
+_DELTAS_PLANO = (1e-5, -1e-5, 3.7e-5, -3.7e-5)
+
+
+def _eps_plano(z_val: float) -> float:
+    return max(1e-9, 1e-12 * max(1.0, abs(z_val)))
+
+
 def _fmt6(v: float) -> str:
     """Formata coordenada com 6 casas decimais, normalizando -0.0 para 0.0."""
     return f"{round(float(v), 6) + 0.0:.6f}"
@@ -89,7 +96,7 @@ def _poli_para_d(
 
 def _montar_svg(
     pav_guid: str,
-    pecas_secao: list[tuple[str, str, list[np.ndarray], float, float]],
+    pecas_secao: list[tuple[str, str, list[np.ndarray], list[np.ndarray], float, float]],
     pols_proj: list[np.ndarray],
     *,
     ox: float = 0.0,
@@ -101,10 +108,14 @@ def _montar_svg(
     partes_secao: list[str] = []
     n_paths = 0
 
-    for gid, classe, fechados, px, py in pecas_secao:
+    for gid, classe, fechados, abertos, px, py in pecas_secao:
         subpaths: list[str] = []
         for anel in fechados:
             sub = _anel_para_d(anel, xs, ys, ox=px, oy=py)
+            if sub:
+                subpaths.append(sub)
+        for cadeia in abertos:
+            sub = _poli_para_d(cadeia, xs, ys, ox=px, oy=py)
             if sub:
                 subpaths.append(sub)
         if not subpaths:
@@ -170,14 +181,15 @@ def desenhar_planta_cache(
 
         oz = z if abs(z) > 1000.0 else 0.0
         z_local = z - oz
-        eps_plano = max(1e-9, 1e-12 * max(1.0, abs(z_local)))
+        eps_plano = _eps_plano(z_local)
         ordenados = sorted(elementos_validos, key=lambda item: (str(item[1]), int(item[0])))
 
+        cands_z = (z_local, *(z_local + d for d in _DELTAS_PLANO))
+        cands_eps = tuple(_eps_plano(zc) for zc in cands_z)
+        bloqueado = [False] * len(cands_z)
+        caixas_pecas: list[tuple[float, float, float, float, float]] = []
+
         t_corte0 = time.perf_counter()
-        xmin: float | None = None
-        xmax: float | None = None
-        ymin: float | None = None
-        ymax: float | None = None
         for id_step, gid in ordenados:
             if gid not in malhas_mundo:
                 return None, "malha_invalida"
@@ -190,15 +202,51 @@ def desenhar_planta_cache(
             del validada
             if f.by_id(int(id_step)) is None:
                 return None, "erro_motor"
-            zmin_loc = float(v[:, 2].min()) - oz
-            if zmin_loc <= z_local + eps_plano:
-                px_min, px_max = float(v[:, 0].min()), float(v[:, 0].max())
-                py_min, py_max = float(v[:, 1].min()), float(v[:, 1].max())
+
+            vz_loc = v[:, 2] - oz
+            zmin_loc = float(vz_loc.min())
+            zmax_loc = float(vz_loc.max())
+            for k, (zc, eps_c) in enumerate(zip(cands_z, cands_eps)):
+                if not bloqueado[k] and np.any(np.abs(vz_loc - zc) <= eps_c):
+                    bloqueado[k] = True
+            del vz_loc
+            if zmin_loc > z_local + eps_plano:
+                for k in range(1, len(cands_z)):
+                    if not bloqueado[k] and not (zmin_loc > cands_z[k] + cands_eps[k]):
+                        bloqueado[k] = True
+            if zmax_loc < z_local - eps_plano:
+                for k in range(1, len(cands_z)):
+                    if not bloqueado[k] and not (zmax_loc < cands_z[k] - cands_eps[k]):
+                        bloqueado[k] = True
+
+            caixas_pecas.append(
+                (
+                    zmin_loc,
+                    float(v[:, 0].min()),
+                    float(v[:, 0].max()),
+                    float(v[:, 1].min()),
+                    float(v[:, 1].max()),
+                )
+            )
+            del v, t
+
+        idx_ef = next((k for k, bloq in enumerate(bloqueado) if not bloq), None)
+        if idx_ef is None:
+            return None, "secao_aberta"
+        z_ef = cands_z[idx_ef]
+        eps_ef = cands_eps[idx_ef]
+
+        xmin: float | None = None
+        xmax: float | None = None
+        ymin: float | None = None
+        ymax: float | None = None
+        for zmin_loc, px_min, px_max, py_min, py_max in caixas_pecas:
+            if zmin_loc <= z_ef + eps_ef:
                 xmin = px_min if xmin is None else min(xmin, px_min)
                 xmax = px_max if xmax is None else max(xmax, px_max)
                 ymin = py_min if ymin is None else min(ymin, py_min)
                 ymax = py_max if ymax is None else max(ymax, py_max)
-            del v, t
+        del caixas_pecas
 
         if xmin is not None and (
             abs(xmin) > 1000.0 or abs(xmax) > 1000.0 or abs(ymin) > 1000.0 or abs(ymax) > 1000.0
@@ -210,9 +258,11 @@ def desenhar_planta_cache(
             oy = 0.0
 
         enviados: list[int] = []
-        pecas_secao: list[tuple[str, str, list[np.ndarray], float, float]] = []
+        pecas_secao: list[tuple[str, str, list[np.ndarray], list[np.ndarray], float, float]] = []
         grupos_secao: list[list[np.ndarray]] = []
         malhas_proj: list[tuple[np.ndarray, np.ndarray]] = []
+        n_cortadas = 0
+        secoes_parciais = 0
 
         for id_step, gid in ordenados:
             verts_raw, tris_raw = malhas_mundo[gid]
@@ -231,12 +281,12 @@ def desenhar_planta_cache(
 
             zmin_loc = float(v[:, 2].min()) - oz
             zmax_loc = float(v[:, 2].max()) - oz
-            if zmin_loc > z_local + eps_plano:
+            if zmin_loc > z_ef + eps_ef:
                 del v, t
                 continue
 
             enviados.append(int(id_step))
-            if zmax_loc <= z_local + eps_plano:
+            if zmax_loc <= z_ef + eps_ef:
                 if ox != 0.0 or oy != 0.0 or oz != 0.0:
                     v = v.astype(np.float64, copy=True)
                     if ox != 0.0:
@@ -267,21 +317,24 @@ def desenhar_planta_cache(
                 if oz != 0.0:
                     v[:, 2] -= oz
 
-            if np.any(np.abs(v[:, 2] - z_local) <= eps_plano):
+            n_cortadas += 1
+            if np.any(np.abs(v[:, 2] - z_ef) <= eps_ef):
                 return None, "secao_aberta"
 
-            v_ab, t_ab, segs = corte_plano.cortar_malha_no_plano(v, t, z_local)
+            v_ab, t_ab, segs = corte_plano.cortar_malha_no_plano(v, t, z_ef)
             del v, t
             fechados, abertos = aneis.aneis_de_segmentos(segs)
             del segs
-            if abertos or not fechados:
+            if not fechados and not abertos:
                 return None, "secao_aberta"
 
-            grupos = oclusores._agrupar_aneis(fechados)
-            if not grupos:
+            grupos = oclusores._agrupar_aneis(fechados) if fechados else []
+            if fechados and not grupos:
                 return None, "secao_aberta"
+            if abertos:
+                secoes_parciais += 1
 
-            pecas_secao.append((str(gid), classe, fechados, px, py))
+            pecas_secao.append((str(gid), classe, fechados, abertos, px, py))
             dx_g, dy_g = px - ox, py - oy
             if dx_g != 0.0 or dy_g != 0.0:
                 desloc = np.array([dx_g, dy_g], dtype=np.float64)
@@ -298,6 +351,9 @@ def desenhar_planta_cache(
                     v_ab[:, 1] += dy_g
                 malhas_proj.append((v_ab, t_ab))
             del v_ab, t_ab
+
+        if secoes_parciais > math.ceil(0.25 * n_cortadas):
+            return None, "secao_aberta"
 
         del malhas_mundo, ordenados
         corte_s = time.perf_counter() - t_corte0
@@ -343,6 +399,7 @@ def desenhar_planta_cache(
             "em_cache": [],
             "pesados": [],
             "falhas_geometria": [],
+            "secoes_parciais": int(secoes_parciais),
             "tempos": {
                 "abrir_s": float(abrir_s),
                 "geo_s": 0.0,

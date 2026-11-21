@@ -2271,7 +2271,13 @@ def _elementos_validos_cache(f, pedido: dict) -> list[tuple[int, str]]:
         if el is None or el.is_a("IfcOpeningElement"):
             continue
         rep_prod = getattr(el, "Representation", None)
-        if rep_prod is None or _eh_so_anotacao_rep(rep_prod, memo_src):
+        if rep_prod is None:
+            continue
+        try:
+            so_anot = _eh_so_anotacao_rep(rep_prod, memo_src)
+        except Exception:  # IFC malformado: na duvida o elemento fica (nao e filtrado)
+            so_anot = False
+        if so_anot:
             continue
         validos.append((int(id_step), str(gid)))
     return validos

@@ -330,7 +330,10 @@ def desenhar_planta_cache(
 
             grupos = oclusores._agrupar_aneis(fechados) if fechados else []
             if fechados and not grupos:
-                return None, "secao_aberta"
+                # T24h: aneis nao agrupaveis viram cadeias abertas (linha, fora da tampa)
+                abertos = list(abertos) + [np.asarray(a) for a in fechados]
+                fechados = []
+                grupos = []
             if abertos:
                 secoes_parciais += 1
 

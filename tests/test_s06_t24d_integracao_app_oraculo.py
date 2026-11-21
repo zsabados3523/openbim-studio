@@ -160,6 +160,7 @@ def _resp_aux(
     via_cache: bool = True,
     queda: str | None = None,
     n_faltantes: int = 0,
+    secoes_parciais: int = 0,
     motor_s: float = 0.07,
     cache_s: float = 0.02,
     corte_s: float = 0.01,
@@ -186,6 +187,7 @@ def _resp_aux(
         "via_cache": via_cache,
         "queda": queda,
         "n_faltantes": n_faltantes,
+        "secoes_parciais": secoes_parciais,
     }
 
 
@@ -267,6 +269,7 @@ def test_contrato_assinaturas_e_defaults():
     assert pl.via_cache is False
     assert pl.queda is None
     assert pl.n_faltantes == 0
+    assert type(pl.secoes_parciais) is int and pl.secoes_parciais == 0
 
 
 @pytest.mark.parametrize("invalido", [123, True, ["/tmp/geo"]])
@@ -751,14 +754,14 @@ def test_gerar_planta_reaproveita_cache_vista_ao_mudar_pasta_geometria(monkeypat
 
 
 @pytest.mark.parametrize(
-    "via_cache,queda,n_faltantes,motor_s",
+    "via_cache,queda,n_faltantes,secoes_parciais,motor_s",
     [
-        (True, None, 0, 0.123),
-        (False, "cache_incompleto", 3, 0.045),
+        (True, None, 0, 2, 0.123),
+        (False, "cache_incompleto", 3, 0, 0.045),
     ],
 )
-def test_planta_propaga_telemetria_cache_e_queda(monkeypatch, tmp_path, via_cache, queda, n_faltantes, motor_s):
-    """Mutante 5 (Planta): gerar_planta propaga via_cache, queda, n_faltantes e tempos['motor_s'] sem colidir com T19i1."""
+def test_planta_propaga_telemetria_cache_e_queda(monkeypatch, tmp_path, via_cache, queda, n_faltantes, secoes_parciais, motor_s):
+    """Mutante 5 (Planta): gerar_planta propaga via_cache, queda, n_faltantes, secoes_parciais e tempos['motor_s'] sem colidir com T19i1."""
     ifc = _stub_planta_env(monkeypatch)
     arq = _arquivo_ifc(tmp_path)
 
@@ -767,26 +770,27 @@ def test_planta_propaga_telemetria_cache_e_queda(monkeypatch, tmp_path, via_cach
         "VISTA_GUID",
         caminho_ifc=arq,
         pasta_cache_geometria=tmp_path / "geo",
-        executor=lambda _q: _resp_aux(via_cache=via_cache, queda=queda, n_faltantes=n_faltantes, motor_s=motor_s, cache_s=0.03),
+        executor=lambda _q: _resp_aux(via_cache=via_cache, queda=queda, n_faltantes=n_faltantes, secoes_parciais=secoes_parciais, motor_s=motor_s, cache_s=0.03),
     )
     assert pl.via_cache is via_cache
     assert pl.queda == queda
     assert pl.n_faltantes == n_faltantes
+    assert type(pl.secoes_parciais) is int and pl.secoes_parciais == secoes_parciais
     assert pl.tempos["motor_s"] == pytest.approx(motor_s)
     assert pl.tempos["cache_s"] == pytest.approx(0.03)
     assert pl.faltantes == () and pl.incompleta is False
 
 
 @pytest.mark.parametrize(
-    "via_cache,queda,n_faltantes,motor_s",
+    "via_cache,queda,n_faltantes,secoes_parciais,motor_s",
     [
-        (True, None, 0, 0.11),
-        (False, "secao_aberta", 0, 0.08),
-        (False, "cache_incompleto", 4, 0.0),
+        (True, None, 0, 1, 0.11),
+        (False, "secao_aberta", 0, 0, 0.08),
+        (False, "cache_incompleto", 4, 0, 0.0),
     ],
 )
-def test_motor_padrao_e_sinal_pronto_propagam_telemetria(qt_app, monkeypatch, tmp_path, via_cache, queda, n_faltantes, motor_s):
-    """Mutante 5 (gerente): _motor_padrao e sinal pronto carregam via_cache, queda, n_faltantes e tempos['motor_s']."""
+def test_motor_padrao_e_sinal_pronto_propagam_telemetria(qt_app, monkeypatch, tmp_path, via_cache, queda, n_faltantes, secoes_parciais, motor_s):
+    """Mutante 5 (gerente): _motor_padrao e sinal pronto carregam via_cache, queda, n_faltantes, secoes_parciais e tempos['motor_s']."""
     monkeypatch.setenv("OBIM_CACHE_DIR", str(tmp_path / "cache"))
     _criar_banco_valido(C.pasta_geometria())
     arq = _arquivo_ifc(tmp_path)
@@ -804,6 +808,7 @@ def test_motor_padrao_e_sinal_pronto_propagam_telemetria(qt_app, monkeypatch, tm
             via_cache=via_cache,
             queda=queda,
             n_faltantes=n_faltantes,
+            secoes_parciais=secoes_parciais,
         )
 
     monkeypatch.setattr(P, "gerar_planta", _fake_planta)
@@ -817,6 +822,7 @@ def test_motor_padrao_e_sinal_pronto_propagam_telemetria(qt_app, monkeypatch, tm
     assert dados_dir["via_cache"] is via_cache
     assert dados_dir["queda"] == queda
     assert dados_dir["n_faltantes"] == n_faltantes
+    assert type(dados_dir["secoes_parciais"]) is int and dados_dir["secoes_parciais"] == secoes_parciais
     assert dados_dir["tempos"]["motor_s"] == pytest.approx(motor_s)
 
     # (b) sinal pronto do GerenteDesenho
@@ -826,6 +832,7 @@ def test_motor_padrao_e_sinal_pronto_propagam_telemetria(qt_app, monkeypatch, tm
         assert dados_sig["via_cache"] is via_cache
         assert dados_sig["queda"] == queda
         assert dados_sig["n_faltantes"] == n_faltantes
+        assert type(dados_sig["secoes_parciais"]) is int and dados_sig["secoes_parciais"] == secoes_parciais
         assert dados_sig["tempos"]["motor_s"] == pytest.approx(motor_s)
     finally:
         g.fechar()

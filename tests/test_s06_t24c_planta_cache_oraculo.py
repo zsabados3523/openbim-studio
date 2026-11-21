@@ -709,22 +709,40 @@ def test_mutante_01b_gid_ausente_em_malhas_mundo_cai_malha_invalida():
 
 
 def test_mutante_02_secao_aberta_ignora_ou_pula_peca():
-    """Mutante 2: desenhar secao aberta ou pular a peca em vez de cair com `secao_aberta`."""
+    """Mutante 2: desenhar ou pular peca em vez de cair com `secao_aberta` nos casos acima do limite T24f."""
     pc = _mod()
     v_boa, t_boa = _caixa_np(5.0, 0.0, 0.0, 8.0, 0.2, 2.8)
 
-    # Caso A: caixa cortada sem uma face lateral -> abertos != []
-    v_ab, t_ab = _caixa_np(0.0, 0.0, 0.0, 2.0, 0.3, 2.8)
+    # Caso A (ajustado T24f): 2 pecas abertas em 3 cortadas (> ceil(0.25*3)=1) -> cai secao_aberta
+    v_ab1, t_ab1 = _caixa_np(0.0, 0.0, 0.0, 2.0, 0.3, 2.8)
+    v_ab2, t_ab2 = _caixa_np(0.0, 2.0, 0.0, 2.0, 2.3, 2.8)
     f1, p1, m1, e1 = _montar_cena_numpy(
-        [(10, "G_BOA", "IfcWall", (v_boa, t_boa)), (11, "G_ABERTA", "IfcWall", (v_ab, t_ab[:-2]))],
+        [
+            (10, "G_BOA", "IfcWall", (v_boa, t_boa)),
+            (11, "G_ABERTA_1", "IfcWall", (v_ab1, t_ab1[:-2])),
+            (12, "G_ABERTA_2", "IfcWall", (v_ab2, t_ab2[:-2])),
+        ],
         altura_corte_m=1.2,
     )
     r1, mot1 = pc.desenhar_planta_cache(f1, p1, m1, e1)
     assert r1 is None and mot1 == "secao_aberta"
 
-    # Caso B: malha que cruza z_corte com face horizontal exatamente em z_corte
+    # Caso B (ajustado T24f): malha com vertices ocupando z=1.2 e todos os 4 deltas (+-1e-5, +-3.7e-5) -> cai secao_aberta
+    zs_bloq = [0.0, 1.2 - 3.7e-5, 1.2 - 1e-5, 1.2, 1.2 + 1e-5, 1.2 + 3.7e-5, 2.8]
+    v_imp = np.array(
+        [[x, y, z] for z in zs_bloq for x, y in ((0.0, 0.0), (1.0, 0.0), (1.0, 0.4), (0.0, 0.4))],
+        dtype=np.float64,
+    )
+    t_imp = [[0, 2, 1], [0, 3, 2]]
+    for k in range(len(zs_bloq) - 1):
+        b, top_k = 4 * k, 4 * (k + 1)
+        for i in range(4):
+            j = (i + 1) % 4
+            t_imp.extend([[b + i, b + j, top_k + j], [b + i, top_k + j, top_k + i]])
+    top_f = 4 * (len(zs_bloq) - 1)
+    t_imp.extend([[top_f, top_f + 1, top_f + 2], [top_f, top_f + 2, top_f + 3]])
     f2, p2, m2, e2 = _montar_cena_numpy(
-        [(10, "G_BOA", "IfcWall", (v_boa, t_boa)), (12, "G_DEGRAU", "IfcWall", _degrau_no_plano_np(1.2))],
+        [(10, "G_BOA", "IfcWall", (v_boa, t_boa)), (12, "G_DEGRAU_IMP", "IfcWall", (v_imp, np.asarray(t_imp, dtype=np.int32)))],
         altura_corte_m=1.2,
     )
     r2, mot2 = pc.desenhar_planta_cache(f2, p2, m2, e2)
@@ -979,11 +997,15 @@ def test_integracao_desenho_quedas_secao_aberta_e_malha_invalida(tmp_path, monke
 
     real_ler = desenho.cache_leitura.malhas_do_cache
 
-    # 1) Injeta malha com secao aberta na parede -> cai pavimento inteiro com queda="secao_aberta"
+    # 1) Injeta malha cortada sem nenhum segmento de corte (T24f: 1/1 aberta seria parcial aceita) -> cai secao_aberta
     def ler_secao_aberta(cache, doc, ids):
         malhas, falt = real_ler(cache, doc, ids)
-        v_ab, t_ab = _caixa_np(0.0, 0.0, 0.0, 4.0, 0.2, 2.8)
-        malhas[cena.parede.GlobalId] = (v_ab, t_ab[:-2])
+        v_sem_seg = np.array(
+            [[0.0, 0.0, 0.0], [4.0, 0.0, 0.0], [4.0, 0.2, 0.0], [0.0, 0.0, 2.8], [4.0, 0.0, 2.8], [4.0, 0.2, 2.8]],
+            dtype=np.float64,
+        )
+        t_sem_seg = np.array([[0, 1, 2], [3, 4, 5]], dtype=np.int32)
+        malhas[cena.parede.GlobalId] = (v_sem_seg, t_sem_seg)
         return malhas, falt
 
     monkeypatch.setattr(desenho.cache_leitura, "malhas_do_cache", ler_secao_aberta)

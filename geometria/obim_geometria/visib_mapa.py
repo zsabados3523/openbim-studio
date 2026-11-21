@@ -5,7 +5,16 @@ from __future__ import annotations
 import math
 import numpy as np
 
-from obim_geometria.visib_base import _aplicar_corte, _dedup_int64, _fatias, _rle_idx, _varredura_x
+from obim_geometria.visib_base import (
+    _aplicar_corte,
+    _cel_caixa,
+    _dedup_int64,
+    _expandir_celulas,
+    _fatias,
+    _rle_idx,
+    _subseg_cels,
+    _varredura_x,
+)
 
 
 def _mapa_z_conservador(A, gx, gy, nx_, ny_, cc_, tx0, tx1, ty0, ty1, mn_x, mn_y, mx_x, mx_y, res_c):
@@ -208,3 +217,136 @@ def _filtrar_e_recortar(
         H_l.append(_unir_intervalos(pe[v], lo[v], hi[v]))
         if len(H_l) > 1 and sum(len(x[0]) for x in H_l[1:]) >= max(1_500_000, len(H_l[0][0])):
             _compactar_H(H_l)
+
+
+def _subgrade_celulas_densas(
+    eobj_d, ecel_d, cont, ini_cel, tri_por_cel, bx0: int, by0: int, Wl: int,
+    mn_x: float, mn_y: float, cg: float,
+    a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
+    tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin, nt_all: int,
+    tol_z: float, d_eps: float, H_l: list,
+):
+    """Subdivide apenas celulas densas em grade de 2o nivel preservando a, b, d originais."""
+    cels_u = np.unique(ecel_d)
+    ts_parts = [tri_por_cel[ini_cel[c]:ini_cel[c] + cont[c]] for c in cels_u]
+    t_densos = np.unique(np.concatenate(ts_parts))
+    if not len(t_densos):
+        return
+
+    cy_d = by0 + (cels_u // Wl)
+    cx_d = bx0 + (cels_u % Wl)
+    sub_x0 = mn_x + float(cx_d.min()) * cg
+    sub_x1 = mn_x + float(cx_d.max() + 1) * cg
+    sub_y0 = mn_y + float(cy_d.min()) * cg
+    sub_y1 = mn_y + float(cy_d.max() + 1) * cg
+    dx_s = max(sub_x1 - sub_x0, cg)
+    dy_s = max(sub_y1 - sub_y0, cg)
+    area_d = float(len(cels_u)) * cg * cg
+    cg_sub = max(1e-4, min(cg / 4.0, math.sqrt(area_d / max(len(t_densos) / 4.0, 1.0))))
+    Ws = int(math.ceil(dx_s / cg_sub)) + 2
+    Hs = int(math.ceil(dy_s / cg_sub)) + 2
+    while Ws * Hs > 2_000_000:
+        cg_sub *= 1.5
+        Ws = int(math.ceil(dx_s / cg_sub)) + 2
+        Hs = int(math.ceil(dy_s / cg_sub)) + 2
+
+    eps = abs(d_eps)
+    ix0, ix1, iy0, iy1 = _cel_caixa(
+        tx0[t_densos] - eps, tx1[t_densos] + eps,
+        ty0[t_densos] - eps, ty1[t_densos] + eps,
+        sub_x0, sub_y0, cg_sub, Ws, Hs,
+    )
+    n_sub = (ix1 - ix0 + 1) * (iy1 - iy0 + 1)
+    eh_grd = n_sub > 64
+    t_grd = t_densos[eh_grd]
+    t_fino_m = ~eh_grd
+
+    eo_u = np.unique(eobj_d)
+    if len(t_grd):
+        eo_g = eo_u
+        if len(t_grd) * len(eo_g) > 200_000:
+            mg = (
+                (ex1[eo_g] >= tx0[t_grd].min()) & (ex0[eo_g] <= tx1[t_grd].max())
+                & (ey1[eo_g] >= ty0[t_grd].min()) & (ey0[eo_g] <= ty1[t_grd].max())
+                & (ezmin[eo_g] < tzmax[t_grd].max() - tol_z)
+            )
+            eo_g = eo_g[mg]
+        if len(eo_g):
+            step_g = max(1, 200_000 // len(eo_g))
+            for g0 in range(0, len(t_grd), step_g):
+                tg = t_grd[g0:g0 + step_g]
+                _filtrar_e_recortar(
+                    np.repeat(eo_g, len(tg)), np.tile(tg, len(eo_g)),
+                    a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
+                    tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin, nt_all,
+                    tol_z, d_eps, H_l,
+                )
+
+    if not np.any(t_fino_m):
+        return
+    t_fino = t_densos[t_fino_m]
+    tobj_s, tcel_s = _expandir_celulas(ix0[t_fino_m], ix1[t_fino_m], iy0[t_fino_m], iy1[t_fino_m], Ws)
+    tobj_s = t_fino[tobj_s]
+    ord_ts = np.argsort(tcel_s, kind="stable")
+    tri_sub = tobj_s[ord_ts]
+    cel_sub_ord = tcel_s[ord_ts]
+    ncel_s = Ws * Hs
+    cont_s = np.bincount(cel_sub_ord, minlength=ncel_s)
+    ini_s = np.cumsum(cont_s) - cont_s
+    sub_tzmax = np.full(ncel_s, -np.inf)
+    np.maximum.at(sub_tzmax, cel_sub_ord, tzmax[tri_sub])
+
+    p0x, p0y = a[eo_u, 0], a[eo_u, 1]
+    ddx, ddy = d[eo_u, 0], d[eo_u, 1]
+    t_lo = np.zeros(len(eo_u), dtype=np.float64)
+    t_hi = np.ones(len(eo_u), dtype=np.float64)
+    pad_box = eps + 1e-9
+    for comp_d, comp_p, lo_b, hi_b in (
+        (ddx, p0x, sub_x0 - pad_box, sub_x1 + pad_box),
+        (ddy, p0y, sub_y0 - pad_box, sub_y1 + pad_box),
+    ):
+        nz = np.abs(comp_d) > 1e-15
+        fora = (~nz) & ((comp_p < lo_b) | (comp_p > hi_b))
+        t_hi = np.where(fora, -1.0, t_hi)
+        inv = np.where(nz, 1.0 / np.where(nz, comp_d, 1.0), 0.0)
+        ta = (lo_b - comp_p) * inv
+        tb = (hi_b - comp_p) * inv
+        t_lo = np.where(nz, np.maximum(t_lo, np.minimum(ta, tb)), t_lo)
+        t_hi = np.where(nz, np.minimum(t_hi, np.maximum(ta, tb)), t_hi)
+    ok_clip = t_hi >= t_lo - 1e-12
+    if not np.any(ok_clip):
+        return
+    eo_c = eo_u[ok_clip]
+    t_lo = np.clip(t_lo[ok_clip], 0.0, 1.0)
+    t_hi = np.clip(t_hi[ok_clip], 0.0, 1.0)
+    a_clip = a[eo_c] + t_lo[:, None] * d[eo_c]
+    d_clip = (t_hi - t_lo)[:, None] * d[eo_c]
+
+    step_s = 0.999 * cg_sub
+    span_s = np.maximum(np.abs(d_clip[:, 0]), np.abs(d_clip[:, 1]))
+    nsub_s = np.maximum(1, np.ceil(span_s / step_s).astype(np.int64))
+    for e0, e1 in _fatias(nsub_s, 400_000):
+        ec_s = eo_c[e0:e1]
+        s_l, _, _, sa, sb, sx0, sx1, sy0, sy1 = _subseg_cels(
+            a_clip[e0:e1], d_clip[e0:e1], nsub_s[e0:e1], sub_x0, sub_y0, cg_sub, Ws, Hs
+        )
+        sobj, scel = _expandir_celulas(sx0, sx1, sy0, sy1, Ws)
+        ok_sc = sub_tzmax[scel] > np.minimum(sa[:, 2], sb[:, 2])[sobj] + tol_z
+        eo_s = ec_s[s_l[sobj[ok_sc]]]
+        ecel_s = scel[ok_sc]
+        if not len(eo_s):
+            continue
+        ch_s = _dedup_int64(eo_s.astype(np.int64) * ncel_s + ecel_s)
+        eo_s = ch_s // ncel_s
+        ecel_s = ch_s % ncel_s
+        nt_s = cont_s[ecel_s]
+        nz = nt_s > 0
+        eo_s, ecel_s, nt_s = eo_s[nz], ecel_s[nz], nt_s[nz]
+        for p0, p1 in _fatias(nt_s, 200_000, chaves=eo_s):
+            g3, kk = _rle_idx(nt_s[p0:p1])
+            _filtrar_e_recortar(
+                eo_s[p0:p1][g3], tri_sub[ini_s[ecel_s[p0:p1]][g3] + kk],
+                a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
+                tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin, nt_all,
+                tol_z, d_eps, H_l,
+            )

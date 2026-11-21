@@ -399,40 +399,63 @@ def recortar_fora_dos_aneis(polilinhas, aneis, encolher: float = 5e-4):
     pad = max(0.0, encolher) + 1e-5
     eps2 = _EPS * _EPS
 
-    pols_pts: list[np.ndarray] = []
-    segs_info: list[tuple[int, np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = []
-    ativos_idx: list[int] = []
-
-    for poli in polilinhas:
-        pts = np.asarray(poli, dtype=float)
-        if len(pts) < 2:
-            continue
-        p_idx = len(pols_pts)
-        pols_pts.append(pts)
-        if not grupos:
-            continue
-        pmin_x, pmin_y = float(pts[:, 0].min()) - pad, float(pts[:, 1].min()) - pad
-        pmax_x, pmax_y = float(pts[:, 0].max()) + pad, float(pts[:, 1].max()) + pad
-        if not any(_sobrepoe(g.bbox, pmin_x, pmin_y, pmax_x, pmax_y) for g in grupos):
-            continue
-
-        d = pts[1:] - pts[:-1]
-        aa_all = d[:, 0] * d[:, 0] + d[:, 1] * d[:, 1]
-        valid_i = np.flatnonzero(~(aa_all <= eps2))  # NaN nao e descartado (como a referencia)
-        if len(valid_i) > 0:
-            ativos_idx.append(p_idx)
-            segs_info.append((p_idx, valid_i, d[valid_i, 0], d[valid_i, 1], aa_all[valid_i]))
-
+    pols_pts = [arr for poli in polilinhas if len(arr := np.asarray(poli, dtype=float)) >= 2]
+    if not pols_pts:
+        return []
     if not grupos:
         return [pts.copy() for pts in pols_pts]
 
-    intervs_por_poli: dict[int, list[list[tuple[float, float]]]] = {}
-    if segs_info:
-        all_ax = np.concatenate([pols_pts[pi][vi, 0] for pi, vi, _, _, _ in segs_info])
-        all_ay = np.concatenate([pols_pts[pi][vi, 1] for pi, vi, _, _, _ in segs_info])
-        all_dx = np.concatenate([dx for _, _, dx, _, _ in segs_info])
-        all_dy = np.concatenate([dy for _, _, _, dy, _ in segs_info])
-        all_aa = np.concatenate([aa for _, _, _, _, aa in segs_info])
+    n_pols = len(pols_pts)
+    lens = np.fromiter((len(pts) for pts in pols_pts), dtype=np.intp, count=n_pols)
+    offsets = np.empty(n_pols + 1, dtype=np.intp)
+    offsets[0] = 0
+    np.cumsum(lens, out=offsets[1:])
+    pts_cat = np.concatenate(pols_pts, axis=0)
+
+    pmin_x = np.minimum.reduceat(pts_cat[:, 0], offsets[:-1]) - pad
+    pmax_x = np.maximum.reduceat(pts_cat[:, 0], offsets[:-1]) + pad
+    pmin_y = np.minimum.reduceat(pts_cat[:, 1], offsets[:-1]) - pad
+    pmax_y = np.maximum.reduceat(pts_cat[:, 1], offsets[:-1]) + pad
+
+    g_bboxes = np.asarray([g.bbox for g in grupos], dtype=float)
+    gmin_x, gmin_y, gmax_x, gmax_y = g_bboxes[:, 0], g_bboxes[:, 1], g_bboxes[:, 2], g_bboxes[:, 3]
+    sobrepoe_poli = np.zeros(n_pols, dtype=bool)
+    step_p = max(1, _MAX_ELEMS_BLOCO // max(1, len(grupos)))
+    for ini in range(0, n_pols, step_p):
+        fim = min(n_pols, ini + step_p)
+        sobrepoe_poli[ini:fim] = np.any(
+            (gmin_x[None, :] <= pmax_x[ini:fim, None])
+            & (gmax_x[None, :] >= pmin_x[ini:fim, None])
+            & (gmin_y[None, :] <= pmax_y[ini:fim, None])
+            & (gmax_y[None, :] >= pmin_y[ini:fim, None]),
+            axis=1,
+        )
+
+    seg_mask = np.repeat(sobrepoe_poli, lens)[:-1]
+    if n_pols > 1:
+        seg_mask[offsets[1:-1] - 1] = False
+    idx_cand = np.flatnonzero(seg_mask)
+
+    idx_val = np.empty(0, dtype=np.intp)
+    if len(idx_cand) > 0:
+        dx_c = pts_cat[idx_cand + 1, 0] - pts_cat[idx_cand, 0]
+        dy_c = pts_cat[idx_cand + 1, 1] - pts_cat[idx_cand, 1]
+        aa_c = dx_c * dx_c + dy_c * dy_c
+        ok_c = ~(aa_c <= eps2)  # NaN nao e descartado (como a referencia)
+        idx_val = idx_cand[ok_c]
+
+    n_tot = len(idx_val)
+    seg_intacto = np.ones(n_tot, dtype=bool)
+    intervs_cortados: dict[int, list[tuple[float, float]]] = {}
+    n_segs_poli = np.zeros(n_pols, dtype=np.intp)
+    poli_tem_corte = np.zeros(n_pols, dtype=bool)
+
+    if n_tot > 0:
+        all_ax = pts_cat[idx_val, 0]
+        all_ay = pts_cat[idx_val, 1]
+        all_dx = dx_c[ok_c]
+        all_dy = dy_c[ok_c]
+        all_aa = aa_c[ok_c]
         all_bx = all_ax + all_dx
         all_by = all_ay + all_dy
         all_sl = np.sqrt(all_aa)
@@ -440,9 +463,6 @@ def recortar_fora_dos_aneis(polilinhas, aneis, encolher: float = 5e-4):
         all_smax_x = np.maximum(all_ax, all_bx) + pad
         all_smin_y = np.minimum(all_ay, all_by) - pad
         all_smax_y = np.maximum(all_ay, all_by) + pad
-
-        n_tot = len(all_ax)
-        intervs_seg: list[list[tuple[float, float]]] = [[(0.0, 1.0)] for _ in range(n_tot)]
 
         for b_ini in range(0, n_tot, _BLOCO_SEG):
             b_fim = min(n_tot, b_ini + _BLOCO_SEG)
@@ -491,7 +511,9 @@ def recortar_fora_dos_aneis(polilinhas, aneis, encolher: float = 5e-4):
                         sub_seg_list.append(s_loc)
                         sub_t0_list.append(unicos[k])
                         sub_t1_list.append(unicos[k + 1])
-                intervs_seg[b_ini + s_loc] = []
+                s_glob = b_ini + s_loc
+                seg_intacto[s_glob] = False
+                intervs_cortados[s_glob] = []
 
             sub_seg = np.asarray(sub_seg_list, dtype=np.intp)
             sub_t0 = np.asarray(sub_t0_list, dtype=float)
@@ -504,46 +526,68 @@ def recortar_fora_dos_aneis(polilinhas, aneis, encolher: float = 5e-4):
             for idx_k in np.flatnonzero(~dentro).tolist():
                 s_glob = b_ini + int(sub_seg[idx_k])
                 t0_k, t1_k = float(sub_t0[idx_k]), float(sub_t1[idx_k])
-                iv = intervs_seg[s_glob]
+                iv = intervs_cortados[s_glob]
                 if iv and iv[-1][1] == t0_k:
                     iv[-1] = (iv[-1][0], t1_k)
                 else:
                     iv.append((t0_k, t1_k))
 
-        offset = 0
-        for pi, vi, _, _, _ in segs_info:
-            n_v = len(vi)
-            intervs_por_poli[pi] = (vi, intervs_seg[offset:offset + n_v])
-            offset += n_v
+        seg_poli = np.repeat(np.arange(n_pols, dtype=np.intp), lens)[idx_val]
+        n_segs_poli = np.bincount(seg_poli, minlength=n_pols)
+        if not np.all(seg_intacto):
+            poli_tem_corte = np.bincount(seg_poli, weights=(~seg_intacto), minlength=n_pols) > 0
 
     saida: list[np.ndarray] = []
-    for p_idx, pts in enumerate(pols_pts):
-        info_p = intervs_por_poli.get(p_idx)
-        if info_p is None:
-            pmin_x, pmin_y = float(pts[:, 0].min()) - pad, float(pts[:, 1].min()) - pad
-            pmax_x, pmax_y = float(pts[:, 0].max()) + pad, float(pts[:, 1].max()) + pad
-            if not any(_sobrepoe(g.bbox, pmin_x, pmin_y, pmax_x, pmax_y) for g in grupos):
+    offset = 0
+    for p_idx in range(n_pols):
+        if not sobrepoe_poli[p_idx]:
+            saida.append(pols_pts[p_idx].copy())
+            continue
+        n_v = int(n_segs_poli[p_idx])
+        if n_v == 0:
+            continue
+        if not poli_tem_corte[p_idx]:
+            pts = pols_pts[p_idx]
+            if n_v == int(lens[p_idx]) - 1:
                 saida.append(pts.copy())
+            else:
+                vi = idx_val[offset:offset + n_v] - offsets[p_idx]
+                pt_idx = np.empty(n_v + 1, dtype=np.intp)
+                pt_idx[0] = vi[0]
+                pt_idx[1:] = vi + 1
+                saida.append(pts[pt_idx])
+            offset += n_v
             continue
 
-        vi, ivs = info_p
-        atual = None
-        for idx_s, i in enumerate(vi.tolist()):
-            interv = ivs[idx_s]
-            ax, ay = float(pts[i, 0]), float(pts[i, 1])
-            dx, dy = float(pts[i + 1, 0]) - ax, float(pts[i + 1, 1]) - ay
-            for t0, t1 in interv:
-                p0 = pts[i].copy() if t0 == 0.0 else np.array([ax + t0 * dx, ay + t0 * dy])
-                p1 = pts[i + 1].copy() if t1 == 1.0 else np.array([ax + t1 * dx, ay + t1 * dy])
-                if atual is not None and t0 == 0.0:
-                    atual.append(p1)
+        atual: list[tuple[float, float]] | None = None
+        for s_glob in range(offset, offset + n_v):
+            s_cat = int(idx_val[s_glob])
+            ax = float(pts_cat[s_cat, 0])
+            ay = float(pts_cat[s_cat, 1])
+            bx = float(pts_cat[s_cat + 1, 0])
+            by = float(pts_cat[s_cat + 1, 1])
+            if seg_intacto[s_glob]:
+                if atual is not None:
+                    atual.append((bx, by))
                 else:
-                    if atual is not None:
-                        saida.append(np.vstack(atual))
-                    atual = [p0, p1]
-            if (not interv or interv[-1][1] != 1.0) and atual is not None:
-                saida.append(np.vstack(atual))
-                atual = None
+                    atual = [(ax, ay), (bx, by)]
+            else:
+                interv = intervs_cortados[s_glob]
+                dx = float(all_dx[s_glob])
+                dy = float(all_dy[s_glob])
+                for t0, t1 in interv:
+                    p0 = (ax, ay) if t0 == 0.0 else (ax + t0 * dx, ay + t0 * dy)
+                    p1 = (bx, by) if t1 == 1.0 else (ax + t1 * dx, ay + t1 * dy)
+                    if atual is not None and t0 == 0.0:
+                        atual.append(p1)
+                    else:
+                        if atual is not None:
+                            saida.append(np.asarray(atual, dtype=float))
+                        atual = [p0, p1]
+                if (not interv or interv[-1][1] != 1.0) and atual is not None:
+                    saida.append(np.asarray(atual, dtype=float))
+                    atual = None
         if atual is not None:
-            saida.append(np.vstack(atual))
+            saida.append(np.asarray(atual, dtype=float))
+        offset += n_v
     return saida

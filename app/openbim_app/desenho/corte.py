@@ -159,7 +159,7 @@ def _gerar_corte_uma_vez(
                 else {}
             )
             with auxiliar.preparar(ifc, pedido, **kw_prep) as p:
-                sig_prep = p.pedido.get("assinatura")
+                sig_prep = (getattr(p, "pedido", None) or {}).get("assinatura")
                 r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor, filho=filho)
             if cancelar is not None and cancelar.is_set():
                 raise auxiliar.DesenhoCancelado("Operação cancelada antes de gravar no cache")

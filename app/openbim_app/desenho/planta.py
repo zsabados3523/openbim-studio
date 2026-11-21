@@ -183,7 +183,7 @@ def gerar_planta(
             else {}
         )
         with auxiliar.preparar(ifc, pedido, **kw_prep) as p:
-            sig_prep = p.pedido.get("assinatura")
+            sig_prep = (getattr(p, "pedido", None) or {}).get("assinatura")
             return (
                 auxiliar.executar(
                     p,

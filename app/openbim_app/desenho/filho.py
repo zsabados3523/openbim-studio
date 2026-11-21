@@ -405,12 +405,49 @@ class FilhoPersistente:
             limite_s=limite_s,
         )
         with self._trava:
-            if not self._fechado and self._proc is not None and self._proc.is_alive():
+            if not self._fechado and self._proc is not None and self._proc.is_alive() and self._construcao_ativa:
                 self._construcao_params = params
-                self._construcao_ativa = bool(
-                    dados.get("aceito") and int(dados.get("pendentes", 0)) > 0 and dados.get("parado") is None
-                )
         return dados
+
+    def consultar_estado_construcao(self, *, timeout_s: float = 0.5) -> bool | None:
+        """Consulta estado_construcao sem matar o filho em timeout/erro; retorna construcao_ativa ou None se falhou."""
+        aux = _auxiliar()
+        limite = max(0.01, float(timeout_s))
+        if not self._trava.acquire(timeout=limite):
+            return None
+        try:
+            if self._fechado or not self._construcao_ativa:
+                return False
+            if self._proc is None:
+                self._construcao_ativa = False
+                return False
+            if not self._proc.is_alive():
+                self._tratar_morte(self._codigo_saida())
+                return False
+            fim = time.monotonic() + limite
+            try:
+                dados = self._enviar_e_ler(
+                    {"op": "estado_construcao", "arquivo": self.arquivo},
+                    fim,
+                    None,
+                    limite,
+                    aux,
+                )
+            except aux.AuxiliarCaiu as e:
+                self._tratar_morte(e.codigo_saida)
+                return False
+            except Exception:
+                return None
+            if not isinstance(dados, dict) or dados.get("ok") is False:
+                return None
+            self._construcao_ativa = bool(
+                dados.get("ativo", True)
+                and int(dados.get("pendentes", 0)) > 0
+                and dados.get("parado") is None
+            )
+            return self._construcao_ativa
+        finally:
+            self._trava.release()
 
     def salvar(self) -> None:
         with self._trava:

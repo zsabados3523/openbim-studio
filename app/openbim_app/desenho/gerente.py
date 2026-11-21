@@ -16,6 +16,7 @@ import itertools
 import math
 import os
 import threading
+import time
 import weakref
 from collections import deque
 from pathlib import Path
@@ -202,6 +203,9 @@ class GerenteDesenho(QObject):
         teto_memoria_mb: float = 6500.0,
         custo_trabalhador_mb: float = 2000.0,
         medir_rss_mb=None,
+        intervalo_estado_s: float = 5.0,
+        timeout_estado_s: float = 0.5,
+        relogio=time.monotonic,
         parent=None,
     ):
         super().__init__(parent)
@@ -217,6 +221,11 @@ class GerenteDesenho(QObject):
         self._teto_memoria_mb = float(teto_memoria_mb)
         self._custo_trabalhador_mb = float(custo_trabalhador_mb)
         self._medir_rss_mb = medir_rss_mb
+        self._intervalo_estado_s = max(0.0, float(intervalo_estado_s))
+        self._timeout_estado_s = max(0.01, float(timeout_estado_s))
+        self._relogio = relogio
+        self._ultima_consulta_estado: float | None = None
+        self._consultando_estado = False
         if motor is None:
             from openbim_app.desenho.cache import CacheDesenho
             motor = functools.partial(
@@ -246,6 +255,50 @@ class GerenteDesenho(QObject):
         with self._trava:
             return any(getattr(f, "construcao_ativa", False) for f in self._filhos_doc.values())
 
+    def _consultar_estado_fundo(self, filhos: list, timeout_s: float) -> None:
+        desativou = False
+        try:
+            for f in filhos:
+                consultar = getattr(f, "consultar_estado_construcao", None)
+                if callable(consultar):
+                    try:
+                        if consultar(timeout_s=timeout_s) is False:
+                            desativou = True
+                    except Exception:
+                        pass
+        finally:
+            with self._trava:
+                self._consultando_estado = False
+            if desativou:
+                with self._cond_vaga:
+                    self._cond_vaga.notify_all()
+
+    def _verificar_estado_construcao(self, *, sincrono: bool = False) -> None:
+        agora = float(self._relogio())
+        with self._trava:
+            filhos = [f for f in self._filhos_doc.values() if getattr(f, "construcao_ativa", False)]
+            if not filhos:
+                self._ultima_consulta_estado = None
+                return
+            if self._ultima_consulta_estado is None:
+                self._ultima_consulta_estado = agora
+                return
+            if (agora - self._ultima_consulta_estado) < self._intervalo_estado_s:
+                return
+            if self._consultando_estado and self._intervalo_estado_s <= 0.0:
+                return
+            self._ultima_consulta_estado = agora
+            self._consultando_estado = True
+            timeout_s = self._timeout_estado_s
+        if sincrono:
+            self._consultar_estado_fundo(filhos, timeout_s)
+        else:
+            threading.Thread(
+                target=self._consultar_estado_fundo,
+                args=(filhos, timeout_s),
+                daemon=True,
+            ).start()
+
     def _ler_rss_valido(self) -> float | None:
         try:
             medir = self._medir_rss_mb if self._medir_rss_mb is not None else _medir_rss_conjunto_mb
@@ -269,6 +322,9 @@ class GerenteDesenho(QObject):
 
     def limite_trabalhadores(self) -> int | None:
         """Retorna o limite de trabalhadores durante construcao ativa, ou None."""
+        if not self._construcao_ativa_agora():
+            return None
+        self._verificar_estado_construcao(sincrono=True)
         if not self._construcao_ativa_agora():
             return None
         rss_medido = self._ler_rss_valido()
@@ -326,6 +382,10 @@ class GerenteDesenho(QObject):
                         return
                 from openbim_app.desenho.cache import pasta_geometria
                 filho.construir(str(pasta_geometria()), cancelar=cancelar)
+                if getattr(filho, "construcao_ativa", False):
+                    agora = float(self._relogio())
+                    with self._trava:
+                        self._ultima_consulta_estado = agora
         except (FilhoIndisponivel, ErroAuxiliar):
             pass
         finally:
@@ -354,6 +414,8 @@ class GerenteDesenho(QObject):
             filhos_atuais = list(self._filhos_doc.values())
         for f in fechar_ociosos:
             f.fechar()
+        if any(getattr(f, "construcao_ativa", False) for f in filhos_atuais):
+            self._verificar_estado_construcao()
         chave = self._chave_estado(tipo, ifc, vista_guid, opcoes)
         sessao = self._obter_sessao(ifc, revisao) if revisao is not None else self._limpar_mortas()
         if chave in self._ativos:
@@ -516,6 +578,7 @@ class GerenteDesenho(QObject):
                         raise DesenhoCancelado("cancelado na fila")
                 if not self._construcao_ativa_agora():
                     return 0, 0.0
+                self._verificar_estado_construcao()
                 rss_medido = self._ler_rss_valido()
                 with self._cond_vaga:
                     if ped.cancelar.is_set():

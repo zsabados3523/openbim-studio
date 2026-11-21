@@ -44,14 +44,21 @@ def _validar_malha(verts_raw, tris_raw) -> tuple[np.ndarray, np.ndarray] | None:
     return v, t
 
 
-def _anel_para_d(anel: np.ndarray, xs: list[float], ys: list[float]) -> str | None:
+def _anel_para_d(
+    anel: np.ndarray,
+    xs: list[float],
+    ys: list[float],
+    ox: float = 0.0,
+    oy: float = 0.0,
+) -> str | None:
     """Converte anel 2D em subpath SVG `M ... L ...` sem `Z` (eixo Y invertido)."""
     pts = np.asarray(anel, dtype=np.float64)
     if pts.ndim != 2 or len(pts) < 3 or pts.shape[1] < 2:
         return None
-    coords = [(float(p[0]), -float(p[1])) for p in pts]
-    if abs(coords[0][0] - coords[-1][0]) > 1e-12 or abs(coords[0][1] - coords[-1][1]) > 1e-12:
-        coords.append(coords[0])
+    coords_loc = [(float(p[0]), float(p[1])) for p in pts]
+    if abs(coords_loc[0][0] - coords_loc[-1][0]) > 1e-12 or abs(coords_loc[0][1] - coords_loc[-1][1]) > 1e-12:
+        coords_loc.append(coords_loc[0])
+    coords = [(x + ox, -(y + oy)) for x, y in coords_loc]
     for x, y in coords:
         xs.append(x)
         ys.append(y)
@@ -60,12 +67,18 @@ def _anel_para_d(anel: np.ndarray, xs: list[float], ys: list[float]) -> str | No
     return " ".join(cmds)
 
 
-def _poli_para_d(poli: np.ndarray, xs: list[float], ys: list[float]) -> str | None:
+def _poli_para_d(
+    poli: np.ndarray,
+    xs: list[float],
+    ys: list[float],
+    ox: float = 0.0,
+    oy: float = 0.0,
+) -> str | None:
     """Converte polilinha 2D em path SVG `M ... L ...` sem `Z` (eixo Y invertido)."""
     pts = np.asarray(poli, dtype=np.float64)
     if pts.ndim != 2 or len(pts) < 2 or pts.shape[1] < 2:
         return None
-    coords = [(float(p[0]), -float(p[1])) for p in pts]
+    coords = [(float(p[0]) + ox, -(float(p[1]) + oy)) for p in pts]
     for x, y in coords:
         xs.append(x)
         ys.append(y)
@@ -78,6 +91,9 @@ def _montar_svg(
     pav_guid: str,
     pecas_secao: list[tuple[str, str, list[np.ndarray]]],
     pols_proj: list[np.ndarray],
+    *,
+    ox: float = 0.0,
+    oy: float = 0.0,
 ) -> tuple[str, int]:
     """Monta SVG deterministico compativel com `estilo.aplicar_estilo`."""
     xs: list[float] = []
@@ -88,7 +104,7 @@ def _montar_svg(
     for gid, classe, fechados in pecas_secao:
         subpaths: list[str] = []
         for anel in fechados:
-            sub = _anel_para_d(anel, xs, ys)
+            sub = _anel_para_d(anel, xs, ys, ox=ox, oy=oy)
             if sub:
                 subpaths.append(sub)
         if not subpaths:
@@ -101,7 +117,7 @@ def _montar_svg(
 
     proj_paths: list[str] = []
     for poli in pols_proj:
-        d_proj = _poli_para_d(poli, xs, ys)
+        d_proj = _poli_para_d(poli, xs, ys, ox=ox, oy=oy)
         if d_proj:
             proj_paths.append(f'<path d="{d_proj}"/>')
             n_paths += 1
@@ -153,7 +169,9 @@ def desenhar_planta_cache(
             return None, "erro_motor"
 
         eps = 1e-9 * max(1.0, abs(z))
-        eps_plano = max(1e-9, 1e-12 * max(1.0, abs(z)))
+        oz = z if abs(z) > 1000.0 else 0.0
+        z_local = z - oz
+        eps_plano = max(1e-9, 1e-12 * max(1.0, abs(z_local)))
         ordenados = sorted(elementos_validos, key=lambda item: (str(item[1]), int(item[0])))
 
         t_corte0 = time.perf_counter()
@@ -161,36 +179,62 @@ def desenhar_planta_cache(
         pecas_secao: list[tuple[str, str, list[np.ndarray]]] = []
         grupos_secao: list[list[np.ndarray]] = []
         malhas_proj: list[tuple[np.ndarray, np.ndarray]] = []
+        ox: float | None = None
+        oy: float = 0.0
 
         for id_step, gid in ordenados:
             if gid not in malhas_mundo:
                 return None, "malha_invalida"
             verts_raw, tris_raw = malhas_mundo[gid]
             validada = _validar_malha(verts_raw, tris_raw)
+            del verts_raw, tris_raw
             if validada is None:
                 return None, "malha_invalida"
             v, t = validada
+            del validada
 
             el = f.by_id(int(id_step))
             if el is None:
                 return None, "erro_motor"
             classe = str(el.is_a() or "IfcProduct")
+            del el
 
             zmin = float(v[:, 2].min())
             zmax = float(v[:, 2].max())
             if zmin > z + eps:
+                del v, t
                 continue
+
+            if ox is None:
+                x0 = float(v[0, 0])
+                y0 = float(v[0, 1])
+                if abs(x0) > 1000.0 or abs(y0) > 1000.0:
+                    ox, oy = x0, y0
+                else:
+                    ox, oy = 0.0, 0.0
+
+            if ox != 0.0 or oy != 0.0 or oz != 0.0:
+                v = v.astype(np.float64, copy=True)
+                if ox != 0.0:
+                    v[:, 0] -= ox
+                if oy != 0.0:
+                    v[:, 1] -= oy
+                if oz != 0.0:
+                    v[:, 2] -= oz
 
             enviados.append(int(id_step))
             if zmax <= z + eps:
                 malhas_proj.append((v, t))
+                del v, t
                 continue
 
-            if np.any(np.abs(v[:, 2] - z) <= eps_plano):
+            if np.any(np.abs(v[:, 2] - z_local) <= eps_plano):
                 return None, "secao_aberta"
 
-            v_ab, t_ab, segs = corte_plano.cortar_malha_no_plano(v, t, z)
+            v_ab, t_ab, segs = corte_plano.cortar_malha_no_plano(v, t, z_local)
+            del v, t
             fechados, abertos = aneis.aneis_de_segmentos(segs)
+            del segs
             if abertos or not fechados:
                 return None, "secao_aberta"
 
@@ -201,9 +245,12 @@ def desenhar_planta_cache(
             pecas_secao.append((str(gid), classe, fechados))
             for rings, _ in grupos:
                 grupos_secao.append(rings)
+            del fechados, abertos, grupos
             if len(t_ab) > 0:
                 malhas_proj.append((v_ab, t_ab))
+            del v_ab, t_ab
 
+        del malhas_mundo, ordenados
         corte_s = time.perf_counter() - t_corte0
 
         threads_ped = pedido.get("threads")
@@ -216,8 +263,11 @@ def desenhar_planta_cache(
                 angulo_graus=0.001,
                 trabalhadores=n_trab,
             )
+            del malhas_proj
             pols_proj = [poli for pols_i in pols_por_peca for poli in pols_i]
+            del pols_por_peca
         else:
+            del malhas_proj
             pols_proj = []
         motor_s = time.perf_counter() - t_mot0
 
@@ -225,8 +275,16 @@ def desenhar_planta_cache(
             t_tampa0 = time.perf_counter()
             pols_proj = recorte.recortar_fora_dos_aneis(pols_proj, grupos_secao, encolher=5e-4)
             corte_s += time.perf_counter() - t_tampa0
+        del grupos_secao
 
-        svg, n_paths = _montar_svg(pav_guid, pecas_secao, pols_proj)
+        svg, n_paths = _montar_svg(
+            pav_guid,
+            pecas_secao,
+            pols_proj,
+            ox=0.0 if ox is None else ox,
+            oy=oy,
+        )
+        del pecas_secao, pols_proj
         return {
             "ok": True,
             "svg": svg,

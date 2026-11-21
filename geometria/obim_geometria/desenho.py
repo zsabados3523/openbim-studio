@@ -2127,8 +2127,10 @@ _MOTIVOS_QUEDA_CACHE = frozenset({
 
 def _desenhar_planta_cache(f, pedido, malhas_mundo, elementos_validos, fase, abrir_s):
     """Delega o desenho da planta pelo cache para `planta_cache` (T24c)."""
+    ref = [malhas_mundo]
+    del malhas_mundo
     return planta_cache.desenhar_planta_cache(
-        f, pedido, malhas_mundo, elementos_validos, fase=fase, abrir_s=abrir_s
+        f, pedido, ref.pop(), elementos_validos, fase=fase, abrir_s=abrir_s
     )
 
 
@@ -2217,8 +2219,10 @@ def _tentar_planta_pelo_cache(
     if faltantes:
         return None, "cache_incompleto", len(faltantes), cache_s
 
+    _ref_malhas = [malhas_mundo]
+    del malhas_mundo
     try:
-        resp_ok, motivo = _desenhar_planta_cache(f, pedido, malhas_mundo, elementos_validos, fase, abrir_s)
+        resp_ok, motivo = _desenhar_planta_cache(f, pedido, _ref_malhas.pop(), elementos_validos, fase, abrir_s)
     except Exception:
         return None, "erro_motor", 0, cache_s
 

@@ -105,11 +105,12 @@ class GerenteDesenho(QObject):
     previa = Signal(str, object)
     _evento = Signal(object, str, object)  # (pedido, tipo do evento, carga); interno
 
-    def __init__(self, cache=None, *, motor=None, chave_estado=None, filho_persistente: bool = True, parent=None):
+    def __init__(self, cache=None, *, motor=None, chave_estado=None, filho_persistente: bool = True, construir_cache: bool = False, parent=None):
         super().__init__(parent)
         self._cache = cache
         self._padrao = chave_estado is None
         self._usar_filho = bool(filho_persistente)
+        self._construir_cache = bool(construir_cache)
         if motor is None:
             from openbim_app.desenho.cache import CacheDesenho
             motor = functools.partial(
@@ -171,6 +172,12 @@ class GerenteDesenho(QObject):
                 if geracao != self._geracao or cancelar.is_set():
                     return
             filho.aquecer(cancelar=cancelar)
+            if self._construir_cache:
+                with self._trava:
+                    if geracao != self._geracao or cancelar.is_set():
+                        return
+                from openbim_app.desenho.cache import pasta_geometria
+                filho.construir(str(pasta_geometria()), cancelar=cancelar)
         except (FilhoIndisponivel, ErroAuxiliar):
             pass
         finally:

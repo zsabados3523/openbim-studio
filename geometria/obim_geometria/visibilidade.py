@@ -2,8 +2,11 @@
 """Motor de linhas visiveis por malha (vista de cima, z-buffer conservador + recorte analitico)."""
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import math
 import numbers
+import os
+
 import numpy as np
 
 from obim_geometria.visib_base import (
@@ -69,8 +72,9 @@ def _visibilidade_hibrida(
     while (math.ceil(dx_dom / g) + 2) * (math.ceil(dy_dom / g) + 2) > 6_000_000:
         g *= 1.05
     chave = (mn_x, mn_y, mx_x, mx_y, g)
-    if memo is not None and chave in memo:
-        z_full, zf_flat, W, H, kept_idx = memo[chave]
+    entrada = memo.get(chave) if memo is not None else None
+    if entrada is not None:
+        z_full, zf_flat, W, H, kept_idx = entrada
     else:
         z_full, W, H = _mapa_z_conservador(
             A, gx, gy, nx_, ny_, cc_, tx0, tx1, ty0, ty1, mn_x, mn_y, mx_x, mx_y, g
@@ -86,7 +90,9 @@ def _visibilidade_hibrida(
             np.logical_or.at(tri_keep, sl[tobj], tzmax[sl[tobj]] >= zf_flat[tcel] - 1e-9)
         kept_idx = np.nonzero(tri_keep)[0]
         if memo is not None:
-            memo[chave] = (z_full, zf_flat, W, H, kept_idx)
+            z_full, zf_flat, W, H, kept_idx = memo.setdefault(
+                chave, (z_full, zf_flat, W, H, kept_idx)
+            )
     d = b - a
     step_g = 0.999 * g
     nsub_g = np.maximum(1, np.ceil(np.maximum(np.abs(d[:, 0]), np.abs(d[:, 1])) / step_g).astype(np.int64))
@@ -285,14 +291,43 @@ def linhas_visiveis(
     return linhas_visiveis_multi([(verts, tris)], angulo_graus=angulo_graus, tol_z=tol_z, min_len=min_len)[0]
 
 
+def _validar_trabalhadores(trabalhadores: int | None) -> int | None:
+    """Valida o numero de trabalhadores: None ou inteiro >= 1 (rejeita bool e nao-inteiros)."""
+    if trabalhadores is None:
+        return None
+    if isinstance(trabalhadores, bool) or not isinstance(trabalhadores, numbers.Integral):
+        raise ValueError("trabalhadores deve ser inteiro >= 1 ou None")
+    n = int(trabalhadores)
+    if n < 1:
+        raise ValueError("trabalhadores deve ser >= 1")
+    return n
+
+
+def _resolver_trabalhadores_auto(n_pecas_cand: int, n_tris: int) -> int:
+    """Resolve numero de threads no modo automatico via env OBIM_VISIB_THREADS ou heuristica."""
+    raw = os.environ.get("OBIM_VISIB_THREADS")
+    if raw is not None:
+        try:
+            n_env = int(raw)
+        except ValueError:
+            n_env = 0
+        if n_env >= 1:
+            return n_env
+    if n_pecas_cand >= 8 and n_tris >= 20_000:
+        return min(4, os.cpu_count() or 1)
+    return 1
+
+
 def linhas_visiveis_multi(
     pecas: list[tuple[np.ndarray, np.ndarray]],
     *,
     angulo_graus: float = 0.001,
     tol_z: float = 1e-4,
     min_len: float = 1e-4,
+    trabalhadores: int | None = None,
 ) -> list[list[np.ndarray]]:
     """Calcula polilinhas visiveis de cada peca com oclusao mutua por todas as pecas."""
+    n_trab = _validar_trabalhadores(trabalhadores)
     for nome, val in (("angulo_graus", angulo_graus), ("tol_z", tol_z), ("min_len", min_len)):
         fv = float(val)
         if not (math.isfinite(fv) and fv >= 0.0):
@@ -331,13 +366,31 @@ def linhas_visiveis_multi(
             cands[i] = (a[m], b[m], ea[m], eb[m])
     if not tw_oks:
         return [[] for _ in pecas_l]
+    ativos = [(i, c) for i, c in enumerate(cands) if c is not None]
+    if not ativos:
+        return [[] for _ in pecas_l]
     Tw_comb = tw_oks[0] if len(tw_oks) == 1 else _dedup_triangulos(np.vstack(tw_oks))
     prep = _preparar_triangulos(P, Tw_comb)
     memo = {}
-    return [
-        [] if c is None else list(_visibilidade_hibrida(P, Tw_comb, *c, tol_z, -1e-6, min_len, prep=prep, memo=memo))
-        for c in cands
-    ]
+    if n_trab is None:
+        n_trab = _resolver_trabalhadores_auto(len(ativos), len(Tw_comb))
+    res: list[list[np.ndarray]] = [[] for _ in pecas_l]
+    if n_trab == 1:
+        for i, c in ativos:
+            res[i] = list(_visibilidade_hibrida(P, Tw_comb, *c, tol_z, -1e-6, min_len, prep=prep, memo=memo))
+        return res
+    with ThreadPoolExecutor(max_workers=n_trab) as pool:
+        try:
+            futs = [
+                (i, pool.submit(_visibilidade_hibrida, P, Tw_comb, *c, tol_z, -1e-6, min_len, prep=prep, memo=memo))
+                for i, c in ativos
+            ]
+            for i, fut in futs:
+                res[i] = list(fut.result())
+        except BaseException:
+            pool.shutdown(wait=True, cancel_futures=True)
+            raise
+    return res
 
 
 def _extrair_poligonos(geom) -> list:

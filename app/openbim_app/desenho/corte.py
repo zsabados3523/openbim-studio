@@ -12,6 +12,7 @@ import ifcopenshell.util.unit
 
 from openbim_app import vistas_ifc
 from openbim_app.desenho import auxiliar, selecao
+from openbim_app.desenho.cache import CacheCancelado
 from openbim_app.desenho.selecao import (
     Selecao,
     SelecaoInvalida,
@@ -139,11 +140,16 @@ def _gerar_corte_uma_vez(
         pedido["motor_visivel"] = motor_visivel
 
     if cache is not None:
-        ch = cache.chave(ifc, pedido)
+        try:
+            ch = cache.chave(ifc, pedido, cancelar=cancelar)
+        except CacheCancelado as exc:
+            raise auxiliar.DesenhoCancelado("Operação cancelada no cálculo da chave do cache") from exc
         r = cache.obter(ch)
         if r is None:
             with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc) as p:
                 r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor, filho=filho)
+            if cancelar is not None and cancelar.is_set():
+                raise auxiliar.DesenhoCancelado("Operação cancelada antes de gravar no cache")
             cache.guardar(ch, r)
     else:
         with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc) as p:

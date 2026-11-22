@@ -12,12 +12,41 @@ import json
 import os
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 
 VERSAO_MODULO = "1"
 
 _IDADE_PADRAO_S = 30 * 86400
+_INTERVALO_NOS = 1000
+_INTERVALO_GIL_S = 0.015
+
+
+class CacheCancelado(Exception):
+    """Cálculo da chave do cache interrompido por cancelamento."""
+
+
+class _ControleChave:
+    """Controla checagem de cancelamento e cessão periódica do GIL."""
+
+    __slots__ = ("cancelar", "nos", "ultimo_yield")
+
+    def __init__(self, cancelar: threading.Event | None):
+        self.cancelar = cancelar
+        self.nos = 0
+        self.ultimo_yield = time.monotonic()
+
+    def checar(self) -> None:
+        if self.cancelar is not None and self.cancelar.is_set():
+            raise CacheCancelado("Cálculo da chave do cache cancelado")
+        time.sleep(0)
+        self.ultimo_yield = time.monotonic()
+
+    def passo_no(self) -> None:
+        self.nos += 1
+        if self.nos % _INTERVALO_NOS == 0:
+            self.checar()
 
 
 def pasta_padrao() -> Path:
@@ -34,16 +63,20 @@ def pasta_padrao() -> Path:
     return raiz / "openbim-studio" / "desenho"
 
 
-def _serializar(valor, vistos):
+def _serializar(valor, vistos, ctrl: _ControleChave | None = None):
     """Converte um valor IFC (ou primitivo) em algo determinístico para o hash."""
+    if ctrl is not None:
+        ctrl.passo_no()
     if valor is None or isinstance(valor, (str, int, float, bool)):
         return valor
     if isinstance(valor, bytes):
         return {"$bytes": valor.hex()}
     if isinstance(valor, (list, tuple)):
-        return [_serializar(v, vistos) for v in valor]
+        return [_serializar(v, vistos, ctrl) for v in valor]
+    if isinstance(valor, (set, frozenset)):
+        return sorted((_serializar(v, vistos, ctrl) for v in valor), key=repr)
     if isinstance(valor, dict):
-        return {str(k): _serializar(v, vistos) for k, v in valor.items()}
+        return {str(k): _serializar(v, vistos, ctrl) for k, v in valor.items()}
     if hasattr(valor, "is_a") and hasattr(valor, "id"):
         ident = valor.id()
         # id()==0: tipo simples/SELECT sem identidade; sempre serializa o valor.
@@ -62,7 +95,9 @@ def _serializar(valor, vistos):
             except Exception:
                 nome = str(i)
             try:
-                atributos[nome] = _serializar(valor[i], vistos)
+                atributos[nome] = _serializar(valor[i], vistos, ctrl)
+            except CacheCancelado:
+                raise
             except Exception as e:  # atributo ilegível não deve derrubar o desenho
                 atributos[nome] = {"$erro": type(e).__name__}
         return {"tipo": valor.is_a(), "atributos": atributos}
@@ -72,11 +107,13 @@ def _serializar(valor, vistos):
 def _seguro(fn, padrao=None):
     try:
         return fn()
+    except CacheCancelado:
+        raise
     except Exception:
         return padrao
 
 
-def _estilos(entidade, vistos):
+def _estilos(entidade, vistos, ctrl: _ControleChave | None = None):
     """Estilos (StyledByItem) dos itens de representação, inclusive via MappedItem."""
     saida = []
     reps = _seguro(lambda: entidade.Representation.Representations) or ()
@@ -87,11 +124,11 @@ def _estilos(entidade, vistos):
             itens.extend(origem or ())
         for item in itens:
             for st in _seguro(lambda: item.StyledByItem) or ():
-                saida.append(_serializar(st, vistos))
+                saida.append(_serializar(st, vistos, ctrl))
     return saida
 
 
-def _relacoes(entidade, vistos):
+def _relacoes(entidade, vistos, ctrl: _ControleChave | None = None):
     """Relações inversas que o motor usa (ver reduzido.py), por lado relacionado."""
     def colher(atributo, *lados):
         saida = []
@@ -101,7 +138,7 @@ def _relacoes(entidade, vistos):
                 if v is None:
                     continue
                 saida.extend(v if isinstance(v, (list, tuple)) else [v])
-        return [_serializar(x, vistos) for x in saida]
+        return [_serializar(x, vistos, ctrl) for x in saida]
 
     return {
         "vaos": colher("HasOpenings", "RelatedOpeningElement"),
@@ -112,7 +149,7 @@ def _relacoes(entidade, vistos):
         "preenche": colher("FillsVoids", "RelatingOpeningElement"),
         "partes": colher("IsDecomposedBy", "RelatedObjects"),
         "projecoes": colher("HasProjections", "RelatedFeatureElement"),
-        "estilos": _estilos(entidade, vistos),
+        "estilos": _estilos(entidade, vistos, ctrl),
     }
 
 
@@ -126,12 +163,12 @@ def _entidade(ifc, guid=None, ident=None):
     return None
 
 
-def _assinatura_entidade(entidade):
+def _assinatura_entidade(entidade, ctrl: _ControleChave | None = None):
     vistos: set[int] = set()
-    return {"dados": _serializar(entidade, vistos), "rel": _relacoes(entidade, vistos)}
+    return {"dados": _serializar(entidade, vistos, ctrl), "rel": _relacoes(entidade, vistos, ctrl)}
 
 
-def _assinatura_elemento(ifc, entrada):
+def _assinatura_elemento(ifc, entrada, ctrl: _ControleChave | None = None):
     ident = guid = None
     if isinstance(entrada, (list, tuple)):
         ident = entrada[0] if entrada else None
@@ -140,20 +177,20 @@ def _assinatura_elemento(ifc, entrada):
     entidade = _entidade(ifc, guid, ident)
     if entidade is None:
         return {"entrada": bruta}
-    return {"entrada": bruta, **_assinatura_entidade(entidade)}
+    return {"entrada": bruta, **_assinatura_entidade(entidade, ctrl)}
 
 
-def _assinatura_contexto(ifc, pedido):
+def _assinatura_contexto(ifc, pedido, ctrl: _ControleChave | None = None):
     """Vista (anotação e pavimento) e unidades do projeto."""
     vista = pedido.get("vista") or {}
     ctx = {}
     for chave in ("guid", "pavimento"):
         if vista.get(chave):
             e = _entidade(ifc, vista[chave])
-            ctx[chave] = _assinatura_entidade(e) if e is not None else None
+            ctx[chave] = _assinatura_entidade(e, ctrl) if e is not None else None
     projetos = _seguro(lambda: ifc.by_type("IfcProject")) or []
     if projetos:
-        ctx["unidades"] = _serializar(_seguro(lambda: projetos[0].UnitsInContext), set())
+        ctx["unidades"] = _serializar(_seguro(lambda: projetos[0].UnitsInContext), set(), ctrl)
     return ctx
 
 
@@ -165,23 +202,41 @@ class CacheDesenho:
     def _arquivo(self, chave: str) -> Path:
         return self.pasta / f"{chave}.json"
 
-    def chave(self, ifc, pedido: dict) -> str:
+    def chave(self, ifc, pedido: dict, cancelar: threading.Event | None = None) -> str:
+        ctrl = _ControleChave(cancelar)
+        ctrl.checar()
         pedido = pedido or {}
-        limpo = {k: v for k, v in pedido.items() if k != "threads"}
-        elementos = [_assinatura_elemento(ifc, e) for e in pedido.get("elementos") or ()]
-        material = json.dumps(
+        limpo = {k: v for k, v in pedido.items() if k not in ("threads", "elementos")}
+        h = hashlib.sha256()
+
+        def _default(o):
+            if isinstance(o, (set, frozenset)):
+                return sorted((_serializar(v, set(), ctrl) for v in o), key=repr)
+            return str(o)
+
+        def _atualizar(obj) -> None:
+            dados = json.dumps(
+                obj,
+                sort_keys=True,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                default=_default,
+            ).encode("utf-8")
+            h.update(f"{len(dados)}:".encode("ascii"))
+            h.update(dados)
+
+        _atualizar(
             {
                 "versao": VERSAO_MODULO,
                 "pedido": limpo,
-                "elementos": elementos,
-                "contexto": _assinatura_contexto(ifc, pedido),
-            },
-            sort_keys=True,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            default=str,
+                "contexto": _assinatura_contexto(ifc, pedido, ctrl),
+            }
         )
-        return hashlib.sha256(material.encode("utf-8")).hexdigest()
+        for entrada in pedido.get("elementos") or ():
+            ctrl.checar()
+            _atualizar(_assinatura_elemento(ifc, entrada, ctrl))
+        ctrl.checar()
+        return h.hexdigest()
 
     def obter(self, chave: str) -> dict | None:
         try:

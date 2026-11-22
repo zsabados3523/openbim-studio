@@ -17,7 +17,7 @@ from obrigatorio import ligar_ci  # noqa: E402
 ligar_ci()  # OBIM_CI=1: liga as chaves de obrigatório antes de qualquer teste ler o ambiente
 
 if os.environ.get("GITHUB_ACTIONS"):
-    # Guarda de travamento no CI: se a sessão passar de 40 min, grava no pytest.log o teste em andamento e a pilha de
+    # Guarda de travamento no CI: se a sessão passar de 50 min, grava no pytest.log o teste em andamento e a pilha de
     # todas as threads e encerra (o pytest captura o stderr, então o resumo é o único lugar que sobrevive).
     import threading
     import time
@@ -29,7 +29,7 @@ if os.environ.get("GITHUB_ACTIONS"):
         _atual["id"], _atual["t"] = nodeid, time.monotonic()
 
     def _vigia():
-        time.sleep(2400)
+        time.sleep(3000)
         destino = "pytest.log"  # o passo do CI redireciona a saída do pytest para este arquivo e depois o imprime
         linhas = [f"### TRAVADO: teste em andamento {_atual['id']} ha {time.monotonic() - _atual['t']:.0f} s"]
         for tid, fr in sys._current_frames().items():

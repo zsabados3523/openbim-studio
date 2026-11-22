@@ -15,8 +15,8 @@ from openbim_app.desenho import auxiliar
 from test_s06_t19h_componentes_oraculo import _caixa, _cena
 
 
-def _preparar(tmp_path, componentes):
-    ped, _ = _cena(tmp_path, [_caixa(3 * k, 0, 0, 3 * k + 1, 1, 1) for k in range(18)], corte=0.5)  # 18 grupos em 6 lotes: o auxiliar demora o bastante para a prévia vir antes do fim
+def _preparar(tmp_path, componentes, n=18):
+    ped, _ = _cena(tmp_path, [_caixa(3 * k, 0, 0, 3 * k + 1, 1, 1) for k in range(n)], corte=0.5)  # n=18 em 6 lotes (padrão); o teste de tempo usa n=150
     if componentes:
         ped["componentes"] = True
     ped.update({"protocolo": 1, "op": "desenho", "threads": 3})
@@ -26,7 +26,8 @@ def _preparar(tmp_path, componentes):
 
 def test_previa_chega_antes_da_resposta_e_uma_vez(tmp_path):
     recebidas = []
-    with _preparar(tmp_path, True) as p:
+    # 150 grupos: margem de ~0,5 s (limite 0,2 s); com 18 a margem era 0,23 s e o teste falhava no CI
+    with _preparar(tmp_path, True, n=150) as p:
         t0 = time.monotonic()
         r = auxiliar.executar(p, previa=lambda s: recebidas.append((time.monotonic() - t0, s)))
         total = time.monotonic() - t0

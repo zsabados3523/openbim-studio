@@ -64,6 +64,8 @@ def _medir(caminho, consumir, **kw):
     t_cons.setInterval(16)
     t_cons.timeout.connect(consumidor)
     car = CarregadorMalhas(str(caminho), **kw)
+    gc.collect()
+    gc.freeze()  # o heap da sessao inteira (milhares de testes) ficaria no gc.collect() da janela e viraria ~200 ms de parada
     t_sonda.start()
     t_cons.start()
     # iniciar() roda já dentro do laço de eventos, com a sonda ligada: o custo dele entra na primeira amostra
@@ -78,6 +80,7 @@ def _medir(caminho, consumir, **kw):
     while time.perf_counter() < fim:  # deixa a sonda registrar qualquer parada da destruição
         QCoreApplication.processEvents()
     t_sonda.stop()
+    gc.unfreeze()
     return np.array(atrasos or [0.0]), estado["resumo"]  # todas as amostras, inclusive a primeira
 
 

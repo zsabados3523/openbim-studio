@@ -37,6 +37,10 @@ class Planta:
     pedido: dict | None = None
     faltantes: tuple[int, ...] = ()
     divergente: bool = False
+    via_cache: bool = False
+    queda: str | None = None
+    n_faltantes: int = 0
+    secoes_parciais: int = 0
 
     @property
     def incompleta(self) -> bool:
@@ -85,8 +89,14 @@ def gerar_planta(
     previa=None,
     sessao_selecao: selecao.SessaoSelecao | None = None,
     filho=None,
+    pasta_cache_geometria: str | Path | None = None,
 ) -> Planta:
     selecao._validar_filho(filho)
+    if pasta_cache_geometria is not None and not isinstance(pasta_cache_geometria, (str, Path)):
+        raise TypeError(
+            f"pasta_cache_geometria inválido: {pasta_cache_geometria!r} (esperado str, Path ou None)"
+        )
+    pasta_geo_str = str(pasta_cache_geometria) if pasta_cache_geometria is not None else ""
     if sessao_selecao is not None and not isinstance(sessao_selecao, selecao.SessaoSelecao):
         raise TypeError(f"sessao_selecao inválido: {sessao_selecao!r} (esperado SessaoSelecao ou None)")
     if pesados not in (None, "silhueta"):
@@ -177,12 +187,17 @@ def gerar_planta(
         arq_cache, sig_chave = resolver_assinatura(caminho_ifc)
 
     def _executar_planta(caminho_atual, sig_atual):
+        ped_exec = dict(pedido)
+        if caminho_atual is not None and sig_atual is not None and pasta_geo_str:
+            ped_exec["pasta_cache_geometria"] = pasta_geo_str
+        else:
+            ped_exec.pop("pasta_cache_geometria", None)
         kw_prep = (
             {"caminho_ifc": caminho_atual, "assinatura": sig_atual}
             if (caminho_atual is not None and sig_atual is not None)
             else {}
         )
-        with auxiliar.preparar(ifc, pedido, **kw_prep) as p:
+        with auxiliar.preparar(ifc, ped_exec, **kw_prep) as p:
             sig_prep = (getattr(p, "pedido", None) or {}).get("assinatura")
             return (
                 auxiliar.executar(
@@ -248,4 +263,8 @@ def gerar_planta(
         pedido=pedido,
         faltantes=tuple(int(x) for x in (r.get("faltantes") or ())),
         divergente=divergente,
+        via_cache=bool(r.get("via_cache", False)),
+        queda=r.get("queda"),
+        n_faltantes=int(r.get("n_faltantes") or 0),
+        secoes_parciais=int(r.get("secoes_parciais") or 0),
     )

@@ -80,6 +80,18 @@ class FilhoPersistente:
         atexit.register(self._atexit_fn)
 
     @property
+    def construcao_ativa(self) -> bool:
+        if not self._construcao_ativa:
+            return False
+        p = self._proc
+        if p is None:
+            return False
+        try:
+            return bool(p.is_alive())
+        except Exception:
+            return False
+
+    @property
     def pid(self) -> int | None:
         p = self._proc
         if p is None:
@@ -121,6 +133,7 @@ class FilhoPersistente:
         self._proc = self._rx = self._tx = None
         self._sig = None
         self._fim_ultimo = None
+        self._construcao_ativa = False
         _fechar_canais(rx, tx)
         if p is not None:
             _auxiliar()._matar_filho(p)
@@ -317,7 +330,20 @@ class FilhoPersistente:
                 if op == "abrir" and isinstance(dados, dict) and dados.get("aberto") is True:
                     return dados
                 if op in ("construir", "estado_construcao"):
-                    return self._tratar_resposta_construcao(op, dados, aux)
+                    res = self._tratar_resposta_construcao(op, dados, aux)
+                    if op == "estado_construcao":
+                        self._construcao_ativa = bool(
+                            res.get("ativo", True)
+                            and int(res.get("pendentes", 0)) > 0
+                            and res.get("parado") is None
+                        )
+                    elif op == "construir":
+                        self._construcao_ativa = bool(
+                            res.get("aceito") is True
+                            and int(res.get("pendentes", 0)) > 0
+                            and res.get("parado") is None
+                        )
+                    return res
                 return aux._tratar_resposta(dados)
         finally:
             self._trava.release()
@@ -379,10 +405,11 @@ class FilhoPersistente:
             limite_s=limite_s,
         )
         with self._trava:
-            self._construcao_params = params
-            self._construcao_ativa = bool(
-                dados.get("aceito") and int(dados.get("pendentes", 0)) > 0
-            )
+            if not self._fechado and self._proc is not None and self._proc.is_alive():
+                self._construcao_params = params
+                self._construcao_ativa = bool(
+                    dados.get("aceito") and int(dados.get("pendentes", 0)) > 0 and dados.get("parado") is None
+                )
         return dados
 
     def salvar(self) -> None:

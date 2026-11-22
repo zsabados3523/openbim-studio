@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-import hashlib, json, platform, sqlite3, sys, time
+import hashlib, json, os, platform, sqlite3, sys, time
 from pathlib import Path
 
 import ifcopenshell
@@ -14,28 +14,38 @@ import ifcopenshell.util.unit as _unit
 import numpy as np
 
 NOME_BANCO = "cache_geometria.sqlite"
-VERSAO_FORMATO = "1"
+VERSAO_FORMATO = "2"
 VERSAO_MOTOR = "1"
 VERSAO_IFCOPENSHELL = str(getattr(ifcopenshell, "__version__", "0"))
 
 _SUFIXOS_SIDECAR = ("-journal", "-wal", "-shm")
 _IGNORA_RAIZ = frozenset({"GlobalId", "OwnerHistory", "Name", "Description"})
 _SQL_INS_FORMA = "INSERT OR REPLACE INTO formas (chave, dtype_v, vertices, triangulos, checksum, gravado_em) VALUES (?, ?, ?, ?, ?, ?)"
-_SQL_INS_OC = "INSERT OR REPLACE INTO ocorrencias (global_id, chave_forma, matriz, caixa, pavimento, classe_ifc, checksum) VALUES (?, ?, ?, ?, ?, ?, ?)"
-_SQL_SEL_OC = "SELECT global_id, chave_forma, matriz, caixa, pavimento, classe_ifc, checksum FROM ocorrencias"
+_SQL_INS_OC = (
+    "INSERT OR REPLACE INTO ocorrencias "
+    "(documento, global_id, chave_forma, matriz, caixa, pavimento, classe_ifc, checksum) "
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+)
+_SQL_SEL_OC = (
+    "SELECT documento, global_id, chave_forma, matriz, caixa, pavimento, classe_ifc, checksum FROM ocorrencias"
+)
 _ESQUEMA_COLUNAS = {
     "meta": ("chave", "valor"),
     "formas": ("chave", "dtype_v", "vertices", "triangulos", "checksum", "gravado_em"),
-    "ocorrencias": ("global_id", "chave_forma", "matriz", "caixa", "pavimento", "classe_ifc", "checksum"),
+    "ocorrencias": ("documento", "global_id", "chave_forma", "matriz", "caixa", "pavimento", "classe_ifc", "checksum"),
+    "memo": ("documento", "id_step", "assinatura", "chave"),
 }
 _SCHEMA_SQL = (
     "CREATE TABLE meta (chave TEXT PRIMARY KEY, valor TEXT NOT NULL);"
     "CREATE TABLE formas (chave TEXT PRIMARY KEY, dtype_v TEXT NOT NULL, vertices BLOB NOT NULL, "
     "triangulos BLOB NOT NULL, checksum BLOB NOT NULL, gravado_em REAL NOT NULL);"
-    "CREATE TABLE ocorrencias (global_id TEXT PRIMARY KEY, chave_forma TEXT NOT NULL, matriz BLOB NOT NULL, "
-    "caixa BLOB NOT NULL, pavimento TEXT, classe_ifc TEXT NOT NULL, checksum BLOB NOT NULL);"
+    "CREATE TABLE ocorrencias (documento TEXT NOT NULL DEFAULT '', global_id TEXT NOT NULL, "
+    "chave_forma TEXT NOT NULL, matriz BLOB NOT NULL, caixa BLOB NOT NULL, pavimento TEXT, "
+    "classe_ifc TEXT NOT NULL, checksum BLOB NOT NULL, PRIMARY KEY (documento, global_id));"
+    "CREATE TABLE memo (documento TEXT NOT NULL, id_step INTEGER NOT NULL, assinatura TEXT NOT NULL, "
+    "chave TEXT NOT NULL, PRIMARY KEY (documento, id_step));"
     "CREATE INDEX idx_formas_gravado_em ON formas (gravado_em);"
-    "CREATE INDEX idx_ocorrencias_pavimento ON ocorrencias (pavimento, global_id);"
+    "CREATE INDEX idx_ocorrencias_pavimento ON ocorrencias (documento, pavimento, global_id);"
 )
 
 
@@ -98,14 +108,21 @@ def _json_canonico(obj) -> str:
     return json.dumps(_normalizar_json(obj), sort_keys=True, ensure_ascii=False, separators=(",", ":"))
 
 
+def documento_de(caminho) -> str:
+    """Devolve o hash SHA-256 (hex) do caminho resolvido e normalizado."""
+    return hashlib.sha256(os.path.normcase(str(Path(caminho).resolve())).encode("utf-8")).hexdigest()
+
+
 def _digest_forma(dtype_v: str, bv: bytes, bt: bytes) -> bytes:
     return hashlib.sha256(
         dtype_v.encode("ascii") + len(bv).to_bytes(8, "little") + bv + len(bt).to_bytes(8, "little") + bt
     ).digest()
 
 
-def _digest_ocorrencia(gid: str, chave: str, bm: bytes, bc: bytes, pav: str | None, classe: str) -> bytes:
-    return hashlib.sha256(_json_canonico([gid, chave, pav, classe]).encode("utf-8") + bm + bc).digest()
+def _digest_ocorrencia(
+    documento: str, gid: str, chave: str, bm: bytes, bc: bytes, pav: str | None, classe: str
+) -> bytes:
+    return hashlib.sha256(_json_canonico([documento, gid, chave, pav, classe]).encode("utf-8") + bm + bc).digest()
 
 
 def _preparar_forma(chave: str, vertices, triangulos) -> tuple[str, str, bytes, bytes, bytes]:
@@ -127,9 +144,11 @@ def _eh_array_real(arr: np.ndarray) -> bool:
     return bool(np.issubdtype(arr.dtype, np.floating) or np.issubdtype(arr.dtype, np.integer))
 
 
-def _preparar_ocorrencia(oc: Ocorrencia) -> tuple[str, str, bytes, bytes, str | None, str, bytes]:
+def _preparar_ocorrencia(oc: Ocorrencia, documento: str = "") -> tuple[str, str, str, bytes, bytes, str | None, str, bytes]:
     if not isinstance(oc, Ocorrencia):
         raise ValueError("ocorrência inválida")
+    if not isinstance(documento, str):
+        raise ValueError("documento inválido")
     if not isinstance(oc.global_id, str) or not oc.global_id or not isinstance(oc.chave_forma, str) or not oc.chave_forma:
         raise ValueError("identificador de ocorrência inválido")
     if not isinstance(oc.classe_ifc, str) or not oc.classe_ifc or (oc.pavimento is not None and not isinstance(oc.pavimento, str)):
@@ -141,15 +160,15 @@ def _preparar_ocorrencia(oc: Ocorrencia) -> tuple[str, str, bytes, bytes, str | 
         raise ValueError(f"caixa inválida: {c.shape}, {c.dtype}")
     bm = np.ascontiguousarray(m, dtype=np.float64).tobytes()
     bc = np.ascontiguousarray(c, dtype=np.float64).tobytes()
-    ck = _digest_ocorrencia(oc.global_id, oc.chave_forma, bm, bc, oc.pavimento, oc.classe_ifc)
-    return oc.global_id, oc.chave_forma, bm, bc, oc.pavimento, oc.classe_ifc, ck
+    ck = _digest_ocorrencia(documento, oc.global_id, oc.chave_forma, bm, bc, oc.pavimento, oc.classe_ifc)
+    return documento, oc.global_id, oc.chave_forma, bm, bc, oc.pavimento, oc.classe_ifc, ck
 
 
 def _decodificar_ocorrencia(row) -> Ocorrencia | None:
     try:
-        gid, chave, bm, bc, pav, classe, ck = row
+        doc, gid, chave, bm, bc, pav, classe, ck = row
         bm, bc, ck = bytes(bm), bytes(bc), bytes(ck)
-        if len(bm) != 128 or len(bc) != 48 or ck != _digest_ocorrencia(gid, chave, bm, bc, pav, classe):
+        if len(bm) != 128 or len(bc) != 48 or ck != _digest_ocorrencia(doc, gid, chave, bm, bc, pav, classe):
             return None
         m = np.frombuffer(bm, dtype=np.float64).reshape((4, 4)).copy()
         c = np.frombuffer(bc, dtype=np.float64).reshape((2, 3)).copy()
@@ -201,10 +220,15 @@ def _banco_integro(con: sqlite3.Connection, cabecalho_json: str) -> bool:
 class CacheGeometria:
     """Armazenamento SQLite de formas tesseladas e ocorrências de peças."""
 
-    def __init__(self, caminho: Path, con: sqlite3.Connection, relogio=time.time) -> None:
+    def __init__(self, caminho: Path, con: sqlite3.Connection, relogio=time.time, em_memoria: bool = False) -> None:
         self._caminho = Path(caminho)
         self._con = con
         self._relogio = relogio
+        self._em_memoria = bool(em_memoria)
+
+    @property
+    def em_memoria(self) -> bool:
+        return self._em_memoria
 
     def __enter__(self) -> CacheGeometria:
         return self
@@ -262,48 +286,125 @@ class CacheGeometria:
         except Exception:
             return None
 
-    def gravar_ocorrencia(self, oc: Ocorrencia) -> None:
-        item = _preparar_ocorrencia(oc)
+    def formas_presentes(self, chaves) -> set[str]:
+        if self._con is None:
+            return set()
+        lista = list(dict.fromkeys(chaves))
+        if not lista:
+            return set()
+        presentes: set[str] = set()
+        try:
+            for i in range(0, len(lista), 500):
+                bloco = lista[i : i + 500]
+                marcadores = ",".join("?" * len(bloco))
+                rows = self._con.execute(f"SELECT chave FROM formas WHERE chave IN ({marcadores})", bloco).fetchall()
+                presentes.update(r[0] for r in rows)
+            return presentes
+        except Exception:
+            return set()
+
+    def gravar_ocorrencia(self, oc: Ocorrencia, documento: str = "") -> None:
+        item = _preparar_ocorrencia(oc, documento=documento)
         with self._tx():
             self._con.execute(_SQL_INS_OC, item)
 
-    def ler_ocorrencia(self, global_id: str) -> Ocorrencia | None:
+    def ler_ocorrencia(self, global_id: str, documento: str = "") -> Ocorrencia | None:
         if self._con is None:
             return None
         try:
-            row = self._con.execute(f"{_SQL_SEL_OC} WHERE global_id = ?", (global_id,)).fetchone()
+            row = self._con.execute(
+                f"{_SQL_SEL_OC} WHERE documento = ? AND global_id = ?", (documento, global_id)
+            ).fetchone()
             return _decodificar_ocorrencia(row) if row is not None else None
         except Exception:
             return None
 
-    def ocorrencias_do_pavimento(self, pavimento: str | None) -> list[Ocorrencia]:
+    def ocorrencias_do_pavimento(self, pavimento: str | None, documento: str = "") -> list[Ocorrencia]:
         if self._con is None:
             return []
         try:
-            filtro = "pavimento IS NULL" if pavimento is None else "pavimento = ?"
-            rows = self._con.execute(
-                f"{_SQL_SEL_OC} WHERE {filtro} ORDER BY global_id ASC",
-                () if pavimento is None else (pavimento,),
-            ).fetchall()
+            filtro = "documento = ? AND pavimento IS NULL" if pavimento is None else "documento = ? AND pavimento = ?"
+            params = (documento,) if pavimento is None else (documento, pavimento)
+            rows = self._con.execute(f"{_SQL_SEL_OC} WHERE {filtro} ORDER BY global_id ASC", params).fetchall()
             return [oc for row in rows if (oc := _decodificar_ocorrencia(row)) is not None]
         except Exception:
             return []
 
-    def gravar_lote(self, formas: dict, ocorrencias: list[Ocorrencia]) -> None:
+    def ocorrencias_por_ids(self, global_ids, documento: str = "") -> dict[str, Ocorrencia]:
+        if self._con is None:
+            return {}
+        lista = list(dict.fromkeys(global_ids))
+        if not lista:
+            return {}
+        resultado: dict[str, Ocorrencia] = {}
+        try:
+            for i in range(0, len(lista), 500):
+                bloco = lista[i : i + 500]
+                marcadores = ",".join("?" * len(bloco))
+                rows = self._con.execute(
+                    f"{_SQL_SEL_OC} WHERE documento = ? AND global_id IN ({marcadores})",
+                    (documento, *bloco),
+                ).fetchall()
+                for row in rows:
+                    oc = _decodificar_ocorrencia(row)
+                    if oc is not None:
+                        resultado[oc.global_id] = oc
+            return resultado
+        except Exception:
+            return {}
+
+    def memo_ler(self, documento: str, assinatura: str) -> dict[int, str]:
+        if self._con is None:
+            return {}
+        try:
+            rows = self._con.execute(
+                "SELECT id_step, chave FROM memo WHERE documento = ? AND assinatura = ?",
+                (documento, assinatura),
+            ).fetchall()
+            return {int(r[0]): str(r[1]) for r in rows}
+        except Exception:
+            return {}
+
+    def gravar_lote(
+        self,
+        formas: dict,
+        ocorrencias: list[Ocorrencia],
+        documento: str = "",
+        memo: tuple[str, dict[int, str]] | None = None,
+    ) -> None:
         if not isinstance(formas, dict):
             raise ValueError("formas deve ser um dicionário")
+        if not isinstance(documento, str):
+            raise ValueError("documento inválido")
         prep_formas = []
         for chave, par in formas.items():
             if not isinstance(par, (tuple, list)) or len(par) != 2:
                 raise ValueError(f"par inválido para {chave!r}")
             prep_formas.append(_preparar_forma(chave, par[0], par[1]))
-        prep_ocs = [_preparar_ocorrencia(oc) for oc in ocorrencias]
+        prep_ocs = [_preparar_ocorrencia(oc, documento=documento) for oc in ocorrencias]
+        itens_memo = None
+        assinatura_memo = None
+        if memo is not None:
+            if not isinstance(memo, tuple) or len(memo) != 2 or not isinstance(memo[0], str) or not isinstance(memo[1], dict):
+                raise ValueError("memo inválido")
+            assinatura_memo = memo[0]
+            itens_memo = [(documento, int(id_step), assinatura_memo, str(chave)) for id_step, chave in memo[1].items()]
         agora = float(self._relogio())
         with self._tx():
             if prep_formas:
                 self._con.executemany(_SQL_INS_FORMA, [(*f, agora) for f in prep_formas])
             if prep_ocs:
                 self._con.executemany(_SQL_INS_OC, prep_ocs)
+            if memo is not None:
+                self._con.execute(
+                    "DELETE FROM memo WHERE documento = ? AND assinatura != ?",
+                    (documento, assinatura_memo),
+                )
+                if itens_memo:
+                    self._con.executemany(
+                        "INSERT OR REPLACE INTO memo (documento, id_step, assinatura, chave) VALUES (?, ?, ?, ?)",
+                        itens_memo,
+                    )
 
     def tamanho_bytes(self) -> int:
         if self._con is None:
@@ -370,7 +471,7 @@ def abrir_cache(pasta, cabecalho: dict | None = None, relogio=time.time) -> Cach
     except OSError:
         con = _conectar(":memory:")
         _inicializar_banco(con, cab_json)
-        return CacheGeometria(caminho, con, relogio=relogio)
+        return CacheGeometria(caminho, con, relogio=relogio, em_memoria=True)
 
     if caminho.exists() and not caminho.is_dir():
         con = None
@@ -402,7 +503,7 @@ def abrir_cache(pasta, cabecalho: dict | None = None, relogio=time.time) -> Cach
 
     con = _conectar(":memory:")
     _inicializar_banco(con, cab_json)
-    return CacheGeometria(caminho, con, relogio=relogio)
+    return CacheGeometria(caminho, con, relogio=relogio, em_memoria=True)
 
 
 def _min_anc(a: int | None, b: int | None) -> int | None:

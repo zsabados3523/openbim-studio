@@ -2,6 +2,7 @@
 """Motor de desenho de planta (modo pavimento do motor SVG, sem criar entidade no arquivo)."""
 import contextlib
 import functools
+import inspect
 import math
 import os
 import re
@@ -9,6 +10,7 @@ import threading
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from types import SimpleNamespace
 import ifcopenshell
 import ifcopenshell.api
@@ -2096,6 +2098,267 @@ def _sem_rastro(f):
         yield
     finally:
         f.discard_transaction()
+
+
+_MOTIVOS_QUEDA_CACHE = frozenset({
+    "sem_arquivo_salvo",
+    "opcoes_incompativeis",
+    "cache_ausente",
+    "cache_invalido",
+    "cache_incompleto",
+    "malha_invalida",
+    "secao_aberta",
+    "erro_motor",
+})
+
+
+def _desenhar_planta_cache(f, pedido, malhas_mundo, elementos_validos, fase, abrir_s):
+    """Delega o desenho da planta pelo cache para `planta_cache` (T24c)."""
+    ref = [malhas_mundo]
+    del malhas_mundo
+    return planta_cache.desenhar_planta_cache(
+        f, pedido, ref.pop(), elementos_validos, fase=fase, abrir_s=abrir_s
+    )
+
+
+_ITENS_SO_ANOTACAO = (
+    "IfcGeometricCurveSet",
+    "IfcCurve",
+    "IfcPoint",
+    "IfcTextLiteral",
+    "IfcAnnotationFillArea",
+)
+
+_SOLIDOS_COMUNS = frozenset({
+    "IfcExtrudedAreaSolid",
+    "IfcExtrudedAreaSolidTapered",
+    "IfcRevolvedAreaSolid",
+    "IfcRevolvedAreaSolidTapered",
+    "IfcSurfaceCurveSweptAreaSolid",
+    "IfcFixedReferenceSweptAreaSolid",
+    "IfcSweptAreaSolid",
+    "IfcSweptDiskSolid",
+    "IfcFacetedBrep",
+    "IfcAdvancedBrep",
+    "IfcTriangulatedFaceSet",
+    "IfcPolygonalFaceSet",
+    "IfcFaceBasedSurfaceModel",
+    "IfcShellBasedSurfaceModel",
+    "IfcBooleanClippingResult",
+    "IfcBooleanResult",
+    "IfcCsgSolid",
+    "IfcSolidModel",
+    "IfcTessellatedItem",
+    "IfcHalfSpaceSolid",
+    "IfcPolygonalBoundedHalfSpace",
+    "IfcBoxedHalfSpace",
+    "IfcBlock",
+    "IfcSphere",
+    "IfcRightCircularCone",
+    "IfcRightCircularCylinder",
+    "IfcRectangularPyramid",
+})
+
+
+_IFC_ENTITY = getattr(ifcopenshell, "entity_instance", None)
+
+
+def _item_so_anotacao(
+    it,
+    visitados: set[int] | None = None,
+    memo_src: dict[int, bool] | None = None,
+) -> bool:
+    """True se o item de representacao IFC for apenas curva/anotacao 2D (sem solido/malha)."""
+    if it is None:
+        return False
+    is_a_fn = getattr(it, "is_a", None)
+    if is_a_fn is None:
+        return False
+    tipo = is_a_fn()
+    eh_ifc = _IFC_ENTITY is not None and type(it) is _IFC_ENTITY
+    if isinstance(tipo, str):
+        if tipo in _SOLIDOS_COMUNS:
+            return False
+        eh_mapped = tipo == "IfcMappedItem"
+    else:
+        eh_mapped = bool(is_a_fn("IfcMappedItem"))
+    if eh_mapped:
+        src = it[0] if eh_ifc else getattr(it, "MappingSource", None)
+        sid = (src.id() if hasattr(src, "id") else id(src)) if src is not None else None
+        if memo_src is not None and sid is not None and sid in memo_src:
+            return memo_src[sid]
+        mrep = (
+            src[1]
+            if (src is not None and _IFC_ENTITY is not None and type(src) is _IFC_ENTITY)
+            else getattr(src, "MappedRepresentation", None)
+        )
+        items = (
+            (mrep[3] or ())
+            if (mrep is not None and _IFC_ENTITY is not None and type(mrep) is _IFC_ENTITY)
+            else (getattr(mrep, "Items", None) or ())
+        )
+        if not items:
+            if memo_src is not None and sid is not None:
+                memo_src[sid] = False
+            return False
+        vistos = set() if visitados is None else visitados
+        iid = it.id() if hasattr(it, "id") else id(it)
+        if iid in vistos:
+            return True
+        vistos.add(iid)
+        res = all(_item_so_anotacao(sub, vistos, memo_src) for sub in items)
+        if memo_src is not None and sid is not None:
+            memo_src[sid] = res
+        return res
+    if any(is_a_fn(t) for t in _ITENS_SO_ANOTACAO):
+        return True
+    if is_a_fn("IfcGeometricSet"):
+        elems = getattr(it, "Elements", None) or ()
+        return bool(elems) and all(_item_so_anotacao(sub, visitados, memo_src) for sub in elems)
+    return False
+
+
+def _eh_so_anotacao_rep(rep_prod, memo_src: dict[int, bool] | None = None) -> bool:
+    """True se todas as representacoes de rep_prod contiverem apenas itens 2D/anotacao."""
+    if rep_prod is None:
+        return False
+    eh_ifc = _IFC_ENTITY is not None and type(rep_prod) is _IFC_ENTITY
+    reps = rep_prod[2] if eh_ifc else getattr(rep_prod, "Representations", None)
+    if not reps:
+        return False
+    tem_item = False
+    for rep in reps:
+        items = (
+            (rep[3] or ())
+            if (_IFC_ENTITY is not None and type(rep) is _IFC_ENTITY)
+            else (getattr(rep, "Items", None) or ())
+        )
+        for it in items:
+            tem_item = True
+            if not _item_so_anotacao(it, None, memo_src):
+                return False
+    return tem_item
+
+
+def _eh_so_anotacao(el, memo_src: dict[int, bool] | None = None) -> bool:
+    """True se todas as representacoes do elemento contiverem apenas itens 2D/anotacao."""
+    return _eh_so_anotacao_rep(getattr(el, "Representation", None), memo_src)
+
+
+def _elementos_validos_cache(f, pedido: dict) -> list[tuple[int, str]]:
+    """Filtra pedido['elementos'] removendo IfcOpeningElement, sem Representation ou so-anotacao."""
+    validos: list[tuple[int, str]] = []
+    memo_src: dict[int, bool] = {}
+    for id_step, gid in pedido.get("elementos") or ():
+        try:
+            el = f.by_id(int(id_step))
+        except Exception:
+            el = None
+        if el is None or el.is_a("IfcOpeningElement"):
+            continue
+        rep_prod = getattr(el, "Representation", None)
+        if rep_prod is None:
+            continue
+        try:
+            so_anot = _eh_so_anotacao_rep(rep_prod, memo_src)
+        except Exception:  # IFC malformado: na duvida o elemento fica (nao e filtrado)
+            so_anot = False
+        if so_anot:
+            continue
+        validos.append((int(id_step), str(gid)))
+    return validos
+
+
+def _anexar_telemetria_cache(
+    resp: dict,
+    *,
+    via_cache: bool,
+    queda: str | None,
+    n_faltantes: int,
+    cache_s: float,
+    secoes_parciais: int = 0,
+) -> dict:
+    """Anexa telemetria de despacho pelo cache sem sobrescrever faltantes/incompleta da T19i1."""
+    resp["via_cache"] = bool(via_cache)
+    resp["queda"] = queda
+    resp["n_faltantes"] = int(n_faltantes)
+    resp["secoes_parciais"] = int(secoes_parciais)
+    tempos = dict(resp.get("tempos") or {})
+    tempos["cache_s"] = float(cache_s)
+    motor_s = tempos.get("motor_s")
+    tempos["motor_s"] = float(motor_s) if motor_s is not None else 0.0
+    resp["tempos"] = tempos
+    return resp
+
+
+def _tentar_planta_pelo_cache(
+    f,
+    pedido: dict,
+    pasta_cache: str | Path,
+    fase,
+    abrir_s: float,
+) -> tuple[dict | None, str | None, int, float]:
+    """Tenta desenhar a planta pelo cache. Retorna (resp_ok, queda, n_faltantes, cache_s)."""
+    t0 = time.perf_counter()
+    elementos_validos = _elementos_validos_cache(f, pedido)
+
+    if pedido.get("moveis_como_caixa"):
+        return None, "opcoes_incompativeis", 0, time.perf_counter() - t0
+
+    arq = pedido.get("arquivo")
+    if not arq or not Path(arq).is_file():
+        return None, "sem_arquivo_salvo", len(elementos_validos), time.perf_counter() - t0
+
+    caminho_banco = Path(pasta_cache) / cache_geometria.NOME_BANCO
+    if not caminho_banco.is_file():
+        return None, "cache_ausente", len(elementos_validos), time.perf_counter() - t0
+
+    cab_json = cache_geometria._json_canonico(
+        cache_geometria.cabecalho_atual(tesselacao=construtor.TESSELACAO)
+    )
+    con = None
+    cache = None
+    try:
+        con = cache_geometria._conectar(caminho_banco)
+        if not cache_geometria._banco_integro(con, cab_json):
+            return None, "cache_invalido", len(elementos_validos), time.perf_counter() - t0
+        cache = cache_geometria.CacheGeometria(caminho_banco, con)
+        con = None
+        doc = cache_geometria.documento_de(arq)
+        malhas_mundo, faltantes = cache_leitura.malhas_do_cache(
+            cache, doc, [gid for _, gid in elementos_validos]
+        )
+    except Exception:
+        return None, "cache_invalido", len(elementos_validos), time.perf_counter() - t0
+    finally:
+        if cache is not None:
+            cache.fechar()
+        elif con is not None:
+            cache_geometria._fechar_con(con)
+
+    cache_s = time.perf_counter() - t0
+    if faltantes:
+        return None, "cache_incompleto", len(faltantes), cache_s
+
+    _ref_malhas = [malhas_mundo]
+    del malhas_mundo
+    try:
+        resp_ok, motivo = _desenhar_planta_cache(f, pedido, _ref_malhas.pop(), elementos_validos, fase, abrir_s)
+    except Exception:
+        return None, "erro_motor", 0, cache_s
+
+    if isinstance(resp_ok, dict) and resp_ok.get("ok") is True and motivo is None:
+        return _anexar_telemetria_cache(
+            resp_ok,
+            via_cache=True,
+            queda=None,
+            n_faltantes=0,
+            cache_s=cache_s,
+            secoes_parciais=int(resp_ok.get("secoes_parciais") or 0),
+        ), None, 0, cache_s
+
+    motivo_final = motivo if motivo in _MOTIVOS_QUEDA_CACHE else "erro_motor"
+    return None, motivo_final, 0, cache_s
 
 
 def processar(pedido: dict, fase=None) -> dict:

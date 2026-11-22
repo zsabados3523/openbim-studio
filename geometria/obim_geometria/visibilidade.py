@@ -2,13 +2,18 @@
 """Motor de linhas visiveis por malha (vista de cima, z-buffer conservador + recorte analitico)."""
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import math
 import numbers
+import os
+import threading
+
 import numpy as np
 
 from obim_geometria.visib_base import (
     _arestas_candidatas,
     _cel_caixa,
+    _dedup_int64,
     _expandir_celulas,
     _fatias,
     _ler_quadro,
@@ -23,8 +28,75 @@ from obim_geometria.visib_mapa import (
     _compactar_H,
     _filtrar_e_recortar,
     _mapa_z_conservador,
+    _subgrade_celulas_densas,
     _varrer_cels_triangulos,
 )
+
+
+def _cull_tris(
+    kept, ea_, eb_, tx0, tx1, ty0, ty1, mn_x, mn_y, dx_dom, dy_dom, n=512, kept_caixas=None
+):
+    """Mantem triangulos cuja caixa toca celula coberta pela caixa de alguma aresta (superconjunto)."""
+    if len(kept) == 0 or len(ea_) == 0:
+        return kept[:0]
+    c = max(dx_dom, dy_dom, 1e-9) / n
+    W = int(dx_dom / c) + 3
+    H = int(dy_dom / c) + 3
+
+    def ij(x, y):
+        return (
+            np.clip(np.floor((x - mn_x) / c).astype(np.int64), 0, W - 1),
+            np.clip(np.floor((y - mn_y) / c).astype(np.int64), 0, H - 1),
+        )
+
+    if kept_caixas is not None:
+        kx0, kx1, ky0, ky1 = kept_caixas
+    else:
+        kx0, kx1, ky0, ky1 = tx0[kept], tx1[kept], ty0[kept], ty1[kept]
+    pad = max(3.0 * c, 1e-6)
+    bx0 = float(min(ea_[:, 0].min(), eb_[:, 0].min())) - pad
+    bx1 = float(max(ea_[:, 0].max(), eb_[:, 0].max())) + pad
+    by0 = float(min(ea_[:, 1].min(), eb_[:, 1].min())) - pad
+    by1 = float(max(ea_[:, 1].max(), eb_[:, 1].max())) + pad
+    sel = np.nonzero((kx1 >= bx0) & (kx0 <= bx1) & (ky1 >= by0) & (ky0 <= by1))[0]
+    if len(sel) == 0:
+        return kept[:0]
+    kept = kept[sel]
+    ex0, ey0 = ij(np.minimum(ea_[:, 0], eb_[:, 0]), np.minimum(ea_[:, 1], eb_[:, 1]))
+    ex1, ey1 = ij(np.maximum(ea_[:, 0], eb_[:, 0]), np.maximum(ea_[:, 1], eb_[:, 1]))
+    ex0 = np.maximum(ex0 - 1, 0)
+    ey0 = np.maximum(ey0 - 1, 0)
+    ex1 = np.minimum(ex1 + 1, W - 1)
+    ey1 = np.minimum(ey1 + 1, H - 1)
+    gx0, gx1 = int(ex0.min()), int(ex1.max())
+    gy0, gy1 = int(ey0.min()), int(ey1.max())
+    qx0, qy0 = ij(kx0[sel], ky0[sel])
+    qx1, qy1 = ij(kx1[sel], ky1[sel])
+    ok_ov = (qx1 >= gx0) & (qx0 <= gx1) & (qy1 >= gy0) & (qy0 <= gy1)
+    if not np.any(ok_ov):
+        return kept[:0]
+    kept = kept[ok_ov]
+    Hl, Wl = gy1 - gy0 + 1, gx1 - gx0 + 1
+    ex0_l, ex1_l = ex0 - gx0, ex1 - gx0
+    ey0_l, ey1_l = ey0 - gy0, ey1 - gy0
+    dif = np.zeros((Hl + 1, Wl + 1), np.int64)
+    np.add.at(dif, (ey0_l, ex0_l), 1)
+    np.add.at(dif, (ey0_l, ex1_l + 1), -1)
+    np.add.at(dif, (ey1_l + 1, ex0_l), -1)
+    np.add.at(dif, (ey1_l + 1, ex1_l + 1), 1)
+    occ = (dif.cumsum(0).cumsum(1)[:Hl, :Wl] > 0).astype(np.int64)
+    sat = np.zeros((Hl + 1, Wl + 1), np.int64)
+    sat[1:, 1:] = occ.cumsum(0).cumsum(1)
+    cx0 = np.maximum(qx0[ok_ov], gx0) - gx0
+    cx1 = np.minimum(qx1[ok_ov], gx1) - gx0
+    cy0 = np.maximum(qy0[ok_ov], gy0) - gy0
+    cy1 = np.minimum(qy1[ok_ov], gy1) - gy0
+    tot = sat[cy1 + 1, cx1 + 1] - sat[cy0, cx1 + 1] - sat[cy1 + 1, cx0] + sat[cy0, cx0]
+    return kept[tot > 0]
+
+
+_MEMO_MGR_LOCK = threading.Lock()
+_MEMO_CHAVE_LOCKS: dict[tuple[int, tuple], list] = {}
 
 
 def _visibilidade_hibrida(
@@ -44,24 +116,52 @@ def _visibilidade_hibrida(
     while (math.ceil(dx_dom / g) + 2) * (math.ceil(dy_dom / g) + 2) > 6_000_000:
         g *= 1.05
     chave = (mn_x, mn_y, mx_x, mx_y, g)
-    if memo is not None and chave in memo:
-        z_full, zf_flat, W, H, kept_idx = memo[chave]
-    else:
-        z_full, W, H = _mapa_z_conservador(
+
+    def _calc_mapa_z():
+        z_full_, W_, H_ = _mapa_z_conservador(
             A, gx, gy, nx_, ny_, cc_, tx0, tx1, ty0, ty1, mn_x, mn_y, mx_x, mx_y, g
         )
-        tx0i, tx1i, ty0i, ty1i = _cel_caixa(tx0, tx1, ty0, ty1, mn_x, mn_y, g, W, H)
+        tx0i, tx1i, ty0i, ty1i = _cel_caixa(tx0, tx1, ty0, ty1, mn_x, mn_y, g, W_, H_)
         idx_s = np.nonzero((tx1i - tx0i + 1) * (ty1i - ty0i + 1) <= 25)[0]
         tri_keep = np.ones(len(A), bool)
-        zf_flat = z_full.ravel()
+        zf_flat_ = z_full_.ravel()
         tri_keep[idx_s] = False
         for k0 in range(0, len(idx_s), 50_000):
             sl = idx_s[k0:k0 + 50_000]
-            tobj, tcel = _expandir_celulas(tx0i[sl], tx1i[sl], ty0i[sl], ty1i[sl], W)
-            np.logical_or.at(tri_keep, sl[tobj], tzmax[sl[tobj]] >= zf_flat[tcel] - 1e-9)
-        kept_idx = np.nonzero(tri_keep)[0]
-        if memo is not None:
-            memo[chave] = (z_full, zf_flat, W, H, kept_idx)
+            tobj, tcel = _expandir_celulas(tx0i[sl], tx1i[sl], ty0i[sl], ty1i[sl], W_)
+            np.logical_or.at(tri_keep, sl[tobj], tzmax[sl[tobj]] >= zf_flat_[tcel] - 1e-9)
+        kept_ = np.nonzero(tri_keep)[0]
+        kept_caixas_ = (
+            np.ascontiguousarray(tx0[kept_]),
+            np.ascontiguousarray(tx1[kept_]),
+            np.ascontiguousarray(ty0[kept_]),
+            np.ascontiguousarray(ty1[kept_]),
+        )
+        return z_full_, zf_flat_, W_, H_, kept_, kept_caixas_
+
+    if memo is None:
+        entrada = _calc_mapa_z()
+    else:
+        entrada = memo.get(chave)
+        if entrada is None:
+            mk = (id(memo), chave)
+            with _MEMO_MGR_LOCK:
+                slot = _MEMO_CHAVE_LOCKS.get(mk)
+                if slot is None:
+                    slot = [threading.Lock(), 0]
+                    _MEMO_CHAVE_LOCKS[mk] = slot
+                slot[1] += 1
+            try:
+                with slot[0]:
+                    entrada = memo.get(chave)
+                    if entrada is None:
+                        entrada = memo.setdefault(chave, _calc_mapa_z())
+            finally:
+                with _MEMO_MGR_LOCK:
+                    slot[1] -= 1
+                    if slot[1] == 0:
+                        _MEMO_CHAVE_LOCKS.pop(mk, None)
+    z_full, zf_flat, W, H, kept_idx, kept_caixas = entrada
     d = b - a
     step_g = 0.999 * g
     nsub_g = np.maximum(1, np.ceil(np.maximum(np.abs(d[:, 0]), np.abs(d[:, 1])) / step_g).astype(np.int64))
@@ -85,6 +185,12 @@ def _visibilidade_hibrida(
             ends[:-1] &= (~hid[1:]) | (s_id[:-1] != s_id[1:])
             H_l.append((s_id[starts], t0_s[starts], t1_s[ends]))
     ek_idx = np.nonzero(ek_mask)[0]
+    n_ref = len(kept_idx)
+    if len(ek_idx) and len(kept_idx):
+        kept_idx = _cull_tris(
+            kept_idx, a[ek_idx], b[ek_idx], tx0, tx1, ty0, ty1, mn_x, mn_y, dx_dom, dy_dom,
+            kept_caixas=kept_caixas,
+        )
     ex0 = np.minimum(a[:, 0], b[:, 0])
     ex1 = np.maximum(a[:, 0], b[:, 0])
     ey0 = np.minimum(a[:, 1], b[:, 1])
@@ -94,11 +200,12 @@ def _visibilidade_hibrida(
     rem_t = _passagem_faixas_orientadas(P, tv, kept_idx, ek_idx, a, b, d, g, tol_z, d_eps, ctx, H_l)
     cg = g
     nt_all = len(A)
+    usar_subgrade = os.environ.get("OBIM_VISIB_SUBGRADE") != "0"
     while len(rem_t) and len(ek_idx):
         Wc = int(math.ceil(dx_dom / cg)) + 2
         Hc = int(math.ceil(dy_dom / cg)) + 2
         ncel = Wc * Hc
-        lim_c = min(400, max(50, 3_000_000 // len(rem_t)))
+        lim_c = min(400, max(50, 3_000_000 // max(len(rem_t), n_ref)))
         if ncel <= lim_c:
             cand_m = np.ones(len(rem_t), bool)
         else:
@@ -137,36 +244,67 @@ def _visibilidade_hibrida(
                         tcel = tcel[ok_tc]
                     if not len(tobj):
                         continue
+                    t_iy, t_ix = tcel // Wc, tcel % Wc
+                    bx0, by0 = int(t_ix.min()), int(t_iy.min())
+                    Wl = int(t_ix.max()) - bx0 + 1
+                    Hl = int(t_iy.max()) - by0 + 1
+                    ncel_l = Wl * Hl
+                    tcel = (t_iy - by0) * Wl + (t_ix - bx0)
                     ord_t = np.argsort(tcel, kind="stable")
                     tri_por_cel = tobj[ord_t]
                     cel_ord = tcel[ord_t]
-                    cont = np.bincount(cel_ord, minlength=ncel)
+                    cont = np.bincount(cel_ord, minlength=ncel_l)
                     ini_cel = np.cumsum(cont) - cont
-                    cell_tzmax = np.full(ncel, -np.inf)
+                    cell_tzmax = np.full(ncel_l, -np.inf)
                     np.maximum.at(cell_tzmax, cel_ord, tzmax[tri_por_cel])
                     for e0, e1 in _fatias(nsub_c, 400_000):
                         ec = ek_idx[e0:e1]
                         s_l, _, _, sa, sb, sx0, sx1, sy0, sy1 = _subseg_cels(
                             a[ec], d[ec], nsub_c[e0:e1], mn_x, mn_y, cg, Wc, Hc
                         )
-                        sobj, scel = _expandir_celulas(sx0, sx1, sy0, sy1, Wc)
+                        sx0 = np.maximum(sx0, bx0); sx1 = np.minimum(sx1, bx0 + Wl - 1)
+                        sy0 = np.maximum(sy0, by0); sy1 = np.minimum(sy1, by0 + Hl - 1)
+                        okb = (sx1 >= sx0) & (sy1 >= sy0)
+                        s_l, sa, sb = s_l[okb], sa[okb], sb[okb]
+                        sobj, scel = _expandir_celulas(sx0[okb] - bx0, sx1[okb] - bx0, sy0[okb] - by0, sy1[okb] - by0, Wl)
                         ok_sc = cell_tzmax[scel] > np.minimum(sa[:, 2], sb[:, 2])[sobj] + tol_z
                         eobj = ec[s_l[sobj[ok_sc]]]
                         ecel = scel[ok_sc]
                         if not len(eobj):
                             continue
-                        ch_ec = np.unique(eobj.astype(np.int64) * ncel + ecel)
-                        eobj = ch_ec // ncel
-                        ecel = ch_ec % ncel
+                        ch_ec = _dedup_int64(eobj.astype(np.int64) * ncel_l + ecel)
+                        eobj = ch_ec // ncel_l
+                        ecel = ch_ec % ncel_l
                         ntri_par = cont[ecel]
                         nz = ntri_par > 0
                         eobj = eobj[nz]
                         ecel = ecel[nz]
                         ntri_par = ntri_par[nz]
+                        if usar_subgrade and len(eobj):
+                            denso_cel = cont >= 128
+                            eh_denso = denso_cel[ecel]
+                            if np.any(eh_denso) and int(ntri_par[eh_denso].sum()) >= 20_000_000:
+                                eo_n, ec_n, nt_n = eobj[~eh_denso], ecel[~eh_denso], ntri_par[~eh_denso]
+                                for p0, p1 in _fatias(nt_n, 200_000, chaves=eo_n):
+                                    g3, kk = _rle_idx(nt_n[p0:p1])
+                                    _filtrar_e_recortar(
+                                        eo_n[p0:p1][g3], tri_por_cel[ini_cel[ec_n[p0:p1]][g3] + kk],
+                                        a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
+                                        tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin, nt_all,
+                                        tol_z, d_eps, H_l,
+                                    )
+                                _subgrade_celulas_densas(
+                                    eobj[eh_denso], ecel[eh_denso], cont, ini_cel, tri_por_cel,
+                                    bx0, by0, Wl, mn_x, mn_y, cg,
+                                    a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
+                                    tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin, nt_all,
+                                    tol_z, d_eps, H_l,
+                                )
+                                continue
                         # shortcut: pares por celula tem custo ~N^2 por ancora comum (vertice muito usado);
                         # limite pratico ~1000 arestas no mesmo vertice
                         # (cone 4096 lados = 17 s; max IFC real = 128).
-                        for p0, p1 in _fatias(ntri_par, 2_000_000):
+                        for p0, p1 in _fatias(ntri_par, 200_000, chaves=eobj):
                             g3, kk = _rle_idx(ntri_par[p0:p1])
                             pe = eobj[p0:p1][g3]
                             pt = tri_por_cel[ini_cel[ecel[p0:p1]][g3] + kk]
@@ -247,14 +385,43 @@ def linhas_visiveis(
     return linhas_visiveis_multi([(verts, tris)], angulo_graus=angulo_graus, tol_z=tol_z, min_len=min_len)[0]
 
 
+def _validar_trabalhadores(trabalhadores: int | None) -> int | None:
+    """Valida o numero de trabalhadores: None ou inteiro >= 1 (rejeita bool e nao-inteiros)."""
+    if trabalhadores is None:
+        return None
+    if isinstance(trabalhadores, bool) or not isinstance(trabalhadores, numbers.Integral):
+        raise ValueError("trabalhadores deve ser inteiro >= 1 ou None")
+    n = int(trabalhadores)
+    if n < 1:
+        raise ValueError("trabalhadores deve ser >= 1")
+    return n
+
+
+def _resolver_trabalhadores_auto(n_pecas_cand: int, n_tris: int) -> int:
+    """Resolve numero de threads no modo automatico via env OBIM_VISIB_THREADS ou heuristica."""
+    raw = os.environ.get("OBIM_VISIB_THREADS")
+    if raw is not None:
+        try:
+            n_env = int(raw)
+        except ValueError:
+            n_env = 0
+        if n_env >= 1:
+            return n_env
+    if n_pecas_cand >= 8 and n_tris >= 20_000:
+        return min(4, os.cpu_count() or 1)
+    return 1
+
+
 def linhas_visiveis_multi(
     pecas: list[tuple[np.ndarray, np.ndarray]],
     *,
     angulo_graus: float = 0.001,
     tol_z: float = 1e-4,
     min_len: float = 1e-4,
+    trabalhadores: int | None = None,
 ) -> list[list[np.ndarray]]:
     """Calcula polilinhas visiveis de cada peca com oclusao mutua por todas as pecas."""
+    n_trab = _validar_trabalhadores(trabalhadores)
     for nome, val in (("angulo_graus", angulo_graus), ("tol_z", tol_z), ("min_len", min_len)):
         fv = float(val)
         if not (math.isfinite(fv) and fv >= 0.0):
@@ -293,13 +460,31 @@ def linhas_visiveis_multi(
             cands[i] = (a[m], b[m], ea[m], eb[m])
     if not tw_oks:
         return [[] for _ in pecas_l]
+    ativos = [(i, c) for i, c in enumerate(cands) if c is not None]
+    if not ativos:
+        return [[] for _ in pecas_l]
     Tw_comb = tw_oks[0] if len(tw_oks) == 1 else _dedup_triangulos(np.vstack(tw_oks))
     prep = _preparar_triangulos(P, Tw_comb)
     memo = {}
-    return [
-        [] if c is None else list(_visibilidade_hibrida(P, Tw_comb, *c, tol_z, -1e-6, min_len, prep=prep, memo=memo))
-        for c in cands
-    ]
+    if n_trab is None:
+        n_trab = _resolver_trabalhadores_auto(len(ativos), len(Tw_comb))
+    res: list[list[np.ndarray]] = [[] for _ in pecas_l]
+    if n_trab == 1:
+        for i, c in ativos:
+            res[i] = list(_visibilidade_hibrida(P, Tw_comb, *c, tol_z, -1e-6, min_len, prep=prep, memo=memo))
+        return res
+    with ThreadPoolExecutor(max_workers=n_trab) as pool:
+        try:
+            futs = [
+                (i, pool.submit(_visibilidade_hibrida, P, Tw_comb, *c, tol_z, -1e-6, min_len, prep=prep, memo=memo))
+                for i, c in ativos
+            ]
+            for i, fut in futs:
+                res[i] = list(fut.result())
+        except BaseException:
+            pool.shutdown(wait=True, cancel_futures=True)
+            raise
+    return res
 
 
 def _extrair_poligonos(geom) -> list:

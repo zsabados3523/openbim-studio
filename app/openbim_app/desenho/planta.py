@@ -14,6 +14,7 @@ import ifcopenshell.util.unit
 
 from openbim_app import vistas_ifc
 from openbim_app.desenho import auxiliar, selecao
+from openbim_app.desenho.cache import CacheCancelado, assinatura_arquivo, resolver_assinatura
 from openbim_app.desenho.selecao import Selecao, SelecaoInvalida
 
 if TYPE_CHECKING:
@@ -35,6 +36,11 @@ class Planta:
     pesados: tuple = ()
     pedido: dict | None = None
     faltantes: tuple[int, ...] = ()
+    divergente: bool = False
+    via_cache: bool = False
+    queda: str | None = None
+    n_faltantes: int = 0
+    secoes_parciais: int = 0
 
     @property
     def incompleta(self) -> bool:
@@ -73,6 +79,7 @@ def gerar_planta(
     cancelar=None,
     executor=None,
     caminho_ifc: str | Path | None = None,
+    assinatura_ifc: tuple[int, int] | None = None,
     cache: "CacheDesenho | None" = None,
     faixas: int | None = None,
     pesados: str | None = None,
@@ -82,8 +89,14 @@ def gerar_planta(
     previa=None,
     sessao_selecao: selecao.SessaoSelecao | None = None,
     filho=None,
+    pasta_cache_geometria: str | Path | None = None,
 ) -> Planta:
     selecao._validar_filho(filho)
+    if pasta_cache_geometria is not None and not isinstance(pasta_cache_geometria, (str, Path)):
+        raise TypeError(
+            f"pasta_cache_geometria inválido: {pasta_cache_geometria!r} (esperado str, Path ou None)"
+        )
+    pasta_geo_str = str(pasta_cache_geometria) if pasta_cache_geometria is not None else ""
     if sessao_selecao is not None and not isinstance(sessao_selecao, selecao.SessaoSelecao):
         raise TypeError(f"sessao_selecao inválido: {sessao_selecao!r} (esperado SessaoSelecao ou None)")
     if pesados not in (None, "silhueta"):
@@ -166,33 +179,76 @@ def gerar_planta(
     if motor_visivel:
         pedido["motor_visivel"] = True
 
-    def _executar_planta(caminho_atual):
-        with auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_atual) as p:
-            return auxiliar.executar(
-                p,
-                limite_s=limite_s,
-                cancelar=cancelar,
-                executor=executor,
-                previa=previa,
-                filho=filho if caminho_atual is not None else None,
+    if caminho_ifc is None:
+        arq_cache, sig_chave = None, None
+    elif assinatura_ifc is not None:
+        arq_cache, sig_chave = Path(caminho_ifc), tuple(int(x) for x in assinatura_ifc)
+    else:
+        arq_cache, sig_chave = resolver_assinatura(caminho_ifc)
+
+    def _executar_planta(caminho_atual, sig_atual):
+        ped_exec = dict(pedido)
+        if caminho_atual is not None and sig_atual is not None and pasta_geo_str:
+            ped_exec["pasta_cache_geometria"] = pasta_geo_str
+        else:
+            ped_exec.pop("pasta_cache_geometria", None)
+        kw_prep = (
+            {"caminho_ifc": caminho_atual, "assinatura": sig_atual}
+            if (caminho_atual is not None and sig_atual is not None)
+            else {}
+        )
+        with auxiliar.preparar(ifc, ped_exec, **kw_prep) as p:
+            sig_prep = (getattr(p, "pedido", None) or {}).get("assinatura")
+            return (
+                auxiliar.executar(
+                    p,
+                    limite_s=limite_s,
+                    cancelar=cancelar,
+                    executor=executor,
+                    previa=previa,
+                    filho=filho if caminho_atual is not None else None,
+                ),
+                sig_prep,
             )
 
     def _executar_com_retry():
         try:
-            return _executar_planta(caminho_ifc)
+            r_exec, sig_prep = _executar_planta(arq_cache, sig_chave)
+            return r_exec, sig_prep, False
         except auxiliar.Divergente:
-            if caminho_ifc is None:
+            if arq_cache is None:
                 raise
-            return _executar_planta(None)
+            r_exec, _ = _executar_planta(None, None)
+            return r_exec, None, True
 
+    divergente = False
     if cache is not None:
-        ch = cache.chave(ifc, pedido)
+        kw_chave = (
+            {"arquivo": arq_cache, "assinatura": sig_chave}
+            if (arq_cache is not None and sig_chave is not None)
+            else {}
+        )
+        try:
+            ch = cache.chave(ifc, pedido, cancelar=cancelar, **kw_chave)
+        except CacheCancelado as exc:
+            raise auxiliar.DesenhoCancelado("Operação cancelada no cálculo da chave do cache") from exc
         r = cache.obter(ch)
         if r is None:
-            r = _executar_com_retry()
-            cache.guardar(ch, r)
+            r, sig_prep, divergente = _executar_com_retry()
+            if cancelar is not None and cancelar.is_set():
+                raise auxiliar.DesenhoCancelado("Operação cancelada antes de gravar no cache")
+            if divergente:
+                try:
+                    ch_grafo = cache.chave(ifc, pedido, cancelar=cancelar)
+                except CacheCancelado as exc:
+                    raise auxiliar.DesenhoCancelado("Operação cancelada no cálculo da chave do cache") from exc
+                cache.guardar(ch_grafo, r)
+            elif arq_cache is None or (
+                sig_prep == list(sig_chave) and assinatura_arquivo(arq_cache) == sig_chave
+            ):
+                cache.guardar(ch, r)
     else:
-        r = _executar_com_retry()
+        r, _, divergente = _executar_com_retry()
 
     return Planta(
         svg=r["svg"],
@@ -206,4 +262,9 @@ def gerar_planta(
         pesados=tuple(dict(d) for d in (r.get("pesados") or ())),
         pedido=pedido,
         faltantes=tuple(int(x) for x in (r.get("faltantes") or ())),
+        divergente=divergente,
+        via_cache=bool(r.get("via_cache", False)),
+        queda=r.get("queda"),
+        n_faltantes=int(r.get("n_faltantes") or 0),
+        secoes_parciais=int(r.get("secoes_parciais") or 0),
     )

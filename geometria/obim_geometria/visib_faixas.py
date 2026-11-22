@@ -92,7 +92,7 @@ def _passagem_faixas_orientadas(P, tv, rem_t, ek_idx, a, b, d, g, tol_z, d_eps, 
             eobj = eobj[nz]
             ebin = ebin[nz]
             nt_p = nt_p[nz]
-            for p0, p1 in _fatias(nt_p, 2_000_000):
+            for p0, p1 in _fatias(nt_p, 200_000, chaves=eobj):
                 g3, kk = _rle_idx(nt_p[p0:p1])
                 pe = eobj[p0:p1][g3]
                 pt = tri_por_b[ini_b[ebin[p0:p1]][g3] + kk]

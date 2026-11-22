@@ -165,7 +165,7 @@ def test_4_assinaturas_publicas():
     import inspect
 
     V = _V()
-    assert list(inspect.signature(V.linhas_visiveis_multi).parameters) == ["pecas", "angulo_graus", "tol_z", "min_len"]
+    assert list(inspect.signature(V.linhas_visiveis_multi).parameters) == ["pecas", "angulo_graus", "tol_z", "min_len", "trabalhadores"]
     ps = list(inspect.signature(V.linhas_visiveis_vista).parameters)
     assert ps[:2] == ["pecas", "quadro"] and "profundidade" in ps
 

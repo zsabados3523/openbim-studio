@@ -63,21 +63,27 @@ def _medir(caminho, consumir, **kw):
     t_sonda.timeout.connect(sonda)
     t_cons.setInterval(16)
     t_cons.timeout.connect(consumidor)
-    car = CarregadorMalhas(str(caminho), **kw)
-    t_sonda.start()
-    t_cons.start()
-    # iniciar() roda já dentro do laço de eventos, com a sonda ligada: o custo dele entra na primeira amostra
-    QTimer.singleShot(0, car.iniciar)
-    ultimo[0] = time.perf_counter()
-    loop.exec()
-    t_cons.stop()
-    car.aguardar(timeout=30.0)
-    del car  # a destruição faz parte da janela de medição
     gc.collect()
-    fim = time.perf_counter() + 0.1
-    while time.perf_counter() < fim:  # deixa a sonda registrar qualquer parada da destruição
-        QCoreApplication.processEvents()
-    t_sonda.stop()
+    gc.freeze()  # o heap da sessao (milhares de testes) ficaria no gc.collect() da janela: ~200 ms de parada numa amostra
+    try:
+        car = CarregadorMalhas(str(caminho), **kw)  # criado depois do freeze: o gc.collect() da janela ainda o coleta
+        t_sonda.start()
+        t_cons.start()
+        # iniciar() roda já dentro do laço de eventos, com a sonda ligada: o custo dele entra na primeira amostra
+        QTimer.singleShot(0, car.iniciar)
+        ultimo[0] = time.perf_counter()
+        loop.exec()
+        t_cons.stop()
+        car.aguardar(timeout=30.0)
+        del car  # a destruição faz parte da janela de medição
+        gc.collect()
+        fim = time.perf_counter() + 0.1
+        while time.perf_counter() < fim:  # deixa a sonda registrar qualquer parada da destruição
+            QCoreApplication.processEvents()
+    finally:
+        t_cons.stop()
+        t_sonda.stop()
+        gc.unfreeze()
     return np.array(atrasos or [0.0]), estado["resumo"]  # todas as amostras, inclusive a primeira
 
 

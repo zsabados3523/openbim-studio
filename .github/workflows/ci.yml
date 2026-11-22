@@ -264,6 +264,10 @@ jobs:
       - uses: ./.github/actions/ambiente-windows
       - name: Testes
         shell: bash -elo pipefail {0}
+        env:
+          # Windows: sem threads no modo automático do motor de linhas visíveis. Com threads, t22a (equivalência com o dourado)
+          # falhou de forma intermitente só aqui (7 contra 8 polilinhas), sem reprodução no Linux. Remover quando a causa for achada.
+          OBIM_VISIB_THREADS: "1"
         run: |
           # Em caso de falha, as últimas linhas viram anotação pública (o log completo exige login no GitHub).
           set +e

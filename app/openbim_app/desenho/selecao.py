@@ -175,6 +175,7 @@ def selecionar(
     cancelar=None,
     sessao: SessaoSelecao | None = None,
     caminho_ifc: str | Path | None = None,
+    assinatura_ifc: tuple[int, int] | list[int] | None = None,
     profundidade_corte: float | None = None,
     filho=None,
 ) -> Selecao:
@@ -324,7 +325,12 @@ def selecionar(
             "vista": {"guid": gid_vista},
             "threads": auxiliar.threads_padrao(),
         }
-        preparado = auxiliar.preparar(ifc, pedido, caminho_ifc=caminho_ifc)
+        preparado = auxiliar.preparar(
+            ifc,
+            pedido,
+            caminho_ifc=caminho_ifc,
+            assinatura=assinatura_ifc,
+        )
         try:
             resposta = auxiliar.executar(
                 preparado,

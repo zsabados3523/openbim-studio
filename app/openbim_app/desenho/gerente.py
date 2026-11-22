@@ -20,6 +20,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Qt, Signal, Slot
 
 from openbim_app.desenho.auxiliar import DesenhoCancelado, ErroAuxiliar
+from openbim_app.desenho.cache import arquivo_resolvido, resolver_assinatura
 from openbim_app.desenho.filho import FilhoIndisponivel, FilhoPersistente
 from openbim_app.desenho.selecao import SessaoSelecao
 
@@ -56,6 +57,17 @@ def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, 
     kw_sessao = {"sessao_selecao": sessao_selecao} if sessao_selecao is not None else {}
     if filho is not None:
         kw_sessao["filho"] = filho
+    opcoes = dict(opcoes)
+    sig_inicio = opcoes.pop("assinatura_ifc", None)
+    caminho_refino = opcoes.get("caminho_ifc")
+    if sig_inicio is None and caminho_refino is not None:
+        caminho_refino, sig_inicio = resolver_assinatura(caminho_refino)
+        if sig_inicio is not None:
+            opcoes["caminho_ifc"] = caminho_refino
+        else:
+            opcoes.pop("caminho_ifc", None)
+    if sig_inicio is not None:
+        kw_sessao["assinatura_ifc"] = sig_inicio
     r = gerar(ifc, vista_guid, cache=cache, cancelar=cancelar, **kw_sessao, **opcoes)
     dados = {
         "svg": r.svg,
@@ -73,19 +85,34 @@ def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, 
         if previa is not None:
             previa(dados)
         from openbim_app.desenho import refino
+        if getattr(r, "divergente", False) or sig_inicio is None:
+            caminho_refino = None
+            sig_refino = None
+        else:
+            sig_refino = sig_inicio
         dados = refino.refinar_pesados(
-            ifc, r.pedido, dados, cache=cache, cancelar=cancelar, progresso=progresso)
+            ifc,
+            r.pedido,
+            dados,
+            cache=cache,
+            cancelar=cancelar,
+            progresso=progresso,
+            caminho_ifc=caminho_refino,
+            assinatura_ifc=sig_refino,
+        )
     return dados
 
 
 def _resolver_ifc_aberto(caminho_ifc, revisao, revisao_salva) -> Path | None:
     if not (caminho_ifc and revisao is not None and revisao == revisao_salva):
         return None
-    try:
-        caminho_resolvido = Path(caminho_ifc).resolve()
-        return caminho_resolvido if caminho_resolvido.is_file() else None
-    except OSError:
-        return None
+    return arquivo_resolvido(caminho_ifc)
+
+
+def _resolver_ifc_com_assinatura(caminho_ifc, revisao, revisao_salva) -> tuple[Path | None, tuple[int, int] | None]:
+    if not (caminho_ifc and revisao is not None and revisao == revisao_salva):
+        return None, None
+    return resolver_assinatura(caminho_ifc)
 
 
 class _Pedido:
@@ -181,9 +208,13 @@ class GerenteDesenho(QObject):
     def pedir(self, tipo, ifc, vista_guid, *, caminho_ifc=None, revisao_salva=None, revisao=None, **opcoes) -> str:
         if tipo not in TIPOS:
             raise ValueError(f"tipo de desenho invalido: {tipo!r}")
-        caminho_resolvido = _resolver_ifc_aberto(caminho_ifc, revisao, revisao_salva)
-        if caminho_resolvido is not None:
-            opcoes["caminho_ifc"] = caminho_ifc
+        caminho_resolvido, sig = _resolver_ifc_com_assinatura(caminho_ifc, revisao, revisao_salva)
+        if caminho_resolvido is not None and sig is not None:
+            opcoes["caminho_ifc"] = caminho_resolvido
+            opcoes["assinatura_ifc"] = sig
+        else:
+            opcoes.pop("caminho_ifc", None)
+            opcoes.pop("assinatura_ifc", None)
         filho = None
         fechar_ociosos = []
         with self._trava:
@@ -340,6 +371,7 @@ class GerenteDesenho(QObject):
             if not mesma_geracao:
                 opcoes = dict(opcoes)
                 opcoes.pop("caminho_ifc", None)
+                opcoes.pop("assinatura_ifc", None)
             extra = {}
             try:
                 params = inspect.signature(self._motor).parameters.values()

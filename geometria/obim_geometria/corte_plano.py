@@ -67,28 +67,23 @@ def cortar_malha_no_plano(verts, tris, z):
         return idx
 
     tris_out: list[tuple[int, int, int]] = []
-    segs_vistos: set[tuple[int, int]] = set()
     segs_out: list[tuple[int, int]] = []
-    arestas_plano: dict[tuple[int, int], tuple[bool, bool]] = {}
+    arestas_plano: dict[tuple[int, int], tuple[int, int]] = {}
 
     def add_seg(ia: int, ib: int) -> None:
-        if ia == ib:
-            return
-        chave = (ia, ib) if ia < ib else (ib, ia)
-        if chave not in segs_vistos:
-            segs_vistos.add(chave)
+        if ia != ib:
             segs_out.append((ia, ib))
 
     def marca_aresta_plano(ia: int, ib: int, lado: int) -> None:
         if ia == ib:
             return
         chave = (ia, ib) if ia < ib else (ib, ia)
-        abaixo, acima = arestas_plano.get(chave, (False, False))
+        n_abaixo, n_acima = arestas_plano.get(chave, (0, 0))
         if lado < 0:
-            abaixo = True
+            n_abaixo += 1
         else:
-            acima = True
-        arestas_plano[chave] = (abaixo, acima)
+            n_acima += 1
+        arestas_plano[chave] = (n_abaixo, n_acima)
 
     for i0, i1, i2 in t.tolist():
         c0, c1, c2 = classe[i0], classe[i1], classe[i2]
@@ -142,8 +137,8 @@ def cortar_malha_no_plano(verts, tris, z):
             tris_out.append((p0, i2, p1))
             add_seg(p0, p1)
 
-    for (ia, ib), (viu_abaixo, viu_acima) in arestas_plano.items():
-        if viu_abaixo and viu_acima:
+    for (ia, ib), (n_abaixo, n_acima) in arestas_plano.items():
+        if (min(n_abaixo, n_acima) & 1) == 1:
             add_seg(ia, ib)
 
     todos_verts = np.vstack([v, np.asarray(novos_verts, dtype=float)]) if novos_verts else v
@@ -160,8 +155,17 @@ def cortar_malha_no_plano(verts, tris, z):
         tris_abaixo = np.zeros((0, 3), dtype=int)
 
     if segs_out:
-        segs_idx = np.asarray(segs_out, dtype=int)
-        segmentos_secao = np.hstack([todos_verts[segs_idx[:, 0], :2], todos_verts[segs_idx[:, 1], :2]])
+        segs_idx = np.asarray(segs_out, dtype=np.int64)
+        raw = np.hstack([todos_verts[segs_idx[:, 0], :2], todos_verts[segs_idx[:, 1], :2]])
+        norm = raw + 0.0
+        trocar = (norm[:, 0] > norm[:, 2]) | ((norm[:, 0] == norm[:, 2]) & (norm[:, 1] > norm[:, 3]))
+        if np.any(trocar):
+            norm[trocar] = norm[trocar][:, (2, 3, 0, 1)]
+        chaves_1d = np.ascontiguousarray(norm).view(np.dtype((np.void, norm.dtype.itemsize * 4))).ravel()
+        _, first_idx, counts = np.unique(chaves_1d, return_index=True, return_counts=True)
+        manter = first_idx[(counts & 1) == 1]
+        manter.sort()
+        segmentos_secao = raw[manter]
     else:
         segmentos_secao = np.zeros((0, 4), dtype=float)
 

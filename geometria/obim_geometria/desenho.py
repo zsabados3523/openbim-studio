@@ -21,7 +21,21 @@ import ifcopenshell.util.element
 import ifcopenshell.util.placement
 import numpy as np
 import shapely
-from obim_geometria import aneis, corte_plano, faixas, nucleos, oclusores, peca_cortada, peca_visivel, silhueta, visibilidade
+from obim_geometria import (
+    aneis,
+    cache_geometria,
+    cache_leitura,
+    construtor,
+    corte_plano,
+    faixas,
+    nucleos,
+    oclusores,
+    peca_cortada,
+    peca_visivel,
+    planta_cache,
+    silhueta,
+    visibilidade,
+)
 
 
 def caixa_valida(c) -> list[float] | None:
@@ -970,21 +984,21 @@ def _corte_em_faixas(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -
     }
 
 
-_ARQ_LOTE: dict[tuple[str, str | None], object] | None = None
+_ARQ_LOTE: dict[tuple[str, str | None, bool], object] | None = None
 _LOTE_TLS = threading.local()
 
 
-def _abrir_ifc(caminho, pavimento: str | None = None):
-    """Abre o IFC, reaproveitando por `(caminho, pavimento)` durante `processar_lote`."""
+def _abrir_ifc(caminho, pavimento: str | None = None, lazy: bool = False):
+    """Abre o IFC, reaproveitando por `(caminho, pavimento, lazy)` durante `processar_lote`."""
     cache = getattr(_LOTE_TLS, "cache", None)
     if cache is None:
         cache = _ARQ_LOTE
     if cache is not None and caminho is not None:
-        chave = (str(caminho), pavimento)
+        chave = (str(caminho), pavimento, bool(lazy))
         if chave not in cache:
-            cache[chave] = ifcopenshell.open(caminho)
+            cache[chave] = ifcopenshell.open(caminho, lazy=True) if lazy else ifcopenshell.open(caminho)
         return cache[chave]
-    return ifcopenshell.open(caminho)
+    return ifcopenshell.open(caminho, lazy=True) if lazy else ifcopenshell.open(caminho)
 
 
 def _malha_caixa(sh):
@@ -2373,13 +2387,20 @@ def processar(pedido: dict, fase=None) -> dict:
             n_faixas = faixas._validar_n(pedido["faixas"])
         except faixas.FaixasInvalidas as e:
             return {"ok": False, "erro": {"tipo": "FaixasInvalidas", "mensagem": str(e), "rastro": ""}}
+    pasta_cache = pedido.get("pasta_cache_geometria")
+    usar_cache = not eh_corte and pedido.get("faixa") is None and pasta_cache is not None and str(pasta_cache) != ""
     try:
         t_a0 = time.perf_counter()
         pav_guid = vista.get("pavimento") if isinstance(vista, dict) else None
-        f = _abrir_ifc(pedido.get("arquivo"), pav_guid)
+        f = (
+            _abrir_ifc(pedido.get("arquivo"), pav_guid, lazy=True)
+            if usar_cache and "lazy" in inspect.signature(_abrir_ifc).parameters
+            else _abrir_ifc(pedido.get("arquivo"), pav_guid)
+        )
         abrir_s = time.perf_counter() - t_a0
     except Exception as e:
         return {"ok": False, "erro": {"tipo": type(e).__name__, "mensagem": str(e), "rastro": traceback.format_exc()}}
+    info_queda = None
     with _sem_rastro(f):
         erro = _conferir_elementos(pedido, f)
         if erro is not None:
@@ -2388,11 +2409,36 @@ def processar(pedido: dict, fase=None) -> dict:
             return _processar_base(pedido, fase, f=f, abrir_s=abrir_s)
         if pedido.get("faixa") is not None:
             return _planta_recortada(pedido, fase, f=f, abrir_s=abrir_s)
+        if usar_cache:
+            resp_cache, motivo_queda, n_faltantes, cache_s = _tentar_planta_pelo_cache(
+                f, pedido, pasta_cache, fase, abrir_s
+            )
+            if resp_cache is not None:
+                return resp_cache
+            info_queda = (motivo_queda, n_faltantes, cache_s)
+            # queda: o pavimento inteiro vai ao motor; sub-pedidos nao reabrem o cache
+            pedido = {k: v for k, v in pedido.items() if k != "pasta_cache_geometria"}
+    if info_queda is not None:
+        t_r0 = time.perf_counter()
+        f = None  # solta o arquivo lazy antes de reabrir (evita pico de RAM)
+        try:
+            f = _abrir_ifc(pedido.get("arquivo"), pav_guid)
+        except Exception as e:
+            return {"ok": False, "erro": {"tipo": type(e).__name__, "mensagem": str(e), "rastro": traceback.format_exc()}}
+        abrir_s += time.perf_counter() - t_r0
+    with _sem_rastro(f):
         if n_faixas is not None:
-            return _planta_em_faixas(pedido, fase, n_faixas, f=f, abrir_s=abrir_s)
-        if pedido.get("componentes"):
-            return _planta_por_componentes(pedido, fase, f=f, abrir_s=abrir_s)
-        return _processar_base(pedido, fase, f=f, abrir_s=abrir_s)
+            resp = _planta_em_faixas(pedido, fase, n_faixas, f=f, abrir_s=abrir_s)
+        elif pedido.get("componentes"):
+            resp = _planta_por_componentes(pedido, fase, f=f, abrir_s=abrir_s)
+        else:
+            resp = _processar_base(pedido, fase, f=f, abrir_s=abrir_s)
+    if info_queda is not None and isinstance(resp, dict):
+        motivo_queda, n_faltantes, cache_s = info_queda
+        _anexar_telemetria_cache(
+            resp, via_cache=False, queda=motivo_queda, n_faltantes=n_faltantes, cache_s=cache_s
+        )
+    return resp
 
 
 def processar_lote(pedido: dict, fase=None) -> dict:
@@ -2405,7 +2451,7 @@ def processar_lote(pedido: dict, fase=None) -> dict:
         }
     global _ARQ_LOTE
     anterior_tls = getattr(_LOTE_TLS, "cache", None)
-    cache: dict[tuple[str, str | None], object] = {}
+    cache: dict[tuple[str, str | None, bool], object] = {}
     _LOTE_TLS.cache = cache
     eh_main = threading.current_thread() is threading.main_thread()
     anterior = _ARQ_LOTE

@@ -49,7 +49,7 @@ def _antigo(proj, base_ifc, manifesto, entradas):  # noqa: F811
 @pytest.mark.parametrize("entradas", [{"novos/lista.json": "[1, 2]"}, {"vistas/a.json": "[1, 2]"}], ids=["pasta nova com lista", "vista com lista"])
 def test_03_r2_versao_maior_ilegivel_recusa_e_nada_muda(proj, base_ifc, entradas):  # noqa: F811
     _fabrica(proj)
-    antigo = _antigo(proj, base_ifc, {**MAN, "versao_formato": "0.3.0", "campo_novo": 1}, entradas)
+    antigo = _antigo(proj, base_ifc, {**MAN, "format_version": "0.3.0", "campo_novo": 1}, entradas)
     with pytest.raises(Exception) as e:
         proj.gravar()
     assert "Casa.obim" in str(e.value)
@@ -58,9 +58,9 @@ def test_03_r2_versao_maior_ilegivel_recusa_e_nada_muda(proj, base_ifc, entradas
     assert proj.chamadas == []
 
 
-@pytest.mark.parametrize("manifesto,entradas", [({k: v for k, v in MAN.items() if k != "versao_formato"}, {"novos/lista.json": "[1, 2]"}),
-                                               ({**MAN, "versao_formato": "lixo"}, {"vistas/a.json": "[1]"}),
-                                               ({**MAN, "versao_formato": 3}, {"vistas/a.json": "[1]"})],
+@pytest.mark.parametrize("manifesto,entradas", [({k: v for k, v in MAN.items() if k != "format_version"}, {"novos/lista.json": "[1, 2]"}),
+                                               ({**MAN, "format_version": "lixo"}, {"vistas/a.json": "[1]"}),
+                                               ({**MAN, "format_version": 3}, {"vistas/a.json": "[1]"})],
                          ids=["sem versao_formato", "versao texto lixo", "versao nao texto"])
 def test_04_r2_sem_versao_confiavel_continua_sobrescrito(proj, base_ifc, manifesto, entradas):  # noqa: F811
     m = ob()

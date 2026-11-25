@@ -186,7 +186,7 @@ def test_d6_ifc_nome_com_caminho_so_vale_ao_lado(p, nome):
     with zipfile.ZipFile(ob) as z:
         dados = {n: z.read(n) for n in z.namelist()}
     man = json.loads(dados["manifest.json"])
-    man["ifc_nome"] = nome
+    man["ifc_name"] = nome
     dados["manifest.json"] = json.dumps(man).encode()
     with zipfile.ZipFile(ob, "w") as z:
         for n, b in dados.items():
@@ -207,7 +207,7 @@ def test_ifc_de_outro_programa_sem_pset_e_sem_obim_nao_avisa(p):
 
 RUINS = {"zip_invalido": lambda ob: ob.write_bytes(b"isto nao e um zip"),
          "manifesto_ilegivel": lambda ob: _regravar(ob, b"{nao json"),
-         "sem_formato": lambda ob: _regravar(ob, b'{"versao_formato": "0.2.0"}'),
+         "sem_formato": lambda ob: _regravar(ob, b'{"format_version": "0.2.0"}'),
          "versao_futura_1_0_0": lambda ob: _versao(ob, "1.0.0"), "versao_futura_0_3_0": lambda ob: _versao(ob, "0.3.0")}
 
 

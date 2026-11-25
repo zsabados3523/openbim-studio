@@ -319,13 +319,13 @@ def test_11_fora_do_historico(novo):
         f, n, pd = esc.arquivo, len(chamadas), d.h.pode_desfazer
         nh, ps = len(f.history), f.by_guid(d.c["obim"])
         with d.h.fora_do_historico(esc):
-            api("pset.edit_pset", f, pset=ps, properties={"Revisao": 7, "LadoId": "novo"})
+            api("pset.edit_pset", f, pset=ps, properties={"Revision": 7, "SideId": "novo"})
         assert (d.h.pode_desfazer, len(f.history), len(chamadas)) == (pd, nh, n), "fora_do_historico entrou no histórico ou no diário"
         d.h.desfazer(esc)
-        assert {p.Name: p.NominalValue.wrappedValue for p in ps.HasProperties} == {"Revisao": 7, "LadoId": "novo"}
+        assert {p.Name: p.NominalValue.wrappedValue for p in ps.HasProperties} == {"Revision": 7, "SideId": "novo"}
         with pytest.raises(T.EdicaoForaDeTransacao):
-            api("pset.edit_pset", f, pset=ps, properties={"Revisao": 8})
-        assert {p.Name: p.NominalValue.wrappedValue for p in ps.HasProperties}["Revisao"] == 7
+            api("pset.edit_pset", f, pset=ps, properties={"Revision": 8})
+        assert {p.Name: p.NominalValue.wrappedValue for p in ps.HasProperties}["Revision"] == 7
 
 
 # ---------- de fora: cada caso pesado num pytest filho (o `@AINDA_NAO` fica aqui, o filho roda sem marca) ----------

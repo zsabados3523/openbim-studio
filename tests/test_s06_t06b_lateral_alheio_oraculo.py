@@ -75,7 +75,7 @@ def guardado(pasta, dados):
 
 def revisao(pr):
     import ifcopenshell.util.element as UE
-    return UE.get_psets(pr.arquivo.by_type("IfcProject")[0])["OBIM_Project"]["Revisao"]
+    return UE.get_psets(pr.arquivo.by_type("IfcProject")[0])["OBIM_Project"]["Revision"]
 
 
 def sujar(pr, tag="x"):
@@ -158,7 +158,7 @@ def test_05_criar_novo_lateral_guarda_o_alheio_e_so_depois_grava_o_novo(p, abre)
     assert not ob.exists() or ob.read_bytes() != dados  # o alheio não segue como Casa.obim
     pr.autosave.gravar_normal()
     novo = gravado(ob)
-    assert novo.manifesto["ifc_projeto_globalid"] == X.GID and novo.manifesto["LadoId"] == X.LADO
+    assert novo.manifesto["ifc_project_globalid"] == X.GID and novo.manifesto["SideId"] == X.LADO
     assert novo.manifesto["ifc_sha256"] == X.sha(ifc) and obter_vazio(novo.lateral)
     assert g.read_bytes() == dados and g.stat().st_mtime_ns == mt and len(achados(p, dados)) == 1
     assert not [n for n in RASTRO if (p / n).exists()]
@@ -219,7 +219,7 @@ def test_10_falha_na_gravacao_depois_da_escolha_nao_perde_o_alheio(p, abre, monk
     assert len(achados(p, dados)) == 1
     monkeypatch.setattr(S, "gravar_par", real)
     pr.autosave.gravar_normal()  # a nova tentativa funciona
-    assert guardado(p, dados).read_bytes() == dados and gravado(ob).manifesto["ifc_projeto_globalid"] == X.GID
+    assert guardado(p, dados).read_bytes() == dados and gravado(ob).manifesto["ifc_project_globalid"] == X.GID
 
 
 def test_11_falha_ao_guardar_deixa_o_alheio_onde_estava_e_a_pendencia(p, abre, monkeypatch):
@@ -267,7 +267,7 @@ def test_12_casos_sem_alheio_abrem_e_gravam_como_hoje(p, abre, fab, vistas, div)
     assert obter(pr) == vistas
     pr.autosave.gravar_normal()
     ob = ifc.with_suffix(".obim")
-    assert gravado(ob).manifesto["ifc_projeto_globalid"] == X.GID and sorted(gravado(ob).lateral.ids("views")) == vistas
+    assert gravado(ob).manifesto["ifc_project_globalid"] == X.GID and sorted(gravado(ob).lateral.ids("views")) == vistas
     assert not list(p.glob("Casa.obim.alheio-*"))
 
 
@@ -282,9 +282,9 @@ def test_12b_sem_alheio_nao_ha_pendencia(p, abre, fab):
 def test_13_regua_o_alheio_da_fixture_e_de_fato_alheio(p):
     ifc, ob, dados, _ = alheio(p)
     m = gravado(ob).manifesto
-    assert m["ifc_projeto_globalid"] != X.GID and len(OUTRO_GID) == 22
+    assert m["ifc_project_globalid"] != X.GID and len(OUTRO_GID) == 22
     ifc2, ob2, _, _ = alheio(p / "b", "ladoid")
-    assert gravado(ob2).manifesto["LadoId"] != X.LADO and gravado(ob2).manifesto["ifc_projeto_globalid"] == X.GID
+    assert gravado(ob2).manifesto["SideId"] != X.LADO and gravado(ob2).manifesto["ifc_project_globalid"] == X.GID
     assert guardado(p, dados).name.startswith("Casa.obim.alheio-") and len(guardado(p, dados).name) == len("Casa.obim.alheio-") + 8
 
 

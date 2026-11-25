@@ -178,7 +178,7 @@ def montar(base):  # arquivo livre (antes de qualquer Historico): camadas, 3 tip
     api("material.edit_layer", f, layer=api("material.add_layer", f, layer_set=ls, material=api("material.add_material", f, name="Concreto")),
         attributes={"LayerThickness": 0.15})
     obim = api("pset.add_pset", f, product=f.by_type("IfcProject")[0], name="OBIM_Project")
-    api("pset.edit_pset", f, pset=obim, properties={"LadoId": "lado-t04", "Revisao": 1})
+    api("pset.edit_pset", f, pset=obim, properties={"SideId": "lado-t04", "Revision": 1})
     c = {"P": random.Random(SEMENTE + 1), "corpo": UR.get_context(f, "Model", "Body", "MODEL_VIEW").id(), "camadas": ls.id(), "obim": obim.GlobalId,
          "andares": sorted(a.GlobalId for a in f.by_type("IfcBuildingStorey")), "g": {}}
     for i in range(3):

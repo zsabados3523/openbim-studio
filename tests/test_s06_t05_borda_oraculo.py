@@ -11,7 +11,7 @@ import s05_t07_aux as X
 from s05_conteudo_aux import _limpa, base_ifc, exigir  # noqa: F401
 from test_s06_t05_obim_zip_oraculo import G1, G2, IDENT, MAN, U, _fabrica, canon, lat, ob, objetos, proj  # noqa: F401
 
-VP = {"prancha": IDENT, "view_guid": G1, "x": 1, "y": 2, "escala": 100}
+VP = {"sheet": IDENT, "view_guid": G1, "x": 1, "y": 2, "scale": 100}
 
 
 def _viewports(**extra):
@@ -40,22 +40,22 @@ def test_02_identification_com_espaco_so_no_fim(tmp_path):  # M04
         m.escrever(tmp_path / "f.obim", lat(sheets={"x": {"identification": "A-02 "}}), MAN)
 
 
-@pytest.mark.parametrize("campo", ["x", "y", "escala"])
+@pytest.mark.parametrize("campo", ["x", "y", "scale"])
 def test_03_bool_nao_e_numero(tmp_path, campo):  # M05
     m = ob()
     with pytest.raises(m.ObimInvalido):
-        m.escrever(tmp_path / "f.obim", _viewports(outro={**VP, "prancha": "B", campo: True}), MAN)
+        m.escrever(tmp_path / "f.obim", _viewports(outro={**VP, "sheet": "B", campo: True}), MAN)
 
 
 def test_04_y_do_viewport_e_validado(tmp_path):  # M06
     m = ob()
     with pytest.raises(m.ObimInvalido):
-        m.escrever(tmp_path / "f.obim", _viewports(outro={**VP, "prancha": "B", "y": "1"}), MAN)
+        m.escrever(tmp_path / "f.obim", _viewports(outro={**VP, "sheet": "B", "y": "1"}), MAN)
 
 
 def test_05_mesma_vista_em_duas_pranchas_e_valida(tmp_path):  # M07 (ADR §4)
     m, p = ob(), tmp_path / "f.obim"
-    m.escrever(p, _viewports(outro={**VP, "prancha": "B-02"}), MAN)  # (IDENT, G1) já existe; (B-02, G1) é outro par
+    m.escrever(p, _viewports(outro={**VP, "sheet": "B-02"}), MAN)  # (IDENT, G1) já existe; (B-02, G1) é outro par
     assert len(m.ler(p).lateral.ids("viewports")) == 3
 
 
@@ -67,7 +67,7 @@ def test_06_extra_perigoso_recusado_e_nada_gravado(tmp_path, nome):  # M08
     assert not p.exists()
 
 
-@pytest.mark.parametrize("manifesto,porque", [({**MAN, "versao_formato": "0.1.0"}, "versão errada"), ({**MAN, "versao_formato": "9.9.9"}, "versão maior"),
+@pytest.mark.parametrize("manifesto,porque", [({**MAN, "format_version": "0.1.0"}, "versão errada"), ({**MAN, "format_version": "9.9.9"}, "versão maior"),
                                               ([], "manifesto lista"), ("texto", "manifesto texto")])
 def test_07_conferir_obim_recusa(tmp_path, manifesto, porque):  # M12, M13
     import openbim_app.gravacao_par as GP

@@ -102,10 +102,10 @@ def test_06_polyline_acima_de_5_milhoes_de_numeros_e_recusada():
 
 
 @pytest.mark.parametrize("nome,corpo", [
-    pytest.param("escala_lista_gigante", "m.montar_svg(lateral(escala=[1] * 3000000), 'P', 'v', PLANTA)", id="escala_lista_gigante"),
-    pytest.param("escala_texto_20MB", "m.montar_svg(lateral(escala='x' * 20000000), 'P', 'v', PLANTA)", id="escala_texto_20MB"),
+    pytest.param("escala_lista_gigante", "m.montar_svg(lateral(scale=[1] * 3000000), 'P', 'v', PLANTA)", id="escala_lista_gigante"),
+    pytest.param("escala_texto_20MB", "m.montar_svg(lateral(scale='x' * 20000000), 'P', 'v', PLANTA)", id="escala_texto_20MB"),
     pytest.param("x_lista_gigante", "m.montar_svg(lateral(x=[1] * 3000000), 'P', 'v', PLANTA)", id="x_lista_gigante"),
-    pytest.param("formato_20MB", "p = lateral(); p.p['formato'] = 'A' * 20000000\nm.montar_svg(p, 'P', 'v', PLANTA)", id="formato_20MB"),
+    pytest.param("formato_20MB", "p = lateral(); p.p['format'] = 'A' * 20000000\nm.montar_svg(p, 'P', 'v', PLANTA)", id="formato_20MB"),
     pytest.param("data_20MB", "m.montar_svg(lateral(carimbo={'projeto': 'x', 'titulo': 't', 'data': '2' * 20000000, 'folha': '1'}), 'P', 'v', PLANTA)", id="data_20MB"),
     pytest.param("rotacao_lista_gigante", "m.montar_svg(lateral(rotacao=[1] * 3000000), 'P', 'v', PLANTA)", id="rotacao_lista_gigante"),
     pytest.param("criar_prancha_formato_20MB", "class L:\n    def criar(self, *a): pass\nm.criar_prancha(L(), 'P', 'Z' * 20000000, 'x', 't', '2026-11-01', '1')", id="criar_prancha_formato_20MB"),

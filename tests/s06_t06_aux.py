@@ -36,18 +36,18 @@ def fazer(pasta, *, vistas=("1", "2"), pranchas=("A-01",), pset=True, lado=LADO,
         A.folha(f, numero, f"Doc {numero}").Scope = escopo
     if pset:
         ps = ifcopenshell.api.run("pset.add_pset", f, product=proj, name="OBIM_Project")
-        ifcopenshell.api.run("pset.edit_pset", f, pset=ps, properties={k: v for k, v in (("LadoId", lado), ("Revisao", rev)) if v is not None})
+        ifcopenshell.api.run("pset.edit_pset", f, pset=ps, properties={k: v for k, v in (("SideId", lado), ("Revision", rev)) if v is not None})
     ifc = pasta / f"{nome}.ifc"
     f.write(str(ifc))
     ob = ifc.with_suffix(".obim")
     if obim:
         citadas = vistas if o_vistas is None else o_vistas
         objs = {"views": {f"v{n}": {"view_guid": V[n], "estilo": "padrao"} for n in citadas},
-                "sheets": {f"p{i}": {"identification": x, "formato": "A1"} for i, x in enumerate(dict.fromkeys(pranchas))},
-                "viewports": {f"vp{n}": {"prancha": pranchas[0], "view_guid": V[n], "x": 10.0, "y": 20.0, "escala": 100.0} for n in citadas} if pranchas else {}}
-        manifesto = {"formato": "obim-lateral", "versao_formato": versao, "LadoId": o_lado or lado or LADO, "Revisao": o_rev or rev or 1, "ifc_nome": ifc.name,
-               "ifc_sha256": sha(ifc), "ifc_tamanho": ifc.stat().st_size, "ifc_projeto_globalid": o_gid or gid, "programa_versao": "0.1.0",
-               "data": "2026-10-30T00:00:00Z"}
+                "sheets": {f"p{i}": {"identification": x, "format": "A1"} for i, x in enumerate(dict.fromkeys(pranchas))},
+                "viewports": {f"vp{n}": {"sheet": pranchas[0], "view_guid": V[n], "x": 10.0, "y": 20.0, "scale": 100.0} for n in citadas} if pranchas else {}}
+        manifesto = {"format": "obim-lateral", "format_version": versao, "SideId": o_lado or lado or LADO, "Revision": o_rev or rev or 1, "ifc_name": ifc.name,
+               "ifc_sha256": sha(ifc), "ifc_size": ifc.stat().st_size, "ifc_project_globalid": o_gid or gid, "program_version": "0.1.0",
+               "date": "2026-10-30T00:00:00Z"}
         for k, v in (man or {}).items():
             manifesto.pop(k, None) if v is APAGAR else manifesto.__setitem__(k, v)
         Z.escrever(ob, Lateral(objs), manifesto)

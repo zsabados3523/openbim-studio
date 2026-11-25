@@ -21,8 +21,8 @@ LADO = str(uuid.uuid5(uuid.UUID("2b1f6a40-7d0e-4c52-9a43-1c0de5a7f007"), "t07"))
 SEQ = 17
 SEMENTE = 20261023
 TEMPS = ("Casa.ifc.tmp", "Casa.obim.tmp", "Casa.ifc.bak.tmp", "Casa.obim.bak.tmp")
-CAMPOS = {"formato", "versao_formato", "LadoId", "Revisao", "ifc_nome", "ifc_sha256", "ifc_tamanho", "ifc_projeto_globalid",
-          "programa_versao", "data"}  # formato do par (ADR-002 §4.3)
+CAMPOS = {"format", "format_version", "SideId", "Revision", "ifc_name", "ifc_sha256", "ifc_size", "ifc_project_globalid",
+          "program_version", "date"}  # formato do par (ADR-002 §4.3)
 Antigo = namedtuple("Antigo", "ifc obim")  # bytes exatos do par de antes
 Novo = namedtuple("Novo", "revisao lado_id foto lado")  # o que o par novo tem de conter (foto sem o pset OBIM_Project; lado = json canônico)
 sha = lambda b: hashlib.sha256(b).hexdigest()  # noqa: E731
@@ -61,7 +61,7 @@ def pset_obim(arquivo):
     n = sum(1 for r in projs[0].IsDefinedBy or () if r.is_a("IfcRelDefinesByProperties") and r.RelatingPropertyDefinition.Name == "OBIM_Project")
     assert n <= 1, f"{n} psets OBIM_Project no IfcProject (G4: um só)"
     p = U.get_pset(projs[0], "OBIM_Project")
-    return None if p is None else (p.get("LadoId"), p.get("Revisao"))
+    return None if p is None else (p.get("SideId"), p.get("Revision"))
 
 
 def mudar(ifc, criar, tag):
@@ -113,15 +113,15 @@ def estado_par(destino, antigo=None, novo=None, pasta_projeto=None):
     faltam = CAMPOS - set(man)
     prob += [f"manifesto sem {sorted(faltam)}"] if faltam else []
     prob += ["manifesto tem `provisorio` (0.2.0 não tem)"] if "provisorio" in man else []
-    confere = {"formato": "obim-lateral", "versao_formato": "0.2.0", "ifc_nome": d.name, "ifc_sha256": sha(bi),
-               "ifc_tamanho": len(bi), "ifc_projeto_globalid": f.by_type("IfcProject")[0].GlobalId}
+    confere = {"format": "obim-lateral", "format_version": "0.2.0", "ifc_name": d.name, "ifc_sha256": sha(bi),
+               "ifc_size": len(bi), "ifc_project_globalid": f.by_type("IfcProject")[0].GlobalId}
     prob += [f"manifesto {k} = {man.get(k)!r}, esperado {v!r}" for k, v in confere.items() if man.get(k) != v]
     try:
         ps = pset_obim(f)
     except Exception as e:  # noqa: BLE001
         return "?", prob + [f"pset OBIM_Project ilegível: {e!r}"]
-    if ps != (man.get("LadoId"), man.get("Revisao")):
-        prob.append(f"pset OBIM_Project {ps} difere do manifesto ({man.get('LadoId')}, {man.get('Revisao')})")
+    if ps != (man.get("SideId"), man.get("Revision")):
+        prob.append(f"pset OBIM_Project {ps} difere do manifesto ({man.get('SideId')}, {man.get('Revision')})")
     if novo is None:
         return "?", prob + ["par que não é o antigo e nenhum novo esperado"]
     if ps != (novo.lado_id, novo.revisao) or not isinstance(ps[1], int):
@@ -139,12 +139,12 @@ def escrever_par_falso(destino, ifc_origem, objetos, revisao, lado_id=LADO, mani
     f = ifcopenshell.open(str(ifc_origem))
     proj = f.by_type("IfcProject")[0]
     ps = ifcopenshell.api.run("pset.add_pset", f, product=proj, name="OBIM_Project")
-    ifcopenshell.api.run("pset.edit_pset", f, pset=ps, properties={"LadoId": lado_id, "Revisao": revisao})
+    ifcopenshell.api.run("pset.edit_pset", f, pset=ps, properties={"SideId": lado_id, "Revision": revisao})
     d = Path(destino)
     f.write(str(d))
     b = d.read_bytes()
-    man = {"formato": "obim-lateral", "versao_formato": "0.1.0" if legado else "0.2.0", **({"provisorio": True} if legado else {}), "LadoId": lado_id, "Revisao": revisao, "ifc_nome": d.name,
-           "ifc_sha256": sha(b), "ifc_tamanho": len(b), "ifc_projeto_globalid": proj.GlobalId, "programa_versao": "0", "data": "2026-10-24T00:00:00Z",
+    man = {"format": "obim-lateral", "format_version": "0.1.0" if legado else "0.2.0", **({"provisorio": True} if legado else {}), "SideId": lado_id, "Revision": revisao, "ifc_name": d.name,
+           "ifc_sha256": sha(b), "ifc_size": len(b), "ifc_project_globalid": proj.GlobalId, "program_version": "0", "date": "2026-10-24T00:00:00Z",
            **(manifesto or {})}
     with zipfile.ZipFile(d.with_suffix(".obim"), "w") as z:
         z.writestr("manifest.json", json.dumps(man))

@@ -21,15 +21,15 @@ from s05_conteudo_aux import _limpa, exigir  # noqa: F401  (fixtures)
 RECUSADOS = {
     "versao_nova": {"versao": "0.3.0"},
     "versao_futura": {"versao": "9.0.0"},
-    "sem_revisao": {"man": {"Revisao": X.APAGAR}},
+    "sem_revisao": {"man": {"Revision": X.APAGAR}},
     "sem_sha": {"man": {"ifc_sha256": X.APAGAR}},
-    "sem_globalid": {"man": {"ifc_projeto_globalid": X.APAGAR}},
-    "sem_ifc_nome": {"man": {"ifc_nome": X.APAGAR}},
-    "revisao_texto": {"man": {"Revisao": "2"}},
-    "sem_ladoid_com_pset": {"man": {"LadoId": X.APAGAR}},
-    "revisao_bool": {"man": {"Revisao": True}},
-    "revisao_decimal": {"man": {"Revisao": 3.5}},
-    "revisao_nula": {"man": {"Revisao": None}},
+    "sem_globalid": {"man": {"ifc_project_globalid": X.APAGAR}},
+    "sem_ifc_nome": {"man": {"ifc_name": X.APAGAR}},
+    "revisao_texto": {"man": {"Revision": "2"}},
+    "sem_ladoid_com_pset": {"man": {"SideId": X.APAGAR}},
+    "revisao_bool": {"man": {"Revision": True}},
+    "revisao_decimal": {"man": {"Revision": 3.5}},
+    "revisao_nula": {"man": {"Revision": None}},
 }
 
 
@@ -98,7 +98,7 @@ def test_02_recusado_nao_vincula_sozinho_o_manifesto_fica_como_estava(p, div):
     with pytest.raises(DV.LateralRecusado):
         _abrir(ifc, div)
     leitura = Z.ler(ob)
-    assert ob.read_bytes() == dados and ob.stat().st_mtime_ns == mt and leitura.somente_leitura and leitura.manifesto["versao_formato"] == "0.3.0"
+    assert ob.read_bytes() == dados and ob.stat().st_mtime_ns == mt and leitura.somente_leitura and leitura.manifesto["format_version"] == "0.3.0"
     assert X.sha(ifc) == leitura.manifesto["ifc_sha256"]  # o IFC também intacto
 
 

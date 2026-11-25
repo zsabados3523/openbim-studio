@@ -29,7 +29,7 @@ def _sha(b):
     return hashlib.sha256(b).hexdigest()
 
 def _manifesto(ifc=IFC, obim=OBIM, **mudar):
-    m = {"formato": "obimpack", "versao_pacote": "1.0.0", "arquivos": [
+    m = {"format": "obimpack", "package_version": "1.0.0", "files": [
         {"nome": "Casa.ifc", "tamanho": len(ifc), "sha256": _sha(ifc)},
         {"nome": "Casa.obim", "tamanho": len(obim), "sha256": _sha(obim)}]}
     m.update(mudar)

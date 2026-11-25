@@ -96,7 +96,7 @@ def lado_id_de(arquivo, ifc_sha256):
         if ps.Name != "OBIM_Project":
             continue
         for prop in ps.HasProperties or ():
-            if prop.Name == "LadoId":
+            if prop.Name == "SideId":
                 valor = getattr(prop.NominalValue, "wrappedValue", None)
                 if valor:
                     return str(valor)

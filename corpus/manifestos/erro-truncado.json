@@ -1,0 +1,23 @@
+{
+  "atribuicao": "OpenBIM Studio (AGPL-3.0-or-later)",
+  "cobre": [
+    "erro",
+    "arquivo-truncado"
+  ],
+  "contagens": {},
+  "data_acesso": "2026-11-15",
+  "esquema": "IFC4",
+  "licenca": "propria",
+  "nome": "erro-truncado",
+  "observacoes": "Metade inicial da casa-terrea.ifc, truncado antes de END-ISO-10303-21.",
+  "origem": "scripts/gerar_modelos_erro.py",
+  "pode_ir_no_git": "nao",
+  "programa_de_origem": "IfcOpenShell 0.9.0",
+  "sha256": "0ab65dfa3b5b858ae0e4817f520b2bea60d0cdea5d322117958ab51a87b83019",
+  "tamanho_bytes": 8338,
+  "valores_conhecidos": {
+    "bytes_originais": 16676,
+    "fracao_mantida": 0.5
+  },
+  "versao_ou_commit": "1.0.0"
+}

@@ -1,0 +1,29 @@
+{
+  "atribuicao": "OpenBIM Studio (AGPL-3.0-or-later)",
+  "cobre": [
+    "erro",
+    "nome-acentuado"
+  ],
+  "contagens": {
+    "IfcBuildingStorey": 1,
+    "IfcDoor": 1,
+    "IfcOpeningElement": 3,
+    "IfcSlab": 1,
+    "IfcWall": 4,
+    "IfcWindow": 2
+  },
+  "data_acesso": "2026-11-15",
+  "esquema": "IFC4",
+  "licenca": "propria",
+  "nome": "erro-nome-com-acentuação",
+  "observacoes": "Casa-terrea com nome de arquivo e IfcProject.Name acentuados em UTF-8.",
+  "origem": "scripts/gerar_modelos_erro.py",
+  "pode_ir_no_git": "nao",
+  "programa_de_origem": "IfcOpenShell 0.9.0",
+  "sha256": "6f93df559446404fbdb78e411d74dd5801e2a0e7363f918634d782cb758eb8b0",
+  "tamanho_bytes": 16717,
+  "valores_conhecidos": {
+    "nome_do_projeto": "Residência São João"
+  },
+  "versao_ou_commit": "1.0.0"
+}

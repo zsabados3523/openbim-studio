@@ -1,0 +1,29 @@
+{
+  "atribuicao": "OpenBIM Studio (AGPL-3.0-or-later)",
+  "cobre": [
+    "erro",
+    "sem-geometria"
+  ],
+  "contagens": {
+    "IfcBuildingStorey": 1,
+    "IfcDoor": 1,
+    "IfcOpeningElement": 3,
+    "IfcSlab": 1,
+    "IfcWall": 4,
+    "IfcWindow": 2
+  },
+  "data_acesso": "2026-11-15",
+  "esquema": "IFC4",
+  "licenca": "propria",
+  "nome": "erro-sem-geometria",
+  "observacoes": "Casa-terrea sem representacao geometrica nos IfcProduct.",
+  "origem": "scripts/gerar_modelos_erro.py",
+  "pode_ir_no_git": "nao",
+  "programa_de_origem": "IfcOpenShell 0.9.0",
+  "sha256": "f66b89e9871a64784821828f6998381984ebd3d44a5358d59cdeef93081f2739",
+  "tamanho_bytes": 16647,
+  "valores_conhecidos": {
+    "elementos_com_geometria": 0
+  },
+  "versao_ou_commit": "1.0.0"
+}

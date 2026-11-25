@@ -2305,6 +2305,71 @@ def _anexar_telemetria_cache(
     return resp
 
 
+def _ler_malhas_cache(
+    pedido: dict,
+    pasta_cache: str | Path,
+    global_ids,
+    matrizes: dict | None = None,
+) -> tuple[dict, list, str | None]:
+    """Lê malhas do cache de geometria sem abrir o IFC. Retorna (malhas_mundo, faltantes, motivo)."""
+    try:
+        arq = pedido.get("arquivo") if isinstance(pedido, dict) else None
+        if not arq or not Path(arq).is_file():
+            return {}, [], "sem_arquivo_salvo"
+
+        if not pasta_cache:
+            return {}, [], "cache_ausente"
+        caminho_banco = Path(pasta_cache) / cache_geometria.NOME_BANCO
+        if not caminho_banco.is_file():
+            return {}, [], "cache_ausente"
+
+        ids = list(global_ids)
+    except Exception:
+        return {}, [], "cache_invalido"
+
+    con = None
+    cache = None
+    try:
+        cab_json = cache_geometria._json_canonico(
+            cache_geometria.cabecalho_atual(tesselacao=construtor.TESSELACAO)
+        )
+        con = cache_geometria._conectar(caminho_banco)
+        if not cache_geometria._banco_integro(con, cab_json):
+            return {}, [], "cache_invalido"
+        cache = cache_geometria.CacheGeometria(caminho_banco, con)
+        con = None
+        doc = cache_geometria.documento_de(arq)
+        ocorrencias_lidas: dict | None = None
+        if matrizes is not None:
+            orig_ocorrencias = cache.ocorrencias_por_ids
+
+            def _capturar_ocorrencias(*args, **kwargs):
+                nonlocal ocorrencias_lidas
+                res = orig_ocorrencias(*args, **kwargs)
+                ocorrencias_lidas = res
+                return res
+
+            cache.ocorrencias_por_ids = _capturar_ocorrencias
+        malhas_mundo, faltantes = cache_leitura.malhas_do_cache(cache, doc, ids)
+        if matrizes is not None:
+            local = {}
+            for gid in malhas_mundo:
+                oc = ocorrencias_lidas.get(gid) if isinstance(ocorrencias_lidas, dict) else None
+                if oc is None:
+                    return {}, [], "cache_invalido"
+                local[gid] = oc.matriz
+            matrizes.update(local)
+    except Exception:
+        return {}, [], "cache_invalido"
+    finally:
+        if cache is not None:
+            cache.fechar()
+        elif con is not None:
+            cache_geometria._fechar_con(con)
+
+    return malhas_mundo, faltantes, None
+
+
 def _tentar_planta_pelo_cache(
     f,
     pedido: dict,
@@ -2319,38 +2384,12 @@ def _tentar_planta_pelo_cache(
     if pedido.get("moveis_como_caixa"):
         return None, "opcoes_incompativeis", 0, time.perf_counter() - t0
 
-    arq = pedido.get("arquivo")
-    if not arq or not Path(arq).is_file():
-        return None, "sem_arquivo_salvo", len(elementos_validos), time.perf_counter() - t0
-
-    caminho_banco = Path(pasta_cache) / cache_geometria.NOME_BANCO
-    if not caminho_banco.is_file():
-        return None, "cache_ausente", len(elementos_validos), time.perf_counter() - t0
-
-    cab_json = cache_geometria._json_canonico(
-        cache_geometria.cabecalho_atual(tesselacao=construtor.TESSELACAO)
+    malhas_mundo, faltantes, motivo = _ler_malhas_cache(
+        pedido, pasta_cache, [gid for _, gid in elementos_validos]
     )
-    con = None
-    cache = None
-    try:
-        con = cache_geometria._conectar(caminho_banco)
-        if not cache_geometria._banco_integro(con, cab_json):
-            return None, "cache_invalido", len(elementos_validos), time.perf_counter() - t0
-        cache = cache_geometria.CacheGeometria(caminho_banco, con)
-        con = None
-        doc = cache_geometria.documento_de(arq)
-        malhas_mundo, faltantes = cache_leitura.malhas_do_cache(
-            cache, doc, [gid for _, gid in elementos_validos]
-        )
-    except Exception:
-        return None, "cache_invalido", len(elementos_validos), time.perf_counter() - t0
-    finally:
-        if cache is not None:
-            cache.fechar()
-        elif con is not None:
-            cache_geometria._fechar_con(con)
-
     cache_s = time.perf_counter() - t0
+    if motivo is not None:
+        return None, motivo, len(elementos_validos), cache_s
     if faltantes:
         return None, "cache_incompleto", len(faltantes), cache_s
 

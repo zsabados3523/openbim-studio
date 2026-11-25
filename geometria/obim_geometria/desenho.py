@@ -19,6 +19,7 @@ import ifcopenshell.guid
 import ifcopenshell.ifcopenshell_wrapper as W
 import ifcopenshell.util.element
 import ifcopenshell.util.placement
+import ifcopenshell.util.unit
 import numpy as np
 import shapely
 from obim_geometria import (
@@ -28,6 +29,7 @@ from obim_geometria import (
     construtor,
     corte_plano,
     faixas,
+    malha_direta,
     nucleos,
     oclusores,
     peca_cortada,
@@ -456,6 +458,69 @@ def _garantir_anotacao(f: ifcopenshell.file, vista: dict) -> None:
             pos_b.RefDirection = None
 
 
+def _formas_corte(f, cands, pedido: dict, num_threads: int) -> tuple[dict, dict]:
+    """Carrega formas das peças candidatas do corte via cache de geometria, com fallback por peça."""
+    pasta = pedido.get("pasta_cache_geometria") if isinstance(pedido, dict) else None
+    if not pasta:
+        return silhueta.formas_do_mundo(f, cands, threads=num_threads), {
+            "n_cache": 0,
+            "n_fallback": 0,
+            "queda": None,
+            "cache_s": 0.0,
+        }
+
+    t0 = time.perf_counter()
+    formas: dict = {}
+    so_essas = []
+    queda = None
+    n_cache = 0
+    try:
+        matrizes: dict = {}
+        malhas_mundo, _faltantes, motivo = _ler_malhas_cache(
+            pedido, pasta, [el.GlobalId for el in cands], matrizes
+        )
+        if motivo is not None:
+            queda = motivo
+            so_essas = list(cands)
+        else:
+            try:
+                escala = float(ifcopenshell.util.unit.calculate_unit_scale(f))
+            except Exception:
+                escala = 1.0
+            for el in cands:
+                gid = el.GlobalId
+                par = malhas_mundo.get(gid)
+                mat_cache = matrizes.get(gid)
+                if par is None or mat_cache is None:
+                    so_essas.append(el)
+                    continue
+                if not np.allclose(mat_cache, construtor.matriz_mundo(el, escala), atol=1e-9):
+                    so_essas.append(el)
+                    continue
+                validada = planta_cache._validar_malha(par[0], par[1])
+                if validada is None:
+                    so_essas.append(el)
+                    continue
+                formas[el.id()] = malha_direta.FormaDireta(el.id(), validada[0], validada[1])
+                n_cache += 1
+    except Exception:
+        formas = {}
+        so_essas = list(cands)
+        queda = "cache_invalido"
+        n_cache = 0
+    cache_s = time.perf_counter() - t0
+
+    if so_essas:
+        formas.update(silhueta.formas_do_mundo(f, so_essas, threads=num_threads))
+
+    return formas, {
+        "n_cache": n_cache,
+        "n_fallback": len(so_essas),
+        "queda": queda,
+        "cache_s": float(cache_s),
+    }
+
+
 def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
     vista = pedido["vista"]
     _garantir_anotacao(f, vista)
@@ -599,6 +664,7 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
         )
 
     janela, incl_podada, geo_ok = None, None, False
+    n_pecas_cache, n_pecas_fallback, queda_corte, cache_s = 0, 0, None, 0.0
     if motor_visivel and incl:
         try:
             janela = _janela_bloco()
@@ -611,7 +677,11 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
             if cands:
                 t_mg0 = time.perf_counter()
                 try:
-                    formas = silhueta.formas_do_mundo(f, cands, threads=num_threads)
+                    formas, tel = _formas_corte(f, cands, pedido, num_threads)
+                    n_pecas_cache = tel["n_cache"]
+                    n_pecas_fallback = tel["n_fallback"]
+                    queda_corte = tel["queda"]
+                    cache_s = tel["cache_s"]
                     for el in cands:
                         dados = _malha_caixa(formas.get(el.id()))
                         if dados is not None:
@@ -621,6 +691,7 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
             geo_ok = True
         except Exception:
             elegiveis, geo_ok = [], False
+            n_pecas_cache, n_pecas_fallback = 0, 0
 
     if fase is not None:
         fase("motor")
@@ -649,6 +720,7 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
             incl = [el for el in incl_podada if el.id() not in motor_set]
         except Exception:
             pols_linhas, pols_tampas, motor_ids = [], [], []
+            n_pecas_cache, n_pecas_fallback = 0, 0
         motor_s = time.perf_counter() - t_m0
     elif motor_visivel and geo_ok:
         incl = incl_podada
@@ -725,6 +797,7 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
     }
     if motor_visivel:
         tempos["motor_s"] = float(motor_s)
+        tempos["cache_s"] = float(cache_s)
     resp = {
         "ok": True,
         "svg": svg,
@@ -737,6 +810,9 @@ def _corte(f: ifcopenshell.file, pedido: dict, fase, abrir_s: float) -> dict:
     }
     if motor_visivel:
         resp["motor_pecas"] = motor_ids
+        resp["n_pecas_cache"] = n_pecas_cache
+        resp["n_pecas_fallback"] = n_pecas_fallback
+        resp["queda_corte"] = queda_corte
     return resp
 
 

@@ -68,6 +68,7 @@ def _gerar_corte_uma_vez(
     motor_visivel: bool | None,
     sessao_selecao: selecao.SessaoSelecao | None,
     filho=None,
+    pasta_geo: str = "",
 ) -> Corte:
     sel = selecao.selecionar(
         ifc,
@@ -141,6 +142,11 @@ def _gerar_corte_uma_vez(
     if motor_visivel is not None:
         pedido["motor_visivel"] = motor_visivel
 
+    # A pasta fica fora da chave do cache de desenho (usa `pedido`); só vai ao filho, e só com arquivo salvo.
+    ped_exec = dict(pedido)
+    if caminho_ifc is not None and assinatura_ifc is not None and pasta_geo:
+        ped_exec["pasta_cache_geometria"] = pasta_geo
+
     if cache is not None:
         kw_chave = (
             {"arquivo": caminho_ifc, "assinatura": assinatura_ifc}
@@ -158,7 +164,7 @@ def _gerar_corte_uma_vez(
                 if (caminho_ifc is not None and assinatura_ifc is not None)
                 else {}
             )
-            with auxiliar.preparar(ifc, pedido, **kw_prep) as p:
+            with auxiliar.preparar(ifc, ped_exec, **kw_prep) as p:
                 sig_prep = (getattr(p, "pedido", None) or {}).get("assinatura")
                 r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor, filho=filho)
             if cancelar is not None and cancelar.is_set():
@@ -173,7 +179,7 @@ def _gerar_corte_uma_vez(
             if (caminho_ifc is not None and assinatura_ifc is not None)
             else {}
         )
-        with auxiliar.preparar(ifc, pedido, **kw_prep) as p:
+        with auxiliar.preparar(ifc, ped_exec, **kw_prep) as p:
             r = auxiliar.executar(p, limite_s=limite_s, cancelar=cancelar, executor=executor, filho=filho)
 
     return Corte(
@@ -206,8 +212,13 @@ def gerar_corte(
     motor_visivel: bool | None = None,
     sessao_selecao: selecao.SessaoSelecao | None = None,
     filho=None,
+    pasta_cache_geometria: str | Path | None = None,
 ) -> Corte:
     selecao._validar_filho(filho)
+    if pasta_cache_geometria is not None and not isinstance(pasta_cache_geometria, (str, Path)):
+        raise TypeError(
+            f"pasta_cache_geometria inválido: {pasta_cache_geometria!r} (esperado str, Path ou None)"
+        )
     if sessao_selecao is not None and not isinstance(sessao_selecao, selecao.SessaoSelecao):
         raise TypeError(f"sessao_selecao inválido: {sessao_selecao!r} (esperado SessaoSelecao ou None)")
     if motor_visivel is not None and not isinstance(motor_visivel, bool):
@@ -245,6 +256,7 @@ def gerar_corte(
                 cancelar, executor, caminho_atual, sig_atual, moveis_caixa2d, profundidade_corte,
                 faixas, cache, motor_visivel, sessao_selecao,
                 filho if caminho_atual is not None else None,
+                str(pasta_cache_geometria) if pasta_cache_geometria is not None else "",
             )
         except auxiliar.Divergente:
             if idx + 1 >= len(tentativas):

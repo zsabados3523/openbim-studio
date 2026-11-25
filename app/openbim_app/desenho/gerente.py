@@ -71,7 +71,7 @@ def _motor_padrao(tipo, ifc, vista_guid, opcoes, *, cancelar, progresso, cache, 
             opcoes.pop("caminho_ifc", None)
     if sig_inicio is not None:
         kw_sessao["assinatura_ifc"] = sig_inicio
-    if tipo == "planta" and caminho_refino is not None and sig_inicio is not None:
+    if tipo in ("planta", "corte") and caminho_refino is not None and sig_inicio is not None:
         pasta_geo = opcoes.get("pasta_cache_geometria")
         if pasta_geo is None:
             cand = pasta_geometria()

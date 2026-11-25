@@ -1,0 +1,32 @@
+{
+  "atribuicao": "OpenBIM Studio (AGPL-3.0-or-later)",
+  "cobre": [
+    "planta",
+    "corte",
+    "estrutura"
+  ],
+  "contagens": {
+    "IfcBeam": 4,
+    "IfcBuildingStorey": 1,
+    "IfcColumn": 4
+  },
+  "data_acesso": "2026-11-15",
+  "esquema": "IFC4",
+  "licenca": "propria",
+  "nome": "estrutura-pilares-vigas",
+  "observacoes": "Estrutura de 4 pilares (0,3x0,3 m, h=3,0 m) em vao 6x4 m e 4 vigas de topo (0,2x0,4 m).",
+  "origem": "scripts/gerar_modelos_extra.py",
+  "pode_ir_no_git": "nao",
+  "programa_de_origem": "IfcOpenShell 0.9.0",
+  "sha256": "d6a2cbd1c6449ef8f92668120f444192f8f866a4c00fc1f984e28d9589b09b6e",
+  "tamanho_bytes": 4492,
+  "valores_conhecidos": {
+    "altura_pilar_m": 3.0,
+    "quantidade_pilares": 4,
+    "quantidade_vigas": 4,
+    "secao_pilar_m": 0.3,
+    "vao_x_m": 6.0,
+    "vao_y_m": 4.0
+  },
+  "versao_ou_commit": "1.0.0"
+}

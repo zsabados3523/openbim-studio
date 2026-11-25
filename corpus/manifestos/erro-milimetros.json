@@ -1,0 +1,31 @@
+{
+  "atribuicao": "OpenBIM Studio (AGPL-3.0-or-later)",
+  "cobre": [
+    "erro",
+    "unidade-milimetros"
+  ],
+  "contagens": {
+    "IfcBuildingStorey": 1,
+    "IfcDoor": 1,
+    "IfcOpeningElement": 3,
+    "IfcSlab": 1,
+    "IfcWall": 4,
+    "IfcWindow": 2
+  },
+  "data_acesso": "2026-11-15",
+  "esquema": "IFC4",
+  "licenca": "propria",
+  "nome": "erro-milimetros",
+  "observacoes": "Casa-terrea com unidade linear declarada em milimetros mantendo valores numericos em metros.",
+  "origem": "scripts/gerar_modelos_erro.py",
+  "pode_ir_no_git": "nao",
+  "programa_de_origem": "IfcOpenShell 0.9.0",
+  "sha256": "cb6beeea2748ee2aea3e68e85f15a54e0bd07851ddf469c5378f0eccf2d63135",
+  "tamanho_bytes": 16682,
+  "valores_conhecidos": {
+    "fator_para_metro": 0.001,
+    "largura_em_unidades": 10.0,
+    "unidade_declarada": "MILLIMETRE"
+  },
+  "versao_ou_commit": "1.0.0"
+}

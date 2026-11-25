@@ -94,8 +94,8 @@ def test_gerente_nao_envia_pasta_cache_quando_sujo_ou_invalidado(qt_app, monkeyp
         g.fechar()
 
 
-def test_motor_padrao_nao_envia_pasta_cache_em_corte(monkeypatch, tmp_path):
-    """Mutante 1 (escopo): _motor_padrao envia pasta_cache_geometria em planta salva, nunca em corte."""
+def test_motor_padrao_envia_pasta_cache_em_corte(monkeypatch, tmp_path):
+    """Mutante 1 (escopo): _motor_padrao envia pasta_cache_geometria em planta e em corte salvos (T27b)."""
     monkeypatch.setenv("OBIM_CACHE_DIR", str(tmp_path / "cache"))
     pasta_geo = C.pasta_geometria()
     _criar_banco_valido(pasta_geo)
@@ -129,7 +129,7 @@ def test_motor_padrao_nao_envia_pasta_cache_em_corte(monkeypatch, tmp_path):
         cancelar=threading.Event(), progresso=lambda _m: None, cache=cache_v,
     )
     assert kw_planta[0].get("pasta_cache_geometria") == str(pasta_geo)
-    assert "pasta_cache_geometria" not in kw_corte[0]
+    assert kw_corte[0].get("pasta_cache_geometria") == str(pasta_geo)
 
 
 # ================================================================== Mutante 2: nunca na thread de pedir()

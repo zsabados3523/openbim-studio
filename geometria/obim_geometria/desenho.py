@@ -494,7 +494,11 @@ def _formas_corte(f, cands, pedido: dict, num_threads: int) -> tuple[dict, dict]
                 if par is None or mat_cache is None:
                     so_essas.append(el)
                     continue
-                if not np.allclose(mat_cache, construtor.matriz_mundo(el, escala), atol=1e-9):
+                try:
+                    fresca = np.allclose(mat_cache, construtor.matriz_mundo(el, escala), rtol=0.0, atol=1e-9)
+                except Exception:
+                    fresca = False
+                if not fresca:
                     so_essas.append(el)
                     continue
                 validada = planta_cache._validar_malha(par[0], par[1])

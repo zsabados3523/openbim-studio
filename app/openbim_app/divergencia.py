@@ -57,7 +57,7 @@ def _zip_legivel(caminho):
             manifesto = json.loads(z.read("manifest.json").decode("utf-8"))
     except Exception:
         return False
-    return isinstance(manifesto, dict) and manifesto.get("formato") == obim_zip.FORMATO
+    return isinstance(manifesto, dict) and manifesto.get("format") == obim_zip.FORMATO
 
 
 def _ler_obim(caminho):
@@ -81,7 +81,7 @@ def _ler_ifc(caminho):
     return arquivo
 
 
-_CAMPOS = ("ifc_projeto_globalid", "ifc_nome", "ifc_sha256", "Revisao")
+_CAMPOS = ("ifc_project_globalid", "ifc_name", "ifc_sha256", "Revision")
 
 
 def _confere_lateral(caminho, leitura):
@@ -92,14 +92,14 @@ def _confere_lateral(caminho, leitura):
     for campo in _CAMPOS:
         if campo not in manifesto:
             raise LateralIncompativel(f"{nome} sem {campo}")
-    revisao = manifesto["Revisao"]
+    revisao = manifesto["Revision"]
     if not isinstance(revisao, int) or isinstance(revisao, bool):
-        raise LateralIncompativel(f"{nome} com Revisao que não é inteiro")
+        raise LateralIncompativel(f"{nome} com Revision que não é inteiro")
 
 
 def _confere_lado(caminho, leitura, pset):
-    if pset is not None and "LadoId" not in leitura.manifesto:
-        raise LateralIncompativel(f"{Path(caminho).name} sem LadoId")
+    if pset is not None and "SideId" not in leitura.manifesto:
+        raise LateralIncompativel(f"{Path(caminho).name} sem SideId")
 
 
 def _numero_documento(d):
@@ -140,11 +140,11 @@ def _par(ifc, obim, leitura, via_obim):
     manifesto = leitura.manifesto
     versao = leitura.versao_original
     base = dict(via_obim=via_obim, versao_lateral=versao, ifc=ifc, obim=obim, vistas_preservadas=len(vistas), ambiguas=ambiguas)
-    lado_pset = pset.get("LadoId") if pset is not None else None
-    if manifesto["ifc_projeto_globalid"] != projeto.GlobalId or (lado_pset is not None and manifesto["LadoId"] != lado_pset):
+    lado_pset = pset.get("SideId") if pset is not None else None
+    if manifesto["ifc_project_globalid"] != projeto.GlobalId or (lado_pset is not None and manifesto["SideId"] != lado_pset):
         return Resultado("D5", D5, D5_OP, estilo_padrao=True, vinculado=False, **base)
-    revisao_pset = pset.get("Revisao") if pset is not None else None
-    if isinstance(revisao_pset, int) and not isinstance(revisao_pset, bool) and manifesto["Revisao"] > revisao_pset:
+    revisao_pset = pset.get("Revision") if pset is not None else None
+    if isinstance(revisao_pset, int) and not isinstance(revisao_pset, bool) and manifesto["Revision"] > revisao_pset:
         return Resultado("D3", D3, D3_OP, vinculado=True, **base)
     if manifesto["ifc_sha256"] == _sha256(ifc):
         return Resultado("D6" if via_obim else "D1", vinculado=True, **base)
@@ -170,7 +170,7 @@ def classificar(caminho, obim=None):
     if via_obim:
         leitura = _ler_obim(entrada)
         _confere_lateral(entrada, leitura)
-        nome = leitura.manifesto.get("ifc_nome")
+        nome = leitura.manifesto.get("ifc_name")
         achado = entrada.parent / nome if isinstance(nome, str) and _nome_seguro(nome) else None
         if achado is None or not achado.is_file():
             return Resultado("D6", D6.format(nome), D6_OP, via_obim=True, versao_lateral=leitura.versao_original, obim=entrada)

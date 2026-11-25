@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Gravação do par `Casa.ifc` + `Casa.obim` com diário de gravação (ADR-002 §4.3, §4.5 e §4.8).
-O IFC é carimbado com `Revisao` + 1 e `LadoId` por `Historico.fora_do_historico`; o resto roda em `ler()`. IFC e lateral são preparados,
+O IFC é carimbado com `Revision` + 1 e `SideId` por `Historico.fora_do_historico`; o resto roda em `ler()`. IFC e lateral são preparados,
 o `gravacao.json` entra por troca atômica e só então os dois são confirmados (IFC primeiro). Falha antes do diário volta o carimbo; depois
 dele o resolvedor roda na hora. Sem Qt, sem `obimcore` e sem importar `diario.py`."""
 import hashlib
@@ -91,7 +91,7 @@ def _ler_carimbo(sessao):
     with sessao.ler() as arquivo:
         _, ps = _pset(arquivo)
         v = _valores(ps)
-        return ps is not None, v.get("LadoId"), v.get("Revisao")
+        return ps is not None, v.get("SideId"), v.get("Revision")
 
 
 def _editar_carimbo(sessao, historico, lado, revisao, remover=False):
@@ -105,16 +105,16 @@ def _editar_carimbo(sessao, historico, lado, revisao, remover=False):
                 return
             if ps is None:
                 ps = ifcopenshell.api.run("pset.add_pset", arquivo, product=proj, name=_PSET)
-            props = {k: v for k, v in (("LadoId", lado), ("Revisao", revisao)) if v is not None}
+            props = {k: v for k, v in (("SideId", lado), ("Revision", revisao)) if v is not None}
             ifcopenshell.api.run("pset.edit_pset", arquivo, pset=ps, properties=props)
 
 
 def _manifesto(destino, prep, projeto, lado_id, revisao, autosave=False, origem_ifc_sha256=None, base=None):
     man = dict(base or {})
-    man.update({"formato": FORMATO, "versao_formato": VERSAO_FORMATO, "LadoId": lado_id,
-                "Revisao": revisao, "ifc_nome": Path(destino).name, "ifc_sha256": prep.sha256, "ifc_tamanho": prep.tamanho,
-                "ifc_projeto_globalid": projeto.GlobalId, "programa_versao": VERSAO_PROGRAMA,
-                "data": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")})
+    man.update({"format": FORMATO, "format_version": VERSAO_FORMATO, "SideId": lado_id,
+                "Revision": revisao, "ifc_name": Path(destino).name, "ifc_sha256": prep.sha256, "ifc_size": prep.tamanho,
+                "ifc_project_globalid": projeto.GlobalId, "program_version": VERSAO_PROGRAMA,
+                "date": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")})
     man.pop("provisorio", None)
     if autosave:
         man["autosave"] = True
@@ -145,7 +145,7 @@ def _ler_existente(obim):
         lido = obim_zip.ler(obim)
     except obim_zip.ObimInvalido:
         man = _manifesto_bruto(obim)
-        familia = obim_zip._familia(man.get("versao_formato")) if man.get("formato") == FORMATO else None
+        familia = obim_zip._familia(man.get("format_version")) if man.get("format") == FORMATO else None
         if familia is not None and familia not in obim_zip._FAMILIAS:
             raise ValueError(f"Não foi possível gravar {Path(obim).name}: o arquivo é de uma versão mais nova do que esta.") from None
         return {}, {}
@@ -164,7 +164,7 @@ def _conferir_obim(caminho):
             if "manifest.json" not in nomes:
                 raise ValueError("ZIP do lateral sem manifest.json")
             man = json.loads(z.read("manifest.json").decode("utf-8"))
-            if not isinstance(man, dict) or man.get("formato") != FORMATO or man.get("versao_formato") != VERSAO_FORMATO:
+            if not isinstance(man, dict) or man.get("format") != FORMATO or man.get("format_version") != VERSAO_FORMATO:
                 raise ValueError("manifesto do lateral fora do formato")
     except zipfile.BadZipFile as e:
         raise ValueError(f"{Path(caminho).name} não é um ZIP válido") from e
@@ -238,7 +238,7 @@ def _resolver_antes_de_gravar(destino, pasta, ao_concluir):
 
 def gravar_par(sessao, historico, lateral, destino, pasta_projeto, lado_id, seq, carimbo=True, ao_concluir=None,
                autosave=False, origem_ifc_sha256=None):
-    """Grava o par; carimba `Revisao` + 1 e `LadoId` (o definitivo = o provisório). Devolve os dois `Gravado`."""
+    """Grava o par; carimba `Revision` + 1 e `SideId` (o definitivo = o provisório). Devolve os dois `Gravado`."""
     destino = Path(destino)
     if destino.name.lower().endswith(".obim"):
         raise ValueError(f"Não foi possível gravar {destino.name}: o destino deve ser o arquivo IFC (.ifc), não .obim.")

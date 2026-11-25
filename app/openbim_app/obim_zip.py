@@ -79,17 +79,17 @@ def validar(lateral):
         pranchas[identificacao] = ident
     for ident in lateral.ids("viewports"):
         o = lateral.obter("viewports", ident)
-        if not isinstance(o.get("prancha"), str) or not o["prancha"]:
-            raise ObimInvalido(f"viewport {ident!r} sem prancha texto não vazio")
+        if not isinstance(o.get("sheet"), str) or not o["sheet"]:
+            raise ObimInvalido(f"viewport {ident!r} sem sheet texto não vazio")
         if not isinstance(o.get("view_guid"), str) or not o["view_guid"]:
             raise ObimInvalido(f"viewport {ident!r} sem view_guid texto não vazio")
         if not _numero(o.get("x")) or not _numero(o.get("y")):
             raise ObimInvalido(f"viewport {ident!r} com x ou y que não é número")
-        if not _numero(o.get("escala")) or o["escala"] <= 0:
-            raise ObimInvalido(f"viewport {ident!r} com escala que não é número > 0")
-        par = (o["prancha"], o["view_guid"])
+        if not _numero(o.get("scale")) or o["scale"] <= 0:
+            raise ObimInvalido(f"viewport {ident!r} com scale que não é número > 0")
+        par = (o["sheet"], o["view_guid"])
         if par in viewports:
-            raise ObimInvalido(f"par prancha/vista repetido: {par!r}")
+            raise ObimInvalido(f"par sheet/vista repetido: {par!r}")
         viewports[par] = ident
 
 
@@ -137,14 +137,14 @@ def ler(caminho):
                 )
             except (UnicodeDecodeError, json.JSONDecodeError) as e:
                 raise ObimInvalido(f"manifest.json ilegível: {e}") from e
-            if not isinstance(manifesto, dict) or manifesto.get("formato") != FORMATO:
+            if not isinstance(manifesto, dict) or manifesto.get("format") != FORMATO:
                 raise ObimInvalido("manifesto do lateral fora do formato")
-            versao = manifesto.get("versao_formato")
+            versao = manifesto.get("format_version")
             familia = _familia(versao)
             somente_leitura = familia not in _FAMILIAS
             if familia == (0, 1):
                 manifesto = dict(manifesto)
-                manifesto["versao_formato"] = VERSAO_FORMATO
+                manifesto["format_version"] = VERSAO_FORMATO
                 manifesto.pop("provisorio", None)
             objetos, extras = {}, {}
             for nome in nomes:
@@ -186,7 +186,7 @@ def orfaos(lateral, view_guids, identifications):
             pranchas.append(ident)
     for ident in lateral.ids("viewports"):
         o = lateral.obter("viewports", ident)
-        if o.get("view_guid") not in view_guids or o.get("prancha") not in identifications:
+        if o.get("view_guid") not in view_guids or o.get("sheet") not in identifications:
             viewports.append(ident)
     return {"vistas": vistas, "pranchas": pranchas, "viewports": viewports}
 

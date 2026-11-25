@@ -77,11 +77,11 @@ def _manifesto(bruto):
         man = json.loads(bruto.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as e:
         raise ObimpackInvalido(f"manifesto.json ilegível: {e}") from e
-    if not isinstance(man, dict) or man.get("formato") != FORMATO:
+    if not isinstance(man, dict) or man.get("format") != FORMATO:
         raise ObimpackInvalido("manifesto.json fora do formato obimpack")
-    if not isinstance(man.get("versao_pacote"), str) or not man["versao_pacote"]:
-        raise ObimpackInvalido("manifesto.json sem versao_pacote texto não vazio")
-    arquivos = man.get("arquivos")
+    if not isinstance(man.get("package_version"), str) or not man["package_version"]:
+        raise ObimpackInvalido("manifesto.json sem package_version texto não vazio")
+    arquivos = man.get("files")
     if not isinstance(arquivos, list) or len(arquivos) != 2:
         raise ObimpackInvalido("manifesto.json deve listar exatamente o arquivo IFC e o OBIM")
     vistos = set()
@@ -127,7 +127,7 @@ def exportar(par, destino=None, *, sobrescrever=False, perguntar=None):
         if perguntar is None or not perguntar(destino):
             raise ArquivoJaExiste(f"pacote já existe: {destino}")
     dados = {NOME_IFC: ifc.read_bytes(), NOME_OBIM: obim.read_bytes()}
-    manifesto = {"formato": FORMATO, "versao_pacote": VERSAO_PACOTE, "arquivos": [
+    manifesto = {"format": FORMATO, "package_version": VERSAO_PACOTE, "files": [
         {"nome": n, "tamanho": len(dados[n]), "sha256": hashlib.sha256(dados[n]).hexdigest()} for n in NOMES]}
     destino.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(prefix=f".{destino.name}.", suffix=".tmp", dir=destino.parent)
@@ -173,7 +173,7 @@ def abrir(pacote, destino, *, sobrescrever=False, perguntar=None):
                 raise ObimpackInvalido("pacote sem manifesto.json")
             bruto, _, _ = _ler(z, NOME_MANIFESTO, LIMITE_MANIFESTO)
             manifest = _manifesto(bruto)
-            declarados = {a["nome"]: a for a in manifest["arquivos"]}
+            declarados = {a["nome"]: a for a in manifest["files"]}
             total = sum(a["tamanho"] for a in declarados.values())
             if total > LIMITE_BYTES:
                 raise ObimpackInvalido(f"pacote declara {total} bytes, acima do limite de {LIMITE_BYTES}")

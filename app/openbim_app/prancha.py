@@ -105,7 +105,7 @@ def _obter_viewport(lateral, identification, view_guid):
         v = lateral.obter("viewports", uid)
         if not isinstance(v, dict):
             raise PranchaInvalida(f"viewport deve ser dict, recebido {type(v).__name__}")
-        if v.get("prancha") == identification and v.get("view_guid") == view_guid:
+        if v.get("sheet") == identification and v.get("view_guid") == view_guid:
             return v
     raise PranchaNaoEncontrada(f"viewport nao encontrado para {_resumo(identification)} / {_resumo(view_guid)}")
 
@@ -127,7 +127,7 @@ def criar_prancha(lado, identification, formato, projeto, titulo, data, folha):
         raise PranchaInvalida(f"data fora do calendario real: {_resumo(data)}")
 
     uid = str(uuid.uuid4())
-    obj = {"identification": identification, "formato": formato,
+    obj = {"identification": identification, "format": formato,
            "carimbo": {"projeto": projeto, "titulo": titulo, "data": data, "folha": folha}}
     lado.criar("sheets", uid, obj)
     return uid
@@ -160,7 +160,7 @@ def colocar_viewport(lado, identification, view_guid, x_mm, y_mm, escala, rotaca
         raise EscalaInvalida("escala invalida: deve ser numero finito > 0")
 
     uid = str(uuid.uuid4())
-    obj = {"prancha": identification, "view_guid": view_guid, "x": x_mm, "y": y_mm, "escala": escala}
+    obj = {"sheet": identification, "view_guid": view_guid, "x": x_mm, "y": y_mm, "scale": escala}
     if rotacao == 90:
         obj["rotacao"] = 90
     lado.criar("viewports", uid, obj)
@@ -174,7 +174,7 @@ def ler_viewport(lateral, identification, view_guid):
     except KeyError as e:
         raise PranchaInvalida(f"falha ao acessar viewport no lateral: {e}") from e
     try:
-        res = {"x": v["x"], "y": v["y"], "escala": v["escala"]}
+        res = {"x": v["x"], "y": v["y"], "escala": v["scale"]}
         if v.get("rotacao") == 90:
             res["rotacao"] = 90
     except KeyError as e:
@@ -789,15 +789,15 @@ def _validar_prancha_e_viewport(prancha, viewport, view_guid):
     if not isinstance(view_guid, str) or _contem_controle(view_guid):
         raise PranchaInvalida(f"view_guid contem caractere de controle ou invalido: {_resumo(view_guid)}")
 
-    escala = viewport.get("escala")
+    escala = viewport.get("scale")
     if isinstance(escala, bool) or not isinstance(escala, (int, float)):
-        raise EscalaInvalida(f"escala invalida no lateral: {_resumo(escala)}")
+        raise EscalaInvalida(f"scale invalida no lateral: {_resumo(escala)}")
     try:
         escala_f = float(escala)
     except OverflowError as e:
-        raise EscalaInvalida(f"escala invalida no lateral: {_resumo(escala)}") from e
+        raise EscalaInvalida(f"scale invalida no lateral: {_resumo(escala)}") from e
     if not math.isfinite(escala_f) or escala_f <= 0 or escala_f > 1e12:
-        raise EscalaInvalida(f"escala invalida no lateral: {_resumo(escala)}")
+        raise EscalaInvalida(f"scale invalida no lateral: {_resumo(escala)}")
 
     for k in ("x", "y"):
         v = viewport.get(k)
@@ -830,7 +830,7 @@ def _validar_prancha_e_viewport(prancha, viewport, view_guid):
     except ValueError as e:
         raise PranchaInvalida(f"data fora do calendario real no carimbo: {_resumo(data_str)}") from e
 
-    formato = prancha.get("formato")
+    formato = prancha.get("format")
     if not isinstance(formato, str) or formato not in FORMATOS:
         raise FormatoInvalido(f"formato desconhecido: {_resumo(formato)}")
     return formato, carimbo, rotacao
@@ -890,7 +890,7 @@ def montar_svg(lateral, identification, view_guid, planta_svg):
     minx, miny, w, h = _parse_viewbox(planta_root)
 
     try:
-        x, y, escala = float(viewport["x"]), float(viewport["y"]), float(viewport["escala"])
+        x, y, escala = float(viewport["x"]), float(viewport["y"]), float(viewport["scale"])
         s = 1000.0 / escala
         if not math.isfinite(s) or s <= 0:
             raise SvgInvalido("escala do viewport resultou em valor invalido")
@@ -966,7 +966,7 @@ def exportar_pdf(lateral, identification, view_guid, planta_svg, destino):
     destino = Path(destino)
     conteudo = montar_svg(lateral, identification, view_guid, planta_svg)
     prancha = _obter_prancha(lateral, identification)
-    formato = prancha.get("formato")
+    formato = prancha.get("format")
     if not isinstance(formato, str) or formato not in FORMATOS:
         raise FormatoInvalido(f"formato desconhecido: {_resumo(formato)}")
     W, H = FORMATOS[formato]

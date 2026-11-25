@@ -90,14 +90,14 @@ def test_r4_lado_id_do_pset_vence_o_dado(tmp_path, base_ifc):  # noqa: F811
     import ifcopenshell.api
     f = ifcopenshell.open(base_ifc)
     ps = ifcopenshell.api.run("pset.add_pset", f, product=f.by_type("IfcProject")[0], name="OBIM_Project")
-    ifcopenshell.api.run("pset.edit_pset", f, pset=ps, properties={"LadoId": "lado-que-ja-estava", "Revisao": 5})
+    ifcopenshell.api.run("pset.edit_pset", f, pset=ps, properties={"SideId": "lado-que-ja-estava", "Revision": 5})
     f.write(str(tmp_path / "com_pset.ifc"))
     p = Proj(tmp_path, str(tmp_path / "com_pset.ifc"))
     novo = p.novo(6)._replace(lado_id="lado-que-ja-estava")
     p.gravar()
-    assert p.pset() == ("lado-que-ja-estava", 6), f"carimbo {p.pset()}: o LadoId do pset tem de ficar (lado_id dado = {LADO})"
+    assert p.pset() == ("lado-que-ja-estava", 6), f"carimbo {p.pset()}: o SideId do pset tem de ficar (lado_id dado = {LADO})"
     assert X.estado_par(p.destino, None, novo, p.pasta) == ("novo", [])
-    assert X.ler_obim(p.destino.with_suffix(".obim"))[0]["LadoId"] == "lado-que-ja-estava"
+    assert X.ler_obim(p.destino.with_suffix(".obim"))[0]["SideId"] == "lado-que-ja-estava"
     p.h.encerrar()
 
 
@@ -281,7 +281,7 @@ def test_r11_unlink_final_recusado_uma_vez_conclui_e_o_carimbo_fica(proj, monkey
     assert proj.pset() == (LADO, 3)
     assert X.estado_par(proj.destino, dois, novo3, proj.pasta) == ("novo", [])
     man, _ = X.ler_obim(proj.destino.with_suffix(".obim"))
-    assert man["Revisao"] == 3
+    assert man["Revision"] == 3
 
 
 def test_r12_recusa_por_pendencia_nao_pula_revisao(proj, monkeypatch):
@@ -355,7 +355,7 @@ def test_r14_pendencia_que_o_resolvedor_desfaz_deixa_gravar(proj, monkeypatch):
     assert X.estado_par(proj.destino, um, novo) == ("novo", [])
     assert (proj.destino.with_name("Casa.ifc.bak").read_bytes(), proj.destino.with_name("Casa.obim.bak").read_bytes()) == tuple(um)
     man, _ = X.ler_obim(proj.destino.with_suffix(".obim"))
-    assert man["Revisao"] == 3
+    assert man["Revision"] == 3
 
 
 @pytest.mark.parametrize("variante", ["autosave_novo", "autosave_antigo"])

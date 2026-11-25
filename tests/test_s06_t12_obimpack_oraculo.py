@@ -51,8 +51,8 @@ def test_exportar_gera_zip_com_tres_entradas_e_manifesto_certo(tmp_path):
         assert sorted(z.namelist()) == ["Casa.ifc", "Casa.obim", "manifesto.json"]
         man = json.loads(z.read("manifesto.json"))
         assert z.read("Casa.ifc") == IFC and z.read("Casa.obim") == OBIM
-    assert man["formato"] == "obimpack" and isinstance(man["versao_pacote"], str) and man["versao_pacote"]
-    por_nome = {a["nome"]: a for a in man["arquivos"]}
+    assert man["format"] == "obimpack" and isinstance(man["package_version"], str) and man["package_version"]
+    por_nome = {a["nome"]: a for a in man["files"]}
     assert set(por_nome) == {"Casa.ifc", "Casa.obim"}
     assert por_nome["Casa.ifc"] == {"nome": "Casa.ifc", "tamanho": len(IFC), "sha256": _sha(IFC)}
     assert por_nome["Casa.obim"] == {"nome": "Casa.obim", "tamanho": len(OBIM), "sha256": _sha(OBIM)}
@@ -137,8 +137,8 @@ def test_sem_obim_recusa(tmp_path):
     _recusa(tmp_path, p, "Casa.obim")
 def test_sem_manifesto_recusa(tmp_path):
     _recusa(tmp_path, _zip(tmp_path / "p.obimpack", manifesto=False), "manifesto")
-@pytest.mark.parametrize("texto", [b"nao e json", b"[]", b'{"formato": "outro", "versao_pacote": "1", "arquivos": []}',
-                                   b'{"formato": "obimpack"}'])
+@pytest.mark.parametrize("texto", [b"nao e json", b"[]", b'{"format": "outro", "package_version": "1", "files": []}',
+                                   b'{"format": "obimpack"}'])
 def test_manifesto_ilegivel_ou_fora_do_formato_recusa(tmp_path, texto):
     p = tmp_path / "p.obimpack"
     with zipfile.ZipFile(p, "w") as z:
@@ -155,7 +155,7 @@ def test_sha256_diferente_recusa_citando_o_arquivo(tmp_path, alvo):
 @pytest.mark.parametrize("alvo", ["Casa.ifc", "Casa.obim"])
 def test_tamanho_declarado_diferente_recusa(tmp_path, alvo):
     man = _manifesto()
-    for a in man["arquivos"]:
+    for a in man["files"]:
         if a["nome"] == alvo:
             a["tamanho"] += 1
     _recusa(tmp_path, _zip(tmp_path / "p.obimpack", manifesto=man), alvo)
@@ -166,7 +166,7 @@ def test_zip_slip_e_caminho_com_pasta_recusa_sem_extrair_nada(tmp_path, nome):
     assert not (tmp_path / "fora.ifc").exists() and not (tmp_path.parent / "fora.ifc").exists()
 def test_nome_perigoso_citado_no_manifesto_recusa(tmp_path):
     man = _manifesto()
-    man["arquivos"][0]["nome"] = "../Casa.ifc"
+    man["files"][0]["nome"] = "../Casa.ifc"
     _recusa(tmp_path, _zip(tmp_path / "p.obimpack", {"../Casa.ifc": IFC, "Casa.obim": OBIM}, man))
     assert not (tmp_path / "Casa.ifc").exists()
 
@@ -223,7 +223,7 @@ def test_falha_nao_deixa_temporarios_nem_pacote_parcial_no_destino(tmp_path):
     assert list(dest.iterdir()) == []
 
 
-@pytest.mark.parametrize("campo,valor", [("formato", "outro"), ("versao_pacote", ""), ("versao_pacote", 3), ("versao_pacote", None)])
+@pytest.mark.parametrize("campo,valor", [("format", "outro"), ("package_version", ""), ("package_version", 3), ("package_version", None)])
 def test_manifesto_com_arquivos_certos_mas_cabecalho_ruim_recusa(tmp_path, campo, valor):
     _recusa(tmp_path, _zip(tmp_path / "p.obimpack", manifesto=_manifesto(**{campo: valor})))
 
@@ -284,7 +284,7 @@ def test_manifesto_com_tamanho_pequeno_nao_descomprime_a_entrada_toda(tmp_path, 
     m = _m()
     ifc, obim = b"\x00" * 5_000_000, b"o" * 100
     man = _manifesto(ifc=ifc, obim=obim)
-    man["arquivos"][0]["tamanho"] = 10
+    man["files"][0]["tamanho"] = 10
     p = _zip(tmp_path / "p.obimpack", {"Casa.ifc": ifc, "Casa.obim": obim}, man)
     monkeypatch.setattr(m, "LIMITE_BYTES", 200_000)
     lido = _espiar_leitura(monkeypatch)
@@ -296,7 +296,7 @@ def test_orcamento_de_bytes_diminui_a_cada_arquivo_lido(tmp_path, monkeypatch):
     m = _m()
     ifc, obim = b"\x00" * 150_000, b"\x00" * 300_000
     man = _manifesto(ifc=ifc, obim=obim)
-    man["arquivos"][1]["tamanho"] = 10  # mente: soma declarada cabe no limite, a real nao
+    man["files"][1]["tamanho"] = 10  # mente: soma declarada cabe no limite, a real nao
     p = _zip(tmp_path / "p.obimpack", {"Casa.ifc": ifc, "Casa.obim": obim}, man)
     monkeypatch.setattr(m, "LIMITE_BYTES", 200_000)
     lido = _espiar_leitura(monkeypatch)

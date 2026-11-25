@@ -61,7 +61,7 @@ def test_03_gravar_par_sobrescreve_obim_com_nao_finito_e_guarda_o_antigo(proj, b
     assert canon(r.lateral) == canon(proj.lat) and "x_outro" not in r.manifesto
     proj.tx(2)
     proj.gravar()  # e a seguinte também (antes: falhava para sempre)
-    assert m.ler(o).manifesto["Revisao"] == r.manifesto["Revisao"] + 1
+    assert m.ler(o).manifesto["Revision"] == r.manifesto["Revision"] + 1
 
 
 # ---------- bug 3 ----------
@@ -129,8 +129,8 @@ def test_07_n8_autosave_grava_marca_e_origem_no_manifesto(proj, tmp_path):
 # ---------- N9 ----------
 def _dois_viewports_da_mesma_vista():
     o = objetos()
-    o["sheets"] = {**o["sheets"], U["p2"]: {"identification": "B-02", "formato": "A3"}}
-    o["viewports"] = {**o["viewports"], U["vp3"]: {"prancha": "B-02", "view_guid": G1, "x": 5, "y": 5, "escala": 100}}
+    o["sheets"] = {**o["sheets"], U["p2"]: {"identification": "B-02", "format": "A3"}}
+    o["viewports"] = {**o["viewports"], U["vp3"]: {"sheet": "B-02", "view_guid": G1, "x": 5, "y": 5, "scale": 100}}
     return o
 
 
@@ -141,7 +141,7 @@ def test_08_n9_apagar_vista_em_duas_pranchas_apaga_todos_os_viewports(proj):
         for c, objs in _dois_viewports_da_mesma_vista().items():
             for i, o in objs.items():
                 t.lado.criar(c, i, o)
-    assert {proj.lat.obter("viewports", U[k])["prancha"] for k in ("vp1", "vp3")} == {IDENT, "B-02"}
+    assert {proj.lat.obter("viewports", U[k])["sheet"] for k in ("vp1", "vp3")} == {IDENT, "B-02"}
     cheio = canon(proj.lat)
     with proj.s.escrever() as esc, proj.h.transacao(esc) as t:
         m.apagar_vista(t.lado, G1)

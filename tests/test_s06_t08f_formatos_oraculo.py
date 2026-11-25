@@ -132,13 +132,13 @@ def test_08_gravacao_e_leitura():
     lado = Lado()
     m.criar_prancha(lado, IDENT, **DADOS)
     iv = m.colocar_viewport(lado, IDENT, GUID, 20, 25.5, 50, rotacao=90)
-    assert lado.lat.obter("viewports", iv) == {"prancha": IDENT, "view_guid": GUID, "x": 20, "y": 25.5, "escala": 50, "rotacao": 90}
+    assert lado.lat.obter("viewports", iv) == {"sheet": IDENT, "view_guid": GUID, "x": 20, "y": 25.5, "scale": 50, "rotacao": 90}
     assert m.ler_viewport(lado.lat, IDENT, GUID) == {"x": 20, "y": 25.5, "escala": 50, "rotacao": 90}
     for kw in ({}, {"rotacao": 0}):
         l2 = Lado()
         m.criar_prancha(l2, IDENT, **DADOS)
         i2 = m.colocar_viewport(l2, IDENT, GUID, 20, 25.5, 50, **kw)
-        assert l2.lat.obter("viewports", i2) == {"prancha": IDENT, "view_guid": GUID, "x": 20, "y": 25.5, "escala": 50}, "rotacao 0 nao grava a chave"
+        assert l2.lat.obter("viewports", i2) == {"sheet": IDENT, "view_guid": GUID, "x": 20, "y": 25.5, "scale": 50}, "rotacao 0 nao grava a chave"
         assert m.ler_viewport(l2.lat, IDENT, GUID) == {"x": 20, "y": 25.5, "escala": 50}
     assert type(lado.lat.obter("viewports", iv)["rotacao"]) is int
 
@@ -156,7 +156,7 @@ def test_09_reabrir_mantem_rotacao(tmp_path):
     assert m.montar_svg(r.lateral, IDENT, GUID, svg) == antes
     with zipfile.ZipFile(p) as z:
         vp = [n for n in z.namelist() if n.startswith("viewports/")]
-        assert len(vp) == 1 and json.loads(z.read(vp[0])) == {"prancha": IDENT, "view_guid": GUID, "x": 30, "y": 40, "escala": 100, "rotacao": 90}
+        assert len(vp) == 1 and json.loads(z.read(vp[0])) == {"sheet": IDENT, "view_guid": GUID, "x": 30, "y": 40, "scale": 100, "rotacao": 90}
 
 
 @pytest.mark.parametrize("hostil", [45, 180, True, "90", None])

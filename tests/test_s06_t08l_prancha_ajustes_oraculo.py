@@ -37,8 +37,8 @@ class Falso:
 
 
 def lateral(escala=100, **viewport):
-    p = {"identification": "P", "formato": "A3", "carimbo": {"projeto": "x", "titulo": "t", "data": "2026-11-01", "folha": "1"}}
-    v = {"prancha": "P", "view_guid": "v", "x": 20, "y": 20, "escala": escala}
+    p = {"identification": "P", "format": "A3", "carimbo": {"projeto": "x", "titulo": "t", "data": "2026-11-01", "folha": "1"}}
+    v = {"sheet": "P", "view_guid": "v", "x": 20, "y": 20, "scale": escala}
     v.update(viewport)
     return Falso(p, v)
 
@@ -135,7 +135,7 @@ class Quebrado:
 
 
 def test_09_ler_viewport_sadio_continua_valendo():
-    v = {"prancha": "P", "view_guid": "v", "x": 1, "y": 2, "escala": 50, "rotacao": 90}
+    v = {"sheet": "P", "view_guid": "v", "x": 1, "y": 2, "scale": 50, "rotacao": 90}
     assert m.ler_viewport(Quebrado("nenhum", v), "P", "v") == {"x": 1, "y": 2, "escala": 50, "rotacao": 90}
 
 
@@ -145,15 +145,15 @@ def test_10_ler_viewport_ja_recusa_viewport_que_nao_e_dict():
 
 
 def test_11_ler_viewport_de_outro_view_guid_e_nao_encontrada():
-    v = {"prancha": "P", "view_guid": "outra", "x": 1, "y": 2, "escala": 50}
+    v = {"sheet": "P", "view_guid": "outra", "x": 1, "y": 2, "scale": 50}
     with pytest.raises(m.PranchaNaoEncontrada):
         m.ler_viewport(Quebrado("nenhum", v), "P", "v")
 
 
 @pytest.mark.parametrize("onde,viewport", [
-    pytest.param("nenhum", {"prancha": "P", "view_guid": "v", "y": 2, "escala": 50}, id="sem_x"),
-    pytest.param("nenhum", {"prancha": "P", "view_guid": "v", "x": 1, "escala": 50}, id="sem_y"),
-    pytest.param("nenhum", {"prancha": "P", "view_guid": "v", "x": 1, "y": 2}, id="sem_escala"),
+    pytest.param("nenhum", {"sheet": "P", "view_guid": "v", "y": 2, "scale": 50}, id="sem_x"),
+    pytest.param("nenhum", {"sheet": "P", "view_guid": "v", "x": 1, "scale": 50}, id="sem_y"),
+    pytest.param("nenhum", {"sheet": "P", "view_guid": "v", "x": 1, "y": 2}, id="sem_escala"),
     pytest.param("obter", None, id="obter_levanta_KeyError"),
     pytest.param("ids", None, id="ids_levanta_KeyError"),
 ])
@@ -212,8 +212,8 @@ import openbim_app.prancha as m
 S = {S!r}
 N = 300000
 class Falso:
-    p = {{"identification": "P", "formato": "A3", "carimbo": {{"projeto": "x", "titulo": "t", "data": "2026-11-01", "folha": "1"}}}}
-    v = {{"prancha": "P", "view_guid": "v", "x": 20, "y": 20, "escala": 100}}
+    p = {{"identification": "P", "format": "A3", "carimbo": {{"projeto": "x", "titulo": "t", "data": "2026-11-01", "folha": "1"}}}}
+    v = {{"sheet": "P", "view_guid": "v", "x": 20, "y": 20, "scale": 100}}
     def ids(self, c): return ["1"]
     def obter(self, c, i): return self.p if c == "sheets" else self.v
 def com(chave, fn):
@@ -277,8 +277,8 @@ def test_20_comentario_com_traco_duplo_ou_menor_dentro_nao_confunde():
 
 
 def test_21_ler_viewport_mensagem_cita_o_campo_ausente():
-    with pytest.raises(m.PranchaInvalida, match="escala"):
-        m.ler_viewport(Quebrado("nenhum", {"prancha": "P", "view_guid": "v", "x": 1, "y": 2}), "P", "v")
+    with pytest.raises(m.PranchaInvalida, match="scale"):
+        m.ler_viewport(Quebrado("nenhum", {"sheet": "P", "view_guid": "v", "x": 1, "y": 2}), "P", "v")
 
 
 def test_22_ler_viewport_keyerror_nao_vira_pranchanaoencontrada_nem_vaza():

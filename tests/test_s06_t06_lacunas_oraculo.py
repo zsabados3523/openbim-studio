@@ -105,16 +105,16 @@ def test_d3_e_d5_com_obim_aberto_direto(p, quem):
 
 
 def test_lateral_0_1_0_no_formato_exato_da_s05_com_provisorio(p):
-    ifc, ob = X.fazer(p, versao="0.1.0", man={"provisorio": True, "programa_versao": "0", "data": "2026-10-24T00:00:00Z"})
+    ifc, ob = X.fazer(p, versao="0.1.0", man={"provisorio": True, "program_version": "0", "date": "2026-10-24T00:00:00Z"})
     assert zipfile.ZipFile(ob).read("manifest.json").count(b"provisorio") == 1
     for entrada in (ifc, ob):
         r = dv().classificar(entrada)
         assert r.caso in ("D1", "D6") and r.versao_lateral == "0.1.0" and r.aviso is None
 
 
-MANIFESTOS_RUINS = {"sem_globalid": {"ifc_projeto_globalid": X.APAGAR}, "sem_ifc_nome": {"ifc_nome": X.APAGAR}, "sem_sha": {"ifc_sha256": X.APAGAR},
-                    "sem_revisao": {"Revisao": X.APAGAR}, "revisao_texto": {"Revisao": "3"}, "revisao_decimal": {"Revisao": 3.5},
-                    "revisao_bool": {"Revisao": True}, "revisao_nula": {"Revisao": None}, "sem_ladoid_com_pset": {"LadoId": X.APAGAR}}
+MANIFESTOS_RUINS = {"sem_globalid": {"ifc_project_globalid": X.APAGAR}, "sem_ifc_nome": {"ifc_name": X.APAGAR}, "sem_sha": {"ifc_sha256": X.APAGAR},
+                    "sem_revisao": {"Revision": X.APAGAR}, "revisao_texto": {"Revision": "3"}, "revisao_decimal": {"Revision": 3.5},
+                    "revisao_bool": {"Revision": True}, "revisao_nula": {"Revision": None}, "sem_ladoid_com_pset": {"SideId": X.APAGAR}}
 
 
 @pytest.mark.parametrize("entrada", ["ifc", "obim"])
@@ -128,7 +128,7 @@ def test_manifesto_incompleto_ou_com_tipo_errado_e_recusado(p, como, entrada):
 
 
 def test_sem_ladoid_no_manifesto_e_ifc_sem_pset_e_normal(p):
-    ifc, _ = X.fazer(p, pset=False, man={"LadoId": X.APAGAR})
+    ifc, _ = X.fazer(p, pset=False, man={"SideId": X.APAGAR})
     _r(dv().classificar(ifc), "D1", vinc=True)
 
 
@@ -158,7 +158,7 @@ def test_ifc_ausente_ilegivel_ou_sem_projeto_levanta_ifcinvalido(p, defeito):
 
 
 def test_ifc_nome_apontando_para_pasta_e_ifc_nao_achado(p):
-    ifc, ob = X.fazer(p, man={"ifc_nome": "pasta"})
+    ifc, ob = X.fazer(p, man={"ifc_name": "pasta"})
     (p / "pasta").mkdir()
     r = dv().classificar(ob)
     _r(r, "D6", D6.format("pasta"), D6_OP, vistas=0, vinc=False)
@@ -171,7 +171,7 @@ def test_revisao_booleana_no_pset_nao_conta_como_numero(p):  # True == 1 em Pyth
 
 
 def test_ifc_nome_que_nao_e_texto_nao_quebra(p):
-    ifc, ob = X.fazer(p, man={"ifc_nome": 5})
+    ifc, ob = X.fazer(p, man={"ifc_name": 5})
     try:
         r = dv().classificar(ob)
     except dv().LateralRecusado:

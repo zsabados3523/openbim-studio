@@ -19,8 +19,8 @@ from obrigatorio import pular
 from s05_conteudo_aux import _limpa, base_ifc, exigir  # noqa: F401  (fixtures)
 from s06_t08_aux import DADOS, GUID, IDENT, Lado, medir, montar
 
-MAN = {"formato": "obim-lateral", "versao_formato": "0.2.0", "LadoId": "l", "Revisao": 1, "ifc_nome": "Casa.ifc", "ifc_sha256": "0" * 64, "ifc_tamanho": 1,
-       "ifc_projeto_globalid": "p", "programa_versao": "0.1.0", "data": "2026-11-01T00:00:00Z"}
+MAN = {"format": "obim-lateral", "format_version": "0.2.0", "SideId": "l", "Revision": 1, "ifc_name": "Casa.ifc", "ifc_sha256": "0" * 64, "ifc_size": 1,
+       "ifc_project_globalid": "p", "program_version": "0.1.0", "date": "2026-11-01T00:00:00Z"}
 UUID4 = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")
 
 
@@ -141,9 +141,9 @@ def test_06_o_que_vai_no_zip(tmp_path):
         vp = [n for n in nomes if n.startswith("viewports/")]
         assert len(pr) == 1 and len(vp) == 1, nomes
         assert UUID4.fullmatch(Path(pr[0]).stem) and UUID4.fullmatch(Path(vp[0]).stem), "o nome do arquivo e um UUID4, nunca a chave"
-        assert json.loads(z.read(pr[0])) == {"identification": IDENT, "formato": "A3",
+        assert json.loads(z.read(pr[0])) == {"identification": IDENT, "format": "A3",
                                              "carimbo": {k: DADOS[k] for k in ("projeto", "titulo", "data", "folha")}}
-        assert json.loads(z.read(vp[0])) == {"prancha": IDENT, "view_guid": GUID, "x": 40, "y": 50, "escala": 100}
+        assert json.loads(z.read(vp[0])) == {"sheet": IDENT, "view_guid": GUID, "x": 40, "y": 50, "scale": 100}
     assert not [n for n in nomes if n.startswith(("views/", "styles/"))], "T08 nao cria vista nem estilo no .obim"
 
 
@@ -192,7 +192,7 @@ def test_09_gravar_par_com_prancha_nao_toca_o_ifc_e_reabre(proj):
     import ifcopenshell
     assert foto(ifcopenshell.open(str(proj.destino)), sem_pset_obim=True) == foto_antes, "a prancha mexeu no IFC"
     r = Z.ler(proj.destino.with_suffix(".obim"))
-    assert r.manifesto["versao_formato"] == "0.2.0"
+    assert r.manifesto["format_version"] == "0.2.0"
     assert m.ler_viewport(r.lateral, IDENT, GUID) == {"x": 20.5, "y": 30.25, "escala": 50}
     assert m.montar_svg(r.lateral, IDENT, GUID, svg) == antes
     assert r.lateral.ids("notas"), "o resto do lateral tem de continuar"

@@ -39,8 +39,8 @@ G1, G2 = "0$Fq3Zk1D5Pv2wX4yAbC_E", "3cUz$7rQ0aLm9XyN2bP_Hd"  # GlobalId tem `$` 
 IDENT = "A-01.2 / rev B"  # Identification pode ter espaço, ponto e barra
 U = {n: f"{i:08x}-0000-4000-8000-00000000000{i}" for i, n in enumerate(("est", "v1", "v2", "p1", "p2", "vp1", "vp2", "vp3", "tb"), 1)}
 SVG = '<svg xmlns="http://www.w3.org/2000/svg"><text>Carimbo ação</text></svg>'.encode()
-MAN = {"formato": "obim-lateral", "versao_formato": "0.2.0", "LadoId": LADO, "Revisao": 1, "ifc_nome": "Casa.ifc", "ifc_sha256": "0" * 64,
-       "ifc_tamanho": 1, "ifc_projeto_globalid": "p", "programa_versao": "0.1.0", "data": "2026-10-30T00:00:00Z", "x_futuro": {"k": [1, 2]}}
+MAN = {"format": "obim-lateral", "format_version": "0.2.0", "SideId": LADO, "Revision": 1, "ifc_name": "Casa.ifc", "ifc_sha256": "0" * 64,
+       "ifc_size": 1, "ifc_project_globalid": "p", "program_version": "0.1.0", "date": "2026-10-30T00:00:00Z", "x_futuro": {"k": [1, 2]}}
 
 
 def ob():
@@ -52,9 +52,9 @@ def objetos(**sobre):
     o = {"styles": {U["est"]: {"nome": "padrao", "espessuras": {"corte": 0.5, "vista": 0.25}, "campo_futuro": {"a": [1, 2]}}},
          "views": {U["v1"]: {"view_guid": G1, "estilo": U["est"], "visibilidade": {"IfcFurniture": False}, "extra": [1]},
                     U["v2"]: {"view_guid": G2, "estilo": U["est"]}},
-         "sheets": {U["p1"]: {"identification": IDENT, "formato": "A1", "carimbo": {"titulo": "Planta térreo"}, "titleblock": U["tb"]}},
-         "viewports": {U["vp1"]: {"prancha": IDENT, "view_guid": G1, "x": 10.0, "y": 20.5, "escala": 100.0},
-                       U["vp2"]: {"prancha": IDENT, "view_guid": G2, "x": 400, "y": 20.5, "escala": 50}},
+         "sheets": {U["p1"]: {"identification": IDENT, "format": "A1", "carimbo": {"titulo": "Planta térreo"}, "titleblock": U["tb"]}},
+         "viewports": {U["vp1"]: {"sheet": IDENT, "view_guid": G1, "x": 10.0, "y": 20.5, "scale": 100.0},
+                       U["vp2"]: {"sheet": IDENT, "view_guid": G2, "x": 400, "y": 20.5, "scale": 50}},
          "notas": {"nx": {"texto": "nota"}}}
     o.update(sobre)
     return o
@@ -86,7 +86,7 @@ def test_01_zip_comum_estrutura_e_manifesto(tmp_path):
     assert (tmp_path / "x" / "titleblocks" / f"{U['tb']}.svg").read_bytes() == SVG
     assert not [n for n in nomes if "$" in n], "GlobalId no NOME do arquivo (a chave vive no campo, o nome é UUID)"
     man = json.loads(zipfile.ZipFile(p).read("manifest.json"))
-    assert man["versao_formato"] == "0.2.0" and "provisorio" not in man and man["formato"] == "obim-lateral"
+    assert man["format_version"] == "0.2.0" and "provisorio" not in man and man["format"] == "obim-lateral"
     assert man["x_futuro"] == {"k": [1, 2]}
 
 def test_02_gravar_e_ler_identico(tmp_path):
@@ -109,7 +109,7 @@ def test_03_chave_com_dolar_e_identification_estranha(tmp_path):
     assert guids == sorted((G1, G2)) and "$" in G1
     assert r.obter("sheets", U["p1"])["identification"] == IDENT
     vp = r.obter("viewports", U["vp1"])
-    assert (vp["prancha"], vp["view_guid"]) == (IDENT, G1), "viewport tem de guardar a Identification da prancha e o GlobalId da vista"
+    assert (vp["sheet"], vp["view_guid"]) == (IDENT, G1), "viewport tem de guardar a Identification da prancha e o GlobalId da vista"
 
 
 def _rep_vista():
@@ -117,11 +117,11 @@ def _rep_vista():
 
 
 def _rep_prancha():
-    return {"sheets": {**objetos()["sheets"], "outra": {"identification": IDENT, "formato": "A3"}}}
+    return {"sheets": {**objetos()["sheets"], "outra": {"identification": IDENT, "format": "A3"}}}
 
 
 def _rep_viewport():
-    return {"viewports": {**objetos()["viewports"], "outro": {"prancha": IDENT, "view_guid": G1, "x": 0, "y": 0, "escala": 100}}}
+    return {"viewports": {**objetos()["viewports"], "outro": {"sheet": IDENT, "view_guid": G1, "x": 0, "y": 0, "scale": 100}}}
 
 
 def _com(col, i, **campos):
@@ -136,12 +136,12 @@ RUINS = [("view_guid repetido", _rep_vista), ("identification repetida", _rep_pr
          ("view_guid que não é texto", lambda: _com("views", "x", view_guid=7)),
          ("identification vazia", lambda: _com("sheets", "x", identification="")),
          ("identification com espaço nas pontas", lambda: _com("sheets", "x", identification=" A-02")),
-         ("identification sem campo", lambda: _com("sheets", "x", formato="A1")),
-         ("viewport sem prancha", lambda: _com("viewports", "x", view_guid=G1, x=0, y=0, escala=100)),
-         ("viewport sem view_guid", lambda: _com("viewports", "x", prancha="B", x=0, y=0, escala=100)),
-         ("viewport com x texto", lambda: _com("viewports", "x", prancha="B", view_guid=G1, x="1", y=0, escala=100)),
-         ("viewport com escala zero", lambda: _com("viewports", "x", prancha="B", view_guid=G1, x=0, y=0, escala=0)),
-         ("viewport com escala negativa", lambda: _com("viewports", "x", prancha="B", view_guid=G1, x=0, y=0, escala=-5))]
+         ("identification sem campo", lambda: _com("sheets", "x", format="A1")),
+         ("viewport sem sheet", lambda: _com("viewports", "x", view_guid=G1, x=0, y=0, scale=100)),
+         ("viewport sem view_guid", lambda: _com("viewports", "x", sheet="B", x=0, y=0, scale=100)),
+         ("viewport com x texto", lambda: _com("viewports", "x", sheet="B", view_guid=G1, x="1", y=0, scale=100)),
+         ("viewport com scale zero", lambda: _com("viewports", "x", sheet="B", view_guid=G1, x=0, y=0, scale=0)),
+         ("viewport com scale negativa", lambda: _com("viewports", "x", sheet="B", view_guid=G1, x=0, y=0, scale=-5))]
 
 @pytest.mark.parametrize("sobre", [f for _, f in RUINS], ids=[n for n, _ in RUINS])
 def test_04_validacao_recusa_e_nao_grava(tmp_path, sobre):
@@ -189,7 +189,7 @@ def test_07_ler_recusa_sem_manifesto_ou_outro_formato(tmp_path):
     with zipfile.ZipFile(a, "w") as z:
         z.writestr("vistas/x.json", "{}")
     with zipfile.ZipFile(b, "w") as z:
-        z.writestr("manifest.json", json.dumps({**MAN, "formato": "outra-coisa"}))
+        z.writestr("manifest.json", json.dumps({**MAN, "format": "outra-coisa"}))
     c.write_bytes(b"isto nao e zip")
     for p in (a, b, c):
         with pytest.raises(m.ObimInvalido):
@@ -209,22 +209,22 @@ def test_08_migra_0_1_0_em_memoria(tmp_path, base_ifc):  # noqa: F811
     bytes_antes = o.read_bytes()
     r = m.ler(o)
     assert (r.versao_original, r.somente_leitura) == ("0.1.0", False)
-    assert r.manifesto["versao_formato"] == "0.2.0" and "provisorio" not in r.manifesto
-    assert r.manifesto["Revisao"] == 3 and r.manifesto["LadoId"] == LADO, "migração perdeu campo do manifesto"
+    assert r.manifesto["format_version"] == "0.2.0" and "provisorio" not in r.manifesto
+    assert r.manifesto["Revision"] == 3 and r.manifesto["SideId"] == LADO, "migração perdeu campo do manifesto"
     assert r.lateral.obter("notas", "n1") == {"texto": "da S05", "ifc_guids": ["abc"]} and r.lateral.obter("outra", "o_1") == {"v": 1.5}
     assert o.read_bytes() == bytes_antes, "ler mudou o arquivo (migra só em memória; regrava só ao gravar o par)"
 
 @pytest.mark.parametrize("versao", ["0.3.0", "1.0.0", "2.4.1"])
 def test_09_versao_maior_abre_so_leitura_e_nada_se_perde(tmp_path, versao):
     m, p = ob(), tmp_path / "f.obim"
-    m.escrever(p, lat(), {**MAN, "versao_formato": versao, "novo_campo_v": 1})
+    m.escrever(p, lat(), {**MAN, "format_version": versao, "novo_campo_v": 1})
     r = m.ler(p)
     assert r.somente_leitura is True and r.versao_original == versao and r.manifesto["novo_campo_v"] == 1
     assert canon(r.lateral) == canon(lat())
 
 def test_10_versao_menor_nova_grava_e_preserva(tmp_path):
     m, p = ob(), tmp_path / "f.obim"
-    m.escrever(p, lat(), {**MAN, "versao_formato": "0.2.1", "campo_021": [1]})
+    m.escrever(p, lat(), {**MAN, "format_version": "0.2.1", "campo_021": [1]})
     r = m.ler(p)
     assert r.somente_leitura is False and r.manifesto["campo_021"] == [1]
 
@@ -279,8 +279,8 @@ def test_14_gravar_par_sai_0_2_0_com_estrutura_real(proj):
     o = proj.destino.with_suffix(".obim")
     assert zipfile.ZipFile(o).testzip() is None
     r = m.ler(o)
-    assert r.manifesto["versao_formato"] == "0.2.0" and "provisorio" not in r.manifesto and r.versao_original == "0.2.0"
-    assert r.manifesto["ifc_nome"] == "Casa.ifc" and r.manifesto["Revisao"] == 1 and r.manifesto["LadoId"] == LADO
+    assert r.manifesto["format_version"] == "0.2.0" and "provisorio" not in r.manifesto and r.versao_original == "0.2.0"
+    assert r.manifesto["ifc_name"] == "Casa.ifc" and r.manifesto["Revision"] == 1 and r.manifesto["SideId"] == LADO
     assert canon(r.lateral) == canon(proj.lat)
     assert not [n for n in entradas(o) if "$" in n] and not any(proj.pasta.glob("gravacao*"))
 
@@ -295,7 +295,7 @@ def test_15_gravar_par_repassa_manifesto_e_entradas_desconhecidas(proj):
     proj.gravar()
     r2 = m.ler(o)
     assert r2.manifesto["x_futuro"] == {"k": [9]} and r2.manifesto["campo_novo"] == "z", "gravar_par montou o manifesto do zero"
-    assert r2.manifesto["Revisao"] == 2 and r2.manifesto["ifc_sha256"] == X.sha(proj.destino.read_bytes()), "campos do programa não foram atualizados"
+    assert r2.manifesto["Revision"] == 2 and r2.manifesto["ifc_sha256"] == X.sha(proj.destino.read_bytes()), "campos do programa não foram atualizados"
     assert r2.extras == {"assets/logo.png": b"\x89PNG\x00", f"titleblocks/{U['tb']}.svg": SVG}, "entrada desconhecida perdida"
     assert r2.lateral.obter("notas", "n2") is not None
 
@@ -306,7 +306,7 @@ def test_16_gravar_par_migra_0_1_0_e_guarda_o_bak(proj, base_ifc, tmp_path):  # 
     proj.gravar()
     assert proj.destino.with_name("Casa.obim.bak").read_bytes() == antigo.obim and proj.destino.with_name("Casa.ifc.bak").read_bytes() == antigo.ifc
     r = m.ler(proj.destino.with_suffix(".obim"))
-    assert r.versao_original == "0.2.0" and r.manifesto["versao_formato"] == "0.2.0" and "provisorio" not in r.manifesto
+    assert r.versao_original == "0.2.0" and r.manifesto["format_version"] == "0.2.0" and "provisorio" not in r.manifesto
     assert canon(r.lateral) == canon(proj.lat)
     assert m.ler(proj.destino.with_name("Casa.obim.bak")).versao_original == "0.1.0", "o .bak do provisório tem de continuar legível"
 
@@ -316,7 +316,7 @@ def _estado_intacto(proj, antigo):
 
 
 def _antes(proj, base_ifc, versao="0.1.0", **man):  # noqa: F811
-    X.escrever_par_falso(proj.destino, base_ifc, {"notas": {"n0": {"texto": "primeira"}}}, 5, manifesto={"versao_formato": versao, **man}, legado=True)
+    X.escrever_par_falso(proj.destino, base_ifc, {"notas": {"n0": {"texto": "primeira"}}}, 5, manifesto={"format_version": versao, **man}, legado=True)
     return X.Antigo(proj.destino.read_bytes(), proj.destino.with_suffix(".obim").read_bytes())
 
 
@@ -361,7 +361,7 @@ def test_20_conferir_obim_aceita_svg_e_entrada_desconhecida(tmp_path):
     import openbim_app.gravacao_par as GP
     p = tmp_path / "ok.obim"
     with zipfile.ZipFile(p, "w") as z:
-        z.writestr("manifest.json", json.dumps({**MAN, "versao_formato": GP.VERSAO_FORMATO}))
+        z.writestr("manifest.json", json.dumps({**MAN, "format_version": GP.VERSAO_FORMATO}))
         z.writestr("vistas/a.json", "{}")
         z.writestr(f"titleblocks/{U['tb']}.svg", SVG)
         z.writestr("assets/logo.png", b"\x00")

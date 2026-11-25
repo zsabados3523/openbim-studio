@@ -33,8 +33,8 @@ class Falso:
     def ids(self, c): return ["1"]
     def obter(self, c, i): return self.p if c == "sheets" else self.v
 def lateral(**sobre):
-    p = {{"identification": "P", "formato": "A3", "carimbo": {{"projeto": "x", "titulo": "t", "data": "2026-11-01", "folha": "1"}}}}
-    v = {{"prancha": "P", "view_guid": "v", "x": 20, "y": 20, "escala": 100}}
+    p = {{"identification": "P", "format": "A3", "carimbo": {{"projeto": "x", "titulo": "t", "data": "2026-11-01", "folha": "1"}}}}
+    v = {{"sheet": "P", "view_guid": "v", "x": 20, "y": 20, "scale": 100}}
     for k, val in sobre.items():
         (p if k == "carimbo" else v)[k] = val
     return Falso(p, v)
@@ -163,7 +163,7 @@ CARIMBOS = [("string", "'x'"), ("nulo", "None"), ("numero", "5"), ("lista", "[1]
 
 @pytest.mark.parametrize("nome,valor", [pytest.param(n, v, id=f"escala_{n}") for n, v in ESCALAS])
 def test_07_escala_adulterada(nome, valor):
-    r, _, _ = rodar(f"m.montar_svg(lateral(escala={valor}), 'P', 'v', PLANTA)")
+    r, _, _ = rodar(f"m.montar_svg(lateral(scale={valor}), 'P', 'v', PLANTA)")
     assert r.startswith("EscalaInvalida|"), f"escala {nome}: veio {r!r}"
 
 
@@ -230,9 +230,9 @@ def test_11_recusa_com_svginvalido(nome, corpo, limite):
 
 
 @pytest.mark.parametrize("nome,corpo", [
-    H("escala_10_elevado_400", "m.montar_svg(lateral(escala=10**400), 'P', 'v', PLANTA)"),
-    H("formato_lista", "p = lateral(); p.p['formato'] = ['A3']\nm.montar_svg(p, 'P', 'v', PLANTA)"),
-    H("formato_dict", "p = lateral(); p.p['formato'] = {'a': 1}\nm.montar_svg(p, 'P', 'v', PLANTA)"),
+    H("escala_10_elevado_400", "m.montar_svg(lateral(scale=10**400), 'P', 'v', PLANTA)"),
+    H("formato_lista", "p = lateral(); p.p['format'] = ['A3']\nm.montar_svg(p, 'P', 'v', PLANTA)"),
+    H("formato_dict", "p = lateral(); p.p['format'] = {'a': 1}\nm.montar_svg(p, 'P', 'v', PLANTA)"),
     H("data_9999_99_99", "m.montar_svg(lateral(carimbo={'projeto': 'x', 'titulo': 't', 'data': '9999-99-99', 'folha': '1'}), 'P', 'v', PLANTA)"),
     H("data_2026_02_30", "m.montar_svg(lateral(carimbo={'projeto': 'x', 'titulo': 't', 'data': '2026-02-30', 'folha': '1'}), 'P', 'v', PLANTA)"),
 ])
@@ -263,7 +263,7 @@ DATA_AR = "\u0662\u0660\u0662\u0666-\u0660\u0661-\u0660\u0661"
 
 
 @pytest.mark.parametrize("nome,corpo", [
-    H("escala_1e13", "m.montar_svg(lateral(escala=1e13), 'P', 'v', PLANTA)"),
+    H("escala_1e13", "m.montar_svg(lateral(scale=1e13), 'P', 'v', PLANTA)"),
     H("x_1e13", "m.montar_svg(lateral(x=1e13), 'P', 'v', PLANTA)"),
     H("y_10_elevado_400", "m.montar_svg(lateral(y=10**400), 'P', 'v', PLANTA)"),
     H("data_digitos_arabes_no_lateral", "m.montar_svg(lateral(carimbo={'projeto': 'x', 'titulo': 't', 'data': " + repr(DATA_AR) + ", 'folha': '1'}), 'P', 'v', PLANTA)"),

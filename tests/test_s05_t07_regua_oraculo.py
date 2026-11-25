@@ -55,8 +55,8 @@ def test_regua_pega_cada_mistura(pares):
     assert X.estado_par(t / "B" / "Casa.ifc", a, novo._replace(lado_id="outro"))[1], "LadoId errado passou"
 
 
-@pytest.mark.parametrize("campo,valor", [("Revisao", 3), ("ifc_sha256", "0" * 64), ("ifc_tamanho", 1), ("LadoId", "x"), ("provisorio", None),
-                                         ("formato", "zip"), ("ifc_projeto_globalid", "0" * 22), ("ifc_nome", "Outra.ifc")])
+@pytest.mark.parametrize("campo,valor", [("Revision", 3), ("ifc_sha256", "0" * 64), ("ifc_size", 1), ("SideId", "x"), ("provisorio", None),
+                                         ("format", "zip"), ("ifc_project_globalid", "0" * 22), ("ifc_name", "Outra.ifc")])
 def test_regua_pega_manifesto_errado(pares, campo, valor):
     t, a, novo, objs_b = pares
     d = t / "C" / "Casa.ifc"

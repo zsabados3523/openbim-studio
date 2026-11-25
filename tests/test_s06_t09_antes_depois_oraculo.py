@@ -104,10 +104,10 @@ def test_carimbo_obim_projeto_e_so_ele(caso):
     g = ifcopenshell.open(str(destino))
     projeto = g.by_type("IfcProject")[0]
     ps = [p for p in g.by_type("IfcPropertySet") if p.Name == "OBIM_Project"]
-    assert len(ps) == 1 and sorted(p.Name for p in ps[0].HasProperties) == ["LadoId", "Revisao"]
+    assert len(ps) == 1 and sorted(p.Name for p in ps[0].HasProperties) == ["Revision", "SideId"]
     rels = [r for r in g.by_type("IfcRelDefinesByProperties") if projeto in r.RelatedObjects]
     assert len(rels) == 1 and rels[0].RelatingPropertyDefinition == ps[0] and list(rels[0].RelatedObjects) == [projeto]
-    assert {k: {a: b for a, b in v.items() if a != "id"} for k, v in UE.get_psets(projeto).items()} == {"OBIM_Project": {"LadoId": "lado-t09", "Revisao": 1}}
+    assert {k: {a: b for a, b in v.items() if a != "id"} for k, v in UE.get_psets(projeto).items()} == {"OBIM_Project": {"SideId": "lado-t09", "Revision": 1}}
 
 
 def test_vistas_e_prancha_continuam_la_depois_de_reabrir(caso):
@@ -136,10 +136,10 @@ def test_gravar_reabrir_e_regravar_nao_muda_mais_nada(caso, tmp_path):
     f2 = R.foto(ifcopenshell.open(str(destino)))
     assert R.diferencas(f1, f2) == [] and f1["sem"] == f2["sem"], "regravar sem carimbo não muda nada"
     s3 = Sessao(ifcopenshell.open(str(destino)))
-    gravar(s3, destino, pasta)  # com carimbo: Revisao 1 -> 2 e só isso
+    gravar(s3, destino, pasta)  # com carimbo: Revision 1 -> 2 e só isso
     g3 = ifcopenshell.open(str(destino))
     import ifcopenshell.util.element as UE
-    assert UE.get_psets(g3.by_type("IfcProject")[0])["OBIM_Project"]["Revisao"] == 2
+    assert UE.get_psets(g3.by_type("IfcProject")[0])["OBIM_Project"]["Revision"] == 2
     com, sem, sumiu, mudou = novas(f2, R.foto(g3))
     assert dict(com) == {} and dict(sem) == {"IfcPropertySingleValue": 1} and len(sumiu) == 1 and sumiu[0][0] == "IfcPropertySingleValue"
     assert mudou == [next(p.GlobalId for p in g3.by_type("IfcPropertySet") if p.Name == "OBIM_Project")], "só o pset do carimbo muda (Revisao)"

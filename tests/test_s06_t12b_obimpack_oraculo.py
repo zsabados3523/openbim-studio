@@ -123,7 +123,7 @@ def test_proibido_recusa_nomes_basicos(nome):
 def test_manifesto_tamanho_bool_nao_vale_como_inteiro(tmp_path):
     ifc = b"x"  # len 1 == True: so a checagem de tipo denuncia
     man = _manifesto(ifc=ifc)
-    man["arquivos"][0]["tamanho"] = True
+    man["files"][0]["tamanho"] = True
     _recusa(tmp_path, _zip(tmp_path / "p.obimpack", {"Casa.ifc": ifc, "Casa.obim": OBIM}, man))
 
 
@@ -140,7 +140,7 @@ def test_entrada_extra_com_nome_perigoso_recusa(tmp_path, nome):
 @pytest.mark.parametrize("nome", ["Casa.ifc:$DATA", "Casa.ifc.", "CON", "Casa.obim."])
 def test_manifesto_citando_nome_perigoso_no_lugar_do_certo_recusa(tmp_path, nome):
     man = _manifesto()
-    man["arquivos"][0]["nome"] = nome
+    man["files"][0]["nome"] = nome
     _recusa(tmp_path, _zip(tmp_path / "p.obimpack", {nome: IFC, "Casa.obim": OBIM}, man))
 
 
@@ -224,13 +224,13 @@ def test_borda_exata_do_limite_de_bytes(tmp_path, monkeypatch):
 
 def _man_com(**campos_do_primeiro):
     man = _manifesto()
-    man["arquivos"][0].update(campos_do_primeiro)
+    man["files"][0].update(campos_do_primeiro)
     return man
 
 
 def _man_dup():
     man = _manifesto()
-    man["arquivos"][1] = dict(man["arquivos"][0])
+    man["files"][1] = dict(man["files"][0])
     return man
 
 
@@ -245,11 +245,11 @@ MANIFESTOS_RUINS = {
     "sha_nao_hex": _man_com(sha256="g" * 64),
     "sha_longo": _man_com(sha256="a" * 65),
     "sha_numero": _man_com(sha256=12345),
-    "sha_ausente": {"formato": "obimpack", "versao_pacote": "1", "arquivos": [
+    "sha_ausente": {"format": "obimpack", "package_version": "1", "files": [
         {"nome": "Casa.ifc", "tamanho": len(IFC)}, {"nome": "Casa.obim", "tamanho": len(OBIM), "sha256": _sha(OBIM)}]},
-    "item_nao_dict": {"formato": "obimpack", "versao_pacote": "1", "arquivos": ["Casa.ifc", "Casa.obim"]},
-    "tres_arquivos": dict(_manifesto(), arquivos=_manifesto()["arquivos"] + [{"nome": "x", "tamanho": 1, "sha256": "0" * 64}]),
-    "arquivos_nao_lista": dict(_manifesto(), arquivos={"Casa.ifc": 1}),
+    "item_nao_dict": {"format": "obimpack", "package_version": "1", "files": ["Casa.ifc", "Casa.obim"]},
+    "tres_arquivos": dict(_manifesto(), files=_manifesto()["files"] + [{"nome": "x", "tamanho": 1, "sha256": "0" * 64}]),
+    "arquivos_nao_lista": dict(_manifesto(), files={"Casa.ifc": 1}),
 }
 
 

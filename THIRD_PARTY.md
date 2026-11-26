@@ -24,7 +24,7 @@ O instalador e o AppImage levam centenas de pacotes de terceiros (Python, Qt, OC
 ## Corpus público de modelos de teste (`corpus/lista.json`)
 | Fonte | Licença | Origem | Atribuição |
 |---|---|---|---|
-| buildingSMART Sample-Test-Files (5 modelos) | CC-BY-4.0 | https://github.com/buildingSMART/Sample-Test-Files (commit `80d976a9`) | (C) buildingSMART International Ltd., CC BY 4.0 |
-| bim-whale-ifc-samples (4 modelos) | MIT | https://github.com/andrewisen/bim-whale-ifc-samples (commit `595fa90e`) | Copyright (c) 2020 Andre "MG" Wisen |
+| buildingSMART Sample-Test-Files (11 modelos) | CC-BY-4.0 | https://github.com/buildingSMART/Sample-Test-Files (commit `80d976a9`) | (C) buildingSMART International Ltd., CC BY 4.0 |
+| bim-whale-ifc-samples (6 modelos) | MIT | https://github.com/andrewisen/bim-whale-ifc-samples (commit `595fa90e`) | Copyright (c) 2020 Andre "MG" Wisen |
 | KIT IFC Examples (3 modelos, somente download local fora do git) | KIT ("unrestricted use") | https://www.ifcwiki.org/index.php?title=KIT_IFC_Examples (acesso 2026-11-14) | Institute for Automation and Applied Informatics (IAI) / Karlsruhe Institute of Technology (KIT) |
 

@@ -1,0 +1,20 @@
+{
+  "nome": "bs-ifc4x3-building-structural",
+  "origem": "https://github.com/buildingSMART/Sample-Test-Files",
+  "versao_ou_commit": "80d976a9b193a26a8e928c3e79bff67af1de68a8",
+  "data_acesso": "2026-11-26",
+  "sha256": "db64895488aad4eab082c8292f5632145b0fc864c0642d4fe667404882bacf27",
+  "tamanho_bytes": 185139,
+  "licenca": "CC-BY-4.0",
+  "atribuicao": "(C) buildingSMART International Ltd., CC BY 4.0",
+  "pode_ir_no_git": "nao",
+  "esquema": "IFC4X3_ADD2",
+  "programa_de_origem": "BIM_Tools - Sketchup_IFC_manager - 5.6.0",
+  "contagens": {},
+  "valores_conhecidos": {},
+  "cobre": [
+    "abrir",
+    "planta"
+  ],
+  "observacoes": ""
+}

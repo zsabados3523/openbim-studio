@@ -143,12 +143,12 @@ def test_cabecalho_step_so_texto(tmp_path):
     assert baixar_corpus.cabecalho_step(p) == {"esquema": "IFC2X3", "programa": "ArchiCAD 24"}
 
 
-def test_lista_real_tem_12_e_regras_de_git():
+def test_lista_real_tem_20_e_regras_de_git():
     import conferir_corpus
     arq = RAIZ / "corpus" / "lista.json"
     assert arq.is_file(), "corpus/lista.json ausente"
     lista = json.loads(arq.read_text(encoding="utf-8"))
-    assert len(lista) == 12 and len({e["nome"] for e in lista}) == 12
+    assert len(lista) == 20 and len({e["nome"] for e in lista}) == 20
     aceitas = conferir_corpus.LICENCAS_ACEITAS | conferir_corpus.LICENCAS_FORA_DO_GIT
     for e in lista:
         for campo in ("nome", "url", "licenca", "atribuicao", "origem", "versao_ou_commit", "pode_ir_no_git",

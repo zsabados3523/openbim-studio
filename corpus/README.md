@@ -13,7 +13,7 @@ Cada modelo do corpus possui um arquivo JSON em `corpus/manifestos/<nome>.json` 
 Modelos grandes ou com restrição de redistribuição usam `pode_ir_no_git: "nao"`: a ausência do arquivo local não gera erro, e `sha256` / `tamanho_bytes` só são conferidos quando o arquivo existe na pasta.
 
 ## Como baixar o corpus público (`corpus/lista.json`)
-Os 12 modelos públicos aprovados ficam listados em `corpus/lista.json` (cópias das licenças em `corpus/licencas/`). Para baixar para `corpus/` e gerar os manifestos em `corpus/manifestos/`:
+Os 20 modelos públicos aprovados ficam listados em `corpus/lista.json` (cópias das licenças em `corpus/licencas/`). Para baixar para `corpus/` e gerar os manifestos em `corpus/manifestos/`:
 ```bash
 ~/miniforge3/envs/openbim/bin/python scripts/baixar_corpus.py
 ```

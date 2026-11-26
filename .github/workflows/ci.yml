@@ -251,13 +251,16 @@ jobs:
       matrix:
         include:
           # T23d: parte 2 e 3 = os arquivos mais lentos (tempo medido); parte 1 = todo o resto. Arquivo de teste novo cai na parte 1 sozinho.
-          - {parte: 1, alvo: "tests --ignore=tests/test_s04_metas.py --ignore=tests/test_s04_t29b_reinicio_oraculo.py --ignore=tests/test_s04_abertura.py --ignore=tests/test_s04_t15g_postador.py --ignore=tests/test_viewport_processo.py --deselect=tests/test_s06_t19j4a2_degrau_oraculo.py::test_desempenho_cilindro_nao_e_quadratico --deselect=tests/test_s06_t24q_grade_2o_nivel_oraculo_b.py::test_desempenho_peca_densa_grande_ate_35_porcento --deselect=tests/test_s06_t24q_grade_2o_nivel_oraculo_c.py::test_memoria_subgrade_tres_pecas_densas --ignore-glob=tests/test_s06_t24*"}
+          - {parte: 1, alvo: "tests --ignore=tests/test_s04_metas.py --ignore=tests/test_s04_t29b_reinicio_oraculo.py --ignore=tests/test_s04_abertura.py --ignore=tests/test_s04_t15g_postador.py --ignore=tests/test_viewport_processo.py --deselect=tests/test_s06_t19j4a2_degrau_oraculo.py::test_desempenho_cilindro_nao_e_quadratico --deselect=tests/test_s06_t24q_grade_2o_nivel_oraculo_b.py::test_desempenho_peca_densa_grande_ate_35_porcento --deselect=tests/test_s06_t24q_grade_2o_nivel_oraculo_c.py::test_memoria_subgrade_tres_pecas_densas --ignore-glob=tests/test_s06_t24* --ignore-glob=tests/test_s06_*"}
           - {parte: 2, alvo: "tests/test_s04_metas.py tests/test_s04_t29b_reinicio_oraculo.py"}
           - {parte: 3, alvo: "tests/test_s04_abertura.py tests/test_s04_t15g_postador.py tests/test_viewport_processo.py tests/test_s06_t19j4a2_degrau_oraculo.py::test_desempenho_cilindro_nao_e_quadratico tests/test_s06_t24q_grade_2o_nivel_oraculo_c.py::test_memoria_subgrade_tres_pecas_densas"}
           # Partes 4 e 5: oraculos T24 (os maiores; a parte 1 passou de 50 min no Windows). Os testes de memoria ficam na parte 3.
           - {parte: 4, alvo: "tests/test_s06_t24[a-q]*.py --deselect=tests/test_s06_t24q_grade_2o_nivel_oraculo_b.py::test_desempenho_peca_densa_grande_ate_35_porcento --deselect=tests/test_s06_t24q_grade_2o_nivel_oraculo_c.py::test_memoria_subgrade_tres_pecas_densas"}
           - {parte: 5, alvo: "tests/test_s06_t24[r-z]*.py"}
           - {parte: 6, alvo: "tests/test_s06_t24q_grade_2o_nivel_oraculo_b.py::test_desempenho_peca_densa_grande_ate_35_porcento"}
+          # Partes 7 e 8: os demais testes s06 (T04 a T23 e T25 a T27), tirados da parte 1, que passou de 50 min no Windows (vigia de 3000 s) em 25/11/2026.
+          - {parte: 7, alvo: "tests/test_s06_t0*.py tests/test_s06_t1[0-5]*.py"}
+          - {parte: 8, alvo: "tests/test_s06_t1[6-9]*.py tests/test_s06_t2[0-3]*.py tests/test_s06_t2[5-9]*.py --deselect=tests/test_s06_t19j4a2_degrau_oraculo.py::test_desempenho_cilindro_nao_e_quadratico"}
     runs-on: windows-latest
     timeout-minutes: 60
     steps:

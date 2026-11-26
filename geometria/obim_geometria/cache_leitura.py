@@ -74,6 +74,7 @@ def caixas_do_cache(
     cache: CacheGeometria,
     documento: str,
     global_ids,
+    matrizes: dict[str, list[float]] | None = None,
 ) -> tuple[dict[str, list[float]], list[str]]:
     """Lê caixas envolventes de `Ocorrencia.caixa` por `global_ids`, sem ler formas."""
     ids = sorted(set(global_ids))
@@ -92,6 +93,10 @@ def caixas_do_cache(
         if arr.shape != (2, 3) or not np.all(np.isfinite(arr)):
             faltantes.append(gid)
             continue
+        mat = np.asarray(oc.matriz, dtype=np.float64)
+        if mat.shape != (4, 4) or not np.all(np.isfinite(mat)):
+            faltantes.append(gid)
+            continue
         c = [
             float(arr[0, 0]), float(arr[0, 1]), float(arr[0, 2]),
             float(arr[1, 0]), float(arr[1, 1]), float(arr[1, 2]),
@@ -100,5 +105,7 @@ def caixas_do_cache(
             faltantes.append(gid)
             continue
         caixas[gid] = c
+        if matrizes is not None:
+            matrizes[gid] = [float(v) for v in mat.ravel()]
 
     return caixas, faltantes

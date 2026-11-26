@@ -34,6 +34,65 @@ def _validar_filho(filho: Any) -> None:
         raise TypeError(f"filho inválido: {filho!r} (esperado objeto com executar chamável ou None)")
 
 
+def _validar_caixa(val: Any) -> list[float] | None:
+    """Valida caixa envolvente [xmin, ymin, zmin, xmax, ymax, zmax] com 6 floats finitos."""
+    if not isinstance(val, (list, tuple)) or len(val) != 6:
+        return None
+    try:
+        floats = [float(x) for x in val]
+    except (ValueError, TypeError):
+        return None
+    if not all(math.isfinite(x) for x in floats):
+        return None
+    if floats[0] > floats[3] or floats[1] > floats[4] or floats[2] > floats[5]:
+        return None
+    return floats
+
+
+def _tem_unidade_ambigua(ifc: ifcopenshell.file, scale: float) -> bool:
+    """Indica IfcProjectLibrary que pode divergir da escala de IfcProject no kernel C++."""
+    libs = ifc.by_type("IfcProjectLibrary")
+    return bool(libs) and (
+        abs(scale - 1.0) > 1e-12
+        or any(getattr(lib, "UnitsInContext", None) is not None for lib in libs)
+    )
+
+
+def _matriz_esperada_cache(elem: Any, scale: float) -> np.ndarray | None:
+    """Matriz 4x4 esperada no cache (metros), ou None se placement for não-ortogonal/inválido."""
+    pl = getattr(elem, "ObjectPlacement", None)
+    if pl is None:
+        return np.eye(4, dtype=np.float64)
+    m = np.asarray(ifcopenshell.util.placement.get_local_placement(pl), dtype=np.float64).copy()
+    if m.shape != (4, 4) or not np.all(np.isfinite(m)):
+        return None
+    r = m[:3, :3]
+    if not np.allclose(r.T @ r, np.eye(3), rtol=0.0, atol=1e-9):
+        return None
+    m[:3, 3] *= scale
+    return m
+
+
+def _perto_borda_faixa(
+    c: list[float],
+    faixa: tuple[tuple[float, float, float], tuple[float, float, float]],
+    tol: float = 1e-5,
+) -> bool:
+    """True se alguma face da caixa estiver a <= `tol` m da borda correspondente de `cruza`."""
+    (xmin, ymin, zmin), (xmax, ymax, zmax) = faixa
+    if (
+        c[0] > xmax + tol or c[3] < xmin - tol
+        or c[1] > ymax + tol or c[4] < ymin - tol
+        or c[2] > zmax + tol or c[5] < zmin - tol
+    ):
+        return False
+    return (
+        abs(c[0] - xmax) <= tol or abs(c[3] - xmin) <= tol
+        or abs(c[1] - ymax) <= tol or abs(c[4] - ymin) <= tol
+        or abs(c[2] - zmax) <= tol or abs(c[5] - zmin) <= tol
+    )
+
+
 CATEGORIAS_PADRAO_PLANTA_OCULTAS: tuple[str, ...] = (
     "IfcMember",
     "IfcPlate",
@@ -344,21 +403,55 @@ def selecionar(
                 preparado.fechar()
 
         restantes = faltantes
-        if pasta_geo and caminho_ifc is not None:
-            resp_cache = _rodar_auxiliar({
-                "op": "caixas_cache",
-                "elementos": [[e.id(), e.GlobalId] for e in faltantes],
-                "vista": {"guid": gid_vista},
-                "pasta_cache_geometria": pasta_geo,
-                "threads": auxiliar.threads_padrao(),
-            })
-            cx_cache = resp_cache.get("caixas_envolventes") if isinstance(resp_cache, dict) else None
-            if isinstance(cx_cache, dict):
-                for chave, caixa in cx_cache.items():
-                    id_step = int(chave)
-                    guardadas[id_step] = [float(v) for v in caixa]
-                    erros_por_id.pop(id_step, None)
-                restantes = [e for e in faltantes if e.id() not in guardadas]
+        if pasta_geo and caminho_ifc is not None and not _tem_unidade_ambigua(ifc, scale):
+            elegiveis_cache: list[Any] = []
+            matrizes_esp: dict[int, np.ndarray] = {}
+            for e in faltantes:
+                try:
+                    mat_esp = _matriz_esperada_cache(e, scale)
+                except Exception:
+                    mat_esp = None
+                if mat_esp is not None:
+                    elegiveis_cache.append(e)
+                    matrizes_esp[e.id()] = mat_esp
+            if elegiveis_cache:
+                resp_cache = _rodar_auxiliar({
+                    "op": "caixas_cache",
+                    "elementos": [[e.id(), e.GlobalId] for e in elegiveis_cache],
+                    "vista": {"guid": gid_vista},
+                    "pasta_cache_geometria": pasta_geo,
+                    "threads": auxiliar.threads_padrao(),
+                })
+                cx_cache = resp_cache.get("caixas_envolventes") if isinstance(resp_cache, dict) else None
+                mats_cache = resp_cache.get("matrizes") if isinstance(resp_cache, dict) else None
+                if isinstance(cx_cache, dict):
+                    for chave, caixa in cx_cache.items():
+                        try:
+                            id_step = int(chave)
+                        except (TypeError, ValueError):
+                            continue
+                        mat_esp = matrizes_esp.get(id_step)
+                        if mat_esp is None:
+                            continue
+                        caixa_ok = _validar_caixa(caixa)
+                        if caixa_ok is None:
+                            continue
+                        if isinstance(mats_cache, dict):
+                            mat_raw = mats_cache.get(str(id_step))
+                            try:
+                                mat_arr = np.asarray(mat_raw, dtype=np.float64).reshape((4, 4))
+                                fresca = np.all(np.isfinite(mat_arr)) and np.allclose(
+                                    mat_arr, mat_esp, rtol=0.0, atol=1e-9
+                                )
+                            except (TypeError, ValueError):
+                                fresca = False
+                            if not fresca:
+                                continue
+                        if _perto_borda_faixa(caixa_ok, faixa):
+                            continue
+                        guardadas[id_step] = caixa_ok
+                        erros_por_id.pop(id_step, None)
+                    restantes = [e for e in faltantes if e.id() not in guardadas]
 
         if restantes:
             resposta = _rodar_auxiliar({
@@ -413,16 +506,9 @@ def selecionar(
     caixas_dict: dict[int, tuple[float, float, float, float, float, float]] = {}
     for i in ids:
         val = guardadas.get(i)
-        if isinstance(val, (list, tuple)) and len(val) >= 6:
-            try:
-                floats = tuple(float(x) for x in val[:6])
-            except (ValueError, TypeError):
-                continue
-            if not all(math.isfinite(x) for x in floats):
-                continue
-            if floats[0] > floats[3] or floats[1] > floats[4] or floats[2] > floats[5]:
-                continue
-            caixas_dict[int(i)] = floats
+        floats = _validar_caixa(val[:6] if isinstance(val, (list, tuple)) and len(val) >= 6 else val)
+        if floats is not None:
+            caixas_dict[int(i)] = tuple(floats)
 
     return Selecao(
         ids=tuple(sorted(set(ids))),

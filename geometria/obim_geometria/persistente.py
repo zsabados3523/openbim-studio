@@ -269,26 +269,25 @@ def servir(tx, rx, *, construtor=None) -> None:
             if erro_sig is not None:
                 responder(numero, erro_sig)
                 continue
-            if op == "caixas_cache":
+            _garantir_aberto(arquivo)
+            fase("aberto")
+            if op == "abrir":
+                dados = {"aberto": True}
+            elif op == "caixas_cache":
                 fase("geometria")
                 dados = caixas.processar_cache(pedido)
             else:
-                _garantir_aberto(arquivo)
-                fase("aberto")
-                if op == "abrir":
-                    dados = {"aberto": True}
-                else:
-                    with desenho._sem_rastro(f):
-                        if op == "caixas":
-                            fase("geometria")
-                            dados = caixas.processar(pedido, f=f)
-                        else:
-                            orig_abrir = desenho._abrir_ifc
-                            desenho._abrir_ifc = _abrir_mantido
-                            try:
-                                dados = desenho.processar(pedido, fase)
-                            finally:
-                                desenho._abrir_ifc = orig_abrir
+                with desenho._sem_rastro(f):
+                    if op == "caixas":
+                        fase("geometria")
+                        dados = caixas.processar(pedido, f=f)
+                    else:
+                        orig_abrir = desenho._abrir_ifc
+                        desenho._abrir_ifc = _abrir_mantido
+                        try:
+                            dados = desenho.processar(pedido, fase)
+                        finally:
+                            desenho._abrir_ifc = orig_abrir
         except Exception as e:
             responder_erro(numero, type(e).__name__, str(e), traceback.format_exc())
             continue

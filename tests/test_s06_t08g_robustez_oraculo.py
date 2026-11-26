@@ -33,10 +33,10 @@ class Falso:
     def ids(self, c): return ["1"]
     def obter(self, c, i): return self.p if c == "sheets" else self.v
 def lateral(**sobre):
-    p = {{"identification": "P", "format": "A3", "carimbo": {{"projeto": "x", "titulo": "t", "data": "2026-11-01", "folha": "1"}}}}
+    p = {{"identification": "P", "format": "A3", "titleblock": {{"project": "x", "title": "t", "date": "2026-11-01", "sheet": "1"}}}}
     v = {{"sheet": "P", "view_guid": "v", "x": 20, "y": 20, "scale": 100}}
     for k, val in sobre.items():
-        (p if k == "carimbo" else v)[k] = val
+        (p if k == "titleblock" else v)[k] = val
     return Falso(p, v)
 PLANTA = '<svg ' + S + ' viewBox="0 0 10 10"><rect width="1" height="1"/></svg>'
 '''
@@ -158,7 +158,7 @@ def test_06_profundidade_tambem_em_montar_svg_com_viewbox():
 
 # ---------- 6: lateral adulterado ----------
 ESCALAS = [("zero", "0"), ("negativa", "-5"), ("texto", "'x'"), ("nula", "None"), ("bool", "True"), ("nan", "float('nan')"), ("infinita", "float('inf')")]
-CARIMBOS = [("string", "'x'"), ("nulo", "None"), ("numero", "5"), ("lista", "[1]"), ("campo_numerico", "{'projeto': 1, 'titulo': 't', 'data': '2026-11-01', 'folha': '1'}")]
+CARIMBOS = [("string", "'x'"), ("nulo", "None"), ("numero", "5"), ("lista", "[1]"), ("campo_numerico", "{'project': 1, 'title': 't', 'date': '2026-11-01', 'sheet': '1'}")]
 
 
 @pytest.mark.parametrize("nome,valor", [pytest.param(n, v, id=f"escala_{n}") for n, v in ESCALAS])
@@ -169,7 +169,7 @@ def test_07_escala_adulterada(nome, valor):
 
 @pytest.mark.parametrize("nome,valor", [pytest.param(n, v, id=f"carimbo_{n}") for n, v in CARIMBOS])
 def test_08_carimbo_adulterado(nome, valor):
-    r, _, _ = rodar(f"m.montar_svg(lateral(carimbo={valor}), 'P', 'v', PLANTA)")
+    r, _, _ = rodar(f"m.montar_svg(lateral(titleblock={valor}), 'P', 'v', PLANTA)")
     assert "|" in r and "PranchaInvalida" in r.split("|")[1].split(","), f"carimbo {nome}: veio {r!r}"
 
 
@@ -233,8 +233,8 @@ def test_11_recusa_com_svginvalido(nome, corpo, limite):
     H("escala_10_elevado_400", "m.montar_svg(lateral(scale=10**400), 'P', 'v', PLANTA)"),
     H("formato_lista", "p = lateral(); p.p['format'] = ['A3']\nm.montar_svg(p, 'P', 'v', PLANTA)"),
     H("formato_dict", "p = lateral(); p.p['format'] = {'a': 1}\nm.montar_svg(p, 'P', 'v', PLANTA)"),
-    H("data_9999_99_99", "m.montar_svg(lateral(carimbo={'projeto': 'x', 'titulo': 't', 'data': '9999-99-99', 'folha': '1'}), 'P', 'v', PLANTA)"),
-    H("data_2026_02_30", "m.montar_svg(lateral(carimbo={'projeto': 'x', 'titulo': 't', 'data': '2026-02-30', 'folha': '1'}), 'P', 'v', PLANTA)"),
+    H("data_9999_99_99", "m.montar_svg(lateral(titleblock={'project': 'x', 'title': 't', 'date': '9999-99-99', 'sheet': '1'}), 'P', 'v', PLANTA)"),
+    H("data_2026_02_30", "m.montar_svg(lateral(titleblock={'project': 'x', 'title': 't', 'date': '2026-02-30', 'sheet': '1'}), 'P', 'v', PLANTA)"),
 ])
 def test_12_lateral_adulterado_e_pranchainvalida(nome, corpo):
     r, _, _ = rodar(corpo)
@@ -266,7 +266,7 @@ DATA_AR = "\u0662\u0660\u0662\u0666-\u0660\u0661-\u0660\u0661"
     H("escala_1e13", "m.montar_svg(lateral(scale=1e13), 'P', 'v', PLANTA)"),
     H("x_1e13", "m.montar_svg(lateral(x=1e13), 'P', 'v', PLANTA)"),
     H("y_10_elevado_400", "m.montar_svg(lateral(y=10**400), 'P', 'v', PLANTA)"),
-    H("data_digitos_arabes_no_lateral", "m.montar_svg(lateral(carimbo={'projeto': 'x', 'titulo': 't', 'data': " + repr(DATA_AR) + ", 'folha': '1'}), 'P', 'v', PLANTA)"),
+    H("data_digitos_arabes_no_lateral", "m.montar_svg(lateral(titleblock={'project': 'x', 'title': 't', 'date': " + repr(DATA_AR) + ", 'sheet': '1'}), 'P', 'v', PLANTA)"),
 ])
 def test_14_lateral_fronteiras(nome, corpo):
     r, _, _ = rodar(corpo)

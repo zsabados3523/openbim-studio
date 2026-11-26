@@ -132,7 +132,7 @@ def test_08_gravacao_e_leitura():
     lado = Lado()
     m.criar_prancha(lado, IDENT, **DADOS)
     iv = m.colocar_viewport(lado, IDENT, GUID, 20, 25.5, 50, rotacao=90)
-    assert lado.lat.obter("viewports", iv) == {"sheet": IDENT, "view_guid": GUID, "x": 20, "y": 25.5, "scale": 50, "rotacao": 90}
+    assert lado.lat.obter("viewports", iv) == {"sheet": IDENT, "view_guid": GUID, "x": 20, "y": 25.5, "scale": 50, "rotation": 90}
     assert m.ler_viewport(lado.lat, IDENT, GUID) == {"x": 20, "y": 25.5, "escala": 50, "rotacao": 90}
     for kw in ({}, {"rotacao": 0}):
         l2 = Lado()
@@ -140,7 +140,7 @@ def test_08_gravacao_e_leitura():
         i2 = m.colocar_viewport(l2, IDENT, GUID, 20, 25.5, 50, **kw)
         assert l2.lat.obter("viewports", i2) == {"sheet": IDENT, "view_guid": GUID, "x": 20, "y": 25.5, "scale": 50}, "rotacao 0 nao grava a chave"
         assert m.ler_viewport(l2.lat, IDENT, GUID) == {"x": 20, "y": 25.5, "escala": 50}
-    assert type(lado.lat.obter("viewports", iv)["rotacao"]) is int
+    assert type(lado.lat.obter("viewports", iv)["rotation"]) is int
 
 
 def test_09_reabrir_mantem_rotacao(tmp_path):
@@ -156,7 +156,7 @@ def test_09_reabrir_mantem_rotacao(tmp_path):
     assert m.montar_svg(r.lateral, IDENT, GUID, svg) == antes
     with zipfile.ZipFile(p) as z:
         vp = [n for n in z.namelist() if n.startswith("viewports/")]
-        assert len(vp) == 1 and json.loads(z.read(vp[0])) == {"sheet": IDENT, "view_guid": GUID, "x": 30, "y": 40, "scale": 100, "rotacao": 90}
+        assert len(vp) == 1 and json.loads(z.read(vp[0])) == {"sheet": IDENT, "view_guid": GUID, "x": 30, "y": 40, "scale": 100, "rotation": 90}
 
 
 @pytest.mark.parametrize("hostil", [45, 180, True, "90", None])
@@ -164,7 +164,7 @@ def test_10_lateral_hostil(hostil):
     m = F.P(rotacao=True)
     lado, svg = F.montar_com(escala=100)
     uid = next(iter(lado.lat.ids("viewports")))
-    obj = dict(lado.lat.obter("viewports", uid), rotacao=hostil)
+    obj = dict(lado.lat.obter("viewports", uid), rotation=hostil)
     lado.lat._criar("viewports", "11111111-2222-4333-8444-555555555555", dict(obj, view_guid="outra"))
     with pytest.raises(m.RotacaoInvalida):
         m.montar_svg(lado.lat, IDENT, "outra", svg)

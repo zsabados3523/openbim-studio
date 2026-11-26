@@ -128,7 +128,7 @@ def _objs_novos():
             "p1": {
                 "identification": IDENT,
                 "format": "A3",
-                "carimbo": {"projeto": "Projeto Alpha", "titulo": "Planta Terreo", "data": "2026-11-25", "folha": "01/01"},
+                "titleblock": {"project": "Projeto Alpha", "title": "Planta Terreo", "date": "2026-11-25", "sheet": "01/01"},
             }
         },
         "viewports": {"vp1": {"sheet": IDENT, "view_guid": G1, "x": 20.0, "y": 20.0, "scale": 50.0}},
@@ -142,7 +142,7 @@ def _objs_antigos():
             "p1": {
                 "identification": IDENT,
                 "formato": "A3",
-                "carimbo": {"projeto": "Projeto Alpha", "titulo": "Planta Terreo", "data": "2026-11-25", "folha": "01/01"},
+                "titleblock": {"project": "Projeto Alpha", "title": "Planta Terreo", "date": "2026-11-25", "sheet": "01/01"},
             }
         },
         "viewports": {"vp1": {"prancha": IDENT, "view_guid": G1, "x": 20.0, "y": 20.0, "escala": 50.0}},

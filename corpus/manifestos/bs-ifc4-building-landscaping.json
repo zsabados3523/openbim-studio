@@ -1,0 +1,19 @@
+{
+  "nome": "bs-ifc4-building-landscaping",
+  "origem": "https://github.com/buildingSMART/Sample-Test-Files",
+  "versao_ou_commit": "80d976a9b193a26a8e928c3e79bff67af1de68a8",
+  "data_acesso": "2026-11-26",
+  "sha256": "937dc9c0e013b0dbbf56dc0fa0dc435efe16a2234cd364af820d2cf1deaa3d7f",
+  "tamanho_bytes": 1074044,
+  "licenca": "CC-BY-4.0",
+  "atribuicao": "(C) buildingSMART International Ltd., CC BY 4.0",
+  "pode_ir_no_git": "nao",
+  "esquema": "IFC4",
+  "programa_de_origem": "BIM_Tools - Sketchup_IFC_manager - 5.6.0",
+  "contagens": {},
+  "valores_conhecidos": {},
+  "cobre": [
+    "abrir"
+  ],
+  "observacoes": ""
+}

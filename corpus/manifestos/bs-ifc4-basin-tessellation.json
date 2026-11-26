@@ -1,0 +1,19 @@
+{
+  "nome": "bs-ifc4-basin-tessellation",
+  "origem": "https://github.com/buildingSMART/Sample-Test-Files",
+  "versao_ou_commit": "80d976a9b193a26a8e928c3e79bff67af1de68a8",
+  "data_acesso": "2026-11-26",
+  "sha256": "7278769ec5ef35d388819d2f197519061c7f0f68dd43a733f333ddeb74578121",
+  "tamanho_bytes": 12131,
+  "licenca": "CC-BY-4.0",
+  "atribuicao": "(C) buildingSMART International Ltd., CC BY 4.0",
+  "pode_ir_no_git": "nao",
+  "esquema": "IFC4",
+  "programa_de_origem": "Geometry Gym Pty Ltd - ggIFC - 1.0.0.0",
+  "contagens": {},
+  "valores_conhecidos": {},
+  "cobre": [
+    "abrir"
+  ],
+  "observacoes": ""
+}

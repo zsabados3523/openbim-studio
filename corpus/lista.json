@@ -168,5 +168,116 @@
       "planta"
     ],
     "tamanho_esperado": 1280471
+  },
+  {
+    "nome": "bs-ifc4-building-hvac",
+    "url": "https://raw.githubusercontent.com/buildingSMART/Sample-Test-Files/80d976a9b193a26a8e928c3e79bff67af1de68a8/IFC%204.0.2.1%20(IFC%204%20ADD2%20TC1)/Simple-Scene/Building-Hvac.ifc",
+    "licenca": "CC-BY-4.0",
+    "atribuicao": "(C) buildingSMART International Ltd., CC BY 4.0",
+    "origem": "https://github.com/buildingSMART/Sample-Test-Files",
+    "versao_ou_commit": "80d976a9b193a26a8e928c3e79bff67af1de68a8",
+    "pode_ir_no_git": "sim",
+    "cobre": [
+      "abrir",
+      "planta"
+    ],
+    "tamanho_esperado": 111375
+  },
+  {
+    "nome": "bs-ifc4-building-landscaping",
+    "url": "https://raw.githubusercontent.com/buildingSMART/Sample-Test-Files/80d976a9b193a26a8e928c3e79bff67af1de68a8/IFC%204.0.2.1%20(IFC%204%20ADD2%20TC1)/Simple-Scene/Building-Landscaping.ifc",
+    "licenca": "CC-BY-4.0",
+    "atribuicao": "(C) buildingSMART International Ltd., CC BY 4.0",
+    "origem": "https://github.com/buildingSMART/Sample-Test-Files",
+    "versao_ou_commit": "80d976a9b193a26a8e928c3e79bff67af1de68a8",
+    "pode_ir_no_git": "nao",
+    "cobre": [
+      "abrir"
+    ],
+    "tamanho_esperado": 1074044
+  },
+  {
+    "nome": "bs-ifc2x3-building-structural",
+    "url": "https://raw.githubusercontent.com/buildingSMART/Sample-Test-Files/80d976a9b193a26a8e928c3e79bff67af1de68a8/IFC%202.3.0.1%20(IFC%202x3%20TC1)/Simple-Scene/Building-Structural.ifc",
+    "licenca": "CC-BY-4.0",
+    "atribuicao": "(C) buildingSMART International Ltd., CC BY 4.0",
+    "origem": "https://github.com/buildingSMART/Sample-Test-Files",
+    "versao_ou_commit": "80d976a9b193a26a8e928c3e79bff67af1de68a8",
+    "pode_ir_no_git": "sim",
+    "cobre": [
+      "abrir",
+      "planta"
+    ],
+    "tamanho_esperado": 109012
+  },
+  {
+    "nome": "bs-ifc4x3-building-structural",
+    "url": "https://raw.githubusercontent.com/buildingSMART/Sample-Test-Files/80d976a9b193a26a8e928c3e79bff67af1de68a8/IFC%204.3.2.0%20(IFC%204.3%20ADD2)/Simple-Scene/Building-Structural.ifc",
+    "licenca": "CC-BY-4.0",
+    "atribuicao": "(C) buildingSMART International Ltd., CC BY 4.0",
+    "origem": "https://github.com/buildingSMART/Sample-Test-Files",
+    "versao_ou_commit": "80d976a9b193a26a8e928c3e79bff67af1de68a8",
+    "pode_ir_no_git": "sim",
+    "cobre": [
+      "abrir",
+      "planta"
+    ],
+    "tamanho_esperado": 185139
+  },
+  {
+    "nome": "bs-ifc4-tessellated-item",
+    "url": "https://raw.githubusercontent.com/buildingSMART/Sample-Test-Files/80d976a9b193a26a8e928c3e79bff67af1de68a8/IFC%204.0.2.1%20(IFC%204%20ADD2%20TC1)/ISO%20Spec%20-%20ReferenceView_V1.2/tessellated-item.ifc",
+    "licenca": "CC-BY-4.0",
+    "atribuicao": "(C) buildingSMART International Ltd., CC BY 4.0",
+    "origem": "https://github.com/buildingSMART/Sample-Test-Files",
+    "versao_ou_commit": "80d976a9b193a26a8e928c3e79bff67af1de68a8",
+    "pode_ir_no_git": "sim",
+    "cobre": [
+      "abrir"
+    ],
+    "tamanho_esperado": 5199
+  },
+  {
+    "nome": "bs-ifc4-basin-tessellation",
+    "url": "https://raw.githubusercontent.com/buildingSMART/Sample-Test-Files/80d976a9b193a26a8e928c3e79bff67af1de68a8/IFC%204.0.2.1%20(IFC%204%20ADD2%20TC1)/ISO%20Spec%20-%20ReferenceView_V1.2/basin-tessellation.ifc",
+    "licenca": "CC-BY-4.0",
+    "atribuicao": "(C) buildingSMART International Ltd., CC BY 4.0",
+    "origem": "https://github.com/buildingSMART/Sample-Test-Files",
+    "versao_ou_commit": "80d976a9b193a26a8e928c3e79bff67af1de68a8",
+    "pode_ir_no_git": "sim",
+    "cobre": [
+      "abrir"
+    ],
+    "tamanho_esperado": 12131
+  },
+  {
+    "nome": "bimwhale-large-building",
+    "url": "https://raw.githubusercontent.com/andrewisen/bim-whale-ifc-samples/595fa90e3af7120d004fcb37a79d8657f1d1c9c2/LargeBuilding/IFC/LargeBuilding.ifc",
+    "licenca": "MIT",
+    "atribuicao": "Copyright (c) 2020 Andre \"MG\" Wisen, MIT",
+    "origem": "https://github.com/andrewisen/bim-whale-ifc-samples",
+    "versao_ou_commit": "595fa90e3af7120d004fcb37a79d8657f1d1c9c2",
+    "pode_ir_no_git": "nao",
+    "cobre": [
+      "planta",
+      "corte",
+      "desempenho"
+    ],
+    "tamanho_esperado": 1292595
+  },
+  {
+    "nome": "bimwhale-basic-house",
+    "url": "https://raw.githubusercontent.com/andrewisen/bim-whale-ifc-samples/595fa90e3af7120d004fcb37a79d8657f1d1c9c2/BasicHouse/IFC/BasicHouse.ifc",
+    "licenca": "MIT",
+    "atribuicao": "Copyright (c) 2020 Andre \"MG\" Wisen, MIT",
+    "origem": "https://github.com/andrewisen/bim-whale-ifc-samples",
+    "versao_ou_commit": "595fa90e3af7120d004fcb37a79d8657f1d1c9c2",
+    "pode_ir_no_git": "nao",
+    "cobre": [
+      "planta",
+      "corte",
+      "desempenho"
+    ],
+    "tamanho_esperado": 52702577
   }
 ]

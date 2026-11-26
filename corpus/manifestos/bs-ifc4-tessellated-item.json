@@ -1,0 +1,19 @@
+{
+  "nome": "bs-ifc4-tessellated-item",
+  "origem": "https://github.com/buildingSMART/Sample-Test-Files",
+  "versao_ou_commit": "80d976a9b193a26a8e928c3e79bff67af1de68a8",
+  "data_acesso": "2026-11-26",
+  "sha256": "758974f7d558f11b8d8121816954179def32594ed7eafcd1faae70ee0a8e5946",
+  "tamanho_bytes": 5199,
+  "licenca": "CC-BY-4.0",
+  "atribuicao": "(C) buildingSMART International Ltd., CC BY 4.0",
+  "pode_ir_no_git": "nao",
+  "esquema": "IFC4",
+  "programa_de_origem": "buildingSMART International - IFC text editor - 1.0.0",
+  "contagens": {},
+  "valores_conhecidos": {},
+  "cobre": [
+    "abrir"
+  ],
+  "observacoes": ""
+}

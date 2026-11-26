@@ -4,13 +4,14 @@ import math
 import os
 import traceback
 from itertools import chain
+from pathlib import Path
 
 import ifcopenshell
 import ifcopenshell.geom
 import ifcopenshell.util.placement
 import ifcopenshell.util.unit
 import numpy as np
-from obim_geometria import nucleos
+from obim_geometria import cache_geometria, cache_leitura, construtor, nucleos
 
 
 class ArvoreCaixas:
@@ -228,19 +229,79 @@ def _caixa_face_set(el, fator, cache=None):
     return [float(v) for v in (*minimo, *maximo)]
 
 
+def _conferir_assinatura(pedido: dict) -> dict | None:
+    assinatura = pedido.get("assinatura")
+    if assinatura is None:
+        return None
+    try:
+        st = os.stat(pedido.get("arquivo"))
+        atual = [int(st.st_size), int(st.st_mtime_ns)]
+    except (OSError, TypeError):
+        atual = None
+    esperado = list(assinatura) if isinstance(assinatura, (list, tuple)) else None
+    if atual is None or esperado != atual:
+        return {"ok": False, "erro": {"tipo": "Divergente", "mensagem": "Arquivo IFC salvo não confere com o modelo", "rastro": ""}}
+    return None
+
+
+def processar_cache(pedido: dict) -> dict:
+    """Lê caixas envolventes de `Ocorrencia.caixa` do cache SQLite sem abrir IFC nem ler formas."""
+    try:
+        erro_sig = _conferir_assinatura(pedido)
+        if erro_sig is not None:
+            return erro_sig
+        elementos = pedido.get("elementos", [])
+        if not elementos:
+            return {"ok": True, "caixas_envolventes": {}, "faltantes": []}
+        arq = pedido.get("arquivo")
+        pasta = pedido.get("pasta_cache_geometria") or pedido.get("pasta_cache")
+        if not arq or not Path(arq).is_file() or not pasta:
+            return {"ok": True, "caixas_envolventes": {}, "faltantes": [list(e) for e in elementos]}
+        caminho_banco = Path(pasta) / cache_geometria.NOME_BANCO
+        if not caminho_banco.is_file():
+            return {"ok": True, "caixas_envolventes": {}, "faltantes": [list(e) for e in elementos]}
+
+        con = None
+        cache = None
+        try:
+            cab_json = cache_geometria._json_canonico(
+                cache_geometria.cabecalho_atual(tesselacao=construtor.TESSELACAO)
+            )
+            con = cache_geometria._conectar(caminho_banco)
+            if not cache_geometria._banco_integro(con, cab_json):
+                return {"ok": True, "caixas_envolventes": {}, "faltantes": [list(e) for e in elementos]}
+            cache = cache_geometria.CacheGeometria(caminho_banco, con)
+            con = None
+            doc = cache_geometria.documento_de(arq)
+            por_gid, _ = cache_leitura.caixas_do_cache(cache, doc, [str(g) for _, g in elementos])
+        except Exception:
+            return {"ok": True, "caixas_envolventes": {}, "faltantes": [list(e) for e in elementos]}
+        finally:
+            if cache is not None:
+                cache.fechar()
+            elif con is not None:
+                cache_geometria._fechar_con(con)
+
+        caixas_out: dict[str, list[float]] = {}
+        faltantes_out: list[list] = []
+        for id_step, gid in elementos:
+            c = por_gid.get(str(gid))
+            if c is not None:
+                caixas_out[str(id_step)] = c
+            else:
+                faltantes_out.append([int(id_step), str(gid)])
+        return {"ok": True, "caixas_envolventes": caixas_out, "faltantes": faltantes_out}
+    except Exception as e:
+        return {"ok": False, "erro": {"tipo": type(e).__name__, "mensagem": str(e), "rastro": traceback.format_exc()}}
+
+
 def processar(pedido: dict, f=None) -> dict:
     try:
         assinatura = pedido.get("assinatura")
         tipo_div = "Divergente" if assinatura is not None else "ArquivoDivergente"
-        if assinatura is not None:
-            try:
-                st = os.stat(pedido.get("arquivo"))
-                atual = [int(st.st_size), int(st.st_mtime_ns)]
-            except (OSError, TypeError):
-                atual = None
-            esperado = list(assinatura) if isinstance(assinatura, (list, tuple)) else None
-            if atual is None or esperado != atual:
-                return {"ok": False, "erro": {"tipo": "Divergente", "mensagem": "Arquivo IFC salvo não confere com o modelo", "rastro": ""}}
+        erro_sig = _conferir_assinatura(pedido)
+        if erro_sig is not None:
+            return erro_sig
         threads = nucleos.limitar_threads(pedido.get("threads"))
         if f is None:
             f = ifcopenshell.open(pedido.get("arquivo"))

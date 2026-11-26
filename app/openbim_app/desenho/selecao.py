@@ -178,9 +178,15 @@ def selecionar(
     assinatura_ifc: tuple[int, int] | list[int] | None = None,
     profundidade_corte: float | None = None,
     filho=None,
+    pasta_cache_geometria: str | Path | None = None,
 ) -> Selecao:
     _validar_filho(filho)
     _validar_profundidade_corte(profundidade_corte)
+    if pasta_cache_geometria is not None and not isinstance(pasta_cache_geometria, (str, Path)):
+        raise TypeError(
+            f"pasta_cache_geometria inválido: {pasta_cache_geometria!r} (esperado str, Path ou None)"
+        )
+    pasta_geo = str(pasta_cache_geometria) if pasta_cache_geometria is not None else ""
     cats = tuple(categorias_ocultas)
     _validar_categorias(ifc, cats)
 
@@ -319,43 +325,63 @@ def selecionar(
         faltantes.append(e)
 
     if faltantes:
-        pedido = {
-            "op": "caixas",
-            "elementos": [[e.id(), e.GlobalId] for e in faltantes],
-            "vista": {"guid": gid_vista},
-            "threads": auxiliar.threads_padrao(),
-        }
-        preparado = auxiliar.preparar(
-            ifc,
-            pedido,
-            caminho_ifc=caminho_ifc,
-            assinatura=assinatura_ifc,
-        )
-        try:
-            resposta = auxiliar.executar(
-                preparado,
-                limite_s=limite_s,
-                cancelar=cancelar,
-                executor=executor,
-                filho=filho,
+        def _rodar_auxiliar(pedido: dict) -> dict:
+            preparado = auxiliar.preparar(
+                ifc,
+                pedido,
+                caminho_ifc=caminho_ifc,
+                assinatura=assinatura_ifc,
             )
-        finally:
-            preparado.fechar()
+            try:
+                return auxiliar.executar(
+                    preparado,
+                    limite_s=limite_s,
+                    cancelar=cancelar,
+                    executor=executor,
+                    filho=filho,
+                )
+            finally:
+                preparado.fechar()
 
-        for chave, caixa in resposta["caixas_envolventes"].items():
-            guardadas[int(chave)] = [float(v) for v in caixa]
-        for falha in resposta["falhas_geometria"]:
-            guardadas[int(falha)] = None
+        restantes = faltantes
+        if pasta_geo and caminho_ifc is not None:
+            resp_cache = _rodar_auxiliar({
+                "op": "caixas_cache",
+                "elementos": [[e.id(), e.GlobalId] for e in faltantes],
+                "vista": {"guid": gid_vista},
+                "pasta_cache_geometria": pasta_geo,
+                "threads": auxiliar.threads_padrao(),
+            })
+            cx_cache = resp_cache.get("caixas_envolventes") if isinstance(resp_cache, dict) else None
+            if isinstance(cx_cache, dict):
+                for chave, caixa in cx_cache.items():
+                    id_step = int(chave)
+                    guardadas[id_step] = [float(v) for v in caixa]
+                    erros_por_id.pop(id_step, None)
+                restantes = [e for e in faltantes if e.id() not in guardadas]
 
-        pedidos = [e.id() for e in faltantes]
-        for id_step in pedidos:  # recalculado: erros velhos desses ids não valem mais
-            erros_por_id.pop(id_step, None)
-        for erro in resposta.get("erros_iterator", ()):
-            msg = f"{erro.get('tipo', 'RuntimeError')}: {erro.get('mensagem', '')}"
-            for id_step in erro.get("ids") or pedidos:
-                lista = erros_por_id.setdefault(int(id_step), [])
-                if msg not in lista:
-                    lista.append(msg)
+        if restantes:
+            resposta = _rodar_auxiliar({
+                "op": "caixas",
+                "elementos": [[e.id(), e.GlobalId] for e in restantes],
+                "vista": {"guid": gid_vista},
+                "threads": auxiliar.threads_padrao(),
+            })
+
+            for chave, caixa in resposta["caixas_envolventes"].items():
+                guardadas[int(chave)] = [float(v) for v in caixa]
+            for falha in resposta["falhas_geometria"]:
+                guardadas[int(falha)] = None
+
+            pedidos = [e.id() for e in restantes]
+            for id_step in pedidos:  # recalculado: erros velhos desses ids não valem mais
+                erros_por_id.pop(id_step, None)
+            for erro in resposta.get("erros_iterator", ()):
+                msg = f"{erro.get('tipo', 'RuntimeError')}: {erro.get('mensagem', '')}"
+                for id_step in erro.get("ids") or pedidos:
+                    lista = erros_por_id.setdefault(int(id_step), [])
+                    if msg not in lista:
+                        lista.append(msg)
 
     def cruza(id_step: int) -> bool:
         c = guardadas.get(id_step)

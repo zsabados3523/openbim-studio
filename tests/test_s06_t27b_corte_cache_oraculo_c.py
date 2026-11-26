@@ -123,6 +123,8 @@ def test_caso17b_gerar_corte_hit_cache_desenho_com_e_sem_pasta(tmp_path):
     n_des = []
 
     def _exec(ped: dict) -> dict:
+        if ped.get("op") == "caixas_cache":  # T27c: cache sem caixas, a selecao cai na op "caixas"
+            return {"ok": True, "caixas_envolventes": {}}
         if ped.get("op") == "caixas":
             return {"ok": True, "caixas_envolventes": {c.w1.id(): [0, -0.2, 0, 4, 0.2, 2.8]}, "falhas_geometria": []}
         n_des.append(dict(ped))

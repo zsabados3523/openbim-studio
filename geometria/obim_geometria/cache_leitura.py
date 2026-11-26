@@ -68,3 +68,37 @@ def malhas_do_cache(
         malhas_mundo[gid] = (verts_mundo, tris)
 
     return malhas_mundo, faltantes
+
+
+def caixas_do_cache(
+    cache: CacheGeometria,
+    documento: str,
+    global_ids,
+) -> tuple[dict[str, list[float]], list[str]]:
+    """Lê caixas envolventes de `Ocorrencia.caixa` por `global_ids`, sem ler formas."""
+    ids = sorted(set(global_ids))
+    if not ids:
+        return {}, []
+
+    ocorrencias = cache.ocorrencias_por_ids(ids, documento=documento)
+    caixas: dict[str, list[float]] = {}
+    faltantes: list[str] = []
+    for gid in ids:
+        oc = ocorrencias.get(gid)
+        if oc is None:
+            faltantes.append(gid)
+            continue
+        arr = np.asarray(oc.caixa, dtype=np.float64)
+        if arr.shape != (2, 3) or not np.all(np.isfinite(arr)):
+            faltantes.append(gid)
+            continue
+        c = [
+            float(arr[0, 0]), float(arr[0, 1]), float(arr[0, 2]),
+            float(arr[1, 0]), float(arr[1, 1]), float(arr[1, 2]),
+        ]
+        if c[0] > c[3] or c[1] > c[4] or c[2] > c[5]:
+            faltantes.append(gid)
+            continue
+        caixas[gid] = c
+
+    return caixas, faltantes

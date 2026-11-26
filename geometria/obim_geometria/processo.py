@@ -38,6 +38,10 @@ def entrada(tx, pedido_json):
             from obim_geometria import caixas
             tx.send_bytes(json.dumps({"tipo": "fase", "fase": "geometria", "tempo": 0.0}).encode("utf-8"))
             resp = caixas.processar(pedido)
+        elif op == "caixas_cache":
+            from obim_geometria import caixas
+            tx.send_bytes(json.dumps({"tipo": "fase", "fase": "geometria", "tempo": 0.0}).encode("utf-8"))
+            resp = caixas.processar_cache(pedido)
         elif op in ("desenho", "desenho_lote"):
             from obim_geometria import desenho
 

@@ -70,6 +70,7 @@ def _gerar_corte_uma_vez(
     filho=None,
     pasta_geo: str = "",
 ) -> Corte:
+    pasta_geo_ativa = pasta_geo if (caminho_ifc is not None and assinatura_ifc is not None and pasta_geo) else ""
     sel = selecao.selecionar(
         ifc,
         gid_vista,
@@ -82,6 +83,7 @@ def _gerar_corte_uma_vez(
         assinatura_ifc=assinatura_ifc,
         profundidade_corte=profundidade_corte,
         filho=filho,
+        pasta_cache_geometria=pasta_geo_ativa or None,
     )
     if not sel.ids:
         return Corte(

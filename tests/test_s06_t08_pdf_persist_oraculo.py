@@ -142,7 +142,7 @@ def test_06_o_que_vai_no_zip(tmp_path):
         assert len(pr) == 1 and len(vp) == 1, nomes
         assert UUID4.fullmatch(Path(pr[0]).stem) and UUID4.fullmatch(Path(vp[0]).stem), "o nome do arquivo e um UUID4, nunca a chave"
         assert json.loads(z.read(pr[0])) == {"identification": IDENT, "format": "A3",
-                                             "carimbo": {k: DADOS[k] for k in ("projeto", "titulo", "data", "folha")}}
+                                             "titleblock": {"project": DADOS["projeto"], "title": DADOS["titulo"], "date": DADOS["data"], "sheet": DADOS["folha"]}}
         assert json.loads(z.read(vp[0])) == {"sheet": IDENT, "view_guid": GUID, "x": 40, "y": 50, "scale": 100}
     assert not [n for n in nomes if n.startswith(("views/", "styles/"))], "T08 nao cria vista nem estilo no .obim"
 

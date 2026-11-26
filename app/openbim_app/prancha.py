@@ -128,7 +128,7 @@ def criar_prancha(lado, identification, formato, projeto, titulo, data, folha):
 
     uid = str(uuid.uuid4())
     obj = {"identification": identification, "format": formato,
-           "carimbo": {"projeto": projeto, "titulo": titulo, "data": data, "folha": folha}}
+           "titleblock": {"project": projeto, "title": titulo, "date": data, "sheet": folha}}
     lado.criar("sheets", uid, obj)
     return uid
 
@@ -162,7 +162,7 @@ def colocar_viewport(lado, identification, view_guid, x_mm, y_mm, escala, rotaca
     uid = str(uuid.uuid4())
     obj = {"sheet": identification, "view_guid": view_guid, "x": x_mm, "y": y_mm, "scale": escala}
     if rotacao == 90:
-        obj["rotacao"] = 90
+        obj["rotation"] = 90
     lado.criar("viewports", uid, obj)
     return uid
 
@@ -173,9 +173,11 @@ def ler_viewport(lateral, identification, view_guid):
         v = _obter_viewport(lateral, identification, view_guid)
     except KeyError as e:
         raise PranchaInvalida(f"falha ao acessar viewport no lateral: {e}") from e
+    if "rotacao" in v:
+        raise PranchaInvalida("chave antiga 'rotacao' nao suportada no viewport")
     try:
         res = {"x": v["x"], "y": v["y"], "escala": v["scale"]}
-        if v.get("rotacao") == 90:
+        if v.get("rotation") == 90:
             res["rotacao"] = 90
     except KeyError as e:
         raise PranchaInvalida(f"campo obrigatorio {e} ausente no viewport") from e
@@ -810,19 +812,21 @@ def _validar_prancha_e_viewport(prancha, viewport, view_guid):
         if not math.isfinite(vf) or abs(vf) > 1e12:
             raise PranchaInvalida(f"coordenada {k} invalida no lateral: {_resumo(v)}")
 
-    rotacao = viewport.get("rotacao", 0)
+    if "rotacao" in viewport:
+        raise PranchaInvalida("chave antiga 'rotacao' nao suportada no viewport")
+    rotacao = viewport.get("rotation", 0)
     if isinstance(rotacao, bool) or not isinstance(rotacao, int) or rotacao not in (0, 90):
         raise RotacaoInvalida(f"rotacao hostil no lateral: {_resumo(rotacao)}")
 
-    carimbo = prancha.get("carimbo")
+    carimbo = prancha.get("titleblock")
     if not isinstance(carimbo, dict):
         raise PranchaInvalida(f"carimbo deve ser dict, recebido {type(carimbo).__name__}")
-    for campo in ("projeto", "titulo", "folha", "data"):
-        val = carimbo.get(campo, "")
+    for campo in ("project", "title", "sheet", "date"):
+        val = carimbo.get(campo)
         if not isinstance(val, str) or _contem_controle(val):
             raise PranchaInvalida(f"{campo} no carimbo contem caractere de controle ou nao e str: {_resumo(val)}")
 
-    data_str = carimbo.get("data", "")
+    data_str = carimbo.get("date", "")
     if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", data_str):
         raise PranchaInvalida(f"formato de data invalido no carimbo: {_resumo(data_str)}")
     try:
@@ -860,8 +864,8 @@ def _montar_carimbo(root, carimbo, W, H, escala):
     })
     fs, folga = 4.0, 5.0
     linhas = [
-        [carimbo.get("projeto", ""), carimbo.get("data", ""), carimbo.get("folha", "")],
-        [carimbo.get("titulo", ""), f"1:{escala:g}"],
+        [carimbo.get("project", ""), carimbo.get("date", ""), carimbo.get("sheet", "")],
+        [carimbo.get("title", ""), f"1:{escala:g}"],
     ]
     for line_items, y_base in zip(linhas, [H - 22.0, H - 13.0]):
         x_curr = 15.0

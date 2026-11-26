@@ -214,11 +214,11 @@ def test_03_sheet_e_viewport_gravados_no_obim_com_chaves_novas(tmp_path):
         assert sheet == {
             "identification": IDENT,
             "format": "A3",
-            "carimbo": {
-                "projeto": "Projeto Alpha",
-                "titulo": "Planta Terreo",
-                "data": "2026-11-25",
-                "folha": "01/02",
+            "titleblock": {
+                "project": "Projeto Alpha",
+                "title": "Planta Terreo",
+                "date": "2026-11-25",
+                "sheet": "01/02",
             },
         }
         assert "formato" not in sheet
@@ -226,7 +226,7 @@ def test_03_sheet_e_viewport_gravados_no_obim_com_chaves_novas(tmp_path):
         assert vp1 == {"sheet": IDENT, "view_guid": G1, "x": 20, "y": 25.5, "scale": 50}
         assert "prancha" not in vp1 and "escala" not in vp1
 
-        assert vp2 == {"sheet": IDENT, "view_guid": G2, "x": 120, "y": 25.5, "scale": 100, "rotacao": 90}
+        assert vp2 == {"sheet": IDENT, "view_guid": G2, "x": 120, "y": 25.5, "scale": 100, "rotation": 90}
         assert "prancha" not in vp2 and "escala" not in vp2
 
         lido = Z.ler(obim)

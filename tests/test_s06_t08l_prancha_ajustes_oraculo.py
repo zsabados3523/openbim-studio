@@ -37,7 +37,7 @@ class Falso:
 
 
 def lateral(escala=100, **viewport):
-    p = {"identification": "P", "format": "A3", "carimbo": {"projeto": "x", "titulo": "t", "data": "2026-11-01", "folha": "1"}}
+    p = {"identification": "P", "format": "A3", "titleblock": {"project": "x", "title": "t", "date": "2026-11-01", "sheet": "1"}}
     v = {"sheet": "P", "view_guid": "v", "x": 20, "y": 20, "scale": escala}
     v.update(viewport)
     return Falso(p, v)
@@ -135,7 +135,7 @@ class Quebrado:
 
 
 def test_09_ler_viewport_sadio_continua_valendo():
-    v = {"sheet": "P", "view_guid": "v", "x": 1, "y": 2, "scale": 50, "rotacao": 90}
+    v = {"sheet": "P", "view_guid": "v", "x": 1, "y": 2, "scale": 50, "rotation": 90}
     assert m.ler_viewport(Quebrado("nenhum", v), "P", "v") == {"x": 1, "y": 2, "escala": 50, "rotacao": 90}
 
 
@@ -212,7 +212,7 @@ import openbim_app.prancha as m
 S = {S!r}
 N = 300000
 class Falso:
-    p = {{"identification": "P", "format": "A3", "carimbo": {{"projeto": "x", "titulo": "t", "data": "2026-11-01", "folha": "1"}}}}
+    p = {{"identification": "P", "format": "A3", "titleblock": {{"project": "x", "title": "t", "date": "2026-11-01", "sheet": "1"}}}}
     v = {{"sheet": "P", "view_guid": "v", "x": 20, "y": 20, "scale": 100}}
     def ids(self, c): return ["1"]
     def obter(self, c, i): return self.p if c == "sheets" else self.v

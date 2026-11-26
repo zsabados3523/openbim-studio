@@ -199,7 +199,7 @@ def test_15_objetos_gravados_no_lateral():
     ip = m.criar_prancha(lado, IDENT, **DADOS)
     iv = m.colocar_viewport(lado, IDENT, GUID, 20, 25.5, 50)
     assert lado.lat.obter("sheets", ip) == {"identification": IDENT, "format": "A3",
-                                              "carimbo": {k: DADOS[k] for k in ("projeto", "titulo", "data", "folha")}}
+                                              "titleblock": {"project": DADOS["projeto"], "title": DADOS["titulo"], "date": DADOS["data"], "sheet": DADOS["folha"]}}
     assert lado.lat.obter("viewports", iv) == {"sheet": IDENT, "view_guid": GUID, "x": 20, "y": 25.5, "scale": 50}
     assert m.ler_viewport(lado.lat, IDENT, GUID) == {"x": 20, "y": 25.5, "escala": 50}
     assert ip != iv and len({ip, iv}) == 2

@@ -218,8 +218,8 @@ def test_10_montar_svg_com_lateral_hostil_nunca_sai_mal_formado(c):
     m = P()
     for campo in ("projeto", "vista"):
         lado = Lado()
-        lado.lat._criar("sheets", "p1", {"identification": IDENT, "format": "A3", "carimbo": {
-            "projeto": f"a{c}b" if campo == "projeto" else "Casa", "titulo": "T", "data": "2026-11-01", "folha": "1/1"}})
+        lado.lat._criar("sheets", "p1", {"identification": IDENT, "format": "A3", "titleblock": {
+            "project": f"a{c}b" if campo == "projeto" else "Casa", "title": "T", "date": "2026-11-01", "sheet": "1/1"}})
         guid = f"G{c}" if campo == "vista" else GUID
         lado.lat._criar("viewports", "v1", {"sheet": IDENT, "view_guid": guid, "x": 20, "y": 20, "scale": 100})
         try:

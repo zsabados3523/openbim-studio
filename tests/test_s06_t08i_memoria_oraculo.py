@@ -106,8 +106,8 @@ def test_06_polyline_acima_de_5_milhoes_de_numeros_e_recusada():
     pytest.param("escala_texto_20MB", "m.montar_svg(lateral(scale='x' * 20000000), 'P', 'v', PLANTA)", id="escala_texto_20MB"),
     pytest.param("x_lista_gigante", "m.montar_svg(lateral(x=[1] * 3000000), 'P', 'v', PLANTA)", id="x_lista_gigante"),
     pytest.param("formato_20MB", "p = lateral(); p.p['format'] = 'A' * 20000000\nm.montar_svg(p, 'P', 'v', PLANTA)", id="formato_20MB"),
-    pytest.param("data_20MB", "m.montar_svg(lateral(carimbo={'projeto': 'x', 'titulo': 't', 'data': '2' * 20000000, 'folha': '1'}), 'P', 'v', PLANTA)", id="data_20MB"),
-    pytest.param("rotacao_lista_gigante", "m.montar_svg(lateral(rotacao=[1] * 3000000), 'P', 'v', PLANTA)", id="rotacao_lista_gigante"),
+    pytest.param("data_20MB", "m.montar_svg(lateral(titleblock={'project': 'x', 'title': 't', 'date': '2' * 20000000, 'sheet': '1'}), 'P', 'v', PLANTA)", id="data_20MB"),
+    pytest.param("rotacao_lista_gigante", "m.montar_svg(lateral(rotation=[1] * 3000000), 'P', 'v', PLANTA)", id="rotacao_lista_gigante"),
     pytest.param("criar_prancha_formato_20MB", "class L:\n    def criar(self, *a): pass\nm.criar_prancha(L(), 'P', 'Z' * 20000000, 'x', 't', '2026-11-01', '1')", id="criar_prancha_formato_20MB"),
     pytest.param("colocar_viewport_rotacao_lista", "class L:\n    def criar(self, *a): pass\nm.colocar_viewport(L(), 'P', 'v', 0, 0, 100, [1] * 3000000)", id="colocar_viewport_rotacao_lista"),
 ])

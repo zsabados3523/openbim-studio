@@ -10,7 +10,8 @@ from pathlib import Path
 
 import ifcopenshell, ifcopenshell.api, ifcopenshell.guid, ifcopenshell.util.placement, ifcopenshell.util.unit
 import numpy as np, pytest
-from PySide6.QtCore import QCoreApplication, QEventLoop, QTimer
+from PySide6.QtCore import QEventLoop, QTimer
+from PySide6.QtWidgets import QApplication
 
 from obim_geometria import cache_geometria as CG, caixas as geo_caixas, construtor, local, persistente
 from openbim_app.desenho import auxiliar, corte as CO, filho as DF, selecao as SL
@@ -318,7 +319,7 @@ def test_34_mutante_r4_restantes_borda_e_peca_nova_mesma_chamada(tmp_path, monke
 
 def test_35_mutante_r4_gerente_invalidar_copia_do_cache(tmp_path, monkeypatch):
     # Mutante r4_gerente_sem_copia (gerente.py ~L437): remover `nova._do_cache = sessao._do_cache.copy()` -> W_SOLDA some de nov2.ids.
-    QCoreApplication.instance() or QCoreApplication([])
+    QApplication.instance() or QApplication([])
     c = _cena_solda(tmp_path, "r4_gerente.ifc", com_parede=True)
     esperados = tuple(sorted((c.id_solda, c.id_b)))
     ref2 = _rodar_selecao(c.f, c.v2, c.arq, pasta_cache=None)[0]

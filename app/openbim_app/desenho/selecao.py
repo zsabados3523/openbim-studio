@@ -81,20 +81,21 @@ def _perto_borda_faixa(
     faixa: tuple[tuple[float, float, float], tuple[float, float, float]],
     tol: float = 1e-5,
 ) -> bool:
-    """True se `c` não cruza `faixa`, mas cruza `faixa` expandida por `tol` m."""
+    """True se `c` cruza `faixa + tol` diferente de `faixa - tol` (banda nos dois lados)."""
     (xmin, ymin, zmin), (xmax, ymax, zmax) = faixa
-    ja_cruza = (
-        c[0] <= xmax and c[3] >= xmin
-        and c[1] <= ymax and c[4] >= ymin
-        and c[2] <= zmax and c[5] >= zmin
-    )
-    if ja_cruza:
-        return False
-    return (
+    cruza_exp = (
         c[0] <= xmax + tol and c[3] >= xmin - tol
         and c[1] <= ymax + tol and c[4] >= ymin - tol
         and c[2] <= zmax + tol and c[5] >= zmin - tol
     )
+    if not cruza_exp:
+        return False
+    cruza_enc = (
+        c[0] <= xmax - tol and c[3] >= xmin + tol
+        and c[1] <= ymax - tol and c[4] >= ymin + tol
+        and c[2] <= zmax - tol and c[5] >= zmin + tol
+    )
+    return not cruza_enc
 
 
 CATEGORIAS_PADRAO_PLANTA_OCULTAS: tuple[str, ...] = (
@@ -136,16 +137,19 @@ class SessaoSelecao:
     def __init__(self) -> None:
         self._caixas: dict[int, list[float] | None] = {}
         self._erros: dict[int, list[str]] = {}
+        self._do_cache: set[int] = set()
 
     def invalidar(self, ids=None) -> None:
         if ids is None:
             self._caixas.clear()
             self._erros.clear()
+            self._do_cache.clear()
             return
         for i in ids:
             chave = int(i)
             self._caixas.pop(chave, None)
             self._erros.pop(chave, None)
+            self._do_cache.discard(chave)
 
 
 def _validar_categorias(ifc: ifcopenshell.file, categorias: tuple[str, ...]) -> None:
@@ -363,13 +367,20 @@ def selecionar(
 
     guardadas = sessao._caixas if sessao is not None else {}
     erros_por_id = sessao._erros if sessao is not None else {}
+    do_cache = sessao._do_cache if sessao is not None else set()
     z_min_seguro, z_max_seguro = zmin - 4.0, zmax + 4.0
     x_min_seguro, x_max_seguro = xmin - 5.0, xmax + 5.0
     y_min_seguro, y_max_seguro = ymin - 5.0, ymax + 5.0
 
+    recalcular_borda: set[int] = set()
     faltantes: list[Any] = []
     for e in visiveis_com_rep:
-        if e.id() in guardadas:
+        eid = e.id()
+        if eid in guardadas:
+            caixa_g = guardadas[eid]
+            if eid in do_cache and caixa_g is not None and _perto_borda_faixa(caixa_g, faixa):
+                recalcular_borda.add(eid)
+                faltantes.append(e)
             continue
         if e.is_a("IfcOpeningElement"):
             continue
@@ -411,6 +422,8 @@ def selecionar(
             elegiveis_cache: list[Any] = []
             matrizes_esp: dict[int, np.ndarray] = {}
             for e in faltantes:
+                if e.id() in recalcular_borda:
+                    continue
                 try:
                     mat_esp = _matriz_esperada_cache(e, scale)
                 except Exception:
@@ -453,8 +466,9 @@ def selecionar(
                         if _perto_borda_faixa(caixa_ok, faixa):
                             continue
                         guardadas[id_step] = caixa_ok
+                        do_cache.add(id_step)
                         erros_por_id.pop(id_step, None)
-                    restantes = [e for e in faltantes if e.id() not in guardadas]
+                    restantes = [e for e in faltantes if e.id() not in guardadas or e.id() in recalcular_borda]
 
         if restantes:
             resposta = _rodar_auxiliar({
@@ -465,9 +479,13 @@ def selecionar(
             })
 
             for chave, caixa in resposta["caixas_envolventes"].items():
-                guardadas[int(chave)] = [float(v) for v in caixa]
+                id_step = int(chave)
+                guardadas[id_step] = [float(v) for v in caixa]
+                do_cache.discard(id_step)
             for falha in resposta["falhas_geometria"]:
-                guardadas[int(falha)] = None
+                id_step = int(falha)
+                guardadas[id_step] = None
+                do_cache.discard(id_step)
 
             pedidos = [e.id() for e in restantes]
             for id_step in pedidos:  # recalculado: erros velhos desses ids não valem mais

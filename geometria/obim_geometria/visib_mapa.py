@@ -592,7 +592,16 @@ def _pares_celulas_e_recortar_nativo(
     nt_all: int, tol_z: float, d_eps: float, usar_subgrade: bool, H_l: list,
     *, lim_t_bloco: int = 2_000_000, lim_e_bloco: int = 400_000, lim_denso_pares: int = 20_000_000,
 ) -> None:
-    """Gera pares por celula em C++ com queda hibrida para sub-grade Python em blocos densos."""
+    """Gera pares por celula em C++ com queda hibrida para sub-grade Python em blocos densos.
+
+    Diferencas do caminho nativo frente a `_pares_celulas_e_recortar_py` fora do uso real:
+    - Indice negativo ou fora de faixa em `t_s`, `ek_idx`, `iy_s`, `ix0_s`, `ix1_s`: nativo levanta `IndexError`
+      (Python indexa do fim ou levanta so quando o indice e usado; `t_s` em span com `w == 0` nunca e lido no Python).
+    - `ix1_s < ix0_s - 1`, `nsub > 100_000_000` ou `+inf`, `lim_t_bloco`/`lim_e_bloco <= 0`, grade local acima de
+      50_000_000 celulas ou `zf_flat` menor que `Wc * Hc` com `filtrar_zf`: nativo levanta `ValueError`.
+    - Coordenada `+inf` ou `>= 2**63` em `cel_clamp`: nativo usa `dim - 1`, Python usa `0`.
+    - `nt_all` so e usado no bloco que cai para a sub-grade Python.
+    """
     fn = visib_nativo.exigir("processar_celulas_e_recortar")
     t_s, iy_s, ix0_s, ix1_s, ek_idx = (np.asarray(v, dtype=np.int64) for v in (t_s, iy_s, ix0_s, ix1_s, ek_idx))
     zf_flat = np.asarray(zf_flat, dtype=np.float64)

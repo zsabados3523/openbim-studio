@@ -59,6 +59,8 @@ def test_caso15_gerar_corte_kwarg_validacao_e_sem_arquivo_salvo(tmp_path):
 
     def _exec(ped: dict) -> dict:
         chamadas.append(dict(ped))
+        if ped.get("op") == "caixas_cache":
+            return {"ok": True, "caixas_envolventes": {}}
         if ped.get("op") == "caixas":
             return {"ok": True, "caixas_envolventes": {c.w1.id(): [0, -0.2, 0, 4, 0.2, 2.8]}, "falhas_geometria": []}
         return {"ok": True, "svg": "<svg/>", "n_paths": 0, "tempos": {"geo_s": 0.0}, "caixas": []}
@@ -90,6 +92,8 @@ def test_caso16_divergencia_assinatura_retry_sem_pasta(tmp_path, monkeypatch):
     monkeypatch.setattr(sqlite3, "connect", lambda *a, **k: (aberturas_db.append(a), orig_connect(*a, **k))[1])
 
     def _exec(ped: dict) -> dict:
+        if ped.get("op") == "caixas_cache":
+            return {"ok": True, "caixas_envolventes": {}}
         if ped.get("op") == "caixas":
             return {"ok": True, "caixas_envolventes": {c.w1.id(): [0, -0.2, 0, 4, 0.2, 2.8]}, "falhas_geometria": []}
         des_pedidos.append(dict(ped))
@@ -123,6 +127,8 @@ def test_caso17b_gerar_corte_hit_cache_desenho_com_e_sem_pasta(tmp_path):
     n_des = []
 
     def _exec(ped: dict) -> dict:
+        if ped.get("op") == "caixas_cache":  # T27c: cache sem caixas, a selecao cai na op "caixas"
+            return {"ok": True, "caixas_envolventes": {}}
         if ped.get("op") == "caixas":
             return {"ok": True, "caixas_envolventes": {c.w1.id(): [0, -0.2, 0, 4, 0.2, 2.8]}, "falhas_geometria": []}
         n_des.append(dict(ped))
@@ -210,6 +216,8 @@ def test_caso20b_sem_sqlite_no_processo_pai(tmp_path, monkeypatch):
     monkeypatch.setattr(sqlite3, "connect", lambda *a, **k: (_ for _ in ()).throw(AssertionError("sqlite3 no pai")))
 
     def _exec(ped: dict) -> dict:
+        if ped.get("op") == "caixas_cache":
+            return {"ok": True, "caixas_envolventes": {}}
         if ped.get("op") == "caixas":
             return {"ok": True, "caixas_envolventes": {c.w1.id(): [0, -0.2, 0, 4, 0.2, 2.8]}, "falhas_geometria": []}
         return {"ok": True, "svg": "<svg/>", "n_paths": 0, "tempos": {"geo_s": 0.0}, "caixas": []}

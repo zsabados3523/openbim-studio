@@ -34,6 +34,70 @@ def _validar_filho(filho: Any) -> None:
         raise TypeError(f"filho inválido: {filho!r} (esperado objeto com executar chamável ou None)")
 
 
+def _validar_caixa(val: Any) -> list[float] | None:
+    """Valida caixa envolvente [xmin, ymin, zmin, xmax, ymax, zmax] com 6 floats finitos."""
+    if not isinstance(val, (list, tuple)) or len(val) != 6:
+        return None
+    try:
+        floats = [float(x) for x in val]
+    except (ValueError, TypeError):
+        return None
+    if not all(math.isfinite(x) for x in floats):
+        return None
+    if floats[0] > floats[3] or floats[1] > floats[4] or floats[2] > floats[5]:
+        return None
+    return floats
+
+
+def _tem_unidade_ambigua(ifc: ifcopenshell.file, scale: float) -> bool:
+    """Indica IfcProjectLibrary que pode divergir da escala de IfcProject no kernel C++."""
+    try:
+        libs = ifc.by_type("IfcProjectLibrary")
+    except RuntimeError:
+        return False
+    return bool(libs) and (
+        abs(scale - 1.0) > 1e-12
+        or any(getattr(lib, "UnitsInContext", None) is not None for lib in libs)
+    )
+
+
+def _matriz_esperada_cache(elem: Any, scale: float) -> np.ndarray | None:
+    """Matriz 4x4 esperada no cache (metros), ou None se placement for não-ortogonal/inválido."""
+    pl = getattr(elem, "ObjectPlacement", None)
+    if pl is None:
+        return np.eye(4, dtype=np.float64)
+    m = np.asarray(ifcopenshell.util.placement.get_local_placement(pl), dtype=np.float64).copy()
+    if m.shape != (4, 4) or not np.all(np.isfinite(m)):
+        return None
+    r = m[:3, :3]
+    if not np.allclose(r.T @ r, np.eye(3), rtol=0.0, atol=1e-9):
+        return None
+    m[:3, 3] *= scale
+    return m
+
+
+def _perto_borda_faixa(
+    c: list[float],
+    faixa: tuple[tuple[float, float, float], tuple[float, float, float]],
+    tol: float = 1e-5,
+) -> bool:
+    """True se `c` cruza `faixa + tol` diferente de `faixa - tol` (banda nos dois lados)."""
+    (xmin, ymin, zmin), (xmax, ymax, zmax) = faixa
+    cruza_exp = (
+        c[0] <= xmax + tol and c[3] >= xmin - tol
+        and c[1] <= ymax + tol and c[4] >= ymin - tol
+        and c[2] <= zmax + tol and c[5] >= zmin - tol
+    )
+    if not cruza_exp:
+        return False
+    cruza_enc = (
+        c[0] <= xmax - tol and c[3] >= xmin + tol
+        and c[1] <= ymax - tol and c[4] >= ymin + tol
+        and c[2] <= zmax - tol and c[5] >= zmin + tol
+    )
+    return not cruza_enc
+
+
 CATEGORIAS_PADRAO_PLANTA_OCULTAS: tuple[str, ...] = (
     "IfcMember",
     "IfcPlate",
@@ -73,16 +137,19 @@ class SessaoSelecao:
     def __init__(self) -> None:
         self._caixas: dict[int, list[float] | None] = {}
         self._erros: dict[int, list[str]] = {}
+        self._do_cache: set[int] = set()
 
     def invalidar(self, ids=None) -> None:
         if ids is None:
             self._caixas.clear()
             self._erros.clear()
+            self._do_cache.clear()
             return
         for i in ids:
             chave = int(i)
             self._caixas.pop(chave, None)
             self._erros.pop(chave, None)
+            self._do_cache.discard(chave)
 
 
 def _validar_categorias(ifc: ifcopenshell.file, categorias: tuple[str, ...]) -> None:
@@ -178,9 +245,15 @@ def selecionar(
     assinatura_ifc: tuple[int, int] | list[int] | None = None,
     profundidade_corte: float | None = None,
     filho=None,
+    pasta_cache_geometria: str | Path | None = None,
 ) -> Selecao:
     _validar_filho(filho)
     _validar_profundidade_corte(profundidade_corte)
+    if pasta_cache_geometria is not None and not isinstance(pasta_cache_geometria, (str, Path)):
+        raise TypeError(
+            f"pasta_cache_geometria inválido: {pasta_cache_geometria!r} (esperado str, Path ou None)"
+        )
+    pasta_geo = str(pasta_cache_geometria) if pasta_cache_geometria is not None else ""
     cats = tuple(categorias_ocultas)
     _validar_categorias(ifc, cats)
 
@@ -294,13 +367,20 @@ def selecionar(
 
     guardadas = sessao._caixas if sessao is not None else {}
     erros_por_id = sessao._erros if sessao is not None else {}
+    do_cache = sessao._do_cache if sessao is not None else set()
     z_min_seguro, z_max_seguro = zmin - 4.0, zmax + 4.0
     x_min_seguro, x_max_seguro = xmin - 5.0, xmax + 5.0
     y_min_seguro, y_max_seguro = ymin - 5.0, ymax + 5.0
 
+    recalcular_borda: set[int] = set()
     faltantes: list[Any] = []
     for e in visiveis_com_rep:
-        if e.id() in guardadas:
+        eid = e.id()
+        if eid in guardadas:
+            caixa_g = guardadas[eid]
+            if eid in do_cache and caixa_g is not None and _perto_borda_faixa(caixa_g, faixa):
+                recalcular_borda.add(eid)
+                faltantes.append(e)
             continue
         if e.is_a("IfcOpeningElement"):
             continue
@@ -319,43 +399,103 @@ def selecionar(
         faltantes.append(e)
 
     if faltantes:
-        pedido = {
-            "op": "caixas",
-            "elementos": [[e.id(), e.GlobalId] for e in faltantes],
-            "vista": {"guid": gid_vista},
-            "threads": auxiliar.threads_padrao(),
-        }
-        preparado = auxiliar.preparar(
-            ifc,
-            pedido,
-            caminho_ifc=caminho_ifc,
-            assinatura=assinatura_ifc,
-        )
-        try:
-            resposta = auxiliar.executar(
-                preparado,
-                limite_s=limite_s,
-                cancelar=cancelar,
-                executor=executor,
-                filho=filho,
+        def _rodar_auxiliar(pedido: dict) -> dict:
+            preparado = auxiliar.preparar(
+                ifc,
+                pedido,
+                caminho_ifc=caminho_ifc,
+                assinatura=assinatura_ifc,
             )
-        finally:
-            preparado.fechar()
+            try:
+                return auxiliar.executar(
+                    preparado,
+                    limite_s=limite_s,
+                    cancelar=cancelar,
+                    executor=executor,
+                    filho=filho,
+                )
+            finally:
+                preparado.fechar()
 
-        for chave, caixa in resposta["caixas_envolventes"].items():
-            guardadas[int(chave)] = [float(v) for v in caixa]
-        for falha in resposta["falhas_geometria"]:
-            guardadas[int(falha)] = None
+        restantes = faltantes
+        if pasta_geo and caminho_ifc is not None and not _tem_unidade_ambigua(ifc, scale):
+            elegiveis_cache: list[Any] = []
+            matrizes_esp: dict[int, np.ndarray] = {}
+            for e in faltantes:
+                if e.id() in recalcular_borda:
+                    continue
+                try:
+                    mat_esp = _matriz_esperada_cache(e, scale)
+                except Exception:
+                    mat_esp = None
+                if mat_esp is not None:
+                    elegiveis_cache.append(e)
+                    matrizes_esp[e.id()] = mat_esp
+            if elegiveis_cache:
+                resp_cache = _rodar_auxiliar({
+                    "op": "caixas_cache",
+                    "elementos": [[e.id(), e.GlobalId] for e in elegiveis_cache],
+                    "vista": {"guid": gid_vista},
+                    "pasta_cache_geometria": pasta_geo,
+                    "threads": auxiliar.threads_padrao(),
+                })
+                cx_cache = resp_cache.get("caixas_envolventes") if isinstance(resp_cache, dict) else None
+                mats_cache = resp_cache.get("matrizes") if isinstance(resp_cache, dict) else None
+                if isinstance(cx_cache, dict) and isinstance(mats_cache, dict):
+                    for chave, caixa in cx_cache.items():
+                        try:
+                            id_step = int(chave)
+                        except (TypeError, ValueError):
+                            continue
+                        mat_esp = matrizes_esp.get(id_step)
+                        if mat_esp is None:
+                            continue
+                        caixa_ok = _validar_caixa(caixa)
+                        if caixa_ok is None:
+                            continue
+                        mat_raw = mats_cache.get(str(id_step))
+                        try:
+                            mat_arr = np.asarray(mat_raw, dtype=np.float64).reshape((4, 4))
+                            fresca = np.all(np.isfinite(mat_arr)) and np.allclose(
+                                mat_arr, mat_esp, rtol=0.0, atol=1e-9
+                            )
+                        except (TypeError, ValueError):
+                            fresca = False
+                        if not fresca:
+                            continue
+                        if _perto_borda_faixa(caixa_ok, faixa):
+                            continue
+                        guardadas[id_step] = caixa_ok
+                        do_cache.add(id_step)
+                        erros_por_id.pop(id_step, None)
+                    restantes = [e for e in faltantes if e.id() not in guardadas or e.id() in recalcular_borda]
 
-        pedidos = [e.id() for e in faltantes]
-        for id_step in pedidos:  # recalculado: erros velhos desses ids não valem mais
-            erros_por_id.pop(id_step, None)
-        for erro in resposta.get("erros_iterator", ()):
-            msg = f"{erro.get('tipo', 'RuntimeError')}: {erro.get('mensagem', '')}"
-            for id_step in erro.get("ids") or pedidos:
-                lista = erros_por_id.setdefault(int(id_step), [])
-                if msg not in lista:
-                    lista.append(msg)
+        if restantes:
+            resposta = _rodar_auxiliar({
+                "op": "caixas",
+                "elementos": [[e.id(), e.GlobalId] for e in restantes],
+                "vista": {"guid": gid_vista},
+                "threads": auxiliar.threads_padrao(),
+            })
+
+            for chave, caixa in resposta["caixas_envolventes"].items():
+                id_step = int(chave)
+                guardadas[id_step] = [float(v) for v in caixa]
+                do_cache.discard(id_step)
+            for falha in resposta["falhas_geometria"]:
+                id_step = int(falha)
+                guardadas[id_step] = None
+                do_cache.discard(id_step)
+
+            pedidos = [e.id() for e in restantes]
+            for id_step in pedidos:  # recalculado: erros velhos desses ids não valem mais
+                erros_por_id.pop(id_step, None)
+            for erro in resposta.get("erros_iterator", ()):
+                msg = f"{erro.get('tipo', 'RuntimeError')}: {erro.get('mensagem', '')}"
+                for id_step in erro.get("ids") or pedidos:
+                    lista = erros_por_id.setdefault(int(id_step), [])
+                    if msg not in lista:
+                        lista.append(msg)
 
     def cruza(id_step: int) -> bool:
         c = guardadas.get(id_step)
@@ -387,16 +527,9 @@ def selecionar(
     caixas_dict: dict[int, tuple[float, float, float, float, float, float]] = {}
     for i in ids:
         val = guardadas.get(i)
-        if isinstance(val, (list, tuple)) and len(val) >= 6:
-            try:
-                floats = tuple(float(x) for x in val[:6])
-            except (ValueError, TypeError):
-                continue
-            if not all(math.isfinite(x) for x in floats):
-                continue
-            if floats[0] > floats[3] or floats[1] > floats[4] or floats[2] > floats[5]:
-                continue
-            caixas_dict[int(i)] = floats
+        floats = _validar_caixa(val[:6] if isinstance(val, (list, tuple)) and len(val) >= 6 else val)
+        if floats is not None:
+            caixas_dict[int(i)] = tuple(floats)
 
     return Selecao(
         ids=tuple(sorted(set(ids))),

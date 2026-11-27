@@ -11,6 +11,9 @@ def executar(pedido: dict) -> dict:
         if op == "caixas":
             from obim_geometria import caixas
             return caixas.processar(pedido)
+        if op == "caixas_cache":
+            from obim_geometria import caixas
+            return caixas.processar_cache(pedido)
         if op == "desenho":
             from obim_geometria import desenho
             return desenho.processar(pedido)

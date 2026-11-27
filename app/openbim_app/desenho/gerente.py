@@ -434,6 +434,7 @@ class GerenteDesenho(QObject):
         nova = SessaoSelecao()
         nova._caixas = sessao._caixas.copy()
         nova._erros = sessao._erros.copy()
+        nova._do_cache = sessao._do_cache.copy()
         nova.invalidar(excluir)
         return nova
 

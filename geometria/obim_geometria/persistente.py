@@ -197,7 +197,7 @@ def servir(tx, rx, *, construtor=None) -> None:
             continue
 
         op = pedido.get("op")
-        if op not in ("desenho", "caixas", "abrir", "construir", "estado_construcao"):
+        if op not in ("desenho", "caixas", "caixas_cache", "abrir", "construir", "estado_construcao"):
             responder_erro(numero, "OperacaoDesconhecida", f"Operação desconhecida: {op}")
             continue
 
@@ -273,6 +273,9 @@ def servir(tx, rx, *, construtor=None) -> None:
             fase("aberto")
             if op == "abrir":
                 dados = {"aberto": True}
+            elif op == "caixas_cache":
+                fase("geometria")
+                dados = caixas.processar_cache(pedido)
             else:
                 with desenho._sem_rastro(f):
                     if op == "caixas":

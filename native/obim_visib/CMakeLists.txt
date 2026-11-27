@@ -30,16 +30,17 @@ execute_process(COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
 list(APPEND CMAKE_PREFIX_PATH "${NB_DIR}")
 find_package(nanobind CONFIG REQUIRED)
 
-nanobind_add_module(_obimvisib ponte_visib.cpp)
+nanobind_add_module(_obimvisib NOMINSIZE ponte_visib.cpp)
 
 if(MSVC)
-  set(OBIM_VISIB_FLAGS_FP "/O2 /fp:precise")
-  target_compile_options(_obimvisib PRIVATE /O2 /fp:precise /utf-8)
+  set(OBIM_VISIB_FLAGS_FP /O2 /fp:precise)
+  target_compile_options(_obimvisib PRIVATE /utf-8)
 else()
-  set(OBIM_VISIB_FLAGS_FP "-O2 -ffp-contract=off")
-  target_compile_options(_obimvisib PRIVATE -O2 -ffp-contract=off)
+  set(OBIM_VISIB_FLAGS_FP -O2 -ffp-contract=off)
 endif()
-target_compile_definitions(_obimvisib PRIVATE OBIM_VISIB_FLAGS_FP="${OBIM_VISIB_FLAGS_FP}")
+target_compile_options(_obimvisib PRIVATE ${OBIM_VISIB_FLAGS_FP})
+string(JOIN " " OBIM_VISIB_FLAGS_FP_STR ${OBIM_VISIB_FLAGS_FP})
+target_compile_definitions(_obimvisib PRIVATE OBIM_VISIB_FLAGS_FP="${OBIM_VISIB_FLAGS_FP_STR}")
 
 if(DEFINED OBIM_SAIDA)
   file(TO_CMAKE_PATH "${OBIM_SAIDA}" OBIM_SAIDA_CMAKE)

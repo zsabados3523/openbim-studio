@@ -2,7 +2,7 @@
 """Oraculo F1-S01-N1: esqueleto do motor nativo de linhas visiveis (`obimvisib`)."""
 from __future__ import annotations
 
-import ast, importlib, os, re, shutil, subprocess, sys
+import ast, importlib, os, re, shlex, shutil, subprocess, sys
 from pathlib import Path
 
 import pytest
@@ -12,7 +12,17 @@ PASTA_NATIVO = RAIZ / "native" / "obim_visib"
 CMAKE, BUILD_SH, PONTE_CPP = PASTA_NATIVO / "CMakeLists.txt", PASTA_NATIVO / "build.sh", PASTA_NATIVO / "ponte_visib.cpp"
 VISIB_PY = RAIZ / "geometria" / "obim_geometria" / "visibilidade.py"
 FLAGS_EXIGIDAS = ("-O2", "-ffp-contract=off", "/O2", "/fp:precise")
-FLAGS_PROIBIDAS = ("-ffast-math", "-Ofast", "-march=native", "-funsafe-math-optimizations")
+FLAGS_PROIBIDAS = (
+    "-ffast-math",
+    "-Ofast",
+    "-march=native",
+    "-funsafe-math-optimizations",
+    "/fp:fast",
+    "/fp:contract",
+    "-ffp-contract=fast",
+    "-ffp-contract=on",
+)
+RPATH_ESPERADO = "$ORIGIN/../../env/lib"
 
 
 def _visib_nativo():
@@ -27,8 +37,13 @@ def _sem_comentarios_sh(texto: str) -> str:
     return "\n".join(ln for ln in texto.splitlines() if not ln.lstrip().startswith("#"))
 
 
-def _tem_token_flag(cod: str, flag: str) -> bool:
-    return re.search(rf'(^|[\s"\'(;]){re.escape(flag)}($|[\s"\');])', cod) is not None
+def _sem_comentarios_cpp(texto: str) -> str:
+    return re.sub(r"//.*", "", re.sub(r"/\*.*?\*/", "", texto, flags=re.S))
+
+
+def _tem_token_flag(cod: str, flag: str, *, ignorar_caixa: bool = False) -> bool:
+    pat = rf'(^|[\s"\'(;]){re.escape(flag)}($|[\s"\');])'
+    return re.search(pat, cod, re.I if ignorar_caixa else 0) is not None
 
 
 @pytest.mark.parametrize(
@@ -73,9 +88,19 @@ def test_cmake_flags_e_alvo():
     assert "nanobind_add_module" in cod and "_obimvisib" in cod
     for flag in FLAGS_EXIGIDAS:
         assert _tem_token_flag(cod, flag), f"flag exigida ausente: {flag}"
-    cod_min = cod.lower()
     for proibida in FLAGS_PROIBIDAS:
-        assert proibida.lower() not in cod_min, f"flag proibida presente: {proibida}"
+        assert not _tem_token_flag(cod, proibida, ignorar_caixa=True), f"flag proibida presente: {proibida}"
+
+
+def test_ponte_cpp_guarda_fast_math():
+    # Mutante: remover #ifdef __FAST_MATH__ / #error de ponte_visib.cpp deve reprovar.
+    assert PONTE_CPP.is_file(), f"ausente: {PONTE_CPP}"
+    cod = _sem_comentarios_cpp(PONTE_CPP.read_text(encoding="utf-8"))
+    padrao = (
+        r"#\s*(?:ifdef\s+__FAST_MATH__\b|if\s+defined(?:\s*\(\s*__FAST_MATH__\s*\)|\s+__FAST_MATH__\b))"
+        r"(?:(?!#\s*(?:else|elif|endif)\b)[\s\S])*?#\s*error\b"
+    )
+    assert re.search(padrao, cod), "ponte_visib.cpp deve barrar __FAST_MATH__ com #error"
 
 
 def test_cmake_sem_qt_nem_ifcopenshell():
@@ -109,15 +134,62 @@ def test_visibilidade_nao_importa_nativo():
             assert "visib_nativo" not in nome and "obimvisib" not in nome, f"import proibido: {nome}"
 
 
+def _verificar_flags_reais_linux(build_dir: Path) -> None:
+    # Mutante: tirar -ffp-contract=off ou -O2 do target_compile_options deve reprovar.
+    ninja = shutil.which("ninja")
+    assert ninja, "ninja ausente no PATH"
+    res = subprocess.run([ninja, "-C", str(build_dir), "-t", "commands"], capture_output=True, text=True, timeout=60)
+    assert res.returncode == 0, f"ninja -t commands falhou ({res.returncode}):\n{res.stderr}"
+    cmds = [
+        toks
+        for ln in res.stdout.splitlines()
+        if "ponte_visib.cpp" in ln
+        for toks in [shlex.split(ln)]
+        if "-c" in toks and any(t.endswith("ponte_visib.cpp") for t in toks)
+    ]
+    assert cmds, "comando de compilacao de ponte_visib.cpp nao encontrado em ninja -t commands"
+    for toks in cmds:
+        assert "-ffp-contract=off" in toks, f"-ffp-contract=off ausente nas flags reais: {toks}"
+        contratos = [t for t in toks if t.startswith("-ffp-contract=")]
+        assert contratos[-1] == "-ffp-contract=off", f"ultima -ffp-contract= incorreta: {contratos}"
+        otims = [t for t in toks if re.fullmatch(r"-O([0-3sfgz]|fast)?", t)]
+        assert otims and otims[-1] == "-O2", f"ultima flag -O* nao e -O2: {otims}"
+        toks_min = {t.lower() for t in toks}
+        for proibida in FLAGS_PROIBIDAS:
+            assert proibida.lower() not in toks_min, f"flag proibida nas flags reais: {proibida}"
+
+
+def _verificar_rpath_linux(pkg_dir: Path) -> None:
+    readelf = shutil.which("readelf")
+    assert readelf, "readelf ausente no PATH"
+    sos = sorted(pkg_dir.glob("_obimvisib*.so"))
+    assert len(sos) == 1, f"esperava 1 .so em {pkg_dir}, achei {sos}"
+    env = {**os.environ, "LC_ALL": "C"}
+    res = subprocess.run([readelf, "-d", str(sos[0])], capture_output=True, text=True, env=env, timeout=30)
+    assert res.returncode == 0, f"readelf -d falhou ({res.returncode}):\n{res.stderr}"
+    linhas = [ln for ln in res.stdout.splitlines() if re.search(r"\((RPATH|RUNPATH)\)", ln)]
+    assert len(linhas) == 1, f"esperava 1 entrada RPATH/RUNPATH, achei {linhas!r}"
+    m = re.search(r"\((RPATH|RUNPATH)\).*\[([^\]]+)\]", linhas[0])
+    assert m and m.group(1) == "RPATH" and m.group(2) == RPATH_ESPERADO, (
+        f"esperava RPATH=[{RPATH_ESPERADO}], obtido: {linhas[0]!r}"
+    )
+
+
 def test_construcao_real_e_integracao(tmp_path, monkeypatch):
+    if os.environ.get("OBIM_VISIB_BUILD") != "1":
+        pytest.skip("defina OBIM_VISIB_BUILD=1; o CI roda no job obimcore")
     if not os.environ.get("CONDA_PREFIX"):
         pytest.skip("CONDA_PREFIX nao definido no ambiente")
-    if shutil.which("cmake") is None or shutil.which("bash") is None:
+    bash = shutil.which("bash")
+    if shutil.which("cmake") is None or bash is None:
         pytest.skip("cmake ou bash ausente no PATH")
     assert BUILD_SH.is_file(), f"ausente: {BUILD_SH}"
-    res = subprocess.run(["bash", str(BUILD_SH), str(tmp_path)], capture_output=True, text=True, timeout=300)
+    res = subprocess.run([bash, str(BUILD_SH), str(tmp_path)], capture_output=True, text=True, timeout=300)
     assert res.returncode == 0, f"build.sh falhou ({res.returncode}):\n{res.stdout}\n{res.stderr}"
     assert (tmp_path / "obimvisib" / "__init__.py").is_file()
+    if sys.platform.startswith("linux"):
+        _verificar_flags_reais_linux(tmp_path / "build_obimvisib")
+        _verificar_rpath_linux(tmp_path / "obimvisib")
 
     antes = {k: v for k, v in sys.modules.items() if k == "obimvisib" or k.startswith("obimvisib.")}
     for k in list(antes):

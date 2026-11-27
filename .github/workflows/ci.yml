@@ -48,7 +48,7 @@ jobs:
         shell: bash -elo pipefail {0}
         run: |
           set +e
-          OBIM_VISIB_BUILD=1 OBIM_S04_P1_OBRIGATORIO=1 QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_f1_s01_n1_oraculo.py tests/test_f1_s01_n2a_oraculo.py tests/test_f1_s01_n2b_oraculo.py tests/test_f1_s01_n3a_oraculo.py > "$RUNNER_TEMP/obimvisib_n1.log" 2>&1
+          OBIM_VISIB_BUILD=1 OBIM_S04_P1_OBRIGATORIO=1 QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_f1_s01_n1_oraculo.py tests/test_f1_s01_n2a_oraculo.py tests/test_f1_s01_n2b_oraculo.py tests/test_f1_s01_n3a_oraculo.py tests/test_f1_s01_n3b_oraculo.py > "$RUNNER_TEMP/obimvisib_n1.log" 2>&1
           rc=$?
           cat "$RUNNER_TEMP/obimvisib_n1.log"
           if [ $rc -ne 0 ] || grep -qE 'SKIPPED|[1-9][0-9]* PULADOS' "$RUNNER_TEMP/obimvisib_n1.log"; then
@@ -387,7 +387,7 @@ jobs:
         shell: bash -elo pipefail {0}
         run: |
           set +e
-          OBIM_VISIB_BUILD=1 OBIM_S04_P1_OBRIGATORIO=1 QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_f1_s01_n1_oraculo.py tests/test_f1_s01_n2a_oraculo.py tests/test_f1_s01_n2b_oraculo.py tests/test_f1_s01_n3a_oraculo.py > "$RUNNER_TEMP/obimvisib_n1.log" 2>&1
+          OBIM_VISIB_BUILD=1 OBIM_S04_P1_OBRIGATORIO=1 QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_f1_s01_n1_oraculo.py tests/test_f1_s01_n2a_oraculo.py tests/test_f1_s01_n2b_oraculo.py tests/test_f1_s01_n3a_oraculo.py tests/test_f1_s01_n3b_oraculo.py > "$RUNNER_TEMP/obimvisib_n1.log" 2>&1
           rc=$?
           cat "$RUNNER_TEMP/obimvisib_n1.log"
           if [ $rc -ne 0 ] || grep -qE 'SKIPPED|[1-9][0-9]* PULADOS' "$RUNNER_TEMP/obimvisib_n1.log"; then

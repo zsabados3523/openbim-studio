@@ -71,6 +71,16 @@ nb::object matriz_numpy_n3(std::vector<double>&& v, size_t nrows) {
     return nb::cast(nb::ndarray<nb::numpy, double, nb::ndim<2>>(dono->data(), 2, forma, limpa));
 }
 
+obim::visib::MalhaClipViews empacotar_malha(
+    const Arr2D& a, const Arr2D& b, const Arr2D& d, const Arr1I& ea, const Arr1I& eb, const Arr2I& tv,
+    const Arr2D& A, const Arr1D& gx, const Arr1D& gy, const Arr2D& nx_, const Arr2D& ny_, const Arr2D& cc_,
+    const Arr1D& tx0, const Arr1D& tx1, const Arr1D& ty0, const Arr1D& ty1, const Arr1D& tzmax,
+    const Arr1D& ex0, const Arr1D& ex1, const Arr1D& ey0, const Arr1D& ey1, const Arr1D& ezmin
+) {
+    return {v2(a), v2(b), v2(d), v1(ea), v1(eb), v2(tv), v2(A), v1(gx), v1(gy), v2(nx_), v2(ny_), v2(cc_),
+            v1(tx0), v1(tx1), v1(ty0), v1(ty1), v1(tzmax), v1(ex0), v1(ex1), v1(ey0), v1(ey1), v1(ezmin)};
+}
+
 template <typename EInt>
 nb::tuple empacotar_intervalos(obim::visib::Intervalos<EInt>&& res) {
     return nb::make_tuple(
@@ -180,6 +190,27 @@ nb::tuple py_filtrar_arestas_mapa_z(
     );
 }
 
+nb::tuple py_processar_celulas_e_recortar(
+    Arr1I t_s, Arr1I iy_s, Arr1I ix0_s, Arr1I ix1_s, Arr1I ek_idx, Arr1D zf_flat, bool filtrar_zf,
+    double mn_x, double mn_y, double cg, int64_t Wc, int64_t Hc,
+    Arr2D a, Arr2D b, Arr2D d, Arr1I ea, Arr1I eb, Arr2I tv, Arr2D A, Arr1D gx, Arr1D gy,
+    Arr2D nx_, Arr2D ny_, Arr2D cc_, Arr1D tx0, Arr1D tx1, Arr1D ty0, Arr1D ty1, Arr1D tzmax,
+    Arr1D ex0, Arr1D ex1, Arr1D ey0, Arr1D ey1, Arr1D ezmin,
+    double tol_z, double d_eps, bool usar_subgrade, int64_t lim_t_bloco, int64_t lim_e_bloco, int64_t lim_denso_pares
+) {
+    const auto vt = v1(t_s), viy = v1(iy_s), vix0 = v1(ix0_s), vix1 = v1(ix1_s), vek = v1(ek_idx);
+    const auto vzf = v1(zf_flat);
+    const auto mv = empacotar_malha(a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_, tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin);
+    obim::visib::ProcessarCelsOut res;
+    {
+        nb::gil_scoped_release solto;
+        res = obim::visib::processar_celulas_e_recortar(
+            vt, viy, vix0, vix1, vek, vzf, filtrar_zf, mn_x, mn_y, cg, Wc, Hc, mv,
+            tol_z, d_eps, usar_subgrade, lim_t_bloco, lim_e_bloco, lim_denso_pares);
+    }
+    return nb::make_tuple(vetor_numpy(std::move(res.iv.he)), vetor_numpy(std::move(res.iv.hlo)), vetor_numpy(std::move(res.iv.hhi)), res.t_ini_py, res.t_fim_py);
+}
+
 }  // namespace
 
 NB_MODULE(_obimvisib, m) {
@@ -208,4 +239,20 @@ NB_MODULE(_obimvisib, m) {
     m.def("filtrar_arestas_mapa_z", &py_filtrar_arestas_mapa_z,
           nb::arg("a").noconvert(), nb::arg("d").noconvert(), nb::arg("z_full").noconvert(),
           nb::arg("mn_x"), nb::arg("mn_y"), nb::arg("g"), nb::arg("tol_z"));
+    m.def("processar_celulas_e_recortar", &py_processar_celulas_e_recortar,
+          nb::arg("t_s").noconvert(), nb::arg("iy_s").noconvert(),
+          nb::arg("ix0_s").noconvert(), nb::arg("ix1_s").noconvert(),
+          nb::arg("ek_idx").noconvert(), nb::arg("zf_flat").noconvert(), nb::arg("filtrar_zf"),
+          nb::arg("mn_x"), nb::arg("mn_y"), nb::arg("cg"), nb::arg("Wc"), nb::arg("Hc"),
+          nb::arg("a").noconvert(), nb::arg("b").noconvert(), nb::arg("d").noconvert(),
+          nb::arg("ea").noconvert(), nb::arg("eb").noconvert(), nb::arg("tv").noconvert(),
+          nb::arg("A").noconvert(), nb::arg("gx").noconvert(), nb::arg("gy").noconvert(),
+          nb::arg("nx_").noconvert(), nb::arg("ny_").noconvert(), nb::arg("cc_").noconvert(),
+          nb::arg("tx0").noconvert(), nb::arg("tx1").noconvert(), nb::arg("ty0").noconvert(),
+          nb::arg("ty1").noconvert(), nb::arg("tzmax").noconvert(),
+          nb::arg("ex0").noconvert(), nb::arg("ex1").noconvert(), nb::arg("ey0").noconvert(),
+          nb::arg("ey1").noconvert(), nb::arg("ezmin").noconvert(),
+          nb::arg("tol_z"), nb::arg("d_eps"), nb::arg("usar_subgrade"),
+          nb::arg("lim_t_bloco") = 2000000, nb::arg("lim_e_bloco") = 400000,
+          nb::arg("lim_denso_pares") = 20000000);
 }

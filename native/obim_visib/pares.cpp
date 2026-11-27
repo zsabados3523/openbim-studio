@@ -12,6 +12,7 @@
 #include "pares.h"
 #include "recorte_interno.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -22,9 +23,47 @@ namespace obim::visib {
 namespace {
 
 constexpr int64_t kMaxTotalCels = 100'000'000;
+constexpr int64_t kMaxCelLocal = 50'000'000;
 constexpr double kMaxNsubD = 100'000'000.0;
 constexpr int64_t kI64Min = std::numeric_limits<int64_t>::min();
 constexpr int64_t kI64Max = std::numeric_limits<int64_t>::max();
+
+struct TriCel { int64_t t, ix, iy; };
+
+inline Intervalos<int64_t> finalizar_intervalos(Intervalos<int64_t>&& raw) {
+    if (raw.he.size() <= 1) {
+        if (raw.he.size() == 1) raw.hhi[0] = max_f(raw.hlo[0], raw.hhi[0]);
+        return std::move(raw);
+    }
+    const int64_t n = static_cast<int64_t>(raw.he.size());
+    return unir_intervalos(View1D<int64_t>{raw.he.data(), n, 1}, View1D<double>{raw.hlo.data(), n, 1}, View1D<double>{raw.hhi.data(), n, 1});
+}
+
+inline void emitir_tris_aresta(
+    const ArestaCache& ac, std::vector<int64_t>& tris_e, const MalhaClipViews& mv,
+    double tol_z, double d_eps, double eps, std::vector<ParLoHi>& buf_grupo, Intervalos<int64_t>& out
+) {
+    if (tris_e.empty()) return;
+    std::sort(tris_e.begin(), tris_e.end());
+    tris_e.erase(std::unique(tris_e.begin(), tris_e.end()), tris_e.end());
+    buf_grupo.clear();
+    for (int64_t t : tris_e) recortar_aresta_tri(ac, t, mv, tol_z, d_eps, eps, buf_grupo);
+    emitir_grupo_aresta(ac.e, buf_grupo, out);
+}
+
+template <typename Fn>
+inline int64_t prox_fatia(Fn&& w_at, int64_t i0, int64_t n, int64_t lim, int64_t* sum_out = nullptr) {
+    int64_t sum = 0, i1 = i0;
+    if (i1 < n) {
+        const int64_t w0 = w_at(i1);
+        if (w0 > lim) { sum = w0; ++i1; }
+        else {
+            while (i1 < n && sum <= lim - w_at(i1)) { sum += w_at(i1); ++i1; }
+        }
+    }
+    if (sum_out) *sum_out = sum;
+    return i1;
+}
 
 inline int64_t calc_nsub(double span, double step) {
     const double q = std::ceil(span / step);
@@ -239,6 +278,150 @@ FiltrarArestasZOut filtrar_arestas_mapa_z(
         if (edge_kept) out.ek_idx.push_back(e);
     }
     return out;
+}
+
+ProcessarCelsOut processar_celulas_e_recortar(
+    View1D<int64_t> t_s, View1D<int64_t> iy_s, View1D<int64_t> ix0_s, View1D<int64_t> ix1_s,
+    View1D<int64_t> ek_idx, View1D<double> zf_flat, bool filtrar_zf,
+    double mn_x, double mn_y, double cg, int64_t Wc, int64_t Hc,
+    const MalhaClipViews& mv, double tol_z, double d_eps, bool usar_subgrade,
+    int64_t lim_t_bloco, int64_t lim_e_bloco, int64_t lim_denso_pares
+) {
+    if (t_s.n != iy_s.n || t_s.n != ix0_s.n || t_s.n != ix1_s.n)
+        throw std::invalid_argument("t_s, iy_s, ix0_s e ix1_s devem ter o mesmo comprimento");
+    if (Wc <= 0 || Hc <= 0 || Wc > kI64Max / Hc || !std::isfinite(cg) || cg <= 0.0 ||
+        !std::isfinite(mn_x) || !std::isfinite(mn_y) || lim_t_bloco <= 0 || lim_e_bloco <= 0)
+        throw std::invalid_argument("parametros de grade ou bloco invalidos");
+    const double step_c = 0.999 * cg;
+    if (!(step_c > 0.0)) throw std::invalid_argument("passo de grade invalido");
+    validar_malha_views(mv);
+    if (filtrar_zf && zf_flat.n < Wc * Hc) throw std::invalid_argument("zf_flat menor que Wc * Hc");
+
+    const int64_t n_spans = t_s.n, n_ek = ek_idx.n, ne = mv.a.n0, nt = mv.A.n0;
+    std::vector<int64_t> nsub_c(static_cast<size_t>(n_ek)), w_s(static_cast<size_t>(n_spans));
+    for (int64_t ie = 0; ie < n_ek; ++ie) {
+        const int64_t e = ek_idx(ie);
+        if (e < 0 || e >= ne) throw std::out_of_range("indice de aresta fora dos limites");
+        nsub_c[static_cast<size_t>(ie)] = calc_nsub(max_f(std::abs(mv.d(e, 0)), std::abs(mv.d(e, 1))), step_c);
+    }
+    for (int64_t si = 0; si < n_spans; ++si) {
+        const int64_t t = t_s(si), x0 = ix0_s(si), x1 = ix1_s(si), iy = iy_s(si);
+        if (t < 0 || t >= nt) throw std::out_of_range("indice de triangulo fora dos limites");
+        const int64_t w = calc_span(x0, x1);
+        if (w > 0 && (iy < 0 || iy >= Hc || x0 < 0 || x1 >= Wc))
+            throw std::out_of_range("coordenada de celula fora dos limites");
+        w_s[static_cast<size_t>(si)] = w;
+    }
+    if (n_spans == 0 || n_ek == 0) return {Intervalos<int64_t>{}, n_spans, n_spans};
+
+    const double eps = std::abs(d_eps);
+    Intervalos<int64_t> out;
+    std::vector<TriCel> buf_tc;
+    std::vector<int64_t> cont, ini_cel, pos_cel, tri_por_cel, cels_e, tris_e;
+    std::vector<double> cell_tzmax;
+    std::vector<ParLoHi> buf_grupo;
+    cels_e.reserve(64); tris_e.reserve(256); buf_grupo.reserve(64);
+
+    int64_t t0 = 0;
+    while (t0 < n_spans) {
+        int64_t sum_w = 0;
+        const int64_t t1 = prox_fatia([&](int64_t i) { return w_s[static_cast<size_t>(i)]; }, t0, n_spans, lim_t_bloco, &sum_w);
+        const size_t mark = out.he.size();
+        buf_tc.clear();
+        buf_tc.reserve(std::min<size_t>(static_cast<size_t>(sum_w), 4'000'000));
+        int64_t bx0 = kI64Max, bx1 = kI64Min, by0 = kI64Max, by1 = kI64Min;
+        for (int64_t si = t0; si < t1; ++si) {
+            const int64_t x0 = ix0_s(si), x1 = ix1_s(si);
+            if (x1 < x0) continue;
+            const int64_t t = t_s(si), iy = iy_s(si), row_glob = iy * Wc;
+            const double tzm = mv.tzmax(t);
+            for (int64_t ix = x0; ix <= x1; ++ix) {
+                if (filtrar_zf && !(tzm >= zf_flat(row_glob + ix) - 1e-9)) continue;
+                buf_tc.push_back({t, ix, iy});
+                bx0 = std::min(bx0, ix); bx1 = std::max(bx1, ix);
+                by0 = std::min(by0, iy); by1 = std::max(by1, iy);
+            }
+        }
+        if (buf_tc.empty()) { t0 = t1; continue; }
+
+        const int64_t Wl = bx1 - bx0 + 1, Hl = by1 - by0 + 1, ncel_l = Wl * Hl;
+        if (ncel_l > kMaxCelLocal) throw std::invalid_argument("grade local excede o limite");
+        cont.assign(static_cast<size_t>(ncel_l), 0);
+        cell_tzmax.assign(static_cast<size_t>(ncel_l), -std::numeric_limits<double>::infinity());
+        for (const auto& tc : buf_tc) {
+            const size_t c = static_cast<size_t>((tc.iy - by0) * Wl + (tc.ix - bx0));
+            cont[c] += 1;
+            cell_tzmax[c] = max_f(cell_tzmax[c], mv.tzmax(tc.t));
+        }
+        ini_cel.resize(static_cast<size_t>(ncel_l));
+        int64_t acum = 0;
+        bool tem_cel_densa = false;
+        for (size_t c = 0; c < static_cast<size_t>(ncel_l); ++c) {
+            const int64_t cnt = cont[c];
+            if (cnt >= 128) tem_cel_densa = true;
+            ini_cel[c] = acum;
+            acum += cnt;
+        }
+        pos_cel = ini_cel;
+        tri_por_cel.resize(buf_tc.size());
+        for (const auto& tc : buf_tc) {
+            const size_t c = static_cast<size_t>((tc.iy - by0) * Wl + (tc.ix - bx0));
+            tri_por_cel[static_cast<size_t>(pos_cel[c]++)] = tc.t;
+        }
+
+        const bool checar_densa = usar_subgrade && tem_cel_densa;
+        for (int64_t e0 = 0, e1; e0 < n_ek; e0 = e1) {
+            e1 = checar_densa ? prox_fatia([&](int64_t i) { return nsub_c[static_cast<size_t>(i)]; }, e0, n_ek, lim_e_bloco) : n_ek;
+            int64_t dense_pair_sum = 0;
+            for (int64_t ie = e0; ie < e1; ++ie) {
+                const int64_t e = ek_idx(ie), nsub = nsub_c[static_cast<size_t>(ie)];
+                const ArestaCache ac = carregar_aresta(e, mv);
+                const double dn = static_cast<double>(nsub);
+                cels_e.clear();
+                for (int64_t k = 0; k < nsub; ++k) {
+                    const double kt0 = static_cast<double>(k) / dn, kt1 = static_cast<double>(k + 1) / dn;
+                    const double sa0 = ac.p0x + kt0 * ac.dx, sa1 = ac.p0y + kt0 * ac.dy, sa2 = ac.a_z + kt0 * ac.dz;
+                    const double sb0 = ac.p0x + kt1 * ac.dx, sb1 = ac.p0y + kt1 * ac.dy, sb2 = ac.a_z + kt1 * ac.dz;
+                    const int64_t sx0 = std::max(cel_clamp(min_f(sa0, sb0), mn_x, cg, Wc), bx0);
+                    const int64_t sx1 = std::min(cel_clamp(max_f(sa0, sb0), mn_x, cg, Wc), bx1);
+                    const int64_t sy0 = std::max(cel_clamp(min_f(sa1, sb1), mn_y, cg, Hc), by0);
+                    const int64_t sy1 = std::min(cel_clamp(max_f(sa1, sb1), mn_y, cg, Hc), by1);
+                    if (sx1 < sx0 || sy1 < sy0) continue;
+                    const double zmin_sub = min_f(sa2, sb2);
+                    for (int64_t cy = sy0; cy <= sy1; ++cy) {
+                        const int64_t row = (cy - by0) * Wl;
+                        for (int64_t cx = sx0; cx <= sx1; ++cx) {
+                            const int64_t c = row + (cx - bx0);
+                            if (cont[static_cast<size_t>(c)] > 0 && cell_tzmax[static_cast<size_t>(c)] > zmin_sub + tol_z) cels_e.push_back(c);
+                        }
+                    }
+                }
+                if (cels_e.empty()) continue;
+                std::sort(cels_e.begin(), cels_e.end());
+                cels_e.erase(std::unique(cels_e.begin(), cels_e.end()), cels_e.end());
+                tris_e.clear();
+                for (int64_t c : cels_e) {
+                    const int64_t cnt = cont[static_cast<size_t>(c)];
+                    if (cnt == 0) continue;
+                    if (checar_densa && cnt >= 128) {
+                        dense_pair_sum = (cnt > kI64Max - dense_pair_sum) ? kI64Max : (dense_pair_sum + cnt);
+                        if (dense_pair_sum >= lim_denso_pares) {
+                            out.he.resize(mark); out.hlo.resize(mark); out.hhi.resize(mark);
+                            return {finalizar_intervalos(std::move(out)), t0, t1};
+                        }
+                    }
+                    const int64_t beg = ini_cel[static_cast<size_t>(c)], end = beg + cnt;
+                    for (int64_t idx = beg; idx < end; ++idx) {
+                        const int64_t t = tri_por_cel[static_cast<size_t>(idx)];
+                        if (passa_aabb_z(ac, t, mv, tol_z)) tris_e.push_back(t);
+                    }
+                }
+                emitir_tris_aresta(ac, tris_e, mv, tol_z, d_eps, eps, buf_grupo, out);
+            }
+        }
+        t0 = t1;
+    }
+    return {finalizar_intervalos(std::move(out)), n_spans, n_spans};
 }
 
 }  // namespace obim::visib

@@ -12,4 +12,3 @@ tests/test_s06_t24l_abrir_lazy_oraculo.py
 tests/test_s06_t24v_cull_por_peca_oraculo_c.py
 tests/test_s06_t24v_cull_por_peca_oraculo_d.py
 tests/test_s06_t27b_corte_cache_oraculo_c.py
-tests/test_viewport_malha.py

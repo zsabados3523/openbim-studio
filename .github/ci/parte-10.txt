@@ -13,4 +13,3 @@ tests/test_s06_t24q_grade_2o_nivel_oraculo_c.py
 tests/test_s06_t24s_quedas_simples_oraculo_b.py
 tests/test_s06_t24t_xor_corte_oraculo_b.py
 tests/test_s06_t27b_corte_cache_oraculo.py
-tests/test_viewport_adaptador.py

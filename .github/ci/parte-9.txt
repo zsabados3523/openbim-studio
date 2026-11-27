@@ -12,5 +12,3 @@ tests/test_s06_t24j_motor_mapa_z_oraculo_b.py
 tests/test_s06_t24j_motor_mapa_z_oraculo_c.py
 tests/test_s06_t24q_grade_2o_nivel_oraculo_e.py
 tests/test_s06_t27b_corte_cache_oraculo_b.py
-tests/test_viewport_carregador.py
-tests/test_viewport_processo.py

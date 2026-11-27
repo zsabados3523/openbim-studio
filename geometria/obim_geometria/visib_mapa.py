@@ -19,7 +19,7 @@ from obim_geometria.visib_base import (
 )
 
 _CONTADOR_LOCK = threading.Lock()
-_CHAMADAS_PY = {"unir_intervalos": 0}
+_CHAMADAS_PY = {"unir_intervalos": 0, "filtrar_e_recortar": 0}
 
 
 def _obter_chamadas_py() -> dict[str, int]:
@@ -31,7 +31,8 @@ def _obter_chamadas_py() -> dict[str, int]:
 def _zerar_chamadas_py() -> None:
     """Zera contadores de chamadas as versoes Python."""
     with _CONTADOR_LOCK:
-        _CHAMADAS_PY["unir_intervalos"] = 0
+        for chave in _CHAMADAS_PY:
+            _CHAMADAS_PY[chave] = 0
 
 
 def _mapa_z_conservador(A, gx, gy, nx_, ny_, cc_, tx0, tx1, ty0, ty1, mn_x, mn_y, mx_x, mx_y, res_c):
@@ -192,11 +193,21 @@ def _compactar_H(H_l: list, limpar: bool = False):
     return res
 
 
-def _filtrar_e_recortar(
+def _anexar_H(H_l: list, res) -> None:
+    """Adiciona bloco nao-vazio a `H_l` e compacta quando excede o limiar."""
+    if len(res[0]):
+        H_l.append(res)
+        if len(H_l) > 1 and sum(len(x[0]) for x in H_l[1:]) >= max(1_500_000, len(H_l[0][0])):
+            _compactar_H(H_l)
+
+
+def _filtrar_e_recortar_py(
     pe, pt, a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
     tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin, nt_all, tol_z, d_eps, H_l,
 ):
-    """Filtra por Z e caixa XY, deduplica pares e executa o recorte analitico."""
+    """Filtra por Z e caixa XY, deduplica pares e executa o recorte analitico (versao Python)."""
+    with _CONTADOR_LOCK:
+        _CHAMADAS_PY["filtrar_e_recortar"] += 1
     if not len(pe):
         return
     m = (
@@ -261,9 +272,34 @@ def _filtrar_e_recortar(
     lo, hi = _aplicar_corte(gx[pt] * dx + gy[pt] * dy - d[pe, 2], -G0, lo, hi, -1.0, eq_fail=True)
     v = (hi - lo) * len2d > 1e-5
     if np.any(v):
-        H_l.append(_unir_intervalos(pe[v], lo[v], hi[v]))
-        if len(H_l) > 1 and sum(len(x[0]) for x in H_l[1:]) >= max(1_500_000, len(H_l[0][0])):
-            _compactar_H(H_l)
+        _anexar_H(H_l, _unir_intervalos(pe[v], lo[v], hi[v]))
+
+
+def _filtrar_e_recortar(
+    pe, pt, a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
+    tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin, nt_all, tol_z, d_eps, H_l,
+):
+    """Filtra por Z e caixa XY, deduplica pares e executa o recorte analitico."""
+    if not visib_nativo.visib_nativo_ligado():
+        _filtrar_e_recortar_py(
+            pe, pt, a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
+            tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin, nt_all, tol_z, d_eps, H_l,
+        )
+        return
+    mod = visib_nativo.carregar()
+    if mod is None:
+        raise ImportError(
+            "Modulo nativo obimvisib indisponivel; compile com native/obim_visib/build.sh"
+        )
+    arrs = (
+        pe, pt, a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
+        tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin,
+    )
+    args_c = [
+        np.asarray(x, dtype=np.int64 if i in (0, 1, 5, 6, 7) else np.float64)
+        for i, x in enumerate(arrs)
+    ]
+    _anexar_H(H_l, mod.filtrar_e_recortar(*args_c, int(nt_all), float(tol_z), float(d_eps)))
 
 
 def _subgrade_celulas_densas(

@@ -7,6 +7,7 @@ import os
 from types import ModuleType
 
 ENV_LIGADO = "OBIM_VISIB_NATIVO"
+VERSAO_ESPERADA = "1"
 
 
 def visib_nativo_ligado() -> bool:
@@ -15,11 +16,20 @@ def visib_nativo_ligado() -> bool:
 
 
 def carregar() -> ModuleType | None:
-    """Importa `obimvisib` sob demanda ou retorna None se indisponivel."""
+    """Importa `obimvisib` sob demanda, valida a versao ou retorna None."""
     try:
-        return importlib.import_module("obimvisib")
+        mod = importlib.import_module("obimvisib")
     except (ImportError, OSError):
         return None
+    versao_fn = getattr(mod, "versao", None)
+    if not callable(versao_fn):
+        return None
+    try:
+        if versao_fn() != VERSAO_ESPERADA:
+            return None
+    except Exception:
+        return None
+    return mod
 
 
 def info() -> dict[str, object]:

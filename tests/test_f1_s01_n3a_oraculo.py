@@ -282,6 +282,9 @@ def test_subseg_cels_validacoes_e_overflow(obimvisib_mod):
     for ns in ([_I64_MAX, 1], [1 << 62, 0], [1 << 50, 0]):
         with pytest.raises((ValueError, OverflowError)):
             obimvisib_mod.subseg_cels(a2, a2, np.array(ns, dtype=np.int64), 0.0, 0.0, 1.0, 4, 4)
+    # Mutante M8: total + n estoura int64 (n > MAX - total); match exige rejeicao no limite, nao na alocacao.
+    with pytest.raises(ValueError, match="limite"):
+        obimvisib_mod.subseg_cels(a2, a2, np.array([1, _I64_MAX], dtype=np.int64), 0.0, 0.0, 1.0, 4, 4)
 
 
 def test_expandir_celulas_validacoes_e_overflow(obimvisib_mod):
@@ -305,6 +308,20 @@ def test_expandir_celulas_validacoes_e_overflow(obimvisib_mod):
     ):
         with pytest.raises((ValueError, OverflowError)):
             obimvisib_mod.expandir_celulas(*(np.array(v, dtype=np.int64) for v in (ix0, ix1, iy0, iy1)), nx)
+    # Mutantes M5 (canto x1,y0), M6 (y<0 * nx>0) e M7 (y>0 * nx<0) em check_cel_coord.
+    for ix0, ix1, iy0, iy1, nx in (
+        ([_I64_MAX - 1], [_I64_MAX], [1], [1], 1),
+        ([0], [0], [-2], [-2], _I64_MAX),
+        ([0], [0], [3], [3], -(1 << 62)),
+    ):
+        with pytest.raises(ValueError, match="indice de celula"):
+            obimvisib_mod.expandir_celulas(*(np.array(v, dtype=np.int64) for v in (ix0, ix1, iy0, iy1)), nx)
+    # Mutante M9: total + prod estoura int64 (prod > MAX - total); match evita falso verde via length_error.
+    with pytest.raises(ValueError, match="limite"):
+        obimvisib_mod.expandir_celulas(
+            np.array([0, 0], dtype=np.int64), np.array([0, _I64_MAX - 1], dtype=np.int64),
+            np.array([0, 0], dtype=np.int64), np.array([0, 0], dtype=np.int64), 1,
+        )
 
 
 def test_pipeline_d1_equivalencia_bit_a_bit(obimvisib_mod, monkeypatch):

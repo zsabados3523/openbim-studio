@@ -1,0 +1,16 @@
+tests/test_s05_t04_gerador_oraculo.py
+tests/test_s05_t04_transacao_oraculo.py
+tests/test_s06_t04_borda_oraculo.py
+tests/test_s06_t04_transacao_oraculo.py
+tests/test_s06_t04d_location_oraculo.py
+tests/test_s06_t08i_memoria_oraculo.py
+tests/test_s06_t19g4c_gerente_filho_oraculo.py
+tests/test_s06_t19h_componentes_oraculo.py
+tests/test_s06_t22c_visibilidade_threads_oraculo.py
+tests/test_s06_t24h_aneis_nao_agrupaveis_oraculo.py
+tests/test_s06_t24q_grade_2o_nivel_oraculo_b.py
+tests/test_s06_t24q_grade_2o_nivel_oraculo_c.py
+tests/test_s06_t24s_quedas_simples_oraculo_b.py
+tests/test_s06_t24t_xor_corte_oraculo_b.py
+tests/test_s06_t27b_corte_cache_oraculo.py
+tests/test_viewport_adaptador.py

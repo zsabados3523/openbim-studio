@@ -86,8 +86,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Parte 1 = todo o resto (arquivo de teste novo cai nela sozinho); 2 = os mais lentos sem o módulo; 3 a 7 = os que usam o módulo.
-        parte: [1, 2, 3, 4, 5, 6, 7]
+        # Parte 1 = todo o resto (arquivo de teste novo cai nela sozinho); 2 = os mais lentos sem o módulo; 3 a 7 = os que usam o módulo;
+        # 8 a 10 = os arquivos mais lentos da antiga parte 1, listados em .github/ci/parte-N.txt (tempo medido por arquivo; a parte 1 ignora esses arquivos).
+        parte: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
         include:
           - {parte: 1, modulo: false}
           - {parte: 2, modulo: false}
@@ -96,6 +97,9 @@ jobs:
           - {parte: 5, modulo: true}
           - {parte: 6, modulo: true}
           - {parte: 7, modulo: true}
+          - {parte: 8, modulo: false}
+          - {parte: 9, modulo: false}
+          - {parte: 10, modulo: false}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -103,14 +107,18 @@ jobs:
         run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/ambiente-linux
-      - name: Testes (partes 1 e 2; sem o módulo obimcore, e os testes que precisam dele pulam, como antes)
-        if: matrix.parte == 1 || matrix.parte == 2
+      - name: Testes (partes 1, 2 e 8 a 10; sem o módulo obimcore, e os testes que precisam dele pulam, como antes)
+        if: matrix.parte == 1 || matrix.parte == 2 || matrix.parte >= 8
         shell: bash -elo pipefail {0}
         run: |
           # Em caso de falha, as últimas linhas viram anotação pública (o log completo exige login no GitHub).
           set +e
+          DESEL="--deselect=tests/test_s06_t19j4a2_degrau_oraculo.py::test_desempenho_cilindro_nao_e_quadratico --deselect=tests/test_s06_t24q_grade_2o_nivel_oraculo_b.py::test_desempenho_peca_densa_grande_ate_35_porcento --deselect=tests/test_s06_t24q_grade_2o_nivel_oraculo_c.py::test_memoria_subgrade_tres_pecas_densas"
           if [ "${{ matrix.parte }}" = 1 ]; then
-            ALVO="tests --ignore=tests/test_s04_metas.py --ignore=tests/test_s04_t29b_reinicio_oraculo.py --ignore=tests/test_s04_abertura.py --deselect=tests/test_s06_t19j4a2_degrau_oraculo.py::test_desempenho_cilindro_nao_e_quadratico --deselect=tests/test_s06_t24q_grade_2o_nivel_oraculo_b.py::test_desempenho_peca_densa_grande_ate_35_porcento --deselect=tests/test_s06_t24q_grade_2o_nivel_oraculo_c.py::test_memoria_subgrade_tres_pecas_densas"
+            IGN=$(cat .github/ci/parte-8.txt .github/ci/parte-9.txt .github/ci/parte-10.txt | sed 's/^/--ignore=/' | tr '\n' ' ')
+            ALVO="tests --ignore=tests/test_s04_metas.py --ignore=tests/test_s04_t29b_reinicio_oraculo.py --ignore=tests/test_s04_abertura.py $IGN $DESEL"
+          elif [ "${{ matrix.parte }}" -ge 8 ]; then
+            ALVO="$(tr '\n' ' ' < .github/ci/parte-${{ matrix.parte }}.txt) $DESEL"
           else
             ALVO="tests/test_s04_metas.py tests/test_s04_t29b_reinicio_oraculo.py tests/test_s04_abertura.py tests/test_s06_t19j4a2_degrau_oraculo.py::test_desempenho_cilindro_nao_e_quadratico tests/test_s06_t24q_grade_2o_nivel_oraculo_b.py::test_desempenho_peca_densa_grande_ate_35_porcento tests/test_s06_t24q_grade_2o_nivel_oraculo_c.py::test_memoria_subgrade_tres_pecas_densas"
           fi

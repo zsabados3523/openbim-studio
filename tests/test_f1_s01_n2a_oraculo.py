@@ -2,7 +2,8 @@
 """Oraculo F1-S01-N2a: `obimvisib.unir_intervalos` nativo e seletor em `visib_mapa`."""
 from __future__ import annotations
 
-import importlib, os, shutil, subprocess, sys
+import importlib, os, shutil, subprocess, sys, threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -13,6 +14,7 @@ from obim_geometria.visibilidade import linhas_visiveis_multi
 from test_s06_t22a_visibilidade_equivalencia_oraculo import todas
 
 BUILD_SH = Path(__file__).resolve().parent.parent / "native" / "obim_visib" / "build.sh"
+_NEG_NAN = np.uint64(0xFFF8000000000000).view(np.float64)
 
 
 def _bits(a: np.ndarray) -> np.ndarray:
@@ -96,25 +98,27 @@ def test_vazio_unitario_e_zeros_assinados(obimvisib_mod, dtype_he):
 
 @pytest.mark.parametrize("dtype_he", [np.int32, np.int64])
 def test_fronteira_1e9_duplicados_negativos_e_estabilidade(obimvisib_mod, dtype_he):
-    # Mutantes: (1) trocar + 1e-9 por - 1e-9; (2) usar < no lugar de <= na fusao;
-    # (3) ordenar so por aresta (ignorar lo); (4) usar hi[i-1] em vez de max_hi acumulado.
+    # Mutantes (caminhos lento e rapido): (1) remover + 1e-9 ou trocar por - 1e-9;
+    # (2) trocar > por >= na fusao; (3) ordenar so por aresta; (4) hi[i-1] em vez de max acumulado.
     lim1 = 1.0 + 1e-9
-    he = np.array([1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 7, 8, 8, 8, -3, -3, -3, 9, 9, 10, 10], dtype=dtype_he)
+    he = np.array([1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 7, 8, 8, 8, -3, -3, -3, 9, 9, 10, 10, 11, 11], dtype=dtype_he)
     lo = np.array([
         0.0, 1e-9, 0.0, np.nextafter(1e-9, 0.0), 0.0, np.nextafter(1e-9, 1.0),
         0.0, lim1, 0.0, np.nextafter(lim1, 2.0), 0.5, 0.0, 0.0, 1.0, 5.0 + 1e-9,
-        0.2, 0.2, 0.2, -5.0, -5.0 + 1e-9, -10.0, -0.0, 0.0, 0.0, -0.0,
+        0.2, 0.2, 0.2, -5.0, -5.0 + 1e-9, -10.0, -0.0, 0.0, 0.0, -0.0, 0.0, np.nextafter(lim1, 0.0),
     ], dtype=np.float64)
     hi = np.array([
         0.0, 0.4, 0.0, 0.4, 0.0, 0.4, 1.0, 2.0, 1.0, 2.0, 0.9, 0.6, 5.0, 2.0, 6.0,
-        0.2, 0.7, 0.4, -5.0, -4.0, -9.0, 0.2, 0.6, 0.2, 0.6,
+        0.2, 0.7, 0.4, -5.0, -4.0, -9.0, 0.2, 0.6, 0.2, 0.6, 1.0, 2.0,
     ], dtype=np.float64)
-    obt = obimvisib_mod.unir_intervalos(he, lo, hi)
-    _igual_bits(obt, visib_mapa._unir_intervalos_py(he, lo, hi))
-    for aresta, qtd in ((1, 1), (2, 1), (3, 2), (4, 1), (5, 2), (6, 1), (7, 1), (-3, 2)):
-        assert int(np.count_nonzero(obt[0] == aresta)) == qtd
-    assert int(_bits(obt[1][obt[0] == 9])[0]) == 0x8000000000000000
-    assert int(_bits(obt[1][obt[0] == 10])[0]) == 0x0
+    for idx in (slice(None), np.lexsort((lo, he))):
+        he_i, lo_i, hi_i = he[idx], lo[idx], hi[idx]
+        obt = obimvisib_mod.unir_intervalos(he_i, lo_i, hi_i)
+        _igual_bits(obt, visib_mapa._unir_intervalos_py(he_i, lo_i, hi_i))
+        for aresta, qtd in ((1, 1), (2, 1), (3, 2), (4, 1), (5, 2), (6, 1), (7, 1), (-3, 2), (11, 1)):
+            assert int(np.count_nonzero(obt[0] == aresta)) == qtd
+        assert int(_bits(obt[1][obt[0] == 9])[0]) == 0x8000000000000000
+        assert int(_bits(obt[1][obt[0] == 10])[0]) == 0x0
 
 
 @pytest.mark.parametrize("dtype_he", [np.int32, np.int64])
@@ -192,3 +196,97 @@ def test_pipeline_d1_equivalencia_bit_a_bit(obimvisib_mod, monkeypatch):
         for seg_nat, seg_py in zip(pls_nat, pls_py):
             assert seg_nat.shape == seg_py.shape
             assert np.array_equal(_bits(seg_nat), _bits(seg_py))
+
+
+@pytest.mark.parametrize("dtype_he", [np.int32, np.int64])
+def test_zeros_assinados_empate_n1_e_n2(obimvisib_mod, dtype_he):
+    # Mutante M10: max_f devolver 1o operando em empate 0.0/-0.0 (numpy devolve o 2o).
+    casos = [
+        ([0], [0.0], [-0.0]), ([0], [-0.0], [0.0]),
+        ([0, 0], [0.0, 0.0], [-0.0, -0.0]), ([0, 0], [-0.0, -0.0], [0.0, 0.0]),
+        ([0, 0], [0.0, -0.0], [-0.0, 0.0]), ([0, 0], [-0.0, 0.0], [0.0, -0.0]),
+        ([0, 1], [0.0, -0.0], [-0.0, 0.0]), ([1, 0], [0.0, -0.0], [-0.0, 0.0]),
+        ([0, 0], [0.0, 0.0], [-1.0, -0.0]), ([0, 0], [-0.0, -0.0], [-1.0, 0.0]),
+    ]
+    for he_l, lo_l, hi_l in casos:
+        he, lo, hi = np.array(he_l, dtype=dtype_he), np.array(lo_l, dtype=np.float64), np.array(hi_l, dtype=np.float64)
+        _igual_bits(obimvisib_mod.unir_intervalos(he, lo, hi), visib_mapa._unir_intervalos_py(he, lo, hi))
+
+
+@pytest.mark.parametrize("dtype_he", [np.int32, np.int64])
+def test_nan_neg_nan_e_infinitos(obimvisib_mod, dtype_he):
+    # Mutantes M1/M2: max_f e lo_less sem tratar NaN; preservar bits de -NaN (0xfff8...).
+    # So casos deterministicos no Python (ate 1 NaN por aresta, sem empates +0.0/-0.0 em hi).
+    nn = _NEG_NAN
+    casos_n1 = [
+        ([0], [np.nan], [1.0]), ([0], [nn], [1.0]), ([0], [1.0], [np.nan]), ([0], [1.0], [nn]),
+        ([0], [nn], [np.nan]), ([0], [np.nan], [nn]), ([0], [-np.inf], [np.inf]),
+        ([0], [np.inf], [-np.inf]), ([0], [-np.inf], [-np.inf]), ([0], [np.inf], [np.inf]),
+        ([0], [-np.inf], [nn]), ([0], [np.inf], [nn]),
+    ]
+    for he_l, lo_l, hi_l in casos_n1:
+        he, lo, hi = np.array(he_l, dtype=dtype_he), np.array(lo_l, dtype=np.float64), np.array(hi_l, dtype=np.float64)
+        _igual_bits(obimvisib_mod.unir_intervalos(he, lo, hi), visib_mapa._unir_intervalos_py(he, lo, hi))
+
+    he_p = np.array([0, 0, 1, 2, 2, 2, 3, 3, 3, 4, 4, 5, 5, 5, 5, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9], dtype=dtype_he)
+    lo_p = np.array([
+        np.nan, 0.0, nn, 0.0, 0.5, 5.0, 0.0, 0.5, 5.0, 0.0, 2.0,
+        -np.inf, -np.inf, 2.0, np.inf, np.inf, 0.0, -np.inf, 0.0, 1.0, nn, 2.0, 0.0, 0.0, 0.0,
+    ], dtype=np.float64)
+    hi_p = np.array([
+        0.5, 1.0, 0.5, nn, 2.0, 6.0, 1.0, np.nan, 6.0, 1.0, nn,
+        -np.inf, 1.0, np.inf, np.inf, -np.inf, 1.0, 0.0, -np.inf, 2.0, 0.5, 3.0, 1.0, -np.inf, -np.inf,
+    ], dtype=np.float64)
+    ord_p = np.lexsort((lo_p, he_p))
+    for idx in (slice(None), ord_p, ord_p[::-1]):
+        _igual_bits(obimvisib_mod.unir_intervalos(he_p[idx], lo_p[idx], hi_p[idx]), visib_mapa._unir_intervalos_py(he_p[idx], lo_p[idx], hi_p[idx]))
+
+    n_ar, por_ar = 24, 5
+    he_m = np.repeat(np.arange(n_ar, dtype=dtype_he), por_ar)
+    lo_m = np.tile(np.array([1.0, 2.0, 3.0, 4.0, 5.0]), n_ar) + he_m * 0.01
+    hi_m = lo_m + np.tile(np.array([0.4, 1.2, 0.5, 0.3, 0.8]), n_ar)
+    for e in range(n_ar):
+        b, r = e * por_ar, e % 6
+        if r == 0: hi_m[b + 1] = np.nan
+        elif r == 1: hi_m[b + 2] = nn
+        elif r == 2: lo_m[b] = np.nan
+        elif r == 3: lo_m[b + 3] = nn
+        elif r == 4: lo_m[b], hi_m[b + 4] = -np.inf, np.inf
+        else: lo_m[b + 4], hi_m[b] = np.inf, -np.inf
+    perm = np.random.default_rng(20260403).permutation(len(he_m))
+    for idx in (perm, np.lexsort((lo_m, he_m))):
+        _igual_bits(obimvisib_mod.unir_intervalos(he_m[idx], lo_m[idx], hi_m[idx]), visib_mapa._unir_intervalos_py(he_m[idx], lo_m[idx], hi_m[idx]))
+
+
+@pytest.mark.parametrize("dtype_he", [np.int32, np.int64])
+@pytest.mark.parametrize("n_emp", [40, 5_000])
+def test_empates_mesmo_he_lo_estabilidade_n_grande(obimvisib_mod, dtype_he, n_emp):
+    # Mutante M3: trocar std::stable_sort por std::sort.
+    # Sem empates +0.0/-0.0 em hi (limitacao do argsort instavel no Python).
+    k, metade = n_emp - 2, (n_emp - 2) // 2
+    he, lo, hi = np.zeros(n_emp, dtype=dtype_he), np.full(n_emp, 1.0, dtype=np.float64), np.empty(n_emp, dtype=np.float64)
+    he[0], he[-1], lo[0], lo[-1], hi[0], hi[-1] = 1, -1, 0.0, 0.0, 0.5, 0.5
+    hi[1 : 1 + metade] = np.linspace(0.0, 0.5, metade, endpoint=False)
+    hi[1 + metade : -1] = np.linspace(2.0, 3.0, k - metade, endpoint=False)
+    obt = obimvisib_mod.unir_intervalos(he, lo, hi)
+    _igual_bits(obt, visib_mapa._unir_intervalos_py(he, lo, hi))
+    assert int(np.count_nonzero(obt[0] == 0)) == metade + 1
+
+
+def test_concorrencia_threads_mesma_entrada(obimvisib_mod):
+    # Nota: a liberacao do GIL (gil_scoped_release) e conferida por revisao de codigo.
+    rng, n = np.random.default_rng(20260402), 100_000
+    he = rng.integers(0, 2_000, size=n, dtype=np.int64)
+    lo = rng.uniform(-50.0, 50.0, size=n)
+    hi = lo + rng.uniform(-0.1, 1.0, size=n)
+    esp = visib_mapa._unir_intervalos_py(he, lo, hi)
+    barreira = threading.Barrier(4)
+
+    def _rodar():
+        barreira.wait()
+        return obimvisib_mod.unir_intervalos(he, lo, hi)
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        saidas = [f.result() for f in [pool.submit(_rodar) for _ in range(4)]]
+    for s in saidas:
+        _igual_bits(s, esp)

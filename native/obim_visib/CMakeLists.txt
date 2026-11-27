@@ -30,14 +30,20 @@ execute_process(COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
 list(APPEND CMAKE_PREFIX_PATH "${NB_DIR}")
 find_package(nanobind CONFIG REQUIRED)
 
+add_library(obim_visib_nucleo STATIC recorte.cpp)
+set_target_properties(obim_visib_nucleo PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 nanobind_add_module(_obimvisib NOMINSIZE ponte_visib.cpp)
+target_link_libraries(_obimvisib PRIVATE obim_visib_nucleo)
 
 if(MSVC)
   set(OBIM_VISIB_FLAGS_FP /O2 /fp:precise)
+  target_compile_options(obim_visib_nucleo PRIVATE /utf-8)
   target_compile_options(_obimvisib PRIVATE /utf-8)
 else()
   set(OBIM_VISIB_FLAGS_FP -O2 -ffp-contract=off)
 endif()
+target_compile_options(obim_visib_nucleo PRIVATE ${OBIM_VISIB_FLAGS_FP})
 target_compile_options(_obimvisib PRIVATE ${OBIM_VISIB_FLAGS_FP})
 string(JOIN " " OBIM_VISIB_FLAGS_FP_STR ${OBIM_VISIB_FLAGS_FP})
 target_compile_definitions(_obimvisib PRIVATE OBIM_VISIB_FLAGS_FP="${OBIM_VISIB_FLAGS_FP_STR}")

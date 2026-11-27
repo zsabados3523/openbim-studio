@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import math
+import threading
 import numpy as np
 
+from obim_geometria import visib_nativo
 from obim_geometria.visib_base import (
     _aplicar_corte,
     _cel_caixa,
@@ -15,6 +17,21 @@ from obim_geometria.visib_base import (
     _subseg_cels,
     _varredura_x,
 )
+
+_CONTADOR_LOCK = threading.Lock()
+_CHAMADAS_PY = {"unir_intervalos": 0}
+
+
+def _obter_chamadas_py() -> dict[str, int]:
+    """Retorna contagem de chamadas as versoes Python."""
+    with _CONTADOR_LOCK:
+        return dict(_CHAMADAS_PY)
+
+
+def _zerar_chamadas_py() -> None:
+    """Zera contadores de chamadas as versoes Python."""
+    with _CONTADOR_LOCK:
+        _CHAMADAS_PY["unir_intervalos"] = 0
 
 
 def _mapa_z_conservador(A, gx, gy, nx_, ny_, cc_, tx0, tx1, ty0, ty1, mn_x, mn_y, mx_x, mx_y, res_c):
@@ -93,8 +110,10 @@ def _varrer_cels_triangulos(cand, nx_, ny_, cc_, tx0, tx1, ty0, ty1, mn_x, mn_y,
     return cov, loc_a, iy_a, ix0_a, ix1_a
 
 
-def _unir_intervalos(He: np.ndarray, Hlo: np.ndarray, Hhi: np.ndarray):
-    """Ordena e une intervalos [lo, hi] sobrepostos por aresta."""
+def _unir_intervalos_py(He: np.ndarray, Hlo: np.ndarray, Hhi: np.ndarray):
+    """Ordena e une intervalos [lo, hi] sobrepostos por aresta (versao Python)."""
+    with _CONTADOR_LOCK:
+        _CHAMADAS_PY["unir_intervalos"] += 1
     n = len(He)
     if n == 0:
         return He[:0].copy(), np.empty(0, dtype=np.float64), np.empty(0, dtype=np.float64)
@@ -126,6 +145,34 @@ def _unir_intervalos(He: np.ndarray, Hlo: np.ndarray, Hhi: np.ndarray):
     fim[-1] = True
     Hlo_ini = Hlo[ini]
     return He[ini], Hlo_ini, np.maximum(Hlo_ini, hic[fim])
+
+
+def _unir_intervalos_nativo(He: np.ndarray, Hlo: np.ndarray, Hhi: np.ndarray):
+    """Ordena e une intervalos [lo, hi] sobrepostos por aresta (versao C++ nativo).
+
+    Diferencas de dtype frente a `_unir_intervalos_py`:
+    - `He` fora de `int32`/`int64` e convertido para `int64` (Python preserva o dtype).
+    - `uint64` acima de `2**63 - 1` sofre overflow para negativo na conversao para `int64`.
+    - Arrays big-endian (`>i4`, `>i8`, `>f8`) levantam `TypeError` no modulo nativo.
+    """
+    mod = visib_nativo.carregar()
+    if mod is None:
+        raise ImportError(
+            "Modulo nativo obimvisib indisponivel; compile com native/obim_visib/build.sh"
+        )
+    he = np.asarray(He)
+    if he.dtype not in (np.int32, np.int64):
+        he = he.astype(np.int64, copy=False)
+    hlo = np.asarray(Hlo, dtype=np.float64)
+    hhi = np.asarray(Hhi, dtype=np.float64)
+    return mod.unir_intervalos(he, hlo, hhi)
+
+
+def _unir_intervalos(He: np.ndarray, Hlo: np.ndarray, Hhi: np.ndarray):
+    """Ordena e une intervalos [lo, hi] sobrepostos por aresta."""
+    if visib_nativo.visib_nativo_ligado():
+        return _unir_intervalos_nativo(He, Hlo, Hhi)
+    return _unir_intervalos_py(He, Hlo, Hhi)
 
 
 def _compactar_H(H_l: list, limpar: bool = False):

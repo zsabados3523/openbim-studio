@@ -15,6 +15,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -343,6 +344,12 @@ Intervalos<int64_t> filtrar_e_recortar(
         throw std::invalid_argument("dimensoes inconsistentes para arrays de entrada");
     }
     if (pe.n == 0 || nt_all <= 0) return out;
+    if (nt_all < nt) {
+        throw std::invalid_argument("nt_all deve ser maior ou igual ao numero de triangulos");
+    }
+    if (ne > 0 && nt > 0 && (ne - 1) > (std::numeric_limits<int64_t>::max() - (nt - 1)) / nt_all) {
+        throw std::invalid_argument("chave e*nt_all+t estoura int64");
+    }
 
     std::vector<int64_t> chaves;
     chaves.reserve(static_cast<size_t>(pe.n));

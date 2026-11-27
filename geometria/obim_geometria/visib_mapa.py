@@ -279,7 +279,15 @@ def _filtrar_e_recortar(
     pe, pt, a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
     tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin, nt_all, tol_z, d_eps, H_l,
 ):
-    """Filtra por Z e caixa XY, deduplica pares e executa o recorte analitico."""
+    """Filtra por Z e caixa XY, deduplica pares e executa o recorte analitico.
+
+    Diferencas do caminho nativo frente a `_filtrar_e_recortar_py` fora do uso real:
+    - Indice negativo em `pe`/`pt`: nativo levanta `IndexError` (Python indexa do fim).
+    - `nt_all <= 0`: nativo retorna vazio (Python divide por zero em `ch // nt_all`).
+    - `nt_all < len(A)` ou overflow de `(ne - 1) * nt_all + (nt - 1)`: nativo levanta `ValueError`.
+    - `pe` vazio com dimensoes inconsistentes: nativo levanta `ValueError` antes do retorno de vazio.
+    - Indices float (`pe`, `pt`, `ea`, `eb`, `tv`) sao convertidos para `int64` pelo wrapper (Python levanta `IndexError`).
+    """
     if not visib_nativo.visib_nativo_ligado():
         _filtrar_e_recortar_py(
             pe, pt, a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,

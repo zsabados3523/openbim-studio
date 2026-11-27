@@ -251,6 +251,28 @@ def test_mutantes_m1_m3_m4_e_z_especial(obimvisib_mod, monkeypatch):
     assert ek3.tolist() == [4] and he3.tolist() == [0, 1, 2, 3, 5]
 
 
+def test_mutantes_m6_t1_e_m10_fma(obimvisib_mod, monkeypatch):
+    # M6: t1 = t0 + 1/dn vs (k+1)/dn (em binary64 nsub=3 coincide bit a bit; nsub=5 k=2 e nsub=6 k=4 divergem em 1 ulp).
+    # M10: std::fma(t1, dz, az) vs az + t1*dz em sb2 (e sa2) exatamente na fronteira z_min_4 - tol_z.
+    monkeypatch.delenv("OBIM_VISIB_NATIVO", raising=False)
+    z0, z1 = (2.0 / 5.0) + (1.0 / 5.0), 5.0 / 6.0
+    z3 = float(np.nextafter(0.5 + (1.0 / 5.0) * 1.1, 1.0))
+    z4 = float(np.ldexp(1.0, -53))
+    assert z0 > 3.0 / 5.0 and (4.0 / 6.0) + (1.0 / 6.0) < z1
+    z = np.array([[z0] * 7, [z1] * 7, [0.0] * 7, [z3] * 7, [z4] * 7], dtype=np.float64)
+    a = np.array(
+        [[0.0, 0.5, 0.0], [0.0, 1.5, 0.0], [0.0, 2.5, -1.0], [0.0, 3.5, 0.5], [0.0, 4.5, 2.0]],
+        dtype=np.float64,
+    )
+    d = np.array(
+        [[4.5, 0.0, 1.0], [5.5, 0.0, 1.0], [2.5, 0.0, 3.0], [4.5, 0.0, 1.1], [2.5, 0.0, -3.0]],
+        dtype=np.float64,
+    )
+    (ek, he, hlo, hhi), _ = _comparar(obimvisib_mod, a, d, z, 0.0, 0.0, 1.0, 0.0)
+    assert ek.tolist() == [0, 1, 2, 3, 4] and he.tolist() == [0, 1, 3, 4]
+    assert np.array_equal(hlo, [0.0, 0.0, 0.0, 2.0 / 3.0]) and np.array_equal(hhi, [3.0 / 5.0, 4.0 / 6.0, 1.0 / 5.0, 1.0])
+
+
 def test_fatia_500k_nao_contiguos_e_somente_leitura(obimvisib_mod, monkeypatch):
     monkeypatch.delenv("OBIM_VISIB_NATIVO", raising=False)
     a_big = np.array([[0.2, 0.2, 1.0 if i in (0, 5) else 20.0] for i in range(6)])

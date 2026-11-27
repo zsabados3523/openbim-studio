@@ -22,8 +22,18 @@ namespace obim::visib {
 namespace {
 
 constexpr int64_t kMaxTotalCels = 100'000'000;
+constexpr double kMaxNsubD = 100'000'000.0;
 constexpr int64_t kI64Min = std::numeric_limits<int64_t>::min();
 constexpr int64_t kI64Max = std::numeric_limits<int64_t>::max();
+
+inline int64_t calc_nsub(double span, double step) {
+    const double q = std::ceil(span / step);
+    if (std::isnan(q) || q <= 1.0) return 1;
+    if (!std::isfinite(q) || q > kMaxNsubD) {
+        throw std::invalid_argument("numero de subsegmentos excede o limite");
+    }
+    return static_cast<int64_t>(q);
+}
 
 // Clampa coordenada para [0, dim - 1] sem UB em +inf/NaN (diverge de int64(inf) -> 0 no Python).
 inline int64_t cel_clamp(double v, double mn, double g, int64_t dim) noexcept {
@@ -166,6 +176,67 @@ ExpandirCelsOut expandir_celulas(
                 ++pos;
             }
         }
+    }
+    return out;
+}
+
+FiltrarArestasZOut filtrar_arestas_mapa_z(
+    View2D<double> a, View2D<double> d, View2D<double> z_full,
+    double mn_x, double mn_y, double g, double tol_z
+) {
+    if (a.n0 != d.n0) throw std::invalid_argument("a e d devem ter o mesmo comprimento");
+    if (a.n1 != 3 || d.n1 != 3) throw std::invalid_argument("a e d devem ter 3 colunas");
+    if (z_full.n0 <= 0 || z_full.n1 <= 0) throw std::invalid_argument("z_full deve ser nao-vazio");
+    if (!std::isfinite(g) || g <= 0.0 || !std::isfinite(mn_x) || !std::isfinite(mn_y)) {
+        throw std::invalid_argument("parametros de grade invalidos");
+    }
+    const double step_g = 0.999 * g;
+    if (!(step_g > 0.0)) throw std::invalid_argument("passo de grade invalido");
+
+    const int64_t H = z_full.n0, W = z_full.n1;
+    FiltrarArestasZOut out;
+    out.ek_idx.reserve(static_cast<size_t>(a.n0));
+
+    for (int64_t e = 0; e < a.n0; ++e) {
+        const double ax = a(e, 0), ay = a(e, 1), az = a(e, 2);
+        const double dx = d(e, 0), dy = d(e, 1), dz = d(e, 2);
+        const int64_t nsub = calc_nsub(max_f(std::abs(dx), std::abs(dy)), step_g);
+        const double dn = static_cast<double>(nsub);
+        bool edge_kept = false, in_hid = false;
+        double t0_hid = 0.0;
+
+        for (int64_t k = 0; k < nsub; ++k) {
+            const double t0 = static_cast<double>(k) / dn;
+            const double t1 = static_cast<double>(k + 1) / dn;
+            const double sa0 = ax + t0 * dx, sa1 = ay + t0 * dy, sa2 = az + t0 * dz;
+            const double sb0 = ax + t1 * dx, sb1 = ay + t1 * dy, sb2 = az + t1 * dz;
+            const int64_t sx0 = cel_clamp(min_f(sa0, sb0), mn_x, g, W);
+            const int64_t sx1 = cel_clamp(max_f(sa0, sb0), mn_x, g, W);
+            const int64_t sy0 = cel_clamp(min_f(sa1, sb1), mn_y, g, H);
+            const int64_t sy1 = cel_clamp(max_f(sa1, sb1), mn_y, g, H);
+            const double z_min_4 = min_f(
+                min_f(z_full(sy0, sx0), z_full(sy0, sx1)),
+                min_f(z_full(sy1, sx0), z_full(sy1, sx1))
+            );
+            if (max_f(sa2, sb2) >= z_min_4 - tol_z) {
+                edge_kept = true;
+                if (in_hid) {
+                    out.hid.he.push_back(e);
+                    out.hid.hlo.push_back(t0_hid);
+                    out.hid.hhi.push_back(t0);
+                    in_hid = false;
+                }
+            } else if (!in_hid) {
+                t0_hid = t0;
+                in_hid = true;
+            }
+        }
+        if (in_hid) {
+            out.hid.he.push_back(e);
+            out.hid.hlo.push_back(t0_hid);
+            out.hid.hhi.push_back(1.0);
+        }
+        if (edge_kept) out.ek_idx.push_back(e);
     }
     return out;
 }

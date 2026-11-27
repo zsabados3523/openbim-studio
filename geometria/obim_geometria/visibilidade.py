@@ -13,22 +13,18 @@ import numpy as np
 from obim_geometria.visib_base import (
     _arestas_candidatas,
     _cel_caixa,
-    _dedup_int64,
     _expandir_celulas,
-    _fatias,
     _ler_quadro,
     _preparar_triangulos,
     _recortar_semi_espaco,
-    _rle_idx,
     _segmentos_corte_plano,
-    _subseg_cels,
 )
 from obim_geometria.visib_faixas import _passagem_faixas_orientadas
 from obim_geometria.visib_mapa import (
     _compactar_H,
-    _filtrar_e_recortar,
+    _filtrar_arestas_mapa_z,
     _mapa_z_conservador,
-    _subgrade_celulas_densas,
+    _pares_celulas_e_recortar,
     _varrer_cels_triangulos,
 )
 
@@ -163,28 +159,8 @@ def _visibilidade_hibrida(
                         _MEMO_CHAVE_LOCKS.pop(mk, None)
     z_full, zf_flat, W, H, kept_idx, kept_caixas = entrada
     d = b - a
-    step_g = 0.999 * g
-    nsub_g = np.maximum(1, np.ceil(np.maximum(np.abs(d[:, 0]), np.abs(d[:, 1])) / step_g).astype(np.int64))
     H_l = []
-    ek_mask = np.zeros(len(a), bool)
-    for e0, e1 in _fatias(nsub_g, 500_000):
-        s_l, t0_s, t1_s, sa, sb, sx0, sx1, sy0, sy1 = _subseg_cels(
-            a[e0:e1], d[e0:e1], nsub_g[e0:e1], mn_x, mn_y, g, W, H
-        )
-        s_id = s_l + e0
-        z_min_4 = np.minimum(
-            np.minimum(z_full[sy0, sx0], z_full[sy0, sx1]), np.minimum(z_full[sy1, sx0], z_full[sy1, sx1])
-        )
-        sub_keep = np.maximum(sa[:, 2], sb[:, 2]) >= z_min_4 - tol_z
-        ek_mask[s_id[sub_keep]] = True
-        hid = ~sub_keep
-        if np.any(hid):
-            starts = hid.copy()
-            ends = hid.copy()
-            starts[1:] &= (~hid[:-1]) | (s_id[1:] != s_id[:-1])
-            ends[:-1] &= (~hid[1:]) | (s_id[:-1] != s_id[1:])
-            H_l.append((s_id[starts], t0_s[starts], t1_s[ends]))
-    ek_idx = np.nonzero(ek_mask)[0]
+    ek_idx = _filtrar_arestas_mapa_z(a, d, z_full, mn_x, mn_y, g, tol_z, H_l)
     n_ref = len(kept_idx)
     if len(ek_idx) and len(kept_idx):
         kept_idx = _cull_tris(
@@ -226,93 +202,13 @@ def _visibilidade_hibrida(
             next_rem.append(cand[~keep_c])
             ok_s = keep_c[loc_s]
             if np.any(ok_s):
-                t_s = cand[loc_s[ok_s]]
-                iy_s = iy_s[ok_s]
-                ix0_s = ix0_s[ok_s]
-                ix1_s = ix1_s[ok_s]
-                w_s = ix1_s - ix0_s + 1
-                step_c = 0.999 * cg
-                span_e = np.maximum(np.abs(d[ek_idx, 0]), np.abs(d[ek_idx, 1]))
-                nsub_c = np.maximum(1, np.ceil(span_e / step_c).astype(np.int64))
-                for t0, t1 in _fatias(w_s, 2_000_000):
-                    g_s, dx_s = _rle_idx(w_s[t0:t1])
-                    tobj = t_s[t0:t1][g_s]
-                    tcel = iy_s[t0:t1][g_s] * Wc + ix0_s[t0:t1][g_s] + dx_s
-                    if cg == g:
-                        ok_tc = tzmax[tobj] >= zf_flat[tcel] - 1e-9
-                        tobj = tobj[ok_tc]
-                        tcel = tcel[ok_tc]
-                    if not len(tobj):
-                        continue
-                    t_iy, t_ix = tcel // Wc, tcel % Wc
-                    bx0, by0 = int(t_ix.min()), int(t_iy.min())
-                    Wl = int(t_ix.max()) - bx0 + 1
-                    Hl = int(t_iy.max()) - by0 + 1
-                    ncel_l = Wl * Hl
-                    tcel = (t_iy - by0) * Wl + (t_ix - bx0)
-                    ord_t = np.argsort(tcel, kind="stable")
-                    tri_por_cel = tobj[ord_t]
-                    cel_ord = tcel[ord_t]
-                    cont = np.bincount(cel_ord, minlength=ncel_l)
-                    ini_cel = np.cumsum(cont) - cont
-                    cell_tzmax = np.full(ncel_l, -np.inf)
-                    np.maximum.at(cell_tzmax, cel_ord, tzmax[tri_por_cel])
-                    for e0, e1 in _fatias(nsub_c, 400_000):
-                        ec = ek_idx[e0:e1]
-                        s_l, _, _, sa, sb, sx0, sx1, sy0, sy1 = _subseg_cels(
-                            a[ec], d[ec], nsub_c[e0:e1], mn_x, mn_y, cg, Wc, Hc
-                        )
-                        sx0 = np.maximum(sx0, bx0); sx1 = np.minimum(sx1, bx0 + Wl - 1)
-                        sy0 = np.maximum(sy0, by0); sy1 = np.minimum(sy1, by0 + Hl - 1)
-                        okb = (sx1 >= sx0) & (sy1 >= sy0)
-                        s_l, sa, sb = s_l[okb], sa[okb], sb[okb]
-                        sobj, scel = _expandir_celulas(sx0[okb] - bx0, sx1[okb] - bx0, sy0[okb] - by0, sy1[okb] - by0, Wl)
-                        ok_sc = cell_tzmax[scel] > np.minimum(sa[:, 2], sb[:, 2])[sobj] + tol_z
-                        eobj = ec[s_l[sobj[ok_sc]]]
-                        ecel = scel[ok_sc]
-                        if not len(eobj):
-                            continue
-                        ch_ec = _dedup_int64(eobj.astype(np.int64) * ncel_l + ecel)
-                        eobj = ch_ec // ncel_l
-                        ecel = ch_ec % ncel_l
-                        ntri_par = cont[ecel]
-                        nz = ntri_par > 0
-                        eobj = eobj[nz]
-                        ecel = ecel[nz]
-                        ntri_par = ntri_par[nz]
-                        if usar_subgrade and len(eobj):
-                            denso_cel = cont >= 128
-                            eh_denso = denso_cel[ecel]
-                            if np.any(eh_denso) and int(ntri_par[eh_denso].sum()) >= 20_000_000:
-                                eo_n, ec_n, nt_n = eobj[~eh_denso], ecel[~eh_denso], ntri_par[~eh_denso]
-                                for p0, p1 in _fatias(nt_n, 200_000, chaves=eo_n):
-                                    g3, kk = _rle_idx(nt_n[p0:p1])
-                                    _filtrar_e_recortar(
-                                        eo_n[p0:p1][g3], tri_por_cel[ini_cel[ec_n[p0:p1]][g3] + kk],
-                                        a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
-                                        tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin, nt_all,
-                                        tol_z, d_eps, H_l,
-                                    )
-                                _subgrade_celulas_densas(
-                                    eobj[eh_denso], ecel[eh_denso], cont, ini_cel, tri_por_cel,
-                                    bx0, by0, Wl, mn_x, mn_y, cg,
-                                    a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
-                                    tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin, nt_all,
-                                    tol_z, d_eps, H_l,
-                                )
-                                continue
-                        # shortcut: pares por celula tem custo ~N^2 por ancora comum (vertice muito usado);
-                        # limite pratico ~1000 arestas no mesmo vertice
-                        # (cone 4096 lados = 17 s; max IFC real = 128).
-                        for p0, p1 in _fatias(ntri_par, 200_000, chaves=eobj):
-                            g3, kk = _rle_idx(ntri_par[p0:p1])
-                            pe = eobj[p0:p1][g3]
-                            pt = tri_por_cel[ini_cel[ecel[p0:p1]][g3] + kk]
-                            _filtrar_e_recortar(
-                                pe, pt, a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
-                                tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin, nt_all,
-                                tol_z, d_eps, H_l,
-                            )
+                _pares_celulas_e_recortar(
+                    cand[loc_s[ok_s]], iy_s[ok_s], ix0_s[ok_s], ix1_s[ok_s], ek_idx, zf_flat, cg == g,
+                    mn_x, mn_y, cg, Wc, Hc,
+                    a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
+                    tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin,
+                    nt_all, tol_z, d_eps, usar_subgrade, H_l,
+                )
         rem_t = np.concatenate(next_rem)
         cg *= 4.0
     He, Hlo, Hhi = _compactar_H(H_l, limpar=True)

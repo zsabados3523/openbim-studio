@@ -15,6 +15,8 @@ _CHAMADAS_PY = {
     "filtrar_e_recortar": 0,
     "expandir_celulas": 0,
     "subseg_cels": 0,
+    "filtrar_arestas_mapa_z": 0,
+    "pares_celulas": 0,
 }
 
 

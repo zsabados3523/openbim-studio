@@ -431,3 +431,172 @@ def _subgrade_celulas_densas(
                 tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin, nt_all,
                 tol_z, d_eps, H_l,
             )
+
+
+def _filtrar_arestas_mapa_z_py(a, d, z_full, mn_x: float, mn_y: float, g: float, tol_z: float, H_l: list):
+    """Filtra subsegmentos de arestas contra o mapa Z conservador (versao Python)."""
+    visib_nativo.registrar_chamada_py("filtrar_arestas_mapa_z")
+    H, W = z_full.shape
+    step_g = 0.999 * g
+    nsub_g = np.maximum(1, np.ceil(np.maximum(np.abs(d[:, 0]), np.abs(d[:, 1])) / step_g).astype(np.int64))
+    ek_mask = np.zeros(len(a), bool)
+    for e0, e1 in _fatias(nsub_g, 500_000):
+        s_l, t0_s, t1_s, sa, sb, sx0, sx1, sy0, sy1 = _subseg_cels(
+            a[e0:e1], d[e0:e1], nsub_g[e0:e1], mn_x, mn_y, g, W, H
+        )
+        s_id = s_l + e0
+        z_min_4 = np.minimum(
+            np.minimum(z_full[sy0, sx0], z_full[sy0, sx1]), np.minimum(z_full[sy1, sx0], z_full[sy1, sx1])
+        )
+        sub_keep = np.maximum(sa[:, 2], sb[:, 2]) >= z_min_4 - tol_z
+        ek_mask[s_id[sub_keep]] = True
+        hid = ~sub_keep
+        if np.any(hid):
+            starts = hid.copy()
+            ends = hid.copy()
+            starts[1:] &= (~hid[:-1]) | (s_id[1:] != s_id[:-1])
+            ends[:-1] &= (~hid[1:]) | (s_id[:-1] != s_id[1:])
+            H_l.append((s_id[starts], t0_s[starts], t1_s[ends]))
+    return np.nonzero(ek_mask)[0]
+
+
+def _filtrar_arestas_mapa_z(a, d, z_full, mn_x: float, mn_y: float, g: float, tol_z: float, H_l: list):
+    """Filtra subsegmentos de arestas contra o mapa Z conservador."""
+    if visib_nativo.visib_nativo_ligado():
+        fn = visib_nativo.exigir("filtrar_arestas_mapa_z")
+        ek_idx, he, hlo, hhi = fn(
+            np.asarray(a, dtype=np.float64),
+            np.asarray(d, dtype=np.float64),
+            np.asarray(z_full, dtype=np.float64),
+            float(mn_x), float(mn_y), float(g), float(tol_z),
+        )
+        if len(he):
+            H_l.append((he, hlo, hhi))
+        return ek_idx
+    return _filtrar_arestas_mapa_z_py(a, d, z_full, mn_x, mn_y, g, tol_z, H_l)
+
+
+def _pares_celulas_bloco_py(
+    t_b, iy_b, ix0_b, ix1_b, w_b, ek_idx, nsub_c, zf_flat, filtrar_zf: bool,
+    mn_x: float, mn_y: float, cg: float, Wc: int, Hc: int,
+    a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
+    tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin,
+    nt_all: int, tol_z: float, d_eps: float, usar_subgrade: bool, H_l: list,
+    *, lim_e_bloco: int = 400_000, lim_denso_pares: int = 20_000_000,
+) -> None:
+    """Processa um bloco de faixas de triangulos por celula na grade atual (versao Python)."""
+    g_s, dx_s = _rle_idx(w_b)
+    tobj = t_b[g_s]
+    tcel = iy_b[g_s] * Wc + ix0_b[g_s] + dx_s
+    if filtrar_zf:
+        ok_tc = tzmax[tobj] >= zf_flat[tcel] - 1e-9
+        tobj = tobj[ok_tc]
+        tcel = tcel[ok_tc]
+    if not len(tobj):
+        return
+    t_iy, t_ix = tcel // Wc, tcel % Wc
+    bx0, by0 = int(t_ix.min()), int(t_iy.min())
+    Wl = int(t_ix.max()) - bx0 + 1
+    Hl = int(t_iy.max()) - by0 + 1
+    ncel_l = Wl * Hl
+    tcel = (t_iy - by0) * Wl + (t_ix - bx0)
+    ord_t = np.argsort(tcel, kind="stable")
+    tri_por_cel = tobj[ord_t]
+    cel_ord = tcel[ord_t]
+    cont = np.bincount(cel_ord, minlength=ncel_l)
+    ini_cel = np.cumsum(cont) - cont
+    cell_tzmax = np.full(ncel_l, -np.inf)
+    np.maximum.at(cell_tzmax, cel_ord, tzmax[tri_por_cel])
+    for e0, e1 in _fatias(nsub_c, lim_e_bloco):
+        ec = ek_idx[e0:e1]
+        s_l, _, _, sa, sb, sx0, sx1, sy0, sy1 = _subseg_cels(
+            a[ec], d[ec], nsub_c[e0:e1], mn_x, mn_y, cg, Wc, Hc
+        )
+        sx0 = np.maximum(sx0, bx0)
+        sx1 = np.minimum(sx1, bx0 + Wl - 1)
+        sy0 = np.maximum(sy0, by0)
+        sy1 = np.minimum(sy1, by0 + Hl - 1)
+        okb = (sx1 >= sx0) & (sy1 >= sy0)
+        s_l, sa, sb = s_l[okb], sa[okb], sb[okb]
+        sobj, scel = _expandir_celulas(sx0[okb] - bx0, sx1[okb] - bx0, sy0[okb] - by0, sy1[okb] - by0, Wl)
+        ok_sc = cell_tzmax[scel] > np.minimum(sa[:, 2], sb[:, 2])[sobj] + tol_z
+        eobj = ec[s_l[sobj[ok_sc]]]
+        ecel = scel[ok_sc]
+        if not len(eobj):
+            continue
+        ch_ec = _dedup_int64(eobj.astype(np.int64) * ncel_l + ecel)
+        eobj = ch_ec // ncel_l
+        ecel = ch_ec % ncel_l
+        ntri_par = cont[ecel]
+        nz = ntri_par > 0
+        eobj, ecel, ntri_par = eobj[nz], ecel[nz], ntri_par[nz]
+        if usar_subgrade and len(eobj):
+            eh_denso = (cont >= 128)[ecel]
+            if np.any(eh_denso) and int(ntri_par[eh_denso].sum()) >= lim_denso_pares:
+                eo_n, ec_n, nt_n = eobj[~eh_denso], ecel[~eh_denso], ntri_par[~eh_denso]
+                for p0, p1 in _fatias(nt_n, 200_000, chaves=eo_n):
+                    g3, kk = _rle_idx(nt_n[p0:p1])
+                    _filtrar_e_recortar(
+                        eo_n[p0:p1][g3], tri_por_cel[ini_cel[ec_n[p0:p1]][g3] + kk],
+                        a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
+                        tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin, nt_all,
+                        tol_z, d_eps, H_l,
+                    )
+                _subgrade_celulas_densas(
+                    eobj[eh_denso], ecel[eh_denso], cont, ini_cel, tri_por_cel,
+                    bx0, by0, Wl, mn_x, mn_y, cg,
+                    a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
+                    tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin, nt_all,
+                    tol_z, d_eps, H_l,
+                )
+                continue
+        for p0, p1 in _fatias(ntri_par, 200_000, chaves=eobj):
+            g3, kk = _rle_idx(ntri_par[p0:p1])
+            _filtrar_e_recortar(
+                eobj[p0:p1][g3], tri_por_cel[ini_cel[ecel[p0:p1]][g3] + kk],
+                a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
+                tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin, nt_all,
+                tol_z, d_eps, H_l,
+            )
+
+
+def _pares_celulas_e_recortar_py(
+    t_s, iy_s, ix0_s, ix1_s, ek_idx, zf_flat, filtrar_zf: bool,
+    mn_x: float, mn_y: float, cg: float, Wc: int, Hc: int,
+    a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
+    tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin,
+    nt_all: int, tol_z: float, d_eps: float, usar_subgrade: bool, H_l: list,
+    *, lim_t_bloco: int = 2_000_000, lim_e_bloco: int = 400_000, lim_denso_pares: int = 20_000_000,
+) -> None:
+    """Gera pares por celula na grade atual e envia para recorte (versao Python)."""
+    visib_nativo.registrar_chamada_py("pares_celulas")
+    w_s = ix1_s - ix0_s + 1
+    nsub_c = np.maximum(1, np.ceil(np.maximum(np.abs(d[ek_idx, 0]), np.abs(d[ek_idx, 1])) / (0.999 * cg)).astype(np.int64))
+    for t0, t1 in _fatias(w_s, lim_t_bloco):
+        _pares_celulas_bloco_py(
+            t_s[t0:t1], iy_s[t0:t1], ix0_s[t0:t1], ix1_s[t0:t1], w_s[t0:t1], ek_idx, nsub_c,
+            zf_flat, filtrar_zf, mn_x, mn_y, cg, Wc, Hc,
+            a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
+            tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin,
+            nt_all, tol_z, d_eps, usar_subgrade, H_l,
+            lim_e_bloco=lim_e_bloco, lim_denso_pares=lim_denso_pares,
+        )
+
+
+def _pares_celulas_e_recortar(
+    t_s, iy_s, ix0_s, ix1_s, ek_idx, zf_flat, filtrar_zf: bool,
+    mn_x: float, mn_y: float, cg: float, Wc: int, Hc: int,
+    a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
+    tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin,
+    nt_all: int, tol_z: float, d_eps: float, usar_subgrade: bool, H_l: list,
+    *, lim_t_bloco: int = 2_000_000, lim_e_bloco: int = 400_000, lim_denso_pares: int = 20_000_000,
+) -> None:
+    """Despachante de geracao e recorte de pares por celula na grade atual."""
+    _pares_celulas_e_recortar_py(
+        t_s, iy_s, ix0_s, ix1_s, ek_idx, zf_flat, filtrar_zf,
+        mn_x, mn_y, cg, Wc, Hc,
+        a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
+        tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin,
+        nt_all, tol_z, d_eps, usar_subgrade, H_l,
+        lim_t_bloco=lim_t_bloco, lim_e_bloco=lim_e_bloco, lim_denso_pares=lim_denso_pares,
+    )

@@ -44,6 +44,18 @@ jobs:
           export OBIM_CI=1  # liga todas as chaves de obrigatório (pulo vira falha; tests/conftest.py) (T04c entregou versao()["registro_ifc4"])
           QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_ponte.py
           OBIM_S04_P1_OBRIGATORIO=1 QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_s04_p1_trava_oraculo.py tests/test_s04_p1_obimcore_oraculo.py
+      - name: Oráculo obimvisib N1 (F1-S01-N1; compila sem pulos; bloqueia o merge)
+        shell: bash -elo pipefail {0}
+        run: |
+          set +e
+          OBIM_VISIB_BUILD=1 OBIM_S04_P1_OBRIGATORIO=1 QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_f1_s01_n1_oraculo.py > "$RUNNER_TEMP/obimvisib_n1.log" 2>&1
+          rc=$?
+          cat "$RUNNER_TEMP/obimvisib_n1.log"
+          if [ $rc -ne 0 ] || grep -qE 'SKIPPED|[1-9][0-9]* PULADOS' "$RUNNER_TEMP/obimvisib_n1.log"; then
+            msg=$(tail -n 40 "$RUNNER_TEMP/obimvisib_n1.log" | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=obimvisib N1 falhou::$msg"
+            exit 1
+          fi
       - name: Entregar o módulo obimcore e o pytest ao job appimage (T17a; usa a ação de cache que já está fixada)
         shell: bash -elo pipefail {0}
         run: |
@@ -371,6 +383,18 @@ jobs:
           touch native/obimcore/ponte.cpp
           bash native/obimcore/build.sh out/s04 | tee "$RUNNER_TEMP/b2.txt"
           echo "obimcore ${RUNNER_OS}: limpo $(grep OBIMCORE "$RUNNER_TEMP/b1.txt") | incremental $(grep OBIMCORE "$RUNNER_TEMP/b2.txt")" >> "$GITHUB_STEP_SUMMARY"
+      - name: Oráculo obimvisib N1 (F1-S01-N1; compila sem pulos; bloqueia o merge)
+        shell: bash -elo pipefail {0}
+        run: |
+          set +e
+          OBIM_VISIB_BUILD=1 OBIM_S04_P1_OBRIGATORIO=1 QT_QPA_PLATFORM=offscreen pytest -q -rs tests/test_f1_s01_n1_oraculo.py > "$RUNNER_TEMP/obimvisib_n1.log" 2>&1
+          rc=$?
+          cat "$RUNNER_TEMP/obimvisib_n1.log"
+          if [ $rc -ne 0 ] || grep -qE 'SKIPPED|[1-9][0-9]* PULADOS' "$RUNNER_TEMP/obimvisib_n1.log"; then
+            msg=$(tail -n 40 "$RUNNER_TEMP/obimvisib_n1.log" | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=obimvisib N1 falhou::$msg"
+            exit 1
+          fi
       - name: Entregar o módulo obimcore e o pytest ao job instalador-windows (T17b; usa a ação de cache que já está fixada)
         shell: bash -elo pipefail {0}
         run: |

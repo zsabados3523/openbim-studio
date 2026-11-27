@@ -13,6 +13,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 
+#include "pares.h"
 #include "recorte.h"
 
 #include <cstddef>
@@ -61,6 +62,13 @@ nb::object vetor_numpy(std::vector<T>&& v) {
     nb::capsule limpa(dono, [](void* p) noexcept { delete static_cast<std::vector<T>*>(p); });
     size_t forma[1] = {dono->size()};
     return nb::cast(nb::ndarray<nb::numpy, T, nb::ndim<1>>(dono->data(), 1, forma, limpa));
+}
+
+nb::object matriz_numpy_n3(std::vector<double>&& v, size_t nrows) {
+    auto* dono = new std::vector<double>(std::move(v));
+    nb::capsule limpa(dono, [](void* p) noexcept { delete static_cast<std::vector<double>*>(p); });
+    size_t forma[2] = {nrows, 3};
+    return nb::cast(nb::ndarray<nb::numpy, double, nb::ndim<2>>(dono->data(), 2, forma, limpa));
 }
 
 template <typename EInt>
@@ -127,6 +135,33 @@ nb::tuple py_filtrar_e_recortar(
     return empacotar_intervalos(std::move(res));
 }
 
+nb::tuple py_subseg_cels(
+    Arr2D a, Arr2D d, Arr1I nsub,
+    double mn_x, double mn_y, double cg, int64_t Wc, int64_t Hc
+) {
+    obim::visib::SubsegCelsOut res;
+    {
+        nb::gil_scoped_release solto;
+        res = obim::visib::subseg_cels(v2(a), v2(d), v1(nsub), mn_x, mn_y, cg, Wc, Hc);
+    }
+    const size_t nrows = static_cast<size_t>(res.total);
+    return nb::make_tuple(
+        vetor_numpy(std::move(res.s_l)), vetor_numpy(std::move(res.t0_s)), vetor_numpy(std::move(res.t1_s)),
+        matriz_numpy_n3(std::move(res.sa_flat), nrows), matriz_numpy_n3(std::move(res.sb_flat), nrows),
+        vetor_numpy(std::move(res.sx0)), vetor_numpy(std::move(res.sx1)),
+        vetor_numpy(std::move(res.sy0)), vetor_numpy(std::move(res.sy1))
+    );
+}
+
+nb::tuple py_expandir_celulas(Arr1I ix0, Arr1I ix1, Arr1I iy0, Arr1I iy1, int64_t nx) {
+    obim::visib::ExpandirCelsOut res;
+    {
+        nb::gil_scoped_release solto;
+        res = obim::visib::expandir_celulas(v1(ix0), v1(ix1), v1(iy0), v1(iy1), nx);
+    }
+    return nb::make_tuple(vetor_numpy(std::move(res.obj)), vetor_numpy(std::move(res.cel)));
+}
+
 }  // namespace
 
 NB_MODULE(_obimvisib, m) {
@@ -146,4 +181,10 @@ NB_MODULE(_obimvisib, m) {
           nb::arg("ex0").noconvert(), nb::arg("ex1").noconvert(), nb::arg("ey0").noconvert(),
           nb::arg("ey1").noconvert(), nb::arg("ezmin").noconvert(),
           nb::arg("nt_all"), nb::arg("tol_z"), nb::arg("d_eps"));
+    m.def("subseg_cels", &py_subseg_cels,
+          nb::arg("a").noconvert(), nb::arg("d").noconvert(), nb::arg("nsub").noconvert(),
+          nb::arg("mn_x"), nb::arg("mn_y"), nb::arg("cg"), nb::arg("Wc"), nb::arg("Hc"));
+    m.def("expandir_celulas", &py_expandir_celulas,
+          nb::arg("ix0").noconvert(), nb::arg("ix1").noconvert(),
+          nb::arg("iy0").noconvert(), nb::arg("iy1").noconvert(), nb::arg("nx"));
 }

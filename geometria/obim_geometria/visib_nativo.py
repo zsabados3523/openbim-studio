@@ -4,10 +4,37 @@ from __future__ import annotations
 
 import importlib
 import os
+import threading
 from types import ModuleType
 
 ENV_LIGADO = "OBIM_VISIB_NATIVO"
 VERSAO_ESPERADA = "1"
+_CONTADOR_LOCK = threading.Lock()
+_CHAMADAS_PY = {
+    "unir_intervalos": 0,
+    "filtrar_e_recortar": 0,
+    "expandir_celulas": 0,
+    "subseg_cels": 0,
+}
+
+
+def registrar_chamada_py(nome: str) -> None:
+    """Incrementa contador de chamadas a versao Python de uma etapa."""
+    with _CONTADOR_LOCK:
+        _CHAMADAS_PY[nome] += 1
+
+
+def obter_chamadas_py() -> dict[str, int]:
+    """Retorna contagem de chamadas as versoes Python."""
+    with _CONTADOR_LOCK:
+        return dict(_CHAMADAS_PY)
+
+
+def zerar_chamadas_py() -> None:
+    """Zera contadores de chamadas as versoes Python."""
+    with _CONTADOR_LOCK:
+        for chave in _CHAMADAS_PY:
+            _CHAMADAS_PY[chave] = 0
 
 
 def visib_nativo_ligado() -> bool:
@@ -30,6 +57,17 @@ def carregar() -> ModuleType | None:
     except Exception:
         return None
     return mod
+
+
+def exigir(nome: str):
+    """Carrega `obimvisib` e retorna o simbolo `nome`, levantando ImportError se ausente."""
+    mod = carregar()
+    fn = getattr(mod, nome, None) if mod is not None else None
+    if not callable(fn):
+        raise ImportError(
+            "Modulo nativo obimvisib indisponivel; compile com native/obim_visib/build.sh"
+        )
+    return fn
 
 
 def info() -> dict[str, object]:

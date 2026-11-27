@@ -297,3 +297,53 @@ def test_pipeline_d1_equivalencia_bit_a_bit(obimvisib_mod, monkeypatch):
         assert len(pls_nat) == len(pls_py)
         for seg_nat, seg_py in zip(pls_nat, pls_py):
             assert seg_nat.shape == seg_py.shape and np.array_equal(_bits(seg_nat), _bits(seg_py))
+
+
+def test_nt_all_menor_e_overflow_chave(obimvisib_mod):
+    # Achado 1: chave e*nt_all+t sem validacao causa leitura OOB (nt_all < nt) ou overflow int64 (UB).
+    tri = [[(0, 0, 5), (2, 0, 5), (0, 2, 5)], [(0, 0, 6), (2, 0, 6), (0, 2, 6)]]
+    ar = [[(0.2, 0.2, 0), (1.2, 0.2, 0)]]
+    exc = (ValueError, IndexError, OverflowError)
+    with pytest.raises(exc):
+        obimvisib_mod.filtrar_e_recortar(*_cena(tri, ar, pe=[0], pt=[1], nt_all=1))
+    with pytest.raises(exc):
+        obimvisib_mod.filtrar_e_recortar(*_cena(tri, ar * 4, pe=[3], pt=[0], nt_all=2**62))
+    with pytest.raises(exc):
+        obimvisib_mod.filtrar_e_recortar(*_cena(tri, ar * 2, pe=[1], pt=[1], nt_all=(1 << 63) - 1))
+
+
+def test_mutantes_k1_k3_k4(obimvisib_mod, monkeypatch):
+    # Achado 2 - mutantes mortos bit a bit:
+    # M1: emitir_grupo_aresta com limiar 1e-9 -> 1e-8 (K1 tem fenda de 5e-9; fenda de 5e-10 funde).
+    # M3: aplicar_corte com min_f -> std::min (K3 tem s<0 e r=NaN no corte Z -> hi=NaN descarta).
+    # M4: aplicar_corte com max_f -> std::max (K4 tem tx0=-0.0 -> lo=-0.0 preservado em hlo).
+    monkeypatch.delenv("OBIM_VISIB_NATIVO", raising=False)
+    ar_u = [[(0.0, 0.2, 0), (1.0, 0.2, 0)]]
+    g_sep = 0.5 + 5e-9
+    tri_k1 = [[(-1, -1, 5), (0.5, -1, 5), (0.5, 3, 5)], [(g_sep, -1, 5), (3, -1, 5), (g_sep, 3, 5)]]
+    res_k1 = _comparar(obimvisib_mod, _cena(tri_k1, ar_u, tol_z=1e-4, d_eps=0.0), vazio=False)
+    assert len(res_k1[0]) == 2
+    g_junto = 0.5 + 5e-10
+    tri_k1b = [[(-1, -1, 5), (0.5, -1, 5), (0.5, 3, 5)], [(g_junto, -1, 5), (3, -1, 5), (g_junto, 3, 5)]]
+    assert len(_comparar(obimvisib_mod, _cena(tri_k1b, ar_u, tol_z=1e-4, d_eps=0.0), vazio=False)[0]) == 1
+
+    tri_p = [[(-1, -1, 5), (3, -1, 5), (-1, 3, 5)]]
+    args_k3 = list(_cena(tri_p, [[(0.2, 0.2, 0), (1.2, 0.2, 1)]]))
+    args_k3[8] = args_k3[8].copy()
+    args_k3[8][0, 2] = np.nan
+    _comparar(obimvisib_mod, tuple(args_k3), vazio=True)
+
+    args_k4 = list(_cena(tri_p, ar_u, d_eps=0.0))
+    args_k4[14] = args_k4[14].copy()
+    args_k4[14][0] = -0.0
+    res_k4 = _comparar(obimvisib_mod, tuple(args_k4), vazio=False)
+    assert int(_bits(res_k4[1])[0]) == 0x8000000000000000
+
+
+def test_indice_negativo_levanta_index_error(obimvisib_mod):
+    # Achado 3 (divergencia baixa documentada): Python indexa do fim; nativo rejeita indice negativo.
+    tri = [[(0, 0, 5), (2, 0, 5), (0, 2, 5)]]
+    ar = [[(0.2, 0.2, 0), (1.2, 0.2, 0)]]
+    for pe, pt in (([-1], [0]), ([0], [-1])):
+        with pytest.raises(IndexError):
+            obimvisib_mod.filtrar_e_recortar(*_cena(tri, ar, pe=pe, pt=pt))

@@ -188,9 +188,7 @@ Intervalos<EInt> unir_intervalos(
 template Intervalos<int32_t> unir_intervalos<int32_t>(View1D<int32_t>, View1D<double>, View1D<double>);
 template Intervalos<int64_t> unir_intervalos<int64_t>(View1D<int64_t>, View1D<double>, View1D<double>);
 
-namespace {
-
-inline void aplicar_corte(
+static inline void aplicar_corte(
     double s, double r, double& lo, double& hi, double fail_val, bool eq_fail
 ) noexcept {
     if (s > 1e-12) {
@@ -202,10 +200,18 @@ inline void aplicar_corte(
     }
 }
 
-struct ParLoHi {
-    double lo;
-    double hi;
-};
+void validar_malha_views(const MalhaClipViews& mv) {
+    const int64_t ne = mv.a.n0, nt = mv.A.n0;
+    if (mv.a.n1 != 3 || mv.b.n0 != ne || mv.b.n1 != 3 || mv.d.n0 != ne || mv.d.n1 != 3 ||
+        mv.ea.n != ne || mv.eb.n != ne || mv.ex0.n != ne || mv.ex1.n != ne ||
+        mv.ey0.n != ne || mv.ey1.n != ne || mv.ezmin.n != ne ||
+        mv.tv.n0 != nt || mv.tv.n1 != 3 || mv.A.n1 != 3 || mv.gx.n != nt || mv.gy.n != nt ||
+        mv.nx_.n0 != nt || mv.nx_.n1 != 3 || mv.ny_.n0 != nt || mv.ny_.n1 != 3 ||
+        mv.cc_.n0 != nt || mv.cc_.n1 != 3 || mv.tx0.n != nt || mv.tx1.n != nt ||
+        mv.ty0.n != nt || mv.ty1.n != nt || mv.tzmax.n != nt) {
+        throw std::invalid_argument("dimensoes inconsistentes para arrays de entrada");
+    }
+}
 
 void emitir_grupo_aresta(int64_t e, std::vector<ParLoHi>& buf, Intervalos<int64_t>& out) {
     const size_t m = buf.size();
@@ -238,34 +244,19 @@ void emitir_grupo_aresta(int64_t e, std::vector<ParLoHi>& buf, Intervalos<int64_
     buf.clear();
 }
 
-struct MalhaClipViews {
-    View2D<double> a, b, d;
-    View1D<int64_t> ea, eb;
-    View2D<int64_t> tv;
-    View2D<double> A;
-    View1D<double> gx, gy;
-    View2D<double> nx_, ny_, cc_;
-    View1D<double> tx0, tx1, ty0, ty1, tzmax;
-    View1D<double> ex0, ex1, ey0, ey1, ezmin;
-};
-
-struct ArestaCache {
-    int64_t e;
-    double p0x, p0y, a_z, bx, by, bz, dx, dy, dz, len2d;
-    int64_t eav, ebv;
-};
-
-inline ArestaCache carregar_aresta(int64_t e, const MalhaClipViews& mv) noexcept {
+ArestaCache carregar_aresta(int64_t e, const MalhaClipViews& mv) noexcept {
     const double dx = mv.d(e, 0);
     const double dy = mv.d(e, 1);
     return {
         e, mv.a(e, 0), mv.a(e, 1), mv.a(e, 2),
         mv.b(e, 0), mv.b(e, 1), mv.b(e, 2),
-        dx, dy, mv.d(e, 2), std::hypot(dx, dy), mv.ea(e), mv.eb(e),
+        dx, dy, mv.d(e, 2), std::hypot(dx, dy),
+        mv.ex0(e), mv.ex1(e), mv.ey0(e), mv.ey1(e), mv.ezmin(e),
+        mv.ea(e), mv.eb(e),
     };
 }
 
-inline void recortar_aresta_tri(
+void recortar_aresta_tri(
     const ArestaCache& ac, int64_t t, const MalhaClipViews& mv,
     double tol_z, double d_eps, double eps, std::vector<ParLoHi>& buf_grupo
 ) {
@@ -302,8 +293,6 @@ inline void recortar_aresta_tri(
     if ((hi - lo) * ac.len2d > 1e-5) buf_grupo.push_back({lo, hi});
 }
 
-}  // namespace
-
 Intervalos<int64_t> filtrar_e_recortar(
     View1D<int64_t> pe, View1D<int64_t> pt,
     View2D<double> a, View2D<double> b, View2D<double> d,
@@ -316,16 +305,12 @@ Intervalos<int64_t> filtrar_e_recortar(
 ) {
     Intervalos<int64_t> out;
     if (pe.n != pt.n) throw std::invalid_argument("pe e pt devem ter o mesmo comprimento");
+    const MalhaClipViews mv{
+        a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
+        tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin
+    };
+    validar_malha_views(mv);
     const int64_t ne = a.n0, nt = A.n0;
-    if (a.n1 != 3 || b.n0 != ne || b.n1 != 3 || d.n0 != ne || d.n1 != 3 ||
-        ea.n != ne || eb.n != ne || ex0.n != ne || ex1.n != ne ||
-        ey0.n != ne || ey1.n != ne || ezmin.n != ne ||
-        tv.n0 != nt || tv.n1 != 3 || A.n1 != 3 || gx.n != nt || gy.n != nt ||
-        nx_.n0 != nt || nx_.n1 != 3 || ny_.n0 != nt || ny_.n1 != 3 ||
-        cc_.n0 != nt || cc_.n1 != 3 || tx0.n != nt || tx1.n != nt ||
-        ty0.n != nt || ty1.n != nt || tzmax.n != nt) {
-        throw std::invalid_argument("dimensoes inconsistentes para arrays de entrada");
-    }
     if (pe.n == 0 || nt_all <= 0) return out;
     if (nt_all < nt) {
         throw std::invalid_argument("nt_all deve ser maior ou igual ao numero de triangulos");
@@ -352,10 +337,6 @@ Intervalos<int64_t> filtrar_e_recortar(
     std::sort(chaves.begin(), chaves.end());
     chaves.erase(std::unique(chaves.begin(), chaves.end()), chaves.end());
 
-    const MalhaClipViews mv{
-        a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
-        tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin
-    };
     const double eps = std::abs(d_eps);
     const size_t cap = std::min<size_t>(chaves.size(), 4096);
     out.he.reserve(cap);

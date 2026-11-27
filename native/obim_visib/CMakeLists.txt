@@ -30,7 +30,7 @@ execute_process(COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
 list(APPEND CMAKE_PREFIX_PATH "${NB_DIR}")
 find_package(nanobind CONFIG REQUIRED)
 
-add_library(obim_visib_nucleo STATIC recorte.cpp)
+add_library(obim_visib_nucleo STATIC recorte.cpp pares.cpp)
 set_target_properties(obim_visib_nucleo PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 nanobind_add_module(_obimvisib NOMINSIZE ponte_visib.cpp)

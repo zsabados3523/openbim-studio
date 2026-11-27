@@ -10,6 +10,7 @@
 #endif
 
 #include "recorte.h"
+#include "recorte_interno.h"
 
 #include <algorithm>
 #include <cmath>
@@ -22,26 +23,8 @@
 namespace obim::visib {
 namespace {
 
-// Semantica de np.maximum: preserva bits do NaN de entrada; em empate (+0/-0) devolve b.
 // Limitacao: em n grande com empates +0/-0 (ou NaNs distintos) em hi, o resultado
 // do Python depende do np.argsort instavel de Hhi e pode divergir nos bits.
-inline double max_f(double a, double b) noexcept {
-    if (std::isnan(a)) {
-        return a;
-    }
-    if (std::isnan(b)) {
-        return b;
-    }
-    return (a > b) ? a : b;
-}
-
-// Semantica de np.minimum: preserva bits do NaN de entrada; em empate (+0/-0) devolve b.
-inline double min_f(double a, double b) noexcept {
-    if (std::isnan(a)) return a;
-    if (std::isnan(b)) return b;
-    return (a < b) ? a : b;
-}
-
 // No maximo acumulado por grupo, o NaN mais recente (b) prevalece sobre h.
 inline double max_acum(double h, double b) noexcept {
     if (std::isnan(b)) {

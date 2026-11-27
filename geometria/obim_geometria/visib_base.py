@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from obim_geometria import visib_nativo
+
 
 def _rle_idx(n: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Retorna (indice_grupo, deslocamento_local) para contagens `n`."""
@@ -41,11 +43,20 @@ def _dedup_int64(ch: np.ndarray) -> np.ndarray:
     return ch[m]
 
 
-def _expandir_celulas(ix0: np.ndarray, ix1: np.ndarray, iy0: np.ndarray, iy1: np.ndarray, nx: int):
-    """Expande caixas de celulas em pares (indice_objeto, indice_celula)."""
+def _expandir_celulas_py(ix0: np.ndarray, ix1: np.ndarray, iy0: np.ndarray, iy1: np.ndarray, nx: int):
+    """Expande caixas de celulas em pares (indice_objeto, indice_celula) (versao Python)."""
+    visib_nativo.registrar_chamada_py("expandir_celulas")
     w = ix1 - ix0 + 1
     obj, k = _rle_idx(w * (iy1 - iy0 + 1))
     return obj, (iy0[obj] + k // w[obj]) * nx + (ix0[obj] + k % w[obj])
+
+
+def _expandir_celulas(ix0: np.ndarray, ix1: np.ndarray, iy0: np.ndarray, iy1: np.ndarray, nx: int):
+    """Expande caixas de celulas em pares (indice_objeto, indice_celula)."""
+    if visib_nativo.visib_nativo_ligado():
+        i64 = [np.asarray(v, dtype=np.int64) for v in (ix0, ix1, iy0, iy1)]
+        return visib_nativo.exigir("expandir_celulas")(*i64, int(nx))
+    return _expandir_celulas_py(ix0, ix1, iy0, iy1, nx)
 
 
 def _cel_caixa(x0, x1, y0, y1, mn_x: float, mn_y: float, g: float, W: int, H: int):
@@ -57,8 +68,9 @@ def _cel_caixa(x0, x1, y0, y1, mn_x: float, mn_y: float, g: float, W: int, H: in
     return ix0, ix1, iy0, iy1
 
 
-def _subseg_cels(a, d, nsub, mn_x: float, mn_y: float, cg: float, Wc: int, Hc: int):
-    """Divide arestas em subsegmentos e retorna parametros, pontas e caixas de celula."""
+def _subseg_cels_py(a, d, nsub, mn_x: float, mn_y: float, cg: float, Wc: int, Hc: int):
+    """Divide arestas em subsegmentos e retorna parametros, pontas e caixas de celula (versao Python)."""
+    visib_nativo.registrar_chamada_py("subseg_cels")
     s_l, k = _rle_idx(nsub)
     n_rep = np.repeat(nsub, nsub)
     t0_s = k / n_rep
@@ -70,6 +82,16 @@ def _subseg_cels(a, d, nsub, mn_x: float, mn_y: float, cg: float, Wc: int, Hc: i
         np.minimum(sa[:, 1], sb[:, 1]), np.maximum(sa[:, 1], sb[:, 1]), mn_x, mn_y, cg, Wc, Hc,
     )
     return s_l, t0_s, t1_s, sa, sb, sx0, sx1, sy0, sy1
+
+
+def _subseg_cels(a, d, nsub, mn_x: float, mn_y: float, cg: float, Wc: int, Hc: int):
+    """Divide arestas em subsegmentos e retorna parametros, pontas e caixas de celula."""
+    if visib_nativo.visib_nativo_ligado():
+        return visib_nativo.exigir("subseg_cels")(
+            np.asarray(a, dtype=np.float64), np.asarray(d, dtype=np.float64), np.asarray(nsub, dtype=np.int64),
+            float(mn_x), float(mn_y), float(cg), int(Wc), int(Hc),
+        )
+    return _subseg_cels_py(a, d, nsub, mn_x, mn_y, cg, Wc, Hc)
 
 
 def _aplicar_corte(s, r, lo, hi, fail_val: float, eq_fail: bool = False):

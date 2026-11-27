@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-import threading
 import numpy as np
 
 from obim_geometria import visib_nativo
@@ -18,21 +17,9 @@ from obim_geometria.visib_base import (
     _varredura_x,
 )
 
-_CONTADOR_LOCK = threading.Lock()
-_CHAMADAS_PY = {"unir_intervalos": 0, "filtrar_e_recortar": 0}
-
-
-def _obter_chamadas_py() -> dict[str, int]:
-    """Retorna contagem de chamadas as versoes Python."""
-    with _CONTADOR_LOCK:
-        return dict(_CHAMADAS_PY)
-
-
-def _zerar_chamadas_py() -> None:
-    """Zera contadores de chamadas as versoes Python."""
-    with _CONTADOR_LOCK:
-        for chave in _CHAMADAS_PY:
-            _CHAMADAS_PY[chave] = 0
+_CHAMADAS_PY = visib_nativo._CHAMADAS_PY
+_obter_chamadas_py = visib_nativo.obter_chamadas_py
+_zerar_chamadas_py = visib_nativo.zerar_chamadas_py
 
 
 def _mapa_z_conservador(A, gx, gy, nx_, ny_, cc_, tx0, tx1, ty0, ty1, mn_x, mn_y, mx_x, mx_y, res_c):
@@ -113,8 +100,7 @@ def _varrer_cels_triangulos(cand, nx_, ny_, cc_, tx0, tx1, ty0, ty1, mn_x, mn_y,
 
 def _unir_intervalos_py(He: np.ndarray, Hlo: np.ndarray, Hhi: np.ndarray):
     """Ordena e une intervalos [lo, hi] sobrepostos por aresta (versao Python)."""
-    with _CONTADOR_LOCK:
-        _CHAMADAS_PY["unir_intervalos"] += 1
+    visib_nativo.registrar_chamada_py("unir_intervalos")
     n = len(He)
     if n == 0:
         return He[:0].copy(), np.empty(0, dtype=np.float64), np.empty(0, dtype=np.float64)
@@ -206,8 +192,7 @@ def _filtrar_e_recortar_py(
     tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin, nt_all, tol_z, d_eps, H_l,
 ):
     """Filtra por Z e caixa XY, deduplica pares e executa o recorte analitico (versao Python)."""
-    with _CONTADOR_LOCK:
-        _CHAMADAS_PY["filtrar_e_recortar"] += 1
+    visib_nativo.registrar_chamada_py("filtrar_e_recortar")
     if not len(pe):
         return
     m = (

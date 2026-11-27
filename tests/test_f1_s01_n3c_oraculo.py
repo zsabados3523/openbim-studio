@@ -253,10 +253,14 @@ def test_bordas_zf_poda_m3_dedup_e_m4(obimvisib_mod, monkeypatch):
     assert _comparar_sem_queda(obimvisib_mod, _cena(t_m4, a_m4, [(0, 0, 0, 2), (1, 0, 1, 2), (2, 1, 0, 1)], lim_t_bloco=3))[0].tolist() == [0, 1]
 
 
+def _denso(cx: int, cy: int = 0, n: int = 128) -> list:
+    return [[(cx + 0.02 + 0.002 * k, cy + 0.02, 5.0 + 0.005 * k), (cx + 0.98, cy + 0.02, 5.0 + 0.005 * k), (cx + 0.02 + 0.002 * k, cy + 0.98, 5.0 + 0.005 * k)] for k in range(n)]
+
+
 def test_ramo_denso_queda_hibrida_m1_m2_w0_e_sinal_zero(obimvisib_mod, monkeypatch):
     # 3 blocos: B0=[0,66) (cont=65 + w=0 na fronteira lim_t_bloco=130), B1=[66,196) (cont=130 denso), B2=[196,198).
     tris = [[(0, 0, 5), (2.5, 0, 5), (0, 2.5, 5)], [(0.4, 0, 6), (2.5, 0, 6), (0.4, 2.5, 6)]]
-    tris.extend([[(4.02 + 0.002 * k, 0.02, 5.0 + 0.005 * k), (4.98, 0.02, 5.0 + 0.005 * k), (4.02 + 0.002 * k, 0.98, 5.0 + 0.005 * k)] for k in range(130)])
+    tris.extend(_denso(4, 0, 130))
     tris.extend([[(7, 0, 5), (8.5, 0, 5), (7, 1.5, 5)], [(7.2, 0, 6), (8.6, 0, 6), (7.2, 1.5, 6)]])
     ars = [[(0.1, 0.2, 0), (1.8, 0.2, 0)], [(4.05, 0.15, 0), (4.9, 0.15, 0)], [(4.05, 0.35, 0), (4.9, 0.35, 0)], [(7.1, 0.2, 0), (7.9, 0.2, 0)]]
     spans = [(k % 2, 0, 0, 1) for k in range(65)] + [(0, 0, 1, 0)] + [(2 + k, 0, 4, 4) for k in range(130)] + [(132, 0, 7, 7), (133, 0, 7, 7)]
@@ -298,6 +302,57 @@ def test_ramo_denso_queda_hibrida_m1_m2_w0_e_sinal_zero(obimvisib_mod, monkeypat
     c_s0["tx0"] = np.zeros(131, dtype=np.float64)
     c_s0["tx0"][0] = -0.0
     assert int(_bits(_comparar_sem_queda(obimvisib_mod, c_s0)[1])[0]) == 0x8000000000000000
+
+
+def test_quedas_fronteiras_m6_m7_m13_m15_e_duas_quedas_g3(obimvisib_mod, monkeypatch):
+    # M15 (w=[lim,0,1] na fronteira lim_t_bloco=128) + M13 (cont==128 exato) + M7 (dense_pair_sum==lim_denso_pares==256).
+    monkeypatch.delenv("OBIM_VISIB_NATIVO", raising=False)
+    t_b = [[(0, 0, 5), (2, 0, 5), (0, 2, 5)], *_denso(0, 1, 128)]
+    a_b = [[(0.1, 0.2, 0), (0.8, 0.2, 0)], [(0.05, 1.15, 0), (0.9, 1.15, 0)], [(0.05, 1.35, 0), (0.9, 1.35, 0)]]
+    sp_b = [(0, 0, 0, 127), (0, 0, 1, 0)] + [(1 + k, 1, 0, 0) for k in range(128)]
+    c_b = _cena(t_b, a_b, sp_b, Wc=130, Hc=2, lim_t_bloco=128, lim_denso_pares=256)
+    he_b, lo_b, hi_b, ti_b, tf_b = _chamar_nativo(obimvisib_mod, c_b)
+    assert (ti_b, tf_b) == (2, 130) and he_b.tolist() == [0]
+    _comparar_sem_queda(obimvisib_mod, dict(c_b, lim_denso_pares=257))
+    # M6: finalizar_intervalos no retorno da queda (B0 emite e1; B1 emite e0 e e1 sobreposto -> bruto [1,0,1], unido [0,1]).
+    t_m6 = [[(0.0, 0.0, 5), (0.7, 0.0, 5), (0.0, 1.0, 5)], [(0.4, 0.0, 6), (1.2, 0.0, 6), (0.4, 1.0, 6)], [(2.0, 0.0, 5), (3.0, 0.0, 5), (2.0, 1.0, 5)], *_denso(0, 1, 128)]
+    a_m6 = [[(2.1, 0.2, 0), (2.7, 0.2, 0)], [(0.1, 0.2, 0), (0.9, 0.2, 0)], [(0.05, 1.15, 0), (0.9, 1.15, 0)], [(0.05, 1.35, 0), (0.9, 1.35, 0)]]
+    sp_m6 = [(0, 0, 0, 127), (1, 0, 0, 63), (2, 0, 2, 65)] + [(3 + k, 1, 0, 0) for k in range(128)]
+    c_m6 = _cena(t_m6, a_m6, sp_m6, Wc=130, Hc=2, lim_t_bloco=128, lim_denso_pares=256)
+    H_m6: list = []
+    _chamar_py(_ref_pares_celulas, dict(c_m6, **{k: c_m6[k][:3] for k in ("t_s", "iy_s", "ix0_s", "ix1_s")}), H_m6)
+    he_6, lo_6, hi_6, ti_6, tf_6 = _chamar_nativo(obimvisib_mod, c_m6)
+    assert (ti_6, tf_6) == (3, 131) and he_6.tolist() == [0, 1]
+    _igual_h((he_6, lo_6, hi_6), _compactar_py(H_m6))
+    # G3: duas quedas no mesmo laco do cursor (B0 denso, B1 C++, B2 denso, B3 C++), bit a bit contra _ref_pares_celulas.
+    t_g3 = [*_denso(0, 0, 128), [(2, 0, 5), (3.5, 0, 5), (2, 1.5, 5)], [(2.3, 0, 6), (3.8, 0, 6), (2.3, 1.5, 6)], *_denso(1, 1, 128), [(5, 1, 5), (6.5, 1, 5), (5, 2.5, 5)], [(5.3, 1, 6), (6.8, 1, 6), (5.3, 2.5, 6)]]
+    a_g3 = [[(0.05, 0.15, 0), (0.9, 0.15, 0)], [(0.05, 0.35, 0), (0.9, 0.35, 0)], [(2.1, 0.2, 0), (2.9, 0.2, 0)], [(1.05, 1.15, 0), (1.9, 1.15, 0)], [(1.05, 1.35, 0), (1.9, 1.35, 0)], [(5.1, 1.2, 0), (5.9, 1.2, 0)]]
+    sp_g3 = [(k, 0, 0, 0) for k in range(128)] + [(128, 0, 2, 65), (129, 0, 2, 65)] + [(130 + k, 1, 1, 1) for k in range(128)] + [(258, 1, 5, 5), (259, 1, 5, 5)]
+    c_g3 = _cena(t_g3, a_g3, sp_g3, Wc=130, Hc=2, lim_t_bloco=128, lim_denso_pares=256)
+    H_ref, H_nat = [], []
+    _chamar_py(_ref_pares_celulas, c_g3, H_ref)
+    monkeypatch.setenv("OBIM_VISIB_NATIVO", "1")
+    visib_mapa._zerar_chamadas_py()
+    _chamar_py(visib_mapa._pares_celulas_e_recortar, c_g3, H_nat)
+    cnt = visib_mapa._obter_chamadas_py()
+    assert cnt["subgrade_celulas_densas"] == 2 and all(cnt[k] == 0 for k in _NATIVOS)
+    res_g3 = _compactar_py(H_nat)
+    assert res_g3[0].tolist() == [0, 1, 2, 3, 4, 5]
+    _igual_h(res_g3, _compactar_py(H_ref))
+
+
+def test_tzmax_nan_m17_e_kt1_inline_m18(obimvisib_mod, monkeypatch):
+    monkeypatch.delenv("OBIM_VISIB_NATIVO", raising=False)
+    # M17: tzmax NaN propaga em cell_tzmax (max_f) quando filtrar_zf=False e e filtrado fora quando filtrar_zf=True.
+    t_nan = [[(0, 0, 5), (2, 0, 5), (0, 2, 5)], [(0, 0, 4), (2, 0, 4), (0, 2, 4)]]
+    c_nan = _cena(t_nan, [[(0.1, 0.2, 0), (0.8, 0.2, 0)]], [(0, 0, 0, 0), (1, 0, 0, 0)], zf_flat=np.zeros(8), filtrar_zf=False)
+    c_nan["tzmax"][1] = np.nan
+    assert _comparar_sem_queda(obimvisib_mod, c_nan)[0].tolist() == []
+    assert _comparar_sem_queda(obimvisib_mod, dict(c_nan, filtrar_zf=True))[0].tolist() == [0]
+    # M18: kt1=(k+1)/dn vs kt0+1/dn no laco inline (nsub=5, k=2: 3/5 < 2/5+1/5 por 1 ULP; em nsub=3 sao iguais em float64).
+    dy = float(np.nextafter(5.0 / 3.0, -np.inf))
+    c_m18 = _cena([[(0, 0, 5), (5, 0, 5), (0, 5, 5)]], [[(0.0, 0.0, 0.0), (4.5, dy, 0.0)]], [(0, 1, 1, 1)], Wc=6, Hc=3)
+    assert _comparar_sem_queda(obimvisib_mod, c_m18)[0].tolist() == []
 
 
 def test_validacoes_erros_e_limites_secao4(obimvisib_mod, monkeypatch):

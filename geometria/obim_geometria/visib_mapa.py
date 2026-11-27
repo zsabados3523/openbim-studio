@@ -303,6 +303,7 @@ def _subgrade_celulas_densas(
     tol_z: float, d_eps: float, H_l: list,
 ):
     """Subdivide apenas celulas densas em grade de 2o nivel preservando a, b, d originais."""
+    visib_nativo.registrar_chamada_py("subgrade_celulas_densas")
     cels_u = np.unique(ecel_d)
     ts_parts = [tri_por_cel[ini_cel[c]:ini_cel[c] + cont[c]] for c in cels_u]
     t_densos = np.unique(np.concatenate(ts_parts))
@@ -583,6 +584,57 @@ def _pares_celulas_e_recortar_py(
         )
 
 
+def _pares_celulas_e_recortar_nativo(
+    t_s, iy_s, ix0_s, ix1_s, ek_idx, zf_flat, filtrar_zf: bool,
+    mn_x: float, mn_y: float, cg: float, Wc: int, Hc: int,
+    a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,
+    tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin,
+    nt_all: int, tol_z: float, d_eps: float, usar_subgrade: bool, H_l: list,
+    *, lim_t_bloco: int = 2_000_000, lim_e_bloco: int = 400_000, lim_denso_pares: int = 20_000_000,
+) -> None:
+    """Gera pares por celula em C++ com queda hibrida para sub-grade Python em blocos densos.
+
+    Diferencas do caminho nativo frente a `_pares_celulas_e_recortar_py` fora do uso real:
+    - Indice negativo ou fora de faixa em `t_s`, `ek_idx`, `iy_s`, `ix0_s`, `ix1_s`: nativo levanta `IndexError`
+      (Python indexa do fim ou levanta so quando o indice e usado; `t_s` em span com `w == 0` nunca e lido no Python).
+    - `ix1_s < ix0_s - 1`, `nsub > 100_000_000` ou `+inf`, `lim_t_bloco`/`lim_e_bloco <= 0`, grade local acima de
+      50_000_000 celulas ou `zf_flat` menor que `Wc * Hc` com `filtrar_zf`: nativo levanta `ValueError`.
+    - Coordenada `+inf` ou `>= 2**63` em `cel_clamp`: nativo usa `dim - 1`, Python usa `0`.
+    - `nt_all` so e usado no bloco que cai para a sub-grade Python.
+    """
+    fn = visib_nativo.exigir("processar_celulas_e_recortar")
+    t_s, iy_s, ix0_s, ix1_s, ek_idx = (np.asarray(v, dtype=np.int64) for v in (t_s, iy_s, ix0_s, ix1_s, ek_idx))
+    zf_flat = np.asarray(zf_flat, dtype=np.float64)
+    malha = tuple(
+        np.asarray(v, dtype=np.int64 if idx in (3, 4, 5) else np.float64)
+        for idx, v in enumerate((a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_, tx0, tx1, ty0, ty1, tzmax, ex0, ex1, ey0, ey1, ezmin))
+    )
+    n_spans, pos, w_s, nsub_c = len(t_s), 0, None, None
+    while True:
+        he, hlo, hhi, t_ini_py, t_fim_py = fn(
+            t_s[pos:], iy_s[pos:], ix0_s[pos:], ix1_s[pos:], ek_idx, zf_flat, bool(filtrar_zf),
+            float(mn_x), float(mn_y), float(cg), int(Wc), int(Hc), *malha,
+            float(tol_z), float(d_eps), bool(usar_subgrade),
+            int(lim_t_bloco), int(lim_e_bloco), int(lim_denso_pares),
+        )
+        _anexar_H(H_l, (he, hlo, hhi))
+        if t_ini_py >= n_spans - pos:
+            break
+        if w_s is None:
+            w_s = ix1_s - ix0_s + 1
+            nsub_c = np.maximum(1, np.ceil(np.maximum(np.abs(malha[2][ek_idx, 0]), np.abs(malha[2][ek_idx, 1])) / (0.999 * float(cg))).astype(np.int64))
+        b0, b1 = pos + t_ini_py, pos + t_fim_py
+        _pares_celulas_bloco_py(
+            t_s[b0:b1], iy_s[b0:b1], ix0_s[b0:b1], ix1_s[b0:b1], w_s[b0:b1], ek_idx, nsub_c,
+            zf_flat, bool(filtrar_zf), float(mn_x), float(mn_y), float(cg), int(Wc), int(Hc), *malha,
+            int(nt_all), float(tol_z), float(d_eps), bool(usar_subgrade), H_l,
+            lim_e_bloco=int(lim_e_bloco), lim_denso_pares=int(lim_denso_pares),
+        )
+        pos += t_fim_py
+        if pos >= n_spans:
+            break
+
+
 def _pares_celulas_e_recortar(
     t_s, iy_s, ix0_s, ix1_s, ek_idx, zf_flat, filtrar_zf: bool,
     mn_x: float, mn_y: float, cg: float, Wc: int, Hc: int,
@@ -592,7 +644,8 @@ def _pares_celulas_e_recortar(
     *, lim_t_bloco: int = 2_000_000, lim_e_bloco: int = 400_000, lim_denso_pares: int = 20_000_000,
 ) -> None:
     """Despachante de geracao e recorte de pares por celula na grade atual."""
-    _pares_celulas_e_recortar_py(
+    fn = _pares_celulas_e_recortar_nativo if visib_nativo.visib_nativo_ligado() else _pares_celulas_e_recortar_py
+    fn(
         t_s, iy_s, ix0_s, ix1_s, ek_idx, zf_flat, filtrar_zf,
         mn_x, mn_y, cg, Wc, Hc,
         a, b, d, ea, eb, tv, A, gx, gy, nx_, ny_, cc_,

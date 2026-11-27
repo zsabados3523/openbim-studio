@@ -5,18 +5,34 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <stdexcept>
 #include <vector>
 
 namespace obim::visib {
 namespace {
 
+// Semantica de np.maximum: preserva bits do NaN de entrada; em empate (+0/-0) devolve b.
+// Limitacao: em n grande com empates +0/-0 (ou NaNs distintos) em hi, o resultado
+// do Python depende do np.argsort instavel de Hhi e pode divergir nos bits.
 inline double max_f(double a, double b) noexcept {
-    if (std::isnan(a) || std::isnan(b)) {
-        return std::numeric_limits<double>::quiet_NaN();
+    if (std::isnan(a)) {
+        return a;
     }
-    return (a >= b) ? a : b;
+    if (std::isnan(b)) {
+        return b;
+    }
+    return (a > b) ? a : b;
+}
+
+// No maximo acumulado por grupo, o NaN mais recente (b) prevalece sobre h.
+inline double max_acum(double h, double b) noexcept {
+    if (std::isnan(b)) {
+        return b;
+    }
+    if (std::isnan(h)) {
+        return h;
+    }
+    return (h > b) ? h : b;
 }
 
 inline bool lo_less(double li, double lj) noexcept {
@@ -100,7 +116,7 @@ Intervalos<EInt> unir_vetores(
                 lo_ini = lo;
                 hi_cur = hi;
             } else {
-                hi_cur = max_f(hi_cur, hi);
+                hi_cur = max_acum(hi_cur, hi);
             }
         }
         out.he.push_back(e_cur);
@@ -136,7 +152,7 @@ Intervalos<EInt> unir_vetores(
             lo_ini = it.lo;
             hi_cur = it.hi;
         } else {
-            hi_cur = max_f(hi_cur, it.hi);
+            hi_cur = max_acum(hi_cur, it.hi);
         }
     }
     out.he.push_back(e_cur);
@@ -156,12 +172,16 @@ Intervalos<EInt> unir_intervalos(
     if (he.n != hlo.n || he.n != hhi.n) {
         throw std::invalid_argument("He, Hlo e Hhi devem ter o mesmo comprimento");
     }
-    return unir_vetores(
+    auto out = unir_vetores(
         he.ptr, he.s0,
         hlo.ptr, hlo.s0,
         hhi.ptr, hhi.s0,
         static_cast<size_t>(he.n)
     );
+    out.he.shrink_to_fit();
+    out.hlo.shrink_to_fit();
+    out.hhi.shrink_to_fit();
+    return out;
 }
 
 template Intervalos<int32_t> unir_intervalos<int32_t>(View1D<int32_t>, View1D<double>, View1D<double>);

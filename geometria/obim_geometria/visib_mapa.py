@@ -148,7 +148,13 @@ def _unir_intervalos_py(He: np.ndarray, Hlo: np.ndarray, Hhi: np.ndarray):
 
 
 def _unir_intervalos_nativo(He: np.ndarray, Hlo: np.ndarray, Hhi: np.ndarray):
-    """Ordena e une intervalos [lo, hi] sobrepostos por aresta (versao C++ nativo)."""
+    """Ordena e une intervalos [lo, hi] sobrepostos por aresta (versao C++ nativo).
+
+    Diferencas de dtype frente a `_unir_intervalos_py`:
+    - `He` fora de `int32`/`int64` e convertido para `int64` (Python preserva o dtype).
+    - `uint64` acima de `2**63 - 1` sofre overflow para negativo na conversao para `int64`.
+    - Arrays big-endian (`>i4`, `>i8`, `>f8`) levantam `TypeError` no modulo nativo.
+    """
     mod = visib_nativo.carregar()
     if mod is None:
         raise ImportError(

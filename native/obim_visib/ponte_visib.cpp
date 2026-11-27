@@ -162,6 +162,24 @@ nb::tuple py_expandir_celulas(Arr1I ix0, Arr1I ix1, Arr1I iy0, Arr1I iy1, int64_
     return nb::make_tuple(vetor_numpy(std::move(res.obj)), vetor_numpy(std::move(res.cel)));
 }
 
+nb::tuple py_filtrar_arestas_mapa_z(
+    Arr2D a, Arr2D d, Arr2D z_full,
+    double mn_x, double mn_y, double g, double tol_z
+) {
+    const auto va = v2(a), vd = v2(d), vz = v2(z_full);
+    obim::visib::FiltrarArestasZOut res;
+    {
+        nb::gil_scoped_release solto;
+        res = obim::visib::filtrar_arestas_mapa_z(va, vd, vz, mn_x, mn_y, g, tol_z);
+    }
+    return nb::make_tuple(
+        vetor_numpy(std::move(res.ek_idx)),
+        vetor_numpy(std::move(res.hid.he)),
+        vetor_numpy(std::move(res.hid.hlo)),
+        vetor_numpy(std::move(res.hid.hhi))
+    );
+}
+
 }  // namespace
 
 NB_MODULE(_obimvisib, m) {
@@ -187,4 +205,7 @@ NB_MODULE(_obimvisib, m) {
     m.def("expandir_celulas", &py_expandir_celulas,
           nb::arg("ix0").noconvert(), nb::arg("ix1").noconvert(),
           nb::arg("iy0").noconvert(), nb::arg("iy1").noconvert(), nb::arg("nx"));
+    m.def("filtrar_arestas_mapa_z", &py_filtrar_arestas_mapa_z,
+          nb::arg("a").noconvert(), nb::arg("d").noconvert(), nb::arg("z_full").noconvert(),
+          nb::arg("mn_x"), nb::arg("mn_y"), nb::arg("g"), nb::arg("tol_z"));
 }

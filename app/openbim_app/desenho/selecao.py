@@ -51,7 +51,10 @@ def _validar_caixa(val: Any) -> list[float] | None:
 
 def _tem_unidade_ambigua(ifc: ifcopenshell.file, scale: float) -> bool:
     """Indica IfcProjectLibrary que pode divergir da escala de IfcProject no kernel C++."""
-    libs = ifc.by_type("IfcProjectLibrary")
+    try:
+        libs = ifc.by_type("IfcProjectLibrary")
+    except RuntimeError:
+        return False
     return bool(libs) and (
         abs(scale - 1.0) > 1e-12
         or any(getattr(lib, "UnitsInContext", None) is not None for lib in libs)
@@ -78,18 +81,19 @@ def _perto_borda_faixa(
     faixa: tuple[tuple[float, float, float], tuple[float, float, float]],
     tol: float = 1e-5,
 ) -> bool:
-    """True se alguma face da caixa estiver a <= `tol` m da borda correspondente de `cruza`."""
+    """True se `c` não cruza `faixa`, mas cruza `faixa` expandida por `tol` m."""
     (xmin, ymin, zmin), (xmax, ymax, zmax) = faixa
-    if (
-        c[0] > xmax + tol or c[3] < xmin - tol
-        or c[1] > ymax + tol or c[4] < ymin - tol
-        or c[2] > zmax + tol or c[5] < zmin - tol
-    ):
+    ja_cruza = (
+        c[0] <= xmax and c[3] >= xmin
+        and c[1] <= ymax and c[4] >= ymin
+        and c[2] <= zmax and c[5] >= zmin
+    )
+    if ja_cruza:
         return False
     return (
-        abs(c[0] - xmax) <= tol or abs(c[3] - xmin) <= tol
-        or abs(c[1] - ymax) <= tol or abs(c[4] - ymin) <= tol
-        or abs(c[2] - zmax) <= tol or abs(c[5] - zmin) <= tol
+        c[0] <= xmax + tol and c[3] >= xmin - tol
+        and c[1] <= ymax + tol and c[4] >= ymin - tol
+        and c[2] <= zmax + tol and c[5] >= zmin - tol
     )
 
 
@@ -424,7 +428,7 @@ def selecionar(
                 })
                 cx_cache = resp_cache.get("caixas_envolventes") if isinstance(resp_cache, dict) else None
                 mats_cache = resp_cache.get("matrizes") if isinstance(resp_cache, dict) else None
-                if isinstance(cx_cache, dict):
+                if isinstance(cx_cache, dict) and isinstance(mats_cache, dict):
                     for chave, caixa in cx_cache.items():
                         try:
                             id_step = int(chave)
@@ -436,17 +440,16 @@ def selecionar(
                         caixa_ok = _validar_caixa(caixa)
                         if caixa_ok is None:
                             continue
-                        if isinstance(mats_cache, dict):
-                            mat_raw = mats_cache.get(str(id_step))
-                            try:
-                                mat_arr = np.asarray(mat_raw, dtype=np.float64).reshape((4, 4))
-                                fresca = np.all(np.isfinite(mat_arr)) and np.allclose(
-                                    mat_arr, mat_esp, rtol=0.0, atol=1e-9
-                                )
-                            except (TypeError, ValueError):
-                                fresca = False
-                            if not fresca:
-                                continue
+                        mat_raw = mats_cache.get(str(id_step))
+                        try:
+                            mat_arr = np.asarray(mat_raw, dtype=np.float64).reshape((4, 4))
+                            fresca = np.all(np.isfinite(mat_arr)) and np.allclose(
+                                mat_arr, mat_esp, rtol=0.0, atol=1e-9
+                            )
+                        except (TypeError, ValueError):
+                            fresca = False
+                        if not fresca:
+                            continue
                         if _perto_borda_faixa(caixa_ok, faixa):
                             continue
                         guardadas[id_step] = caixa_ok

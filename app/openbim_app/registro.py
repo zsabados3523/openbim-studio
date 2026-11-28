@@ -10,6 +10,7 @@ import os
 import sys
 import tempfile
 import threading
+import traceback
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -17,6 +18,24 @@ NOME_LOG = "openbim.log"
 NOME_QUEDAS = "quedas.log"
 log = logging.getLogger("openbim")
 _estado = {"pasta": None, "quedas": None, "handler": None, "antes": None, "dialogo": False, "em_dialogo": False}
+
+
+class _FormatoSemColunas(logging.Formatter):
+    """Pilha igual à de sempre, sem os `^^^^` (que fazem `ast.parse` a cada quadro). Hipótese, não provada: no runner de
+    2 vCPU do CI a thread do gancho ficou presa na formatação da pilha e segurou o lock do handler (F1-LIMPEZA-REG)."""
+
+    def formatException(self, ei):
+        te, vistos, fila = traceback.TracebackException(*ei), set(), []
+        fila.append(te)
+        while fila:
+            t = fila.pop()
+            if t is None or id(t) in vistos:
+                continue
+            vistos.add(id(t))
+            for q in t.stack:
+                q.colno = q.end_colno = None
+            fila += [t.__cause__, t.__context__, *(t.exceptions or ())]
+        return "".join(te.format()).rstrip("\n")
 
 
 def pasta_registros():
@@ -96,7 +115,7 @@ def iniciar(dialogo=False):
         return None
     try:
         h = RotatingFileHandler(pasta / NOME_LOG, maxBytes=1_000_000, backupCount=3, encoding="utf-8")
-        h.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(threadName)s] %(message)s"))
+        h.setFormatter(_FormatoSemColunas("%(asctime)s %(levelname)s [%(threadName)s] %(message)s"))
         log.addHandler(h)
         log.setLevel(logging.INFO)
         quedas = open(pasta / NOME_QUEDAS, "a", encoding="utf-8")  # fica aberto até o fim: o faulthandler grava no descritor

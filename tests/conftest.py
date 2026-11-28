@@ -32,9 +32,10 @@ if os.environ.get("GITHUB_ACTIONS"):
         time.sleep(3000)
         destino = "pytest.log"  # o passo do CI redireciona a saída do pytest para este arquivo e depois o imprime
         linhas = [f"### TRAVADO: teste em andamento {_atual['id']} ha {time.monotonic() - _atual['t']:.0f} s"]
+        nomes = {t.ident: t.name for t in threading.enumerate()}
         for tid, fr in sys._current_frames().items():
-            linhas.append(f"thread {tid}:")
-            linhas.extend("    " + x.rstrip() for x in traceback.format_stack(fr)[-8:])
+            linhas.append(f"thread {tid} ({nomes.get(tid, '?')}):")
+            linhas.extend("    " + x.rstrip() for x in traceback.format_stack(fr)[-30:])
         if destino:
             with open(destino, "a", encoding="utf-8") as f:
                 f.write("\n".join(linhas) + "\n")

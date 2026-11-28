@@ -62,7 +62,11 @@ def test_erro_nao_tratado_em_thread_vai_para_o_arquivo():
 
     t = threading.Thread(target=falha, name="trabalhadora")
     t.start()
-    t.join()
+    t.join(timeout=30)  # guarda: travou no CI Linux sem causa achada; falha rápida com a pilha de todas as threads
+    if t.is_alive():
+        import traceback
+        pilhas = "\n".join(f"thread {i}:\n" + "".join(traceback.format_stack(f)) for i, f in sys._current_frames().items())
+        pytest.fail(f"thread trabalhadora não terminou em 30 s\n{pilhas}")
     assert "thread trabalhadora" in _texto_log() and "KeyError" in _texto_log()
 
 

@@ -1,0 +1,14 @@
+tests/test_s04_fluxo_a.py
+tests/test_s04_t15g_postador.py
+tests/test_s05_t07_queda_oraculo.py
+tests/test_s05_t11_merge_oraculo.py
+tests/test_s06_t04_lacunas_oraculo.py
+tests/test_s06_t07e_auxiliar_oraculo.py
+tests/test_s06_t08g_robustez_oraculo.py
+tests/test_s06_t19d3_janela_oraculo.py
+tests/test_s06_t23d_laco_oraculo_b.py
+tests/test_s06_t23f_integracao_oraculo.py
+tests/test_s06_t24j_motor_mapa_z_oraculo_b.py
+tests/test_s06_t24j_motor_mapa_z_oraculo_c.py
+tests/test_s06_t24q_grade_2o_nivel_oraculo_e.py
+tests/test_s06_t27b_corte_cache_oraculo_b.py

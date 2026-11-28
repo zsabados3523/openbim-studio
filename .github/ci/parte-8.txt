@@ -1,0 +1,14 @@
+tests/test_s04_v1c_sublotes_oraculo.py
+tests/test_s05_t05_recuperar_oraculo.py
+tests/test_s05_t09b_reforco_oraculo.py
+tests/test_s06_t19b4_visibilidade_forca_bruta_oraculo.py
+tests/test_s06_t19d7_mapa_z_uma_vez_oraculo.py
+tests/test_s06_t19g4b_pai_persistente_oraculo.py
+tests/test_s06_t22a_visibilidade_equivalencia_oraculo.py
+tests/test_s06_t22d_tampa_secao_oraculo.py
+tests/test_s06_t23e_pai_oraculo.py
+tests/test_s06_t24j_motor_mapa_z_oraculo_d.py
+tests/test_s06_t24l_abrir_lazy_oraculo.py
+tests/test_s06_t24v_cull_por_peca_oraculo_c.py
+tests/test_s06_t24v_cull_por_peca_oraculo_d.py
+tests/test_s06_t27b_corte_cache_oraculo_c.py

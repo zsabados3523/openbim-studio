@@ -21,21 +21,14 @@ _estado = {"pasta": None, "quedas": None, "handler": None, "antes": None, "dialo
 
 
 class _FormatoSemColunas(logging.Formatter):
-    """Pilha igual à de sempre, sem os `^^^^` (que fazem `ast.parse` a cada quadro). Hipótese, não provada: no runner de
-    2 vCPU do CI a thread do gancho ficou presa na formatação da pilha e segurou o lock do handler (F1-LIMPEZA-REG)."""
+    """Pilha sem `co_positions`: no CI (2 vCPU) a thread do gancho ficou presa em `traceback._get_code_position` ao
+    formatar o erro, segurando o lock do handler (F1-LIMPEZA-REG, prova: pilha do vigia). Sem cadeia de causas."""
 
     def formatException(self, ei):
-        te, vistos, fila = traceback.TracebackException(*ei), set(), []
-        fila.append(te)
-        while fila:
-            t = fila.pop()
-            if t is None or id(t) in vistos:
-                continue
-            vistos.add(id(t))
-            for q in t.stack:
-                q.colno = q.end_colno = None
-            fila += [t.__cause__, t.__context__, *(t.exceptions or ())]
-        return "".join(te.format()).rstrip("\n")
+        tipo, valor, tb = ei
+        pilha = traceback.StackSummary.extract(traceback.walk_tb(tb), lookup_lines=True)
+        corpo = "Traceback (most recent call last):\n" + "".join(pilha.format()) if tb else ""
+        return (corpo + "".join(traceback.format_exception_only(tipo, valor))).rstrip("\n")
 
 
 def pasta_registros():

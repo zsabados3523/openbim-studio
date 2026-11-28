@@ -38,8 +38,8 @@ EXCEPTIONS = {
     # Runtimes redistribuíveis da Microsoft: a Microsoft permite redistribuir estas DLLs
     # junto de programas; todo programa C++ no Windows as leva. Condições no THIRD_PARTY.md.
     ("ucrt", "10.0.26100.0"): ("LicenseRef-Microsoft-Redistributable", "Universal CRT do Windows SDK 10, redistribuível pelos termos da Microsoft"),
-    ("vc14_runtime", "14.51.36247"): ("LicenseRef-Microsoft-Redistributable", "runtime do Visual C++ 2015-2022, redistribuível pelos termos da Microsoft"),
-    ("vcomp14", "14.51.36247"): ("LicenseRef-Microsoft-Redistributable", "runtime OpenMP do Visual C++ 2015-2022, redistribuível pelos termos da Microsoft"),
+    ("vc14_runtime", "14.52.37029"): ("LicenseRef-Microsoft-Redistributable", "runtime do Visual C++ 2015-2022, redistribuível pelos termos da Microsoft"),
+    ("vcomp14", "14.52.37029"): ("LicenseRef-Microsoft-Redistributable", "runtime OpenMP do Visual C++ 2015-2022, redistribuível pelos termos da Microsoft"),
     ("cgal-cpp", "6.2.1"): ("GPL-3.0-or-later AND LGPL-3.0-or-later", "metadado 'GPL3/LGPL3' (não é SPDX); cabeçalhos do CGAL em GPL-3 e LGPL-3 (partes diferentes), compilados dentro do IfcOpenShell; combinação pela seção 13 da AGPL"),
 }
 
